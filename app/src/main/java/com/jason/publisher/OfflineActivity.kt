@@ -544,7 +544,7 @@ class OfflineActivity : AppCompatActivity() {
      */
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun mapViewSetup() {
-        binding.map.overlays.remove(busMarker)
+        binding.map.overlays.clear()
         binding.map.invalidate()
         busMarker.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow, null)
         busMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
@@ -561,10 +561,9 @@ class OfflineActivity : AppCompatActivity() {
         val handler = Handler(Looper.getMainLooper())
         val updateRunnable = object : Runnable {
             override fun run() {
-                val attributesData = AttributesData(latitude, longitude, bearing, bearingCustomer,speed, direction)
-//                Log.d("attributesData", attributesData.toString())
+                val attributesData = AttributesData(latitude, longitude, bearing, bearingCustomer, speed, direction)
                 postAttributes(apiService, mqttManager.getUsername(), attributesData)
-//                Log.d("Mqttmanager", mqttManager.getUsername())
+
                 if (routeIndex < calculatedBearings.size) {
                     busMarker.position = GeoPoint(latitude, longitude)
                     busMarker.rotation = calculatedBearings[routeIndex]
@@ -572,15 +571,15 @@ class OfflineActivity : AppCompatActivity() {
                     bearingCustomer = calculatedBearings[routeIndex]
                     direction = Helper.bearingToDirection(bearing)
                 }
-//                Log.d("Check Array", busBearingCustomer.isEmpty().toString())
-//                Log.d("Check Index", routeIndex.toString())
-//                Log.d("Check Index", busBearingCustomer.toString())
-//                Log.d("bearingUpdateMarker", bearing.toString())
-                binding.map.overlays.add(busMarker)
+
+                // Ensure that the marker is only added once
+                if (!binding.map.overlays.contains(busMarker)) {
+                    binding.map.overlays.add(busMarker)
+                }
+
                 binding.map.invalidate()
                 publishTelemetryData()
                 updateClientAttributes()
-//                Log.d("updateMarker", "")
                 routeIndex = (routeIndex + 1) % calculatedBearings.size
                 handler.postDelayed(this, PUBLISH_POSITION_TIME)
             }
