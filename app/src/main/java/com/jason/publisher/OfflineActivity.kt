@@ -86,6 +86,7 @@ class OfflineActivity : AppCompatActivity() {
     private var speed = 0.0F
     private var direction = "North"
     private var busConfig = ""
+    private var currentDeviceAccessToken: String = ""
 
     private var routeIndex = 0 // Initialize index at the start
     private var busRoute = OfflineData.getRoutesOffline()
@@ -137,6 +138,7 @@ class OfflineActivity : AppCompatActivity() {
         requestAdminMessage()
         subscribeAdminMessage()
 
+        // Initialize busMarker
         busMarker = Marker(binding.map)
         mapController = binding.map.controller as MapController
 
@@ -176,7 +178,6 @@ class OfflineActivity : AppCompatActivity() {
             }
         }
     }
-
 
     /**
      * Retrieves the access token for the current device's Android ID from the configuration list.
@@ -528,6 +529,7 @@ class OfflineActivity : AppCompatActivity() {
                 routePolyline.addPoint(point)
             }
 
+            // Add polyline to the map overlays
             binding.map.overlays.add(routePolyline)
         } catch (ignored: IOException) {
             Toast.makeText(
@@ -544,13 +546,29 @@ class OfflineActivity : AppCompatActivity() {
      */
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun mapViewSetup() {
+        // Clear all overlays first
         binding.map.overlays.clear()
         binding.map.invalidate()
-        busMarker.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow, null)
-        busMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+
+        // Initialize and set up the red arrow for the current device
+        busMarker = Marker(binding.map).apply {
+            icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow, null)
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            // Ensure the marker is always on top
+            setPanToView(true)
+        }
+
+        // Generate the polyline
+        generatePolyline()
+
+        // Add the red arrow for the current device
+        if (!binding.map.overlays.contains(busMarker)) {
+            binding.map.overlays.add(busMarker)
+        }
         updateMarkerPosition()
         routeIndex = 0
     }
+
 
     /**
      * Updates the position of the bus marker on the map and publishes telemetry data.
@@ -563,7 +581,6 @@ class OfflineActivity : AppCompatActivity() {
             override fun run() {
                 val attributesData = AttributesData(latitude, longitude, bearing, bearingCustomer, speed, direction)
                 postAttributes(apiService, mqttManager.getUsername(), attributesData)
-
                 if (routeIndex < calculatedBearings.size) {
                     busMarker.position = GeoPoint(latitude, longitude)
                     busMarker.rotation = calculatedBearings[routeIndex]
@@ -571,12 +588,12 @@ class OfflineActivity : AppCompatActivity() {
                     bearingCustomer = calculatedBearings[routeIndex]
                     direction = Helper.bearingToDirection(bearing)
                 }
-
-                // Ensure that the marker is only added once
                 if (!binding.map.overlays.contains(busMarker)) {
                     binding.map.overlays.add(busMarker)
+                } else {
+                    binding.map.overlays.remove(busMarker)
+                    binding.map.overlays.add(busMarker)
                 }
-
                 binding.map.invalidate()
                 publishTelemetryData()
                 updateClientAttributes()
@@ -586,6 +603,7 @@ class OfflineActivity : AppCompatActivity() {
         }
         handler.post(updateRunnable)
     }
+
 
     /**
      * Updates the client attributes by posting the current location, bearing, speed, and direction data to the server.
@@ -820,17 +838,20 @@ class OfflineActivity : AppCompatActivity() {
         val aid = intent.getStringExtra(Constant.aidKey)
         busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
 
-//        Log.d("arrBusDataOffline1", arrBusData.toString())
-//        Log.d("aidOffLine", aid.toString())
+        // Store the current device access token
+        currentDeviceAccessToken = token
+
+        // Filter out the current device's configuration
         arrBusData = arrBusData.filter { it.aid != aid }
-//        Log.d("arrBusDataOffline2", arrBusData.toString())
+
+        // Initialize markers for other devices
         for (bus in arrBusData) {
-            markerBus[bus.accessToken] = Marker(binding.map)
-            markerBus[bus.accessToken]!!.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow2, null)
-            markerBus[bus.accessToken]!!.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            val otherBusMarker = Marker(binding.map).apply {
+                icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow2, null)
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            }
+            markerBus[bus.accessToken] = otherBusMarker
         }
-//        Log.d("Marker Bus",markerBus.toString())
-//        Log.d("Bearing Length", busBearing.size.toString())
     }
 
     /**
@@ -855,8 +876,6 @@ class OfflineActivity : AppCompatActivity() {
      * @param clientKeys The keys to request attributes for.
      */
     private fun getAttributes(apiService: ApiService, token: String, clientKeys: String) {
-//        Log.d("getAttribute: ", "test1")
-//        Log.d("token: ", token)
         val call = apiService.getAttributes(
             "${ApiService.BASE_URL}$token/attributes",
             "application/json",
@@ -864,29 +883,30 @@ class OfflineActivity : AppCompatActivity() {
         )
         call.enqueue(object : Callback<ClientAttributesResponse> {
             override fun onResponse(call: Call<ClientAttributesResponse>, response: Response<ClientAttributesResponse>) {
-//                Log.d("Attribute Data", response.body().toString())
                 if (response.isSuccessful) {
-                    if (response.body()?.client != null){
-                        val lat = response.body()?.client?.latitude ?: 0.0
-                        val lon = response.body()!!.client.longitude ?: 0.0
-                        val ber = response.body()!!.client.bearing ?: 0.0F
-                        val berCus = response.body()!!.client.bearingCustomer ?: 0.0F
-//                        Log.d( "Check Array", arrBusData.size.toString())
-                        for (bus in arrBusData) {
-                            if (token == bus.accessToken) {
-                                markerBus[token]!!.position = GeoPoint(lat, lon)
-                                markerBus[token]!!.rotation = ber
-                                binding.map.overlays.add(markerBus[token])
-                                binding.map.invalidate()
+                    response.body()?.client?.let { client ->
+                        val lat = client.latitude ?: 0.0
+                        val lon = client.longitude ?: 0.0
+                        val ber = client.bearing ?: 0.0F
+
+                        // Skip updating marker if the token belongs to the current device
+                        if (token == currentDeviceAccessToken) return
+
+                        val otherBusMarker = markerBus[token]
+                        otherBusMarker?.apply {
+                            position = GeoPoint(lat, lon)
+                            rotation = ber
+                            if (!binding.map.overlays.contains(this)) {
+                                binding.map.overlays.add(this)
                             }
                         }
+                        binding.map.invalidate()
                     }
-                } else {
-//                    Log.d("request data bus", response.message().toString())
                 }
             }
+
             override fun onFailure(call: Call<ClientAttributesResponse>, t: Throwable) {
-                TODO("Not yet implemented")
+                // Handle failure
             }
         })
     }
