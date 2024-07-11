@@ -388,7 +388,8 @@ class MainActivity : AppCompatActivity() {
      * Sets up the map view and initializes markers and polylines.
      */
     private fun mapViewSetup() {
-        val center = GeoPoint(-36.780120000000004, 174.99216)
+//        val center = GeoPoint(-36.780120000000004, 174.99216)
+        val center = GeoPoint(-36.855647, 174.765249)
 
         val marker = Marker(binding.map)
         marker.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow, null) // Use custom drawable
