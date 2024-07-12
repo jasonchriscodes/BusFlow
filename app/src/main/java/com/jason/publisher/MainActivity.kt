@@ -340,7 +340,6 @@ class MainActivity : AppCompatActivity() {
                 if (lastLatitude != 0.0 && lastLongitude != 0.0) {
                     bearing = calculateBearing(lastLatitude, lastLongitude, currentLatitude, currentLongitude)
                     direction = Helper.bearingToDirection(bearing)
-                    updateBearingTextView()
                 }
 
                 latitude = currentLatitude
@@ -473,11 +472,18 @@ class MainActivity : AppCompatActivity() {
                 binding.map.invalidate()
                 publishTelemetryData()
                 updateClientAttributes()
+
+                // Update UI elements
+                runOnUiThread {
+                    updateBearingTextView()
+                }
+
                 handler.postDelayed(this, PUBLISH_POSITION_TIME)
             }
         }
         handler.post(updateRunnable)
     }
+
 
     /**
      * Updates the client attributes by posting the current location, bearing, speed, and direction data to the server.
