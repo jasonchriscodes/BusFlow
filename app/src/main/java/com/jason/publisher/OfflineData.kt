@@ -81,8 +81,7 @@ object OfflineData {
             {"latitude":-36.79689,"longitude":175.03242}, // bus 14
             {"latitude":-36.78365,"longitude":175.01139}, // bus 15
             {"latitude":-36.79159,"longitude":174.99938}, // bus 16
-            {"latitude":-36.78724,"longitude":175.00125}, // bus 17
-            {"latitude":-36.78012,"longitude":174.99216}  // bus end
+            {"latitude":-36.78724,"longitude":175.00125} // bus 17
         ]
     """.trimIndent()
         val jsonString2 = """
@@ -102,8 +101,7 @@ object OfflineData {
             {"latitude":-36.81456,"longitude":175.08249}, // bus 12
             {"latitude":-36.79601,"longitude":175.04829}, // bus 13
             {"latitude":-36.79689,"longitude":175.03242}, // bus 14
-            {"latitude":-36.78365,"longitude":175.01139}, // bus 15
-            {"latitude":-36.78012,"longitude":174.99216}  // bus end
+            {"latitude":-36.78365,"longitude":175.01139} // bus 15
         ]
     """.trimIndent()
         val jsonString3 = """
@@ -117,10 +115,14 @@ object OfflineData {
     """.trimIndent()
         val jsonArray = JSONArray(jsonString2)
         for (i in 0 until jsonArray.length()) {
-            val item = jsonArray.getJSONObject(i)
-            val latitude = item.getDouble("latitude")
-            val longitude = item.getDouble("longitude")
-            geoPoint.add(GeoPoint(latitude, longitude))
+            val item = jsonArray.optJSONObject(i)
+            if (item != null) {
+                val latitude = item.optDouble("latitude")
+                val longitude = item.optDouble("longitude")
+                if (!latitude.isNaN() && !longitude.isNaN()) {
+                    geoPoint.add(GeoPoint(latitude, longitude))
+                }
+            }
         }
         return geoPoint
     }

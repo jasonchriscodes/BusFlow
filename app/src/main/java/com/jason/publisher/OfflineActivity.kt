@@ -489,7 +489,6 @@ class OfflineActivity : AppCompatActivity() {
     private fun generateBusStop() {
         val overlayItems = ArrayList<OverlayItem>()
         busStop.forEachIndexed { index, geoPoint ->
-//            Log.d("BUS STOP", geoPoint.toString())
             val busStopNumber = index + 1
             val busStopSymbol = createBusStopSymbol(applicationContext, busStopNumber, busStop.size)
             val marker = OverlayItem(
@@ -515,7 +514,6 @@ class OfflineActivity : AppCompatActivity() {
         )
         binding.map.overlays.add(overlayItem)
     }
-
 
     /**
      * Generates polylines for bus route segments on the map.

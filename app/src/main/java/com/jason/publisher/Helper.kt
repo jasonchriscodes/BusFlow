@@ -112,8 +112,7 @@ object Helper {
     fun createBusStopSymbol(context: Context, busStopNumber: Int, maxBusStopNumber: Int): Drawable {
         // Determine the adjusted bus stop number
         val adjustedNumber = when (busStopNumber) {
-            1 -> "S"
-            maxBusStopNumber -> "E"
+            1 -> "S/E"
             else -> (busStopNumber - 1).toString()
         }
 
@@ -134,7 +133,7 @@ object Helper {
             color = Color.CYAN // set text color
             isFakeBoldText = true // enable bold text
             typeface = Typeface.DEFAULT_BOLD // set bold typeface
-            setTextSize(textSize)
+            this.textSize = textSize
         }
         val text = adjustedNumber
         val x = (canvas.width - paint.measureText(text)) / 2 // adjust the horizontal position to center the text
@@ -144,5 +143,4 @@ object Helper {
 
         return BitmapDrawable(context.resources, bitmap)
     }
-
 }
