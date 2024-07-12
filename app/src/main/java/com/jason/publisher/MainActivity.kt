@@ -63,6 +63,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var soundManager: SoundManager
     private lateinit var mapController: MapController
     private lateinit var bearingTextView: TextView
+    private lateinit var latitudeTextView: TextView
+    private lateinit var longitudeTextView: TextView
+    private lateinit var directionTextView: TextView
+    private lateinit var speedTextView: TextView
+    private lateinit var busNameTextView: TextView
+    private lateinit var showDepartureTimeTextView: TextView
+    private lateinit var departureTimeTextView: TextView
 
     private var lastLatitude = 0.0
     private var lastLongitude = 0.0
@@ -72,6 +79,7 @@ class MainActivity : AppCompatActivity() {
     private var speed = 0.0F
     private var direction = "North"
     private var busConfig = ""
+    private var busname = ""
 
     private var lastMessage = ""
     private var totalMessage = 0
@@ -96,6 +104,13 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         bearingTextView = findViewById(R.id.bearingTextView)
+        latitudeTextView = findViewById(R.id.latitudeTextView)
+        longitudeTextView = findViewById(R.id.longitudeTextView)
+        directionTextView = findViewById(R.id.directionTextView)
+        speedTextView = findViewById(R.id.speedTextView)
+        busNameTextView = findViewById(R.id.busNameTextView)
+        showDepartureTimeTextView = findViewById(R.id.showDepartureTimeTextView)
+        departureTimeTextView = findViewById(R.id.departureTimeTextView)
         Configuration.getInstance().load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
         getAccessToken()
 
@@ -384,6 +399,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Updates the other data text view with the current other data telemetry.
+     */
+    private fun updateTextViews() {
+        bearingTextView.text = "Current Bearing: $bearing degrees"
+        latitudeTextView.text = "Latitude: $latitude"
+        longitudeTextView.text = "Longitude: $longitude"
+        directionTextView.text = "Direction: $direction"
+        speedTextView.text = "Speed: $speed"
+        busNameTextView.text = "Bus Name: $busname"
+        showDepartureTimeTextView.text = "Show Departure Time: $showDepartureTime"
+        departureTimeTextView.text = "Departure Time: $departureTime"
+    }
+
+    /**
      * Sets up the map view and initializes markers and polylines.
      */
     private fun mapViewSetup() {
@@ -476,6 +505,7 @@ class MainActivity : AppCompatActivity() {
                 // Update UI elements
                 runOnUiThread {
                     updateBearingTextView()
+                    updateTextViews()
                 }
 
                 handler.postDelayed(this, PUBLISH_POSITION_TIME)
@@ -543,10 +573,7 @@ class MainActivity : AppCompatActivity() {
     private fun publishTelemetryData() {
         val aid = intent.getStringExtra(Constant.aidKey)
         val jsonObject = JSONObject()
-        val busname = Utils.findBusNameByAid(aid)
-        if (busname != null) {
-//            Log.d("busname", busname)
-        }
+        busname = Utils.findBusNameByAid(aid) ?: ""
         jsonObject.put("latitude", latitude)
         jsonObject.put("longitude", longitude)
         jsonObject.put("bearing", bearing)

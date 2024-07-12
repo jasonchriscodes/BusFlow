@@ -1,4 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -74,7 +73,106 @@
         android:text="Bearing: 0.0"
         android:textSize="16sp"
         android:textColor="@android:color/black"
+        android:background="@android:color/white"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- TextView to display latitude -->
+    <TextView
+        android:id="@+id/latitudeTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:text="Latitude: 0.0"
+        android:textSize="16sp"
+        android:textColor="@android:color/black"
+        android:background="@android:color/white"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/bearingTextView" />
+
+    <!-- TextView to display longitude -->
+    <TextView
+        android:id="@+id/longitudeTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:text="Longitude: 0.0"
+        android:textSize="16sp"
+        android:textColor="@android:color/black"
+        android:background="@android:color/white"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/latitudeTextView" />
+
+    <!-- TextView to display direction -->
+    <TextView
+        android:id="@+id/directionTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:text="Direction: North"
+        android:textSize="16sp"
+        android:textColor="@android:color/black"
+        android:background="@android:color/white"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/longitudeTextView" />
+
+    <!-- TextView to display speed -->
+    <TextView
+        android:id="@+id/speedTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:text="Speed: 0.0"
+        android:textSize="16sp"
+        android:textColor="@android:color/black"
+        android:background="@android:color/white"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/directionTextView" />
+
+    <!-- TextView to display bus name -->
+    <TextView
+        android:id="@+id/busNameTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:text="Bus Name: "
+        android:textSize="16sp"
+        android:textColor="@android:color/black"
+        android:background="@android:color/white"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/speedTextView" />
+
+    <!-- TextView to display showDepartureTime -->
+    <TextView
+        android:id="@+id/showDepartureTimeTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:text="Show Departure Time: Yes"
+        android:textSize="16sp"
+        android:textColor="@android:color/black"
+        android:background="@android:color/white"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/busNameTextView" />
+
+    <!-- TextView to display departureTime -->
+    <TextView
+        android:id="@+id/departureTimeTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:text="Departure Time: 00:00:00"
+        android:textSize="16sp"
+        android:textColor="@android:color/black"
+        android:background="@android:color/white"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/showDepartureTimeTextView" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
