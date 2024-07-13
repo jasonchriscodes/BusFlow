@@ -62,48 +62,51 @@ object OfflineData {
      */
     fun getBusStopOffline(): List<GeoPoint> {
         val geoPoint = mutableListOf<GeoPoint>()
+        // bus start -> bus 17
         val jsonString1 = """
         [
-            {"latitude":-36.78012,"longitude":174.99216}, // bus start
-            {"latitude":-36.78139,"longitude":175.007},   // bus 1
-            {"latitude":-36.78338,"longitude":175.01086}, // bus 2
-            {"latitude":-36.79883,"longitude":175.03447}, // bus 3
-            {"latitude":-36.79589,"longitude":175.04737}, // bus 4
-            {"latitude":-36.80141,"longitude":175.06579}, // bus 5
-            {"latitude":-36.80106,"longitude":175.06972}, // bus 6
-            {"latitude":-36.79887,"longitude":175.07527}, // bus 7
-            {"latitude":-36.78842,"longitude":175.08309}, // bus 8
-            {"latitude":-36.8011,"longitude":175.06984},  // bus 9
-            {"latitude":-36.80149,"longitude":175.06619}, // bus 10
-            {"latitude":-36.81456,"longitude":175.08249}, // bus 11
-            {"latitude":-36.80916,"longitude":175.06174}, // bus 12
-            {"latitude":-36.79601,"longitude":175.04829}, // bus 13
-            {"latitude":-36.79689,"longitude":175.03242}, // bus 14
-            {"latitude":-36.78365,"longitude":175.01139}, // bus 15
-            {"latitude":-36.79159,"longitude":174.99938}, // bus 16
-            {"latitude":-36.78724,"longitude":175.00125} // bus 17
+            {"latitude":-36.78012,"longitude":174.99216}, 
+            {"latitude":-36.78139,"longitude":175.007},   
+            {"latitude":-36.78338,"longitude":175.01086}, 
+            {"latitude":-36.79883,"longitude":175.03447}, 
+            {"latitude":-36.79589,"longitude":175.04737}, 
+            {"latitude":-36.80141,"longitude":175.06579}, 
+            {"latitude":-36.80106,"longitude":175.06972}, 
+            {"latitude":-36.79887,"longitude":175.07527}, 
+            {"latitude":-36.78842,"longitude":175.08309}, 
+            {"latitude":-36.8011,"longitude":175.06984},  
+            {"latitude":-36.80149,"longitude":175.06619}, 
+            {"latitude":-36.81456,"longitude":175.08249}, 
+            {"latitude":-36.80916,"longitude":175.06174}, 
+            {"latitude":-36.79601,"longitude":175.04829}, 
+            {"latitude":-36.79689,"longitude":175.03242}, 
+            {"latitude":-36.78365,"longitude":175.01139}, 
+            {"latitude":-36.79159,"longitude":174.99938}, 
+            {"latitude":-36.78724,"longitude":175.00125} 
         ]
     """.trimIndent()
+        // bus start -> bus 15
         val jsonString2 = """
         [
-            {"latitude":-36.78012,"longitude":174.99216}, // bus start
-            {"latitude":-36.79159,"longitude":174.99938}, // bus 1
-            {"latitude":-36.78724,"longitude":175.00125}, // bus 2
-            {"latitude":-36.78139,"longitude":175.007},   // bus 3
-            {"latitude":-36.78338,"longitude":175.01086}, // bus 4
-            {"latitude":-36.79883,"longitude":175.03447}, // bus 5
-            {"latitude":-36.79589,"longitude":175.04737}, // bus 6
-            {"latitude":-36.80141,"longitude":175.06579}, // bus 7
-            {"latitude":-36.79887,"longitude":175.07527}, // bus 8
-            {"latitude":-36.78842,"longitude":175.08309}, // bus 9
-            {"latitude":-36.8011,"longitude":175.06984},  // bus 10
-            {"latitude":-36.80149,"longitude":175.06619}, // bus 11
-            {"latitude":-36.81456,"longitude":175.08249}, // bus 12
-            {"latitude":-36.79601,"longitude":175.04829}, // bus 13
-            {"latitude":-36.79689,"longitude":175.03242}, // bus 14
-            {"latitude":-36.78365,"longitude":175.01139} // bus 15
+            {"latitude":-36.78012,"longitude":174.99216}, 
+            {"latitude":-36.79159,"longitude":174.99938}, 
+            {"latitude":-36.78724,"longitude":175.00125}, 
+            {"latitude":-36.78139,"longitude":175.007},   
+            {"latitude":-36.78338,"longitude":175.01086}, 
+            {"latitude":-36.79883,"longitude":175.03447}, 
+            {"latitude":-36.79589,"longitude":175.04737}, 
+            {"latitude":-36.80141,"longitude":175.06579}, 
+            {"latitude":-36.79887,"longitude":175.07527}, 
+            {"latitude":-36.78842,"longitude":175.08309}, 
+            {"latitude":-36.8011,"longitude":175.06984},  
+            {"latitude":-36.80149,"longitude":175.06619}, 
+            {"latitude":-36.81456,"longitude":175.08249}, 
+            {"latitude":-36.79601,"longitude":175.04829}, 
+            {"latitude":-36.79689,"longitude":175.03242}, 
+            {"latitude":-36.78365,"longitude":175.01139} 
         ]
     """.trimIndent()
+        // bus start -> bus 4
         val jsonString3 = """
         [
             {"latitude":-36.854638,"longitude":174.764622}, 
