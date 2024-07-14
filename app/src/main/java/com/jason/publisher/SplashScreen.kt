@@ -59,7 +59,7 @@ class SplashScreen : AppCompatActivity() {
         modeSelectionDialog = ModeSelectionDialog(this)
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
 //        Toast.makeText(this, aaid, Toast.LENGTH_LONG).show()
-//        Log.d("aaid bus a:", aaid)
+        Log.d("aaid bus a:", aaid)
         sharedPrefMananger = SharedPrefMananger(this)
         locationManager = LocationManager(this)
         startLocationUpdate()
