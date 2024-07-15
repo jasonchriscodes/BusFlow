@@ -36,8 +36,13 @@ import com.jason.publisher.services.ClientAttributesResponse
 import com.jason.publisher.services.LocationManager
 import com.jason.publisher.services.MqttManager
 import com.jason.publisher.services.NotificationManager
+import com.jason.publisher.services.OpenRouteService
 import com.jason.publisher.services.SharedPrefMananger
 import com.jason.publisher.services.SoundManager
+import com.jason.publisher.utils.BusStopProximityManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -97,6 +102,8 @@ class MainActivity : AppCompatActivity() {
     private var isFirstTime = false
     private lateinit var timer: CountDownTimer
     private var firstTime = true
+
+    private var closestBusStopToPubDevice = "none"
 
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -584,15 +591,39 @@ class MainActivity : AppCompatActivity() {
         jsonObject.put("departureTime", departureTime)
         jsonObject.put("bus", busname)
 //        Log.d("BusConfig", busConfig)
-        val jsonString = jsonObject.toString()
-        mqttManager.publish(PUB_POS_TOPIC, jsonString, 1)
-        notificationManager.showNotification(
-            channelId = "channel1",
-            notificationId = 1,
-            title = "Connected",
-            message = "Lat: $latitude, Long: $longitude, Direction: $direction",
-            false
-        )
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                val nextBusStopInSequence =
+                    BusStopProximityManager.getNextBusStopInSequence(closestBusStopToPubDevice)
+                if (nextBusStopInSequence != null) {
+
+                    // Note: uncomment below lines of code to use TomTom API.
+//                    val etaToNextBStop = TomTomService.getEstimateTimeFromPointToPoint(
+//                        latitude, longitude,
+//                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
+//                    )
+
+                    val etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
+                        latitude, longitude,
+                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
+                    )
+
+                    jsonObject.put("ETAtoNextBStop", etaToNextBStop)
+                }
+
+                val jsonString = jsonObject.toString()
+                mqttManager.publish(MainActivity.PUB_POS_TOPIC, jsonString, 1)
+                notificationManager.showNotification(
+                    channelId = "channel1",
+                    notificationId = 1,
+                    title = "Connected",
+                    message = "Lat: $latitude, Long: $longitude, Direction: $direction",
+                    false
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     /**

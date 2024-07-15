@@ -1,14 +1,9 @@
 package com.jason.publisher
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.content.DialogInterface
 import android.graphics.Color
 import android.graphics.Rect
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
@@ -28,21 +23,23 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.res.ResourcesCompat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.jason.publisher.Helper.createBusStopSymbol
 import com.jason.publisher.databinding.ActivityOfflineBinding
 import com.jason.publisher.model.AttributesData
 import com.jason.publisher.model.Bus
-import com.jason.publisher.model.Coordinate
 import com.jason.publisher.model.Message
 import com.jason.publisher.services.ApiService
 import com.jason.publisher.services.ApiServiceBuilder
 import com.jason.publisher.services.ClientAttributesResponse
 import com.jason.publisher.services.MqttManager
 import com.jason.publisher.services.NotificationManager
+import com.jason.publisher.services.OpenRouteService
 import com.jason.publisher.services.SharedPrefMananger
 import com.jason.publisher.services.SoundManager
-import com.jason.publisher.utils.BusStopAssignment
+import com.jason.publisher.utils.BusStopProximityManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -60,7 +57,6 @@ import java.io.IOException
 import java.lang.Math.atan2
 import java.lang.Math.cos
 import java.lang.Math.sin
-import java.nio.charset.StandardCharsets
 import kotlin.random.Random
 
 /**
@@ -109,6 +105,8 @@ class OfflineActivity : AppCompatActivity() {
     private var arrBusData = OfflineData.getConfig()
     private var markerBus = HashMap<String, Marker>()
     private var routeDirection = "forward"
+
+    private var closestBusStopToPubDevice = "none"
 
     /**
      * Initializes the activity, sets up sensor and service managers, loads configuration, subscribes to admin messages,
@@ -681,23 +679,46 @@ class OfflineActivity : AppCompatActivity() {
         jsonObject.put("bus", busname)
 
         // To publish the closest bus stop to the publisher device.
-        val closestBusStopToPubDevice = BusStopAssignment.getTheClosestBusStopToPubDevice(latitude, longitude);
+        closestBusStopToPubDevice = BusStopProximityManager.getTheClosestBusStopToPubDevice(
+            latitude,
+            longitude,
+            closestBusStopToPubDevice
+        );
         jsonObject.put("closestBusStopToPubDevice:", closestBusStopToPubDevice)
 
-//        Log.d("bearingTelemetry", bearing.toString())
-//        Log.d("departureTimeTelemetry:", departureTime)
-//        Log.d("departureTimeShowTelemetry:", showDepartureTime)
-//        Log.d("routeDirectionTelemetry", routeDirection)
-//        Log.d("BusConfig", busConfig)
-        val jsonString = jsonObject.toString()
-        mqttManager.publish(MainActivity.PUB_POS_TOPIC, jsonString, 1)
-        notificationManager.showNotification(
-            channelId = "channel1",
-            notificationId = 1,
-            title = "Connected",
-            message = "Lat: $latitude, Long: $longitude, Direction: $direction",
-            false
-        )
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                val nextBusStopInSequence =
+                    BusStopProximityManager.getNextBusStopInSequence(closestBusStopToPubDevice)
+                if (nextBusStopInSequence != null) {
+
+                    // Note: uncomment below lines of code to use TomTom API.
+//                    val etaToNextBStop = TomTomService.getEstimateTimeFromPointToPoint(
+//                        latitude, longitude,
+//                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
+//                    )
+
+                    val etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
+                        latitude, longitude,
+                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
+                    )
+
+                    jsonObject.put("ETAtoNextBStop", etaToNextBStop)
+                }
+
+                val jsonString = jsonObject.toString()
+                mqttManager.publish(MainActivity.PUB_POS_TOPIC, jsonString, 1)
+                notificationManager.showNotification(
+                    channelId = "channel1",
+                    notificationId = 1,
+                    title = "Connected",
+                    message = "Lat: $latitude, Long: $longitude, Direction: $direction",
+                    false
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     /**
