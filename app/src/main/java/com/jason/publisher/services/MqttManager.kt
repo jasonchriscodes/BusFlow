@@ -28,12 +28,22 @@ class MqttManager(
         connectOptions.isCleanSession = true
         connectOptions.connectionTimeout = 10
         connectOptions.keepAliveInterval = 60
+        Log.d("MqttManager", "Initializing MQTT client")
+    }
+
+    /**
+     * Connects to the MQTT broker and executes the callback on success or failure.
+     *
+     * @param callback The callback to execute after attempting to connect.
+     */
+    fun connect(callback: (Boolean) -> Unit) {
         try {
-            // connect to the MQTT broker when an instance of MqttManager is created
             mqttClient.connect(connectOptions)
+            Log.d("MqttManager", "MQTT client connected")
+            callback(true)
         } catch (e: MqttException) {
-            Log.d("MqttManager", "Failed to connect to MQTT broker: ${e.message}")
-            // handle the exception according to your app's requirements
+            Log.e("MqttManager", "Failed to connect to MQTT broker: ${e.message}", e)
+            callback(false)
         }
     }
 

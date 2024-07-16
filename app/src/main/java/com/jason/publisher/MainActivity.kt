@@ -27,6 +27,7 @@ import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivityMainBinding
 import com.jason.publisher.model.AttributesData
 import com.jason.publisher.model.Bus
+import com.jason.publisher.model.BusItem
 import com.jason.publisher.model.BusRoute
 import com.jason.publisher.model.BusStop
 import com.jason.publisher.model.Message
@@ -85,6 +86,7 @@ class MainActivity : AppCompatActivity() {
     private var direction = "North"
     private var busConfig = ""
     private var busname = ""
+    private var config: List<BusItem>? = null
 
     private var lastMessage = ""
     private var totalMessage = 0
@@ -110,6 +112,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Initialize UI components
         bearingTextView = findViewById(R.id.bearingTextView)
         latitudeTextView = findViewById(R.id.latitudeTextView)
         longitudeTextView = findViewById(R.id.longitudeTextView)
@@ -118,21 +122,36 @@ class MainActivity : AppCompatActivity() {
         busNameTextView = findViewById(R.id.busNameTextView)
         showDepartureTimeTextView = findViewById(R.id.showDepartureTimeTextView)
         departureTimeTextView = findViewById(R.id.departureTimeTextView)
-        Configuration.getInstance().load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
-        getAccessToken()
 
+        Configuration.getInstance().load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
+
+        // Initialize managers
         locationManager = LocationManager(this)
         sharedPrefMananger = SharedPrefMananger(this)
         notificationManager = NotificationManager(this)
         soundManager = SoundManager(this)
 
+        // Fetch and initialize config
+        fetchConfig {
+            if (it) {
+                // Initialize MQTT manager
+                getAccessToken()
+                mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
+
+                // Connect and subscribe
+                connectAndSubscribe()
+            } else {
+                // Handle config initialization failure
+                Toast.makeText(this, "Failed to initialize config. No bus information available.", Toast.LENGTH_SHORT).show()
+                clearBusData() // Clear any existing bus data
+            }
+        }
+
         getDefaultConfigValue()
-        mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
         getMessageCount()
         startLocationUpdate()
         mapViewSetup()
         requestAdminMessage()
-        subscribeSharedData()
         sendRequestAttributes()
 
         binding.chatButton.setOnClickListener {
@@ -146,7 +165,22 @@ class MainActivity : AppCompatActivity() {
         // Set click listener for pop-up button
         binding.popUpButton.setOnClickListener {
             showPopUpDialog()
-//            Toast.makeText(this, "is mqtt connect? " + mqttManager.isMqttConnect(), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Fetches the configuration data and initializes the config variable.
+     * Calls the provided callback with true if successful, false otherwise.
+     */
+    private fun fetchConfig(callback: (Boolean) -> Unit) {
+        // Simulate fetching config data
+        val listConfig = OnlineData.getConfig()
+        if (listConfig.isNotEmpty()) {
+            config = listConfig
+            callback(true)
+        } else {
+            config = emptyList()  // Ensure config is set to an empty list if no data is available
+            callback(false)
         }
     }
 
@@ -155,11 +189,11 @@ class MainActivity : AppCompatActivity() {
      */
     @SuppressLint("HardwareIds")
     private fun getAccessToken() {
-        val listConfig = OnlineData.getConfig()
+        val listConfig = config
         val aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-        for (config in listConfig) {
-            if (config.aid == aid) {
-                token = config.accessToken
+        for (configItem in listConfig.orEmpty()) {
+            if (configItem.aid == aid) {
+                token = configItem.accessToken
                 break
             }
         }
@@ -233,19 +267,25 @@ class MainActivity : AppCompatActivity() {
      */
     private fun subscribeSharedData() {
         mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
-//            Log.d("Message from admin",message)
             runOnUiThread {
                 val gson = Gson()
                 val data = gson.fromJson(message, Bus::class.java)
+                config = data.shared?.config?.busConfig
                 val msg = data.shared?.message
                 val route = data.shared?.busRoute1
                 val stops = data.shared?.busStop1
-//                Log.d(" Check message", message.toString())
-//                Log.d(" Check route", route?.jsonMember1.toString())
+
+                if (config.isNullOrEmpty()) {
+                    // Handle the case where the config is empty
+                    Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
+                    clearBusData()
+                    return@runOnUiThread
+                }
+
                 if (firstTime) {
                     if (route != null) {
                         if (stops != null) {
-                            generatePolyline(route,stops)
+                            generatePolyline(route, stops)
                             firstTime = false
                         }
                     }
@@ -256,6 +296,31 @@ class MainActivity : AppCompatActivity() {
                         showNotification(msg)
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Clears any existing bus data from the map and other UI elements.
+     */
+    private fun clearBusData() {
+        binding.map.overlays.clear()
+        binding.map.invalidate()
+        markerBus.clear()
+    }
+
+
+    /**
+     * Connects to the MQTT broker and subscribes to the shared data topic upon successful connection.
+     */
+    private fun connectAndSubscribe() {
+        mqttManager.connect { isConnected ->
+            if (isConnected) {
+                Log.d("MainActivity", "Connected to MQTT broker")
+                subscribeSharedData()
+            } else {
+                Log.e("MainActivity", "Failed to connect to MQTT broker")
+                Toast.makeText(this, "Failed to connect to MQTT broker", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -688,7 +753,7 @@ class MainActivity : AppCompatActivity() {
 //        Log.d("arrBusDataOnline2", arrBusData.toString())
         for (bus in arrBusData) {
             markerBus[bus.accessToken] = Marker(binding.map)
-            markerBus[bus.accessToken]!!.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow2, null) // Use custom drawable
+            markerBus[bus.accessToken]!!.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow2, null)
             markerBus[bus.accessToken]!!.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
         }
     }
