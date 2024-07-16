@@ -36,6 +36,7 @@ import com.jason.publisher.services.NotificationManager
 import com.jason.publisher.services.OpenRouteService
 import com.jason.publisher.services.SharedPrefMananger
 import com.jason.publisher.services.SoundManager
+import com.jason.publisher.services.TomTomService
 import com.jason.publisher.utils.BusStopProximityManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -692,7 +693,7 @@ class OfflineActivity : AppCompatActivity() {
                     BusStopProximityManager.getNextBusStopInSequence(closestBusStopToPubDevice)
                 if (nextBusStopInSequence != null) {
 
-                    // Note: uncomment below lines of code to use TomTom API.
+//                     Note: uncomment below lines of code to use TomTom API.
 //                    val etaToNextBStop = TomTomService.getEstimateTimeFromPointToPoint(
 //                        latitude, longitude,
 //                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
@@ -957,8 +958,8 @@ class OfflineActivity : AppCompatActivity() {
         const val CLIENT_ID = "jasonAndroidClientId"
         private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
         private const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
-        private const val REQUEST_PERIODIC_TIME = 5000L
-        private const val PUBLISH_POSITION_TIME = 5000L
+        private const val REQUEST_PERIODIC_TIME = 1000L
+        private const val PUBLISH_POSITION_TIME = 1000L
         private const val LAST_MSG_KEY = "lastMessageKey"
         private const val MSG_KEY = "messageKey"
         private const val SOUND_FILE_NAME = "notif.wav"
