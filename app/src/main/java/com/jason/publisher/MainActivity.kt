@@ -87,6 +87,7 @@ class MainActivity : AppCompatActivity() {
     private var busConfig = ""
     private var busname = ""
     private var config: List<BusItem>? = null
+    private var aid = ""
 
     private var lastMessage = ""
     private var totalMessage = 0
@@ -190,7 +191,7 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("HardwareIds")
     private fun getAccessToken() {
         val listConfig = config
-        val aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         for (configItem in listConfig.orEmpty()) {
             if (configItem.aid == aid) {
                 token = configItem.accessToken
@@ -643,7 +644,6 @@ class MainActivity : AppCompatActivity() {
      * Publishes telemetry data including latitude, longitude, bearing, speed, direction, and other relevant information.
      */
     private fun publishTelemetryData() {
-        val aid = intent.getStringExtra(Constant.aidKey)
         val jsonObject = JSONObject()
         busname = Utils.findBusNameByAid(aid) ?: ""
         jsonObject.put("latitude", latitude)
@@ -655,7 +655,9 @@ class MainActivity : AppCompatActivity() {
         jsonObject.put("showDepartureTime", showDepartureTime)
         jsonObject.put("departureTime", departureTime)
         jsonObject.put("bus", busname)
+        jsonObject.put("aid", aid)
 //        Log.d("BusConfig", busConfig)
+//        Log.d("aid", aid)
         CoroutineScope(Dispatchers.Main).launch {
             try {
                 val nextBusStopInSequence =
@@ -745,10 +747,8 @@ class MainActivity : AppCompatActivity() {
         direction = intent.getStringExtra("dir").toString()
         lastMessage = sharedPrefMananger.getString(LAST_MSG_KEY, "").toString()
 
-        val aid = intent.getStringExtra(Constant.aidKey)
         busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
 //        Log.d("arrBusDataOnline1", arrBusData.toString())
-//        Log.d("aidOnline", aid.toString())
         arrBusData = arrBusData.filter { it.aid != aid }
 //        Log.d("arrBusDataOnline2", arrBusData.toString())
         for (bus in arrBusData) {
