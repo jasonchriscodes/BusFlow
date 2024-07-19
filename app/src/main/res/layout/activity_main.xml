@@ -175,4 +175,52 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/showDepartureTimeTextView" />
 
+    <!-- TextView to display connection status -->
+    <TextView
+        android:id="@+id/connectionStatusTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:text="Connected"
+        android:textSize="16sp"
+        android:textColor="@android:color/black"
+        app:layout_constraintEnd_toStartOf="@id/networkStatusIndicator"
+        app:layout_constraintTop_toTopOf="@id/networkStatusIndicator"
+        app:layout_constraintBottom_toBottomOf="@id/networkStatusIndicator" />
+
+    <!-- View to display network status -->
+    <View
+        android:id="@+id/networkStatusIndicator"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_margin="16dp"
+        android:background="@drawable/circle_shape_green"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- ProgressBar to show reconnecting -->
+    <ProgressBar
+        android:id="@+id/reconnectProgressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/attemptingToConnectTextView" />
+
+    <!-- TextView to show "Attempting to connect..." -->
+    <TextView
+        android:id="@+id/attemptingToConnectTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Attempting to connect"
+        android:textSize="16sp"
+        android:textColor="@android:color/black"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

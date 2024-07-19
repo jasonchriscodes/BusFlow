@@ -1,5 +1,6 @@
 package com.jason.publisher
 
+import NetworkReceiver
 import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.graphics.Color
@@ -58,8 +59,12 @@ import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import java.lang.Math.atan2
+import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.view.View
+import android.widget.ProgressBar
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var mqttManager: MqttManager
@@ -68,6 +73,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var notificationManager: NotificationManager
     private lateinit var soundManager: SoundManager
     private lateinit var mapController: MapController
+    private lateinit var networkReceiver: NetworkReceiver
+    private lateinit var networkStatusIndicator: View
+    private lateinit var reconnectProgressBar: ProgressBar
+    private lateinit var connectionStatusTextView: TextView
+    private lateinit var attemptingToConnectTextView: TextView
+    private val handler = Handler(Looper.getMainLooper())
+    private var dotCount = 0
+
     private lateinit var bearingTextView: TextView
     private lateinit var latitudeTextView: TextView
     private lateinit var longitudeTextView: TextView
@@ -123,6 +136,10 @@ class MainActivity : AppCompatActivity() {
         busNameTextView = findViewById(R.id.busNameTextView)
         showDepartureTimeTextView = findViewById(R.id.showDepartureTimeTextView)
         departureTimeTextView = findViewById(R.id.departureTimeTextView)
+        networkStatusIndicator = findViewById(R.id.networkStatusIndicator)
+        reconnectProgressBar = findViewById(R.id.reconnectProgressBar)
+        connectionStatusTextView = findViewById(R.id.connectionStatusTextView)
+        attemptingToConnectTextView = findViewById(R.id.attemptingToConnectTextView)
 
         Configuration.getInstance().load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
 
@@ -167,6 +184,82 @@ class MainActivity : AppCompatActivity() {
         binding.popUpButton.setOnClickListener {
             showPopUpDialog()
         }
+
+        // Register NetworkReceiver
+        networkReceiver = NetworkReceiver(this)
+        val intentFilter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
+        registerReceiver(networkReceiver, intentFilter)
+    }
+
+    /**
+     * Called when the network becomes available.
+     * Reconnects the MQTT manager and updates the network status indicator.
+     */
+    override fun onNetworkAvailable() {
+        mqttManager.reconnect()
+        runOnUiThread {
+            networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_green)
+            reconnectProgressBar.visibility = View.GONE
+            attemptingToConnectTextView.visibility = View.GONE
+            connectionStatusTextView.text = "Connected"
+            handler.removeCallbacks(fiveDotRunnable)
+        }
+    }
+
+    /**
+     * Called when the network becomes unavailable.
+     * Shows the reconnect spinner and updates the network status indicator.
+     */
+    override fun onNetworkUnavailable() {
+        runOnUiThread {
+            networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_red)
+            reconnectProgressBar.visibility = View.VISIBLE
+            attemptingToConnectTextView.visibility = View.VISIBLE
+            connectionStatusTextView.text = "Disconnected"
+            startFiveDotAnimation()
+        }
+    }
+
+    /**
+     * Starts the five dot animation.
+     */
+    private fun startFiveDotAnimation() {
+        dotCount = 0
+        handler.post(fiveDotRunnable)
+    }
+
+    /**
+     * Runnable to animate the five dots in the "Attempting to connect..." text.
+     */
+    private val fiveDotRunnable = object : Runnable {
+        override fun run() {
+            dotCount = (dotCount + 1) % 6
+            val dots = ".".repeat(dotCount)
+            attemptingToConnectTextView.text = "Attempting to connect$dots"
+            handler.postDelayed(this, 500)
+        }
+    }
+
+    /**
+     * Runnable to animate the dots in the "Attempting to connect..." text.
+     * This Runnable updates the text with an increasing number of dots every 500 milliseconds,
+     * looping through 1 to 4 dots.
+     */
+    private val dotRunnable = object : Runnable {
+        override fun run() {
+            dotCount = (dotCount + 1) % 4
+            val dots = ".".repeat(dotCount)
+            attemptingToConnectTextView.text = "Attempting to connect$dots"
+            handler.postDelayed(this, 500)
+        }
+    }
+
+    /**
+     * Starts the five dot animation.
+     */
+    private fun startDotAnimation() {
+        dotCount = 0
+        handler.post(dotRunnable)
     }
 
     /**
@@ -489,8 +582,8 @@ class MainActivity : AppCompatActivity() {
      * Sets up the map view and initializes markers and polylines.
      */
     private fun mapViewSetup() {
-//        val center = GeoPoint(-36.780120000000004, 174.99216)
-        val center = GeoPoint(-36.855647, 174.765249)
+        val center = GeoPoint(-36.780120000000004, 174.99216)
+//        val center = GeoPoint(-36.855647, 174.765249)
 
         val marker = Marker(binding.map)
         marker.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow, null) // Use custom drawable
@@ -847,6 +940,8 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         soundManager.stopSound()
         mqttManager.disconnect()
+        unregisterReceiver(networkReceiver)
+        handler.removeCallbacks(dotRunnable)
         super.onDestroy()
     }
 

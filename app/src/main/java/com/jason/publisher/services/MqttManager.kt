@@ -47,6 +47,17 @@ class MqttManager(
         }
     }
 
+    fun reconnect() {
+        if (!mqttClient.isConnected) {
+            try {
+                mqttClient.reconnect()
+                Log.d("MqttManager", "MQTT client reconnected")
+            } catch (e: MqttException) {
+                Log.e("MqttManager", "Failed to reconnect to MQTT broker: ${e.message}", e)
+            }
+        }
+    }
+
     /**
      * Checks if the MQTT client is connected.
      *
