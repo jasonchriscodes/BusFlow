@@ -905,9 +905,9 @@ class OfflineActivity : AppCompatActivity() {
             override fun onResponse(call: Call<ClientAttributesResponse>, response: Response<ClientAttributesResponse>) {
                 if (response.isSuccessful) {
                     response.body()?.client?.let { client ->
-                        val lat = client.latitude ?: 0.0
-                        val lon = client.longitude ?: 0.0
-                        val ber = client.bearing ?: 0.0F
+                        val lat = client.latitude
+                        val lon = client.longitude
+                        val ber = client.bearing
 
                         // Skip updating marker if the token belongs to the current device
                         if (token == currentDeviceAccessToken) return

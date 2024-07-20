@@ -58,4 +58,28 @@ class LocationManager(private val context: Context) {
             null
         )
     }
+
+    /**
+     * Gets the current location and notifies the listener with the current location.
+     *
+     * @param listener The listener to be notified with the current location.
+     */
+    fun getCurrentLocation(listener: LocationListener) {
+        if (ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // Permission is not granted, so return without getting location
+            return
+        }
+        fusLocation.lastLocation.addOnSuccessListener { location ->
+            location?.let {
+                listener.onLocationUpdate(it)
+            }
+        }
+    }
 }

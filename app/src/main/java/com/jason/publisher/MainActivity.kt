@@ -149,6 +149,17 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         notificationManager = NotificationManager(this)
         soundManager = SoundManager(this)
 
+        // Initialize current location
+        locationManager.getCurrentLocation(object : LocationListener {
+            override fun onLocationUpdate(location: Location) {
+                latitude = location.latitude
+                longitude = location.longitude
+                // Optionally, you can also update the UI components
+                latitudeTextView.text = "Latitude: $latitude"
+                longitudeTextView.text = "Longitude: $longitude"
+            }
+        })
+
         // Fetch and initialize config
         fetchConfig {
             if (it) {
@@ -833,8 +844,8 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      * Retrieves default configuration values for the activity, such as latitude, longitude, bearing, and more.
      */
     private fun getDefaultConfigValue() {
-        latitude = intent.getDoubleExtra("lat", 0.0)
-        longitude = intent.getDoubleExtra("lng", 0.0)
+        latitude = intent.getDoubleExtra("lat", latitude)
+        longitude = intent.getDoubleExtra("lng", longitude)
         bearing = intent.getFloatExtra("ber", 0.0F)
         speed = intent.getFloatExtra("spe", 0.0F)
         direction = intent.getStringExtra("dir").toString()
@@ -886,7 +897,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 //                Log.d("Attribute Data", response.body().toString())
                 if (response.isSuccessful) {
                     if (response.body()?.client != null){
-                        val lat = response.body()?.client?.latitude ?: 0.0
+                        val lat = response.body()!!.client.latitude
                         val lon = response.body()!!.client.longitude
                         val ber = response.body()!!.client.bearing
                         val berCus = response.body()!!.client.bearingCustomer
