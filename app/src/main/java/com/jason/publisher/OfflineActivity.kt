@@ -135,7 +135,7 @@ class OfflineActivity : AppCompatActivity() {
 
         getMessageCount()
         requestAdminMessage()
-        subscribeAdminMessage()
+        connectAndSubscribe() // Updated connection and subscription method
 
         // Initialize busMarker
         busMarker = Marker(binding.map)
@@ -319,16 +319,32 @@ class OfflineActivity : AppCompatActivity() {
      * Subscribes to admin messages and displays notifications for new messages.
      */
     private fun subscribeAdminMessage() {
-        mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
-//            Log.d("Message from admin",message)
-            runOnUiThread {
-                val gson = Gson()
-                val data = gson.fromJson(message, Bus::class.java)
-                val msg = data.shared!!.message!!
-                if (lastMessage != msg) {
-                    saveNewMessage(msg)
-                    showNotification(msg)
+        if (mqttManager.isMqttConnect()) {
+            mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
+                runOnUiThread {
+                    val gson = Gson()
+                    val data = gson.fromJson(message, Bus::class.java)
+                    val msg = data.shared!!.message!!
+                    if (lastMessage != msg) {
+                        saveNewMessage(msg)
+                        showNotification(msg)
+                    }
                 }
+            }
+        } else {
+            Log.e("OfflineActivity", "MQTT client is not connected, cannot subscribe.")
+        }
+    }
+
+    /**
+     * Connects to the MQTT broker and subscribes to the shared data topic upon successful connection.
+     */
+    private fun connectAndSubscribe() {
+        mqttManager.connect { isConnected ->
+            if (isConnected) {
+                subscribeAdminMessage()
+            } else {
+                Toast.makeText(this, "Failed to connect to MQTT broker", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -599,7 +615,7 @@ class OfflineActivity : AppCompatActivity() {
 
                 // To reset the map center position based on the location of the publisher device.
                 val newCenterLocationBasedOnPubDevice = GeoPoint(latitude, longitude)
-                mapController.setCenter(newCenterLocationBasedOnPubDevice)
+                mapController.animateTo(newCenterLocationBasedOnPubDevice)
             }
         }
         handler.post(updateRunnable)
