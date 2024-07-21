@@ -596,6 +596,10 @@ class OfflineActivity : AppCompatActivity() {
                 updateClientAttributes()
                 routeIndex = (routeIndex + 1) % calculatedBearings.size
                 handler.postDelayed(this, PUBLISH_POSITION_TIME)
+
+                // To reset the map center position based on the location of the publisher device.
+                val newCenterLocationBasedOnPubDevice = GeoPoint(latitude, longitude)
+                mapController.setCenter(newCenterLocationBasedOnPubDevice)
             }
         }
         handler.post(updateRunnable)
