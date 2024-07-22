@@ -686,6 +686,10 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 }
 
                 handler.postDelayed(this, PUBLISH_POSITION_TIME)
+
+                // To reset the map center position based on the location of the publisher device.
+                val newCenterLocationBasedOnPubDevice = GeoPoint(latitude, longitude)
+                mapController.animateTo(newCenterLocationBasedOnPubDevice)
             }
         }
         handler.post(updateRunnable)
