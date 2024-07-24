@@ -369,6 +369,8 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
     /**
      * Subscribes to shared data from the server.
+     * Checks if the configuration is null or empty, and if the `aid` from ThingsBoard matches the tablet's `aid`.
+     * If either check fails, it returns and runs on the UI thread.
      */
     private fun subscribeSharedData() {
         mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
@@ -387,19 +389,26 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                     return@runOnUiThread
                 }
 
+                val tabletAid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+                val matchingAid = config!!.any { it.aid == tabletAid }
+
+                if (!matchingAid) {
+                    // Handle the case where the aid does not match
+                    Toast.makeText(this, "AID does not match.", Toast.LENGTH_SHORT).show()
+                    clearBusData()
+                    return@runOnUiThread
+                }
+
                 if (firstTime) {
-                    if (route != null) {
-                        if (stops != null) {
-                            generatePolyline(route, stops)
-                            firstTime = false
-                        }
+                    if (route != null && stops != null) {
+                        generatePolyline(route, stops)
+                        firstTime = false
                     }
                 }
-                if (lastMessage != msg) {
-                    if (msg != null) {
-                        saveNewMessage(msg)
-                        showNotification(msg)
-                    }
+
+                if (lastMessage != msg && msg != null) {
+                    saveNewMessage(msg)
+                    showNotification(msg)
                 }
             }
         }
