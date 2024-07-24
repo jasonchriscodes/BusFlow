@@ -266,14 +266,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     }
 
     /**
-     * Starts the five dot animation.
-     */
-    private fun startDotAnimation() {
-        dotCount = 0
-        handler.post(dotRunnable)
-    }
-
-    /**
      * Fetches the configuration data and initializes the config variable.
      * Calls the provided callback with true if successful, false otherwise.
      */
