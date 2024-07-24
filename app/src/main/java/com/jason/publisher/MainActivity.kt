@@ -108,7 +108,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var token = ""
     private var apiService = ApiServiceBuilder.buildService(ApiService::class.java)
     private var markerBus = HashMap<String, Marker>()
-    private var arrBusData = OnlineData.getConfig()
+    private var arrBusData: List<BusItem> = emptyList()
     private var clientKeys = "latitude,longitude,bearing,speed,direction"
 
     private var hoursDeparture = 0
@@ -128,35 +128,29 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         setContentView(binding.root)
 
         // Initialize UI components
-        bearingTextView = findViewById(R.id.bearingTextView)
-        latitudeTextView = findViewById(R.id.latitudeTextView)
-        longitudeTextView = findViewById(R.id.longitudeTextView)
-        directionTextView = findViewById(R.id.directionTextView)
-        speedTextView = findViewById(R.id.speedTextView)
-        busNameTextView = findViewById(R.id.busNameTextView)
-        showDepartureTimeTextView = findViewById(R.id.showDepartureTimeTextView)
-        departureTimeTextView = findViewById(R.id.departureTimeTextView)
-        networkStatusIndicator = findViewById(R.id.networkStatusIndicator)
-        reconnectProgressBar = findViewById(R.id.reconnectProgressBar)
-        connectionStatusTextView = findViewById(R.id.connectionStatusTextView)
-        attemptingToConnectTextView = findViewById(R.id.attemptingToConnectTextView)
+        initializeUIComponents()
 
+        // Load configuration
         Configuration.getInstance().load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
 
         // Initialize managers
-        locationManager = LocationManager(this)
-        sharedPrefMananger = SharedPrefMananger(this)
-        notificationManager = NotificationManager(this)
-        soundManager = SoundManager(this)
+        initializeManagers()
 
-        // Initialize current location
+        /**
+         * Initialize current location and setup map.
+         * The map setup occurs only after the current location is fetched.
+         */
         locationManager.getCurrentLocation(object : LocationListener {
             override fun onLocationUpdate(location: Location) {
                 latitude = location.latitude
                 longitude = location.longitude
-                // Optionally, you can also update the UI components
+
+                // Update UI components with the current location
                 latitudeTextView.text = "Latitude: $latitude"
                 longitudeTextView.text = "Longitude: $longitude"
+
+                // Set up the map view with the current location
+                mapViewSetup(latitude, longitude)
             }
         })
 
@@ -179,13 +173,13 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         getDefaultConfigValue()
         getMessageCount()
         startLocationUpdate()
-        mapViewSetup()
         requestAdminMessage()
         sendRequestAttributes()
 
         binding.chatButton.setOnClickListener {
             showChatDialog()
         }
+
         // Set up spinner
         val items = arrayOf("Yes", "No")
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items)
@@ -200,6 +194,34 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         networkReceiver = NetworkReceiver(this)
         val intentFilter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
         registerReceiver(networkReceiver, intentFilter)
+    }
+
+    /**
+     * Initialize UI components and assign them to the corresponding views.
+     */
+    private fun initializeUIComponents() {
+        bearingTextView = findViewById(R.id.bearingTextView)
+        latitudeTextView = findViewById(R.id.latitudeTextView)
+        longitudeTextView = findViewById(R.id.longitudeTextView)
+        directionTextView = findViewById(R.id.directionTextView)
+        speedTextView = findViewById(R.id.speedTextView)
+        busNameTextView = findViewById(R.id.busNameTextView)
+        showDepartureTimeTextView = findViewById(R.id.showDepartureTimeTextView)
+        departureTimeTextView = findViewById(R.id.departureTimeTextView)
+        networkStatusIndicator = findViewById(R.id.networkStatusIndicator)
+        reconnectProgressBar = findViewById(R.id.reconnectProgressBar)
+        connectionStatusTextView = findViewById(R.id.connectionStatusTextView)
+        attemptingToConnectTextView = findViewById(R.id.attemptingToConnectTextView)
+    }
+
+    /**
+     * Initialize various managers used in the application.
+     */
+    private fun initializeManagers() {
+        locationManager = LocationManager(this)
+        sharedPrefMananger = SharedPrefMananger(this)
+        notificationManager = NotificationManager(this)
+        soundManager = SoundManager(this)
     }
 
     /**
@@ -370,12 +392,9 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 val gson = Gson()
                 val data = gson.fromJson(message, Bus::class.java)
                 config = data.shared?.config?.busConfig
-                val msg = data.shared?.message
-                val route = data.shared?.busRoute1
-                val stops = data.shared?.busStop1
+                arrBusData = config.orEmpty() // Ensure arrBusData is assigned
 
                 if (config.isNullOrEmpty()) {
-                    // Handle the case where the config is empty
                     Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
                     clearBusData()
                     return@runOnUiThread
@@ -385,19 +404,21 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 val matchingAid = config!!.any { it.aid == tabletAid }
 
                 if (!matchingAid) {
-                    // Handle the case where the aid does not match
                     Toast.makeText(this, "AID does not match.", Toast.LENGTH_SHORT).show()
                     clearBusData()
                     return@runOnUiThread
                 }
 
                 if (firstTime) {
+                    val route = data.shared?.busRoute1
+                    val stops = data.shared?.busStop1
                     if (route != null && stops != null) {
                         generatePolyline(route, stops)
                         firstTime = false
                     }
                 }
 
+                val msg = data.shared?.message
                 if (lastMessage != msg && msg != null) {
                     saveNewMessage(msg)
                     showNotification(msg)
@@ -591,11 +612,13 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     }
 
     /**
-     * Sets up the map view and initializes markers and polylines.
+     * Sets up the map view and initializes markers and polylines with the provided coordinates.
+     *
+     * @param lat The latitude for the initial map center.
+     * @param lon The longitude for the initial map center.
      */
-    private fun mapViewSetup() {
-        val center = GeoPoint(-36.780120000000004, 174.99216)
-//        val center = GeoPoint(-36.855647, 174.765249)
+    private fun mapViewSetup(lat: Double, lon: Double) {
+        val center = GeoPoint(lat, lon)
 
         val marker = Marker(binding.map)
         marker.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow, null) // Use custom drawable
@@ -614,6 +637,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         }
         updateMarkerPosition(marker)
     }
+
 
     /**
      * Generates polylines and markers for the bus route and stops.
@@ -859,7 +883,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
 //        Log.d("arrBusDataOnline1", arrBusData.toString())
         arrBusData = arrBusData.filter { it.aid != aid }
-//        Log.d("arrBusDataOnline2", arrBusData.toString())
         for (bus in arrBusData) {
             markerBus[bus.accessToken] = Marker(binding.map)
             markerBus[bus.accessToken]!!.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow2, null)
@@ -890,8 +913,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      * @param clientKeys The keys to request attributes for.
      */
     private fun getAttributes(apiService: ApiService, token: String, clientKeys: String) {
-//        Log.d("getAttribute: ", "test1")
-//        Log.d("token: ", token)
         val call = apiService.getAttributes(
             "${ApiService.BASE_URL}$token/attributes",
             "application/json",
@@ -899,34 +920,46 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         )
         call.enqueue(object : Callback<ClientAttributesResponse> {
             override fun onResponse(call: Call<ClientAttributesResponse>, response: Response<ClientAttributesResponse>) {
-//                Log.d("Attribute Data", response.body().toString())
                 if (response.isSuccessful) {
-                    if (response.body()?.client != null){
-                        val lat = response.body()!!.client.latitude
-                        val lon = response.body()!!.client.longitude
-                        val ber = response.body()!!.client.bearing
-                        val berCus = response.body()!!.client.bearingCustomer
-//                        Log.d( "Check Data", "$lat $lon")
-                        for (bus in arrBusData) {
-                            if (token == bus.accessToken) {
-                                markerBus[token]!!.position = GeoPoint(lat, lon)
-                                markerBus[token]!!.rotation = ber
-                                binding.map.overlays.add(markerBus[token])
-                                binding.map.invalidate()
-                            }
-                        }
-                    }
+                    val clientAttributes = response.body()?.client
+                    if (clientAttributes != null) {
+                        val lat = clientAttributes.latitude
+                        val lon = clientAttributes.longitude
+                        val ber = clientAttributes.bearing
+                        val berCus = clientAttributes.bearingCustomer
 
+                        // Ensure lat, lon, and other attributes are not null before using them
+                        if (lat != null && lon != null && ber != null) {
+                            for (bus in arrBusData) {
+                                if (token == bus.accessToken) {
+                                    val marker = markerBus[token]
+                                    if (marker != null) {
+                                        marker.position = GeoPoint(lat, lon)
+                                        marker.rotation = ber
+                                        binding.map.overlays.add(marker)
+                                        binding.map.invalidate()
+                                    } else {
+                                        Log.e("MainActivity", "Marker for token $token is null")
+                                    }
+                                }
+                            }
+                        } else {
+                            Log.e("MainActivity", "Received null values for lat, lon, or bearing")
+                        }
+                    } else {
+                        Log.e("MainActivity", "Client attributes are null")
+                    }
                 } else {
-//                    Log.d("request data bus", response.message().toString())
+                    Log.e("MainActivity", "Failed to retrieve attributes: ${response.message()}")
                 }
             }
 
             override fun onFailure(call: Call<ClientAttributesResponse>, t: Throwable) {
-//                Log.d("","")
+                Log.e("MainActivity", "Error fetching attributes: ${t.message}")
             }
         })
     }
+
 
     /**
      * Retrieves the total message count from shared preferences.
