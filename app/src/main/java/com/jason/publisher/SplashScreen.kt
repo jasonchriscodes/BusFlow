@@ -3,6 +3,9 @@ package com.jason.publisher
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Dialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
@@ -94,6 +97,9 @@ class SplashScreen : AppCompatActivity() {
         val onlineModeButton = dialog.findViewById<Button>(R.id.onlineModeButton)
         val offlineModeButton = dialog.findViewById<Button>(R.id.offlineModeButton)
 
+        // Find the "Who am I" button
+        val whoAmIButton = dialog.findViewById<Button>(R.id.whoAmIButton)
+
         onlineModeButton.setOnClickListener {
             val intent = Intent(this, MainActivity::class.java)
             startActivity(intent)
@@ -104,6 +110,14 @@ class SplashScreen : AppCompatActivity() {
             val intent = Intent(this, OfflineActivity::class.java)
             startActivity(intent)
             dialog.dismiss()
+        }
+
+        whoAmIButton.setOnClickListener {
+            val aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("Device AID", aid)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(this, "Device AID copied to clipboard", Toast.LENGTH_SHORT).show()
         }
 
         dialog.show()
