@@ -166,6 +166,11 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         mapController = binding.map.controller as MapController
 
         // Set up the map initially
+        binding.map.apply {
+            setTileSource(TileSourceFactory.DEFAULT_TILE_SOURCE)
+            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+            setMultiTouchControls(true)
+        }
         setupInitialMap()
 
         binding.chatButton.setOnClickListener {
@@ -192,17 +197,12 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      * Function to setup initial map position and zoom level
      */
     private fun setupInitialMap() {
-        binding.map.apply {
-            setTileSource(TileSourceFactory.DEFAULT_TILE_SOURCE)
-            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-            setMultiTouchControls(true)
-            if (busRoute.isNotEmpty()) {
-                mapController.setCenter(GeoPoint(busRoute[0].latitude, busRoute[0].longitude))
-            } else {
-                mapController.setCenter(GeoPoint(-36.78012, 174.99216))
-            }
-            mapController.setZoom(18.0)
+        if (busRoute.isNotEmpty()) {
+            mapController.setCenter(GeoPoint(busRoute[0].latitude, busRoute[0].longitude))
+        } else {
+            mapController.setCenter(GeoPoint(-36.78012, 174.99216))
         }
+        mapController.setZoom(18.0)
     }
 
     /**
@@ -593,6 +593,10 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                     lastLatitude = currentLatitude
                     lastLongitude = currentLongitude
                     routeIndex = (routeIndex + 1) % busRoute.size
+
+                    // Call updateMarkerPosition without animating the map
+                    updateMarkerPositionWithoutAnimation()
+
                     handler.postDelayed(this, PUBLISH_POSITION_TIME)
                 } else {
                     Log.e("OfflineActivity", "routeIndex $routeIndex out of bounds for busRoute size ${busRoute.size}")
@@ -745,6 +749,25 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         busNameTextView.text = "Bus Name: $busname"
         showDepartureTimeTextView.text = "Show Departure Time: $showDepartureTime"
         departureTimeTextView.text = "Departure Time: $departureTime"
+    }
+
+    /**
+     * Add a new method to update the marker position without animating the map
+     */
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun updateMarkerPositionWithoutAnimation() {
+        busMarker.position = GeoPoint(latitude, longitude)
+        busMarker.rotation = bearing
+        if (!binding.map.overlays.contains(busMarker)) {
+            binding.map.overlays.add(busMarker)
+        } else {
+            binding.map.overlays.remove(busMarker)
+            binding.map.overlays.add(busMarker)
+        }
+        binding.map.invalidate()
+        publishTelemetryData()
+        updateClientAttributes()
+        updateTextViews()
     }
 
     /**
