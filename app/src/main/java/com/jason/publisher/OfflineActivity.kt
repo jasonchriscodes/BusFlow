@@ -108,8 +108,8 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var aid = ""
 
     private var routeIndex = 0 // Initialize index at the start
-    private var busRoute = OfflineData.getRoutesOffline()
-    private var busStop = OfflineData.getBusStopOffline()
+    private var busRoute = listOf<GeoPoint>()
+    private var busStop = listOf<GeoPoint>()
     private var calculatedBearings = calculateBearings()
 
     private var lastMessage = ""
@@ -125,7 +125,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private lateinit var timer: CountDownTimer
     private var apiService = ApiServiceBuilder.buildService(ApiService::class.java)
     private var clientKeys = "latitude,longitude,bearing,bearingCustomer,speed,direction"
-    private var arrBusData = OfflineData.getConfig()
+    private var arrBusData: List<BusItem> = emptyList()
     private var markerBus = HashMap<String, Marker>()
     private var routeDirection = "forward"
 
@@ -159,28 +159,14 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
         getMessageCount()
         requestAdminMessage()
-        connectAndSubscribe() // Updated connection and subscription method
+        connectAndSubscribe()
 
         // Initialize busMarker
         busMarker = Marker(binding.map)
         mapController = binding.map.controller as MapController
 
-        // Initialize busRoute and busStop using OfflineData
-        busRoute = OfflineData.getRoutesOffline()
-        busStop = OfflineData.getBusStopOffline()
-        calculatedBearings = calculateBearings()
-
-        val center = GeoPoint(busRoute[0].latitude, busRoute[0].longitude)
-        mapController.setCenter(center)
-        mapController.setZoom(18.0)
-
-        binding.map.apply {
-            setTileSource(TileSourceFactory.DEFAULT_TILE_SOURCE)
-            mapCenter
-            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-            setMultiTouchControls(true)
-            getLocalVisibleRect(Rect())
-        }
+        // Set up the map initially
+        setupInitialMap()
 
         binding.chatButton.setOnClickListener {
             showChatDialog()
@@ -200,6 +186,23 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         networkReceiver = NetworkReceiver(this)
         val intentFilter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
         registerReceiver(networkReceiver, intentFilter)
+    }
+
+    /**
+     * Function to setup initial map position and zoom level
+     */
+    private fun setupInitialMap() {
+        binding.map.apply {
+            setTileSource(TileSourceFactory.DEFAULT_TILE_SOURCE)
+            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+            setMultiTouchControls(true)
+            if (busRoute.isNotEmpty()) {
+                mapController.setCenter(GeoPoint(busRoute[0].latitude, busRoute[0].longitude))
+            } else {
+                mapController.setCenter(GeoPoint(-36.78012, 174.99216))
+            }
+            mapController.setZoom(18.0)
+        }
     }
 
     /**
@@ -407,34 +410,21 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     }
 
     /**
-     * Subscribes to admin messages and displays notifications for new messages.
-     */
-    private fun subscribeAdminMessage() {
-        if (mqttManager.isMqttConnect()) {
-            mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
-                runOnUiThread {
-                    val gson = Gson()
-                    val data = gson.fromJson(message, Bus::class.java)
-                    val msg = data.shared!!.message!!
-                    if (lastMessage != msg) {
-                        saveNewMessage(msg)
-                        showNotification(msg)
-                    }
-                }
-            }
-        } else {
-            Log.e("OfflineActivity", "MQTT client is not connected, cannot subscribe.")
-        }
-    }
-
-    /**
      * Connects to the MQTT broker and subscribes to the shared data topic upon successful connection.
      */
     private fun connectAndSubscribe() {
         mqttManager.connect { isConnected ->
             if (isConnected) {
                 Log.d("OfflineActivity", "Connected to MQTT broker")
-                subscribeSharedData()
+                subscribeSharedData {
+                    if (busRoute.isNotEmpty()) {
+                        val firstGeoPoint = busRoute[0]
+                        runOnUiThread {
+                            mapController.setCenter(firstGeoPoint)
+                            mapController.setZoom(18.0)
+                        }
+                    }
+                }
             } else {
                 Log.e("OfflineActivity", "Failed to connect to MQTT broker")
                 Toast.makeText(this, "Failed to connect to MQTT broker", Toast.LENGTH_SHORT).show()
@@ -444,17 +434,15 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
     /**
      * Subscribes to shared data from the server.
-     * Checks if the configuration is null or empty, and if the `aid` from ThingsBoard matches the tablet's `aid`.
-     * If either check fails, it returns and runs on the UI thread.
      */
-    private fun subscribeSharedData() {
+    private fun subscribeSharedData(onDataFetched: () -> Unit) {
         mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
             runOnUiThread {
                 val gson = Gson()
                 val data = gson.fromJson(message, Bus::class.java)
                 arrBusData = data.shared?.config?.busConfig ?: return@runOnUiThread
 
-                if (arrBusData.isEmpty()) {
+                if (arrBusData.isNullOrEmpty()) {
                     Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
                     clearBusData()
                     return@runOnUiThread
@@ -477,6 +465,30 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 if (lastMessage != msg && msg != null) {
                     saveNewMessage(msg)
                     showNotification(msg)
+                }
+
+                // Initialize busRoute and busStop using data from shared
+                busRoute = data.shared?.busRoute1?.mapNotNull {
+                    it.latitude?.let { lat ->
+                        it.longitude?.let { lon ->
+                            GeoPoint(lat, lon)
+                        }
+                    }
+                } ?: listOf()
+                busStop = data.shared?.busStop1?.mapNotNull {
+                    it.latitude?.let { lat ->
+                        it.longitude?.let { lon ->
+                            GeoPoint(lat, lon)
+                        }
+                    }
+                } ?: listOf()
+                calculatedBearings = calculateBearings()
+
+                if (busRoute.isNotEmpty()) {
+                    onDataFetched()
+                    binding.map.invalidate() // Ensure the map is rendered correctly
+                } else {
+                    Toast.makeText(this, "No route data available.", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -767,6 +779,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 routeIndex = (routeIndex + 1) % calculatedBearings.size
                 handler.postDelayed(this, PUBLISH_POSITION_TIME)
 
+                // Animate to the new center location based on the current position
                 val newCenterLocationBasedOnPubDevice = GeoPoint(latitude, longitude)
                 mapController.animateTo(newCenterLocationBasedOnPubDevice)
             }
