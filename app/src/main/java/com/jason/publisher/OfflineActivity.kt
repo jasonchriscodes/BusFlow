@@ -125,7 +125,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private lateinit var timer: CountDownTimer
     private var apiService = ApiServiceBuilder.buildService(ApiService::class.java)
     private var clientKeys = "latitude,longitude,bearing,bearingCustomer,speed,direction"
-    private var arrBusData = OfflineData.getConfig()
+    private var arrBusData: List<BusItem> = emptyList()
     private var markerBus = HashMap<String, Marker>()
     private var routeDirection = "forward"
 
@@ -454,14 +454,14 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 val data = gson.fromJson(message, Bus::class.java)
                 arrBusData = data.shared?.config?.busConfig ?: return@runOnUiThread
 
-                if (arrBusData.isEmpty()) {
+                if (arrBusData.isNullOrEmpty()) {
                     Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
                     clearBusData()
                     return@runOnUiThread
                 }
 
                 val tabletAid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-                if (arrBusData.none { it.aid == tabletAid }) {
+                if (arrBusData?.none { it.aid == tabletAid } == true) {
                     Toast.makeText(this, "AID does not match.", Toast.LENGTH_SHORT).show()
                     clearBusData()
                     finish()
