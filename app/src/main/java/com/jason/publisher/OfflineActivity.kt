@@ -417,13 +417,6 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
             if (isConnected) {
                 Log.d("OfflineActivity", "Connected to MQTT broker")
                 subscribeSharedData {
-                    if (busRoute.isNotEmpty()) {
-                        val firstGeoPoint = busRoute[0]
-                        runOnUiThread {
-                            mapController.setCenter(firstGeoPoint)
-                            mapController.setZoom(18.0)
-                        }
-                    }
                 }
             } else {
                 Log.e("OfflineActivity", "Failed to connect to MQTT broker")
@@ -563,8 +556,11 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
             return
         }
 
-        latitude = busRoute[routeIndex].latitude
-        longitude = busRoute[routeIndex].longitude
+        // Set the initial position to the first point in the busRoute
+        latitude = busRoute[0].latitude
+        longitude = busRoute[0].longitude
+        lastLatitude = latitude
+        lastLongitude = longitude
 
         // Perform route simulation by using pre-defined routes from OfflineData.
         // The location updates and movements are simulated based on these pre-loaded routes.
@@ -581,7 +577,6 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                     if (lastLatitude != 0.0 && lastLongitude != 0.0) {
                         bearing = calculateBearing(lastLatitude, lastLongitude, currentLatitude, currentLongitude)
                         direction = Helper.bearingToDirection(bearing)
-                        updateBearingTextView()
                     }
 
                     latitude = currentLatitude
@@ -594,8 +589,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                     lastLongitude = currentLongitude
                     routeIndex = (routeIndex + 1) % busRoute.size
 
-                    // Call updateMarkerPosition without animating the map
-                    updateMarkerPositionWithoutAnimation()
+                    updateMarkerPosition()
 
                     handler.postDelayed(this, PUBLISH_POSITION_TIME)
                 } else {
@@ -752,7 +746,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     }
 
     /**
-     * Add a new method to update the marker position without animating the map
+     * Updates the position of the marker on the map without animating.
      */
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun updateMarkerPositionWithoutAnimation() {
@@ -772,42 +766,31 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
     /**
      * Updates the position of the marker on the map and publishes telemetry data.
-     *
-     * @param marker The marker to be updated.
      */
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun updateMarkerPosition() {
-        val handler = Handler(Looper.getMainLooper())
-        val updateRunnable = object : Runnable {
-            override fun run() {
-                val attributesData = AttributesData(latitude, longitude, bearing, bearingCustomer, speed, direction)
-                postAttributes(apiService, mqttManager.getUsername(), attributesData)
-                if (routeIndex < calculatedBearings.size) {
-                    busMarker.position = GeoPoint(latitude, longitude)
-                    busMarker.rotation = calculatedBearings[routeIndex]
-                    bearing = calculatedBearings[routeIndex]
-                    bearingCustomer = calculatedBearings[routeIndex]
-                    direction = Helper.bearingToDirection(bearing)
-                }
-                if (!binding.map.overlays.contains(busMarker)) {
-                    binding.map.overlays.add(busMarker)
-                } else {
-                    binding.map.overlays.remove(busMarker)
-                    binding.map.overlays.add(busMarker)
-                }
-                binding.map.invalidate()
-                publishTelemetryData()
-                updateClientAttributes()
-                updateTextViews()
-                routeIndex = (routeIndex + 1) % calculatedBearings.size
-                handler.postDelayed(this, PUBLISH_POSITION_TIME)
+        val newLatLng = GeoPoint(latitude, longitude)
+        val newBearing = bearing
 
-                // Animate to the new center location based on the current position
-                val newCenterLocationBasedOnPubDevice = GeoPoint(latitude, longitude)
-                mapController.animateTo(newCenterLocationBasedOnPubDevice)
-            }
+        if (busMarker.position != newLatLng || busMarker.rotation != newBearing) {
+            busMarker.position = newLatLng
+            busMarker.rotation = newBearing
+            bearingCustomer = newBearing
         }
-        handler.post(updateRunnable)
+
+        if (!binding.map.overlays.contains(busMarker)) {
+            binding.map.overlays.add(busMarker)
+        }
+
+        binding.map.invalidate()
+
+        // Publish telemetry data only if the latitude and longitude are not initial values
+        if (latitude != 0.0 && longitude != 0.0) {
+            publishTelemetryData()
+        }
+
+        updateClientAttributes()
+        updateTextViews()
     }
 
     /**
