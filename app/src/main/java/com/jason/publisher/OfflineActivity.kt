@@ -104,7 +104,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var direction = "North"
     private var busConfig = ""
     private var busname = ""
-    private var config: List<BusItem>? = null
+    private var listConfig: List<BusItem>? = OfflineData.getConfig()
     private var aid = ""
 
     private var routeIndex = 0 // Initialize index at the start
@@ -286,9 +286,9 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      */
     @SuppressLint("HardwareIds")
     private fun getAccessToken() {
-        val listConfig = OfflineData.getConfig()
+//        Toast.makeText(this, "listConfig getAccessToken: ${listConfig}", Toast.LENGTH_SHORT).show()
         aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-        for (config in listConfig) {
+        for (config in listConfig!!) {
             if (config.aid == aid) {
                 token = config.accessToken
                 break
@@ -462,6 +462,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
                 // Initialize busRoute and busStop using data from shared
                 busRoute = data.shared?.busRoute1?.mapNotNull {
+//                    Toast.makeText(this, "busRoute subscribeSharedData: ${busRoute}", Toast.LENGTH_SHORT).show()
                     it.latitude?.let { lat ->
                         it.longitude?.let { lon ->
                             GeoPoint(lat, lon)
@@ -895,13 +896,12 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      * @return the name of the bus or null if not found.
      */
     fun findBusNameByAid(aid: String?): String? {
+//        Toast.makeText(this, "listConfig findBusNameByAid: ${listConfig}", Toast.LENGTH_SHORT).show()
         if (aid == null) {
             Log.e("findBusNameByAid", "AID is null")
             return null
         }
-
-        val configList = OfflineData.getConfig()
-        val busItem = configList.find { it.aid == aid }
+        val busItem = listConfig!!.find { it.aid == aid }
 
         return busItem?.bus ?: run {
             Log.e("findBusNameByAid", "No bus found with AID: $aid")
