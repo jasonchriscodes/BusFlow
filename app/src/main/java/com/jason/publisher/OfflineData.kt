@@ -138,7 +138,7 @@ object OfflineData {
      */
     fun getConfig() : List<BusItem> {
         val jsonString = """
-            {"busConfig":[{"aid":"8d34bdc9a5c78c42","bus":"Bus A","accessToken":"z0MQXzmMsNZwiD9Pwn6J"},{"aid":"2b039058a1a5f8a3","bus":"Bus B","accessToken":"YiSbp8zzJyt3htZ7ECI0"},{"aid":"02372ba208415152","bus":"Bus C","accessToken":"kTmTKRd11CPX7RhXTVZY"},{"aid":"b9e0b467411f31b2","bus":"Bus D","accessToken":"0B9UJJEPVy9KOJr724RM"},{"aid":"9ce83742994fb104","bus":"Bus E","accessToken":"cqvj70Vg5KUHzZgsO5An"}]}
+            {"busConfig":[{"aid":"8d34bdc9a5c78c42","bus":"Bus A","accessToken":"z0MQXzmMsNZwiD9Pwn6J"},{"aid":"2b039058a1a5f8a3","bus":"Bus B","accessToken":"YiSbp8zzJyt3htZ7ECI0"},{"aid":"02372ba208415152","bus":"Bus C","accessToken":"kTmTKRd11CPX7RhXTVZY"},{"aid":"b9e0b467411f31b2","bus":"Bus D","accessToken":"0B9UJJEPVy9KOJr724RM"},{"aid":"9ce83742994fb104","bus":"Bus E","accessToken":"cqvj70Vg5KUHzZgsO5An"},{"aid":"3df25aa38ddb75b4","bus":"Bus F","accessToken":"VZ5cnoaj1kdMT5UeW3ne"}]}
         """.trimIndent()
 
         val configurationBus = mutableListOf<BusItem>()
