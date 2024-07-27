@@ -144,6 +144,13 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         binding = ActivityOfflineBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // To be implement!!
+        // get client attribute
+        // filter aid
+        // if aid not match, add bus name, accesstoken, aid (automatis)
+        // post to client attributes
+        // use posted data, to connect mqtt manager
+
         // Initialize UI components
         initializeUIComponents()
 
@@ -299,6 +306,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 break
             }
         }
+        //if (token.isEmpty())
     }
 
     /**
@@ -438,7 +446,11 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
             runOnUiThread {
                 val gson = Gson()
                 val data = gson.fromJson(message, Bus::class.java)
-                arrBusData = data.shared?.config?.busConfig ?: return@runOnUiThread
+                listConfig = data.shared?.config?.busConfig
+                arrBusData = listConfig ?:
+                return@runOnUiThread
+
+//                Toast.makeText(this, "bus config subscribeSharedData(): ${arrBusData} ", Toast.LENGTH_SHORT).show()
 
                 if (arrBusData.isNullOrEmpty()) {
                     Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
@@ -447,6 +459,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 }
 
                 val tabletAid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+                aid = tabletAid
                 if (arrBusData.none { it.aid == tabletAid }) {
                     Toast.makeText(this, "AID does not match.", Toast.LENGTH_SHORT).show()
                     clearBusData()
