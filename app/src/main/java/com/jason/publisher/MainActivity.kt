@@ -784,7 +784,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         jsonObject.put("bearing", bearing)
         jsonObject.put("direction", direction)
         jsonObject.put("speed", speed)
-        jsonObject.put("bus", busConfig)
         jsonObject.put("showDepartureTime", showDepartureTime)
         jsonObject.put("departureTime", departureTime)
         jsonObject.put("bus", busname)
