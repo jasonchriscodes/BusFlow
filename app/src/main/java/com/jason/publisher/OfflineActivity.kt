@@ -93,6 +93,8 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private lateinit var busNameTextView: TextView
     private lateinit var showDepartureTimeTextView: TextView
     private lateinit var departureTimeTextView: TextView
+    private lateinit var etaToNextBStopTextView: TextView
+    private lateinit var aidTextView: TextView
 
     private var lastLatitude = 0.0
     private var lastLongitude = 0.0
@@ -106,6 +108,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var busname = ""
     private var listConfig: List<BusItem>? = OfflineData.getConfig()
     private var aid = ""
+    private var etaToNextBStop = ""
 
     private var routeIndex = 0 // Initialize index at the start
     private var busRoute = listOf<GeoPoint>()
@@ -217,10 +220,12 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         busNameTextView = findViewById(R.id.busNameTextView)
         showDepartureTimeTextView = findViewById(R.id.showDepartureTimeTextView)
         departureTimeTextView = findViewById(R.id.departureTimeTextView)
+        etaToNextBStopTextView = findViewById(R.id.etaToNextBStopTextView)
         networkStatusIndicator = findViewById(R.id.networkStatusIndicator)
         reconnectProgressBar = findViewById(R.id.reconnectProgressBar)
         connectionStatusTextView = findViewById(R.id.connectionStatusTextView)
         attemptingToConnectTextView = findViewById(R.id.attemptingToConnectTextView)
+        aidTextView = findViewById(R.id.aidTextView)
     }
 
     /**
@@ -645,14 +650,6 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     }
 
     /**
-     * Updates the bearing text view with the current bearing.
-     */
-    private fun updateBearingTextView() {
-        val bearingString = bearing.toString()
-        bearingTextView.text = "Current Bearing: $bearingString degrees"
-    }
-
-    /**
      * Generates markers for bus stops on the map.
      */
     private fun generateBusStop() {
@@ -744,31 +741,13 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         busNameTextView.text = "Bus Name: $busname"
         showDepartureTimeTextView.text = "Show Departure Time: $showDepartureTime"
         departureTimeTextView.text = "Departure Time: $departureTime"
-    }
-
-    /**
-     * Updates the position of the marker on the map without animating.
-     */
-    @RequiresApi(Build.VERSION_CODES.Q)
-    private fun updateMarkerPositionWithoutAnimation() {
-        busMarker.position = GeoPoint(latitude, longitude)
-        busMarker.rotation = bearing
-        if (!binding.map.overlays.contains(busMarker)) {
-            binding.map.overlays.add(busMarker)
-        } else {
-            binding.map.overlays.remove(busMarker)
-            binding.map.overlays.add(busMarker)
-        }
-        binding.map.invalidate()
-        publishTelemetryData()
-        updateClientAttributes()
-        updateTextViews()
+        etaToNextBStopTextView.text = "etaToNextBStop: $etaToNextBStop"
+        aidTextView.text = "AID: $aid"
     }
 
     /**
      * Updates the position of the marker on the map and publishes telemetry data.
      */
-    @RequiresApi(Build.VERSION_CODES.Q)
     private fun updateMarkerPosition() {
         val newLatLng = GeoPoint(latitude, longitude)
         val newBearing = bearing
@@ -867,7 +846,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 val nextBusStopInSequence =
                     BusStopProximityManager.getNextBusStopInSequence(closestBusStopToPubDevice)
                 if (nextBusStopInSequence != null) {
-                    val etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
+                    etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
                         latitude, longitude,
                         nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
                     )
