@@ -89,6 +89,9 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private lateinit var busNameTextView: TextView
     private lateinit var showDepartureTimeTextView: TextView
     private lateinit var departureTimeTextView: TextView
+    private lateinit var etaToNextBStopTextView: TextView
+    private lateinit var aidTextView: TextView
+    private lateinit var closestBusStopToPubDeviceTextView: TextView
 
     private var lastLatitude = 0.0
     private var lastLongitude = 0.0
@@ -99,8 +102,10 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var direction = "North"
     private var busConfig = ""
     private var busname = ""
-    private var config: List<BusItem>? = null
+    private var config: List<BusItem>? = emptyList()
     private var aid = ""
+    private var etaToNextBStop = ""
+    private var closestBusStopToPubDevice = "none"
 
     private var lastMessage = ""
     private var totalMessage = 0
@@ -118,8 +123,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var isFirstTime = false
     private lateinit var timer: CountDownTimer
     private var firstTime = true
-
-    private var closestBusStopToPubDevice = "none"
 
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -208,10 +211,13 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         busNameTextView = findViewById(R.id.busNameTextView)
         showDepartureTimeTextView = findViewById(R.id.showDepartureTimeTextView)
         departureTimeTextView = findViewById(R.id.departureTimeTextView)
+        etaToNextBStopTextView = findViewById(R.id.etaToNextBStopTextView)
         networkStatusIndicator = findViewById(R.id.networkStatusIndicator)
         reconnectProgressBar = findViewById(R.id.reconnectProgressBar)
         connectionStatusTextView = findViewById(R.id.connectionStatusTextView)
         attemptingToConnectTextView = findViewById(R.id.attemptingToConnectTextView)
+        aidTextView = findViewById(R.id.aidTextView)
+        closestBusStopToPubDeviceTextView = findViewById(R.id.closestBusStopToPubDeviceTextView)
     }
 
     /**
@@ -590,14 +596,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     }
 
     /**
-     * Updates the bearing text view with the current bearing.
-     */
-    private fun updateBearingTextView() {
-        val bearingString = bearing.toString()
-        bearingTextView.text = "Current Bearing: $bearingString degrees"
-    }
-
-    /**
      * Updates the other data text view with the current other data telemetry.
      */
     private fun updateTextViews() {
@@ -609,6 +607,9 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         busNameTextView.text = "Bus Name: $busname"
         showDepartureTimeTextView.text = "Show Departure Time: $showDepartureTime"
         departureTimeTextView.text = "Departure Time: $departureTime"
+        etaToNextBStopTextView.text = "etaToNextBStop: $etaToNextBStop"
+        aidTextView.text = "AID: $aid"
+        closestBusStopToPubDeviceTextView.text = "closestBusStopToPubDevice: $closestBusStopToPubDevice"
     }
 
     /**
@@ -706,7 +707,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
                 // Update UI elements
                 runOnUiThread {
-                    updateBearingTextView()
                     updateTextViews()
                 }
 
@@ -784,13 +784,21 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         jsonObject.put("bearing", bearing)
         jsonObject.put("direction", direction)
         jsonObject.put("speed", speed)
-        jsonObject.put("bus", busConfig)
         jsonObject.put("showDepartureTime", showDepartureTime)
         jsonObject.put("departureTime", departureTime)
         jsonObject.put("bus", busname)
         jsonObject.put("aid", aid)
 //        Log.d("BusConfig", busConfig)
 //        Log.d("aid", aid)
+
+        // To publish the closest bus stop to the publisher device.
+        closestBusStopToPubDevice = BusStopProximityManager.getTheClosestBusStopToPubDevice(
+            latitude,
+            longitude,
+            closestBusStopToPubDevice
+        );
+        jsonObject.put("closestBusStopToPubDevice", closestBusStopToPubDevice)
+
         CoroutineScope(Dispatchers.Main).launch {
             try {
                 val nextBusStopInSequence =
@@ -803,7 +811,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 //                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
 //                    )
 
-                    val etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
+                    etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
                         latitude, longitude,
                         nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
                     )
@@ -881,8 +889,10 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         lastMessage = sharedPrefMananger.getString(LAST_MSG_KEY, "").toString()
 
         busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
-//        Log.d("arrBusDataOnline1", arrBusData.toString())
+//        Toast.makeText(this, "arrBusDataOnline1: ${arrBusData}", Toast.LENGTH_SHORT).show()
+        arrBusData = config!!
         arrBusData = arrBusData.filter { it.aid != aid }
+//        Toast.makeText(this, "arrBusDataOnline2: ${arrBusData}", Toast.LENGTH_SHORT).show()
         for (bus in arrBusData) {
             markerBus[bus.accessToken] = Marker(binding.map)
             markerBus[bus.accessToken]!!.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow2, null)
@@ -999,13 +1009,13 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      * Includes server URI, client ID, MQTT topics, and other constants.
      */
     companion object {
-        const val SERVER_URI = "tcp://43.226.218.94:1883"
+        const val SERVER_URI = "tcp://43.226.218.97:1883"
         const val CLIENT_ID = "jasonAndroidClientId"
         const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
         private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
         private const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
-        private const val REQUEST_PERIODIC_TIME = 5000L
-        private const val PUBLISH_POSITION_TIME = 5000L
+        private const val REQUEST_PERIODIC_TIME = 3000L
+        private const val PUBLISH_POSITION_TIME = 3000L
         private const val LAST_MSG_KEY = "lastMessageKey"
         private const val MSG_KEY = "messageKey"
         private const val SOUND_FILE_NAME = "notif.wav"

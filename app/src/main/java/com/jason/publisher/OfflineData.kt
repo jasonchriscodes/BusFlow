@@ -138,9 +138,11 @@ object OfflineData {
      */
     fun getConfig() : List<BusItem> {
         val jsonString = """
-            {"busConfig":[{"aid":"8d34bdc9a5c78c42","bus":"Bus A","accessToken":"z0MQXzmMsNZwiD9Pwn6J"},{"aid":"2b039058a1a5f8a3","bus":"Bus B","accessToken":"YiSbp8zzJyt3htZ7ECI0"},{"aid":"02372ba208415152","bus":"Bus C","accessToken":"kTmTKRd11CPX7RhXTVZY"},{"aid":"b9e0b467411f31b2","bus":"Bus D","accessToken":"0B9UJJEPVy9KOJr724RM"},{"aid":"9ce83742994fb104","bus":"Bus E","accessToken":"cqvj70Vg5KUHzZgsO5An"}]}
+            {"busConfig":[{"aid":"8d34bdc9a5c78c42","bus":"Bus A","accessToken":"3KMpqehqIfz7V4NT6xW7"},{"aid":"2b039058a1a5f8a3","bus":"Bus B","accessToken":"wurH9PWz8Le2Lqcsu7tw"}, {"aid":"02372ba208415152","bus":"Bus C","accessToken":"c1T0vQ8QFf9pfiluG27Y"}]}
         """.trimIndent()
-
+        val jsonString1 = """
+            {}
+        """.trimIndent()
         val configurationBus = mutableListOf<BusItem>()
 
         val jsonObject = JSONObject(jsonString)
@@ -183,7 +185,15 @@ object OfflineData {
             {"latitude":-36.78365,"longitude":175.01139,"busStopName":"15"} // bus 15
         ]
     """.trimIndent()
-
+        val jsonString2 = """
+        [
+            {"latitude":-36.854638,"longitude":174.764622,"busStopName":"S/E"}, // bus start
+            {"latitude":-36.853792,"longitude":174.765981,"busStopName":"1"}, // bus 1
+            {"latitude":-36.854254,"longitude":174.767905,"busStopName":"2"}, // bus 2
+            {"latitude":-36.855171,"longitude":174.76703,"busStopName":"3"},   // bus 3
+            {"latitude":-36.856104,"longitude":174.765522,"busStopName":"4"}, // bus 4
+        ]
+    """.trimIndent()
         val busStops = mutableListOf<BusStopInfo>()
         val jsonArray = JSONArray(jsonString)
 

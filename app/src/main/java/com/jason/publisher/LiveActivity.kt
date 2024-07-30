@@ -95,7 +95,7 @@ class LiveActivity: AppCompatActivity() {
 
         getConfigData()
         Log.d("Check username", username!!)
-        mqttManager = MqttManager(serverUri = "tcp://43.226.218.94:1883", clientId = clientId!!, username = username!!)
+        mqttManager = MqttManager(serverUri = "tcp://43.226.218.97:1883", clientId = clientId!!, username = username!!)
 
         mapConfiguration()
         publishDeviceInfo()

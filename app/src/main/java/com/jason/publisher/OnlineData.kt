@@ -17,9 +17,12 @@ object OnlineData {
      */
     fun getConfig() : List<BusItem> {
         val jsonString = """
-            {"busConfig":[{"aid":"8d34bdc9a5c78c42","bus":"Bus A","accessToken":"z0MQXzmMsNZwiD9Pwn6J"},{"aid":"2b039058a1a5f8a3","bus":"Bus B","accessToken":"YiSbp8zzJyt3htZ7ECI0"},{"aid":"02372ba208415152","bus":"Bus C","accessToken":"kTmTKRd11CPX7RhXTVZY"},{"aid":"b9e0b467411f31b2","bus":"Bus D","accessToken":"0B9UJJEPVy9KOJr724RM"}]}
+            {"busConfig":[{"aid":"8d34bdc9a5c78c42","bus":"Bus A","accessToken":"3KMpqehqIfz7V4NT6xW7"},{"aid":"2b039058a1a5f8a3","bus":"Bus B","accessToken":"wurH9PWz8Le2Lqcsu7tw"}, {"aid":"02372ba208415152","bus":"Bus C","accessToken":"c1T0vQ8QFf9pfiluG27Y"}]}
+            
         """.trimIndent()
-
+        val jsonString1 = """
+            {}
+        """.trimIndent()
         val configurationBus = mutableListOf<BusItem>()
         val jsonObject = JSONObject(jsonString)
         val jsonArray = jsonObject.getJSONArray("busConfig")

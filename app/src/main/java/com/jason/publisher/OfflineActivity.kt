@@ -93,6 +93,9 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private lateinit var busNameTextView: TextView
     private lateinit var showDepartureTimeTextView: TextView
     private lateinit var departureTimeTextView: TextView
+    private lateinit var etaToNextBStopTextView: TextView
+    private lateinit var aidTextView: TextView
+    private lateinit var closestBusStopToPubDeviceTextView: TextView
 
     private var lastLatitude = 0.0
     private var lastLongitude = 0.0
@@ -104,8 +107,10 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var direction = "North"
     private var busConfig = ""
     private var busname = ""
-    private var config: List<BusItem>? = null
+    private var listConfig: List<BusItem>? = OfflineData.getConfig()
     private var aid = ""
+    private var etaToNextBStop = ""
+    private var closestBusStopToPubDevice = "none"
 
     private var routeIndex = 0 // Initialize index at the start
     private var busRoute = listOf<GeoPoint>()
@@ -129,8 +134,6 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var markerBus = HashMap<String, Marker>()
     private var routeDirection = "forward"
 
-    private var closestBusStopToPubDevice = "none"
-
     /**
      * Initializes the activity, sets up sensor and service managers, loads configuration, subscribes to admin messages,
      * and initializes UI components.
@@ -140,6 +143,13 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         super.onCreate(savedInstanceState)
         binding = ActivityOfflineBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // To be implement!!
+        // get client attribute
+        // filter aid
+        // if aid not match, add bus name, accesstoken, aid (automate)
+        // post to client attributes
+        // use posted data, to connect mqtt manager
 
         // Initialize UI components
         initializeUIComponents()
@@ -217,10 +227,13 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         busNameTextView = findViewById(R.id.busNameTextView)
         showDepartureTimeTextView = findViewById(R.id.showDepartureTimeTextView)
         departureTimeTextView = findViewById(R.id.departureTimeTextView)
+        etaToNextBStopTextView = findViewById(R.id.etaToNextBStopTextView)
         networkStatusIndicator = findViewById(R.id.networkStatusIndicator)
         reconnectProgressBar = findViewById(R.id.reconnectProgressBar)
         connectionStatusTextView = findViewById(R.id.connectionStatusTextView)
         attemptingToConnectTextView = findViewById(R.id.attemptingToConnectTextView)
+        aidTextView = findViewById(R.id.aidTextView)
+        closestBusStopToPubDeviceTextView = findViewById(R.id.closestBusStopToPubDeviceTextView)
     }
 
     /**
@@ -286,14 +299,15 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      */
     @SuppressLint("HardwareIds")
     private fun getAccessToken() {
-        val listConfig = OfflineData.getConfig()
+//        Toast.makeText(this, "listConfig getAccessToken: ${listConfig}", Toast.LENGTH_SHORT).show()
         aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-        for (config in listConfig) {
+        for (config in listConfig!!) {
             if (config.aid == aid) {
                 token = config.accessToken
                 break
             }
         }
+        //if (token.isEmpty())
     }
 
     /**
@@ -433,7 +447,11 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
             runOnUiThread {
                 val gson = Gson()
                 val data = gson.fromJson(message, Bus::class.java)
-                arrBusData = data.shared?.config?.busConfig ?: return@runOnUiThread
+                listConfig = data.shared?.config?.busConfig
+                arrBusData = listConfig ?:
+                return@runOnUiThread
+
+//                Toast.makeText(this, "bus config subscribeSharedData(): ${arrBusData} ", Toast.LENGTH_SHORT).show()
 
                 if (arrBusData.isNullOrEmpty()) {
                     Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
@@ -442,6 +460,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 }
 
                 val tabletAid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+                aid = tabletAid
                 if (arrBusData.none { it.aid == tabletAid }) {
                     Toast.makeText(this, "AID does not match.", Toast.LENGTH_SHORT).show()
                     clearBusData()
@@ -462,6 +481,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
                 // Initialize busRoute and busStop using data from shared
                 busRoute = data.shared?.busRoute1?.mapNotNull {
+//                    Toast.makeText(this, "busRoute subscribeSharedData: ${busRoute}", Toast.LENGTH_SHORT).show()
                     it.latitude?.let { lat ->
                         it.longitude?.let { lon ->
                             GeoPoint(lat, lon)
@@ -644,14 +664,6 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     }
 
     /**
-     * Updates the bearing text view with the current bearing.
-     */
-    private fun updateBearingTextView() {
-        val bearingString = bearing.toString()
-        bearingTextView.text = "Current Bearing: $bearingString degrees"
-    }
-
-    /**
      * Generates markers for bus stops on the map.
      */
     private fun generateBusStop() {
@@ -743,31 +755,14 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         busNameTextView.text = "Bus Name: $busname"
         showDepartureTimeTextView.text = "Show Departure Time: $showDepartureTime"
         departureTimeTextView.text = "Departure Time: $departureTime"
-    }
-
-    /**
-     * Updates the position of the marker on the map without animating.
-     */
-    @RequiresApi(Build.VERSION_CODES.Q)
-    private fun updateMarkerPositionWithoutAnimation() {
-        busMarker.position = GeoPoint(latitude, longitude)
-        busMarker.rotation = bearing
-        if (!binding.map.overlays.contains(busMarker)) {
-            binding.map.overlays.add(busMarker)
-        } else {
-            binding.map.overlays.remove(busMarker)
-            binding.map.overlays.add(busMarker)
-        }
-        binding.map.invalidate()
-        publishTelemetryData()
-        updateClientAttributes()
-        updateTextViews()
+        etaToNextBStopTextView.text = "etaToNextBStop: $etaToNextBStop"
+        aidTextView.text = "AID: $aid"
+        closestBusStopToPubDeviceTextView.text = "closestBusStopToPubDevice: $closestBusStopToPubDevice"
     }
 
     /**
      * Updates the position of the marker on the map and publishes telemetry data.
      */
-    @RequiresApi(Build.VERSION_CODES.Q)
     private fun updateMarkerPosition() {
         val newLatLng = GeoPoint(latitude, longitude)
         val newBearing = bearing
@@ -855,21 +850,37 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         jsonObject.put("bearing", bearing)
         jsonObject.put("direction", direction)
         jsonObject.put("speed", speed)
-        jsonObject.put("bus", busConfig)
         jsonObject.put("showDepartureTime", showDepartureTime)
         jsonObject.put("departureTime", departureTime)
         jsonObject.put("bus", busname)
         jsonObject.put("aid", aid)
+
+        // To publish the closest bus stop to the publisher device.
+        closestBusStopToPubDevice = BusStopProximityManager.getTheClosestBusStopToPubDevice(
+            latitude,
+            longitude,
+            closestBusStopToPubDevice
+        );
+        jsonObject.put("closestBusStopToPubDevice", closestBusStopToPubDevice)
+//        Toast.makeText(this, "closestBusStopToPubDevice:${closestBusStopToPubDevice}", Toast.LENGTH_SHORT).show()
 
         CoroutineScope(Dispatchers.Main).launch {
             try {
                 val nextBusStopInSequence =
                     BusStopProximityManager.getNextBusStopInSequence(closestBusStopToPubDevice)
                 if (nextBusStopInSequence != null) {
-                    val etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
+
+//                     Note: uncomment below lines of code to use TomTom API.
+//                    val etaToNextBStop = TomTomService.getEstimateTimeFromPointToPoint(
+//                        latitude, longitude,
+//                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
+//                    )
+
+                    etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
                         latitude, longitude,
                         nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
                     )
+
                     jsonObject.put("ETAtoNextBStop", etaToNextBStop)
                 }
 
@@ -895,13 +906,12 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      * @return the name of the bus or null if not found.
      */
     fun findBusNameByAid(aid: String?): String? {
+//        Toast.makeText(this, "listConfig findBusNameByAid: ${listConfig}", Toast.LENGTH_SHORT).show()
         if (aid == null) {
             Log.e("findBusNameByAid", "AID is null")
             return null
         }
-
-        val configList = OfflineData.getConfig()
-        val busItem = configList.find { it.aid == aid }
+        val busItem = listConfig!!.find { it.aid == aid }
 
         return busItem?.bus ?: run {
             Log.e("findBusNameByAid", "No bus found with AID: $aid")
@@ -1122,7 +1132,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      * Includes server URI, client ID, MQTT topics, and other constants.
      */
     companion object {
-        const val SERVER_URI = "tcp://43.226.218.94:1883"
+        const val SERVER_URI = "tcp://43.226.218.97:1883"
         const val CLIENT_ID = "jasonAndroidClientId"
         const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
         private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"

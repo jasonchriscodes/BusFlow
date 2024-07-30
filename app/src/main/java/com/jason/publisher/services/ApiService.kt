@@ -42,7 +42,7 @@ interface ApiService {
     ): Call<ClientAttributesResponse>
 
     companion object {
-        const val BASE_URL = "http://43.226.218.94:8080/api/v1/"
+        const val BASE_URL = "http://43.226.218.97:8080/api/v1/"
     }
 }
 
