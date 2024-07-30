@@ -91,6 +91,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private lateinit var departureTimeTextView: TextView
     private lateinit var etaToNextBStopTextView: TextView
     private lateinit var aidTextView: TextView
+    private lateinit var closestBusStopToPubDeviceTextView: TextView
 
     private var lastLatitude = 0.0
     private var lastLongitude = 0.0
@@ -104,6 +105,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var config: List<BusItem>? = null
     private var aid = ""
     private var etaToNextBStop = ""
+    private var closestBusStopToPubDevice = "none"
 
     private var lastMessage = ""
     private var totalMessage = 0
@@ -121,8 +123,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var isFirstTime = false
     private lateinit var timer: CountDownTimer
     private var firstTime = true
-
-    private var closestBusStopToPubDevice = "none"
 
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -217,6 +217,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         connectionStatusTextView = findViewById(R.id.connectionStatusTextView)
         attemptingToConnectTextView = findViewById(R.id.attemptingToConnectTextView)
         aidTextView = findViewById(R.id.aidTextView)
+        closestBusStopToPubDeviceTextView = findViewById(R.id.closestBusStopToPubDeviceTextView)
     }
 
     /**
@@ -608,6 +609,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         departureTimeTextView.text = "Departure Time: $departureTime"
         etaToNextBStopTextView.text = "etaToNextBStop: $etaToNextBStop"
         aidTextView.text = "AID: $aid"
+        closestBusStopToPubDeviceTextView.text = "closestBusStopToPubDevice: $closestBusStopToPubDevice"
     }
 
     /**
@@ -788,6 +790,15 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         jsonObject.put("aid", aid)
 //        Log.d("BusConfig", busConfig)
 //        Log.d("aid", aid)
+
+        // To publish the closest bus stop to the publisher device.
+        closestBusStopToPubDevice = BusStopProximityManager.getTheClosestBusStopToPubDevice(
+            latitude,
+            longitude,
+            closestBusStopToPubDevice
+        );
+        jsonObject.put("closestBusStopToPubDevice", closestBusStopToPubDevice)
+
         CoroutineScope(Dispatchers.Main).launch {
             try {
                 val nextBusStopInSequence =
@@ -1001,8 +1012,8 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
         private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
         private const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
-        private const val REQUEST_PERIODIC_TIME = 5000L
-        private const val PUBLISH_POSITION_TIME = 5000L
+        private const val REQUEST_PERIODIC_TIME = 3000L
+        private const val PUBLISH_POSITION_TIME = 3000L
         private const val LAST_MSG_KEY = "lastMessageKey"
         private const val MSG_KEY = "messageKey"
         private const val SOUND_FILE_NAME = "notif.wav"

@@ -235,5 +235,19 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/etaToNextBStopTextView" />
 
+    <!-- TextView to Closest Bus Stop -->
+    <TextView
+        android:id="@+id/closestBusStopToPubDeviceTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:text="closestBusStopToPubDevice: "
+        android:textSize="16sp"
+        android:textColor="@android:color/black"
+        android:background="@android:color/white"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/aidTextView" />
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>

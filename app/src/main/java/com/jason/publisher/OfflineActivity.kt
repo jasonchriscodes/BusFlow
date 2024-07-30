@@ -95,6 +95,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private lateinit var departureTimeTextView: TextView
     private lateinit var etaToNextBStopTextView: TextView
     private lateinit var aidTextView: TextView
+    private lateinit var closestBusStopToPubDeviceTextView: TextView
 
     private var lastLatitude = 0.0
     private var lastLongitude = 0.0
@@ -109,6 +110,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var listConfig: List<BusItem>? = OfflineData.getConfig()
     private var aid = ""
     private var etaToNextBStop = ""
+    private var closestBusStopToPubDevice = "none"
 
     private var routeIndex = 0 // Initialize index at the start
     private var busRoute = listOf<GeoPoint>()
@@ -131,8 +133,6 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var arrBusData: List<BusItem> = emptyList()
     private var markerBus = HashMap<String, Marker>()
     private var routeDirection = "forward"
-
-    private var closestBusStopToPubDevice = "none"
 
     /**
      * Initializes the activity, sets up sensor and service managers, loads configuration, subscribes to admin messages,
@@ -233,6 +233,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         connectionStatusTextView = findViewById(R.id.connectionStatusTextView)
         attemptingToConnectTextView = findViewById(R.id.attemptingToConnectTextView)
         aidTextView = findViewById(R.id.aidTextView)
+        closestBusStopToPubDeviceTextView = findViewById(R.id.closestBusStopToPubDeviceTextView)
     }
 
     /**
@@ -756,6 +757,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         departureTimeTextView.text = "Departure Time: $departureTime"
         etaToNextBStopTextView.text = "etaToNextBStop: $etaToNextBStop"
         aidTextView.text = "AID: $aid"
+        closestBusStopToPubDeviceTextView.text = "closestBusStopToPubDevice: $closestBusStopToPubDevice"
     }
 
     /**
@@ -853,16 +855,32 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         jsonObject.put("bus", busname)
         jsonObject.put("aid", aid)
 
+        // To publish the closest bus stop to the publisher device.
+        closestBusStopToPubDevice = BusStopProximityManager.getTheClosestBusStopToPubDevice(
+            latitude,
+            longitude,
+            closestBusStopToPubDevice
+        );
+        jsonObject.put("closestBusStopToPubDevice", closestBusStopToPubDevice)
+//        Toast.makeText(this, "closestBusStopToPubDevice:${closestBusStopToPubDevice}", Toast.LENGTH_SHORT).show()
+
         CoroutineScope(Dispatchers.Main).launch {
             try {
                 val nextBusStopInSequence =
                     BusStopProximityManager.getNextBusStopInSequence(closestBusStopToPubDevice)
-//                        Toast.makeText(this@OfflineActivity, "nextBusStopInSequence publishTelemetryData: ${nextBusStopInSequence}", Toast.LENGTH_SHORT).show()
                 if (nextBusStopInSequence != null) {
+
+//                     Note: uncomment below lines of code to use TomTom API.
+//                    val etaToNextBStop = TomTomService.getEstimateTimeFromPointToPoint(
+//                        latitude, longitude,
+//                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
+//                    )
+
                     etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
                         latitude, longitude,
                         nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
                     )
+
                     jsonObject.put("ETAtoNextBStop", etaToNextBStop)
                 }
 
