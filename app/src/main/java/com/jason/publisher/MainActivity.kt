@@ -102,7 +102,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var direction = "North"
     private var busConfig = ""
     private var busname = ""
-    private var config: List<BusItem>? = null
+    private var config: List<BusItem>? = emptyList()
     private var aid = ""
     private var etaToNextBStop = ""
     private var closestBusStopToPubDevice = "none"
@@ -889,8 +889,10 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         lastMessage = sharedPrefMananger.getString(LAST_MSG_KEY, "").toString()
 
         busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
-//        Log.d("arrBusDataOnline1", arrBusData.toString())
+//        Toast.makeText(this, "arrBusDataOnline1: ${arrBusData}", Toast.LENGTH_SHORT).show()
+        arrBusData = config!!
         arrBusData = arrBusData.filter { it.aid != aid }
+//        Toast.makeText(this, "arrBusDataOnline2: ${arrBusData}", Toast.LENGTH_SHORT).show()
         for (bus in arrBusData) {
             markerBus[bus.accessToken] = Marker(binding.map)
             markerBus[bus.accessToken]!!.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow2, null)
