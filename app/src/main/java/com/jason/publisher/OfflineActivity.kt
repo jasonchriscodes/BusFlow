@@ -147,7 +147,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         // To be implement!!
         // get client attribute
         // filter aid
-        // if aid not match, add bus name, accesstoken, aid (automatis)
+        // if aid not match, add bus name, accesstoken, aid (automate)
         // post to client attributes
         // use posted data, to connect mqtt manager
 
@@ -857,6 +857,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
             try {
                 val nextBusStopInSequence =
                     BusStopProximityManager.getNextBusStopInSequence(closestBusStopToPubDevice)
+//                        Toast.makeText(this@OfflineActivity, "nextBusStopInSequence publishTelemetryData: ${nextBusStopInSequence}", Toast.LENGTH_SHORT).show()
                 if (nextBusStopInSequence != null) {
                     etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
                         latitude, longitude,

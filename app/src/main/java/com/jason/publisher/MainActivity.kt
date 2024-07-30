@@ -89,6 +89,8 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private lateinit var busNameTextView: TextView
     private lateinit var showDepartureTimeTextView: TextView
     private lateinit var departureTimeTextView: TextView
+    private lateinit var etaToNextBStopTextView: TextView
+    private lateinit var aidTextView: TextView
 
     private var lastLatitude = 0.0
     private var lastLongitude = 0.0
@@ -101,6 +103,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var busname = ""
     private var config: List<BusItem>? = null
     private var aid = ""
+    private var etaToNextBStop = ""
 
     private var lastMessage = ""
     private var totalMessage = 0
@@ -208,10 +211,12 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         busNameTextView = findViewById(R.id.busNameTextView)
         showDepartureTimeTextView = findViewById(R.id.showDepartureTimeTextView)
         departureTimeTextView = findViewById(R.id.departureTimeTextView)
+        etaToNextBStopTextView = findViewById(R.id.etaToNextBStopTextView)
         networkStatusIndicator = findViewById(R.id.networkStatusIndicator)
         reconnectProgressBar = findViewById(R.id.reconnectProgressBar)
         connectionStatusTextView = findViewById(R.id.connectionStatusTextView)
         attemptingToConnectTextView = findViewById(R.id.attemptingToConnectTextView)
+        aidTextView = findViewById(R.id.aidTextView)
     }
 
     /**
@@ -590,14 +595,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     }
 
     /**
-     * Updates the bearing text view with the current bearing.
-     */
-    private fun updateBearingTextView() {
-        val bearingString = bearing.toString()
-        bearingTextView.text = "Current Bearing: $bearingString degrees"
-    }
-
-    /**
      * Updates the other data text view with the current other data telemetry.
      */
     private fun updateTextViews() {
@@ -609,6 +606,8 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         busNameTextView.text = "Bus Name: $busname"
         showDepartureTimeTextView.text = "Show Departure Time: $showDepartureTime"
         departureTimeTextView.text = "Departure Time: $departureTime"
+        etaToNextBStopTextView.text = "etaToNextBStop: $etaToNextBStop"
+        aidTextView.text = "AID: $aid"
     }
 
     /**
@@ -706,7 +705,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
                 // Update UI elements
                 runOnUiThread {
-                    updateBearingTextView()
                     updateTextViews()
                 }
 
@@ -802,7 +800,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 //                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
 //                    )
 
-                    val etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
+                    etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
                         latitude, longitude,
                         nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
                     )
