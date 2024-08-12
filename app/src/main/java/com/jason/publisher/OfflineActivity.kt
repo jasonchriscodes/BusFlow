@@ -165,7 +165,9 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         sharedPrefMananger = SharedPrefMananger(this)
         notificationManager = NotificationManager(this)
         soundManager = SoundManager(this)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         getDefaultConfigValue()
+        }
 
         getMessageCount()
         requestAdminMessage()
