@@ -18,10 +18,21 @@ def tomtomApiKey = System.getenv("TOMTOM_API_KEY") ?: ""
 def googleApiKey = System.getenv("GOOGLE_API_KEY") ?: ""
 def openRouteServiceApiKey = System.getenv("OpenRouteService_API_KEY") ?: ""
 
+def propertiesFile = file("${rootDir}/local.properties")
+if (propertiesFile.exists()) {
+    propertiesFile.withInputStream { stream ->
+        properties.load(stream)
+    }
+
+    // Override environment variables with local properties if they exist
+    tomtomApiKey = properties.getProperty("TOMTOM_API_KEY", tomtomApiKey)
+    googleApiKey = properties.getProperty("GOOGLE_API_KEY", googleApiKey)
+    openRouteServiceApiKey = properties.getProperty("OpenRouteService_API_KEY", openRouteServiceApiKey)
+}
+
 android {
     namespace 'com.jason.publisher'
     compileSdk 33
-    compileSdkVersion 33
 
     defaultConfig {
         applicationId "com.jason.publisher"
@@ -30,14 +41,6 @@ android {
         versionCode 1
         versionName "1.0"
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-
-        testOptions {
-            unitTests.all {
-                jvmArgs '--add-opens', 'java.base/java.lang=ALL-UNNAMED',
-                        '--add-opens', 'java.base/java.lang.reflect=ALL-UNNAMED'
-            }
-        }
         buildConfigField "String", "TOMTOM_API_KEY", "\"${tomtomApiKey}\""
         buildConfigField "String", "GOOGLE_API_KEY", "\"${googleApiKey}\""
         buildConfigField "String", "OpenRouteService_API_KEY", "\"${openRouteServiceApiKey}\""
