@@ -14,13 +14,14 @@ file("${rootDir}/local.properties").withInputStream { stream ->
 }
 
 // Read properties from environment variables first, fallback to local.properties
-def tomtomApiKey = System.getenv("TOMTOM_API_KEY") ?: properties.getProperty("TOMTOM_API_KEY")
-def googleApiKey = System.getenv("GOOGLE_API_KEY") ?: properties.getProperty("GOOGLE_API_KEY")
-def openRouteServiceApiKey = System.getenv("OpenRouteService_API_KEY") ?: properties.getProperty("OpenRouteService_API_KEY")
+def tomtomApiKey = System.getenv("TOMTOM_API_KEY") ?: ""
+def googleApiKey = System.getenv("GOOGLE_API_KEY") ?: ""
+def openRouteServiceApiKey = System.getenv("OpenRouteService_API_KEY") ?: ""
 
 android {
     namespace 'com.jason.publisher'
     compileSdk 33
+    compileSdkVersion 33
 
     defaultConfig {
         applicationId "com.jason.publisher"
