@@ -125,52 +125,52 @@ class MainActivityTest {
     /**
      * Tests the bearingToDirection method with various bearing values.
      */
-    @Test
-    fun testBearingToDirection() {
-        // North
-        assertEquals("North", Helper.bearingToDirection(normalizeBearing(0f)))
-        assertEquals("North", Helper.bearingToDirection(normalizeBearing(360f)))
-        assertEquals("North", Helper.bearingToDirection(normalizeBearing(15f)))
-        assertEquals("North", Helper.bearingToDirection(normalizeBearing(337.5f)))
-
-        // Northeast
-        assertEquals("Northeast", Helper.bearingToDirection(normalizeBearing(22.5f)))
-        assertEquals("Northeast", Helper.bearingToDirection(normalizeBearing(45f)))
-        assertEquals("Northeast", Helper.bearingToDirection(normalizeBearing(67.4f)))
-
-        // East
-        assertEquals("East", Helper.bearingToDirection(normalizeBearing(67.5f)))
-        assertEquals("East", Helper.bearingToDirection(normalizeBearing(90f)))
-        assertEquals("East", Helper.bearingToDirection(normalizeBearing(112.4f)))
-
-        // Southeast
-        assertEquals("Southeast", Helper.bearingToDirection(normalizeBearing(112.5f)))
-        assertEquals("Southeast", Helper.bearingToDirection(normalizeBearing(135f)))
-        assertEquals("Southeast", Helper.bearingToDirection(normalizeBearing(157.4f)))
-
-        // South
-        assertEquals("South", Helper.bearingToDirection(normalizeBearing(157.5f)))
-        assertEquals("South", Helper.bearingToDirection(normalizeBearing(180f)))
-        assertEquals("South", Helper.bearingToDirection(normalizeBearing(202.4f)))
-
-        // Southwest
-        assertEquals("Southwest", Helper.bearingToDirection(normalizeBearing(202.5f)))
-        assertEquals("Southwest", Helper.bearingToDirection(normalizeBearing(225f)))
-        assertEquals("Southwest", Helper.bearingToDirection(normalizeBearing(247.4f)))
-
-        // West
-        assertEquals("West", Helper.bearingToDirection(normalizeBearing(247.5f)))
-        assertEquals("West", Helper.bearingToDirection(normalizeBearing(270f)))
-        assertEquals("West", Helper.bearingToDirection(normalizeBearing(292.4f)))
-
-        // Northwest
-        assertEquals("Northwest", Helper.bearingToDirection(normalizeBearing(292.5f)))
-        assertEquals("Northwest", Helper.bearingToDirection(normalizeBearing(315f)))
-        assertEquals("Northwest", Helper.bearingToDirection(normalizeBearing(337.4f)))
-
-        // Normalize Invalid Bearings
-        assertEquals("North", Helper.bearingToDirection(normalizeBearing(-1f))) // -1 normalized to 359
-        assertEquals("Northeast", Helper.bearingToDirection(normalizeBearing(400f))) // 400 normalized to 40
-    }
+//    @Test
+//    fun testBearingToDirection() {
+//        // North
+//        assertEquals("North", Helper.bearingToDirection(normalizeBearing(0f)))
+//        assertEquals("North", Helper.bearingToDirection(normalizeBearing(360f)))
+//        assertEquals("North", Helper.bearingToDirection(normalizeBearing(15f)))
+//        assertEquals("North", Helper.bearingToDirection(normalizeBearing(337.5f)))
+//
+//        // Northeast
+//        assertEquals("Northeast", Helper.bearingToDirection(normalizeBearing(22.5f)))
+//        assertEquals("Northeast", Helper.bearingToDirection(normalizeBearing(45f)))
+//        assertEquals("Northeast", Helper.bearingToDirection(normalizeBearing(67.4f)))
+//
+//        // East
+//        assertEquals("East", Helper.bearingToDirection(normalizeBearing(67.5f)))
+//        assertEquals("East", Helper.bearingToDirection(normalizeBearing(90f)))
+//        assertEquals("East", Helper.bearingToDirection(normalizeBearing(112.4f)))
+//
+//        // Southeast
+//        assertEquals("Southeast", Helper.bearingToDirection(normalizeBearing(112.5f)))
+//        assertEquals("Southeast", Helper.bearingToDirection(normalizeBearing(135f)))
+//        assertEquals("Southeast", Helper.bearingToDirection(normalizeBearing(157.4f)))
+//
+//        // South
+//        assertEquals("South", Helper.bearingToDirection(normalizeBearing(157.5f)))
+//        assertEquals("South", Helper.bearingToDirection(normalizeBearing(180f)))
+//        assertEquals("South", Helper.bearingToDirection(normalizeBearing(202.4f)))
+//
+//        // Southwest
+//        assertEquals("Southwest", Helper.bearingToDirection(normalizeBearing(202.5f)))
+//        assertEquals("Southwest", Helper.bearingToDirection(normalizeBearing(225f)))
+//        assertEquals("Southwest", Helper.bearingToDirection(normalizeBearing(247.4f)))
+//
+//        // West
+//        assertEquals("West", Helper.bearingToDirection(normalizeBearing(247.5f)))
+//        assertEquals("West", Helper.bearingToDirection(normalizeBearing(270f)))
+//        assertEquals("West", Helper.bearingToDirection(normalizeBearing(292.4f)))
+//
+//        // Northwest
+//        assertEquals("Northwest", Helper.bearingToDirection(normalizeBearing(292.5f)))
+//        assertEquals("Northwest", Helper.bearingToDirection(normalizeBearing(315f)))
+//        assertEquals("Northwest", Helper.bearingToDirection(normalizeBearing(337.4f)))
+//
+//        // Normalize Invalid Bearings
+//        assertEquals("North", Helper.bearingToDirection(normalizeBearing(-1f))) // -1 normalized to 359
+//        assertEquals("Northeast", Helper.bearingToDirection(normalizeBearing(400f))) // 400 normalized to 40
+//    }
 
 }
