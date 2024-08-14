@@ -564,7 +564,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
                 latitude = currentLatitude
                 longitude = currentLongitude
-                speed = location.speed
+                speed = (location.speed * 3.6).toFloat()
 
                 // Update the last known location
                 lastLatitude = currentLatitude
