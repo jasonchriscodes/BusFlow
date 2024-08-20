@@ -28,6 +28,9 @@ class FeedbackActivity : AppCompatActivity() {
     private lateinit var submitFeedbackButton: Button
     private lateinit var backButton: Button
 
+    // Loading Dialog
+    private lateinit var loadingDialog: LoadingDialogFragment
+
     /**
      * Called when the activity is first created.
      * Initializes the UI components and sets up click listeners.
@@ -42,12 +45,16 @@ class FeedbackActivity : AppCompatActivity() {
         submitFeedbackButton = findViewById(R.id.submitFeedbackButton)
         backButton = findViewById(R.id.backButton)
 
+        // Initialize Loading Dialog
+        loadingDialog = LoadingDialogFragment()
+
         // Handle send feedback button click
         submitFeedbackButton.setOnClickListener {
             val name = nameEditText.text.toString()
             val feedback = feedbackEditText.text.toString()
 
             if (name.isNotEmpty() && feedback.isNotEmpty()) {
+                showLoading(true)
                 sendFeedback(name, feedback)
             } else {
                 showCustomToast("Please fill in all fields", false)
@@ -73,10 +80,12 @@ class FeedbackActivity : AppCompatActivity() {
             try {
                 sendEmail(subject, message)
                 runOnUiThread {
+                    showLoading(false)
                     showCustomToast("Your message has been successfully sent.", true)
                 }
             } catch (e: Exception) {
                 runOnUiThread {
+                    showLoading(false)
                     showCustomToast("Your message failed to send.", false)
                 }
             }
@@ -89,8 +98,8 @@ class FeedbackActivity : AppCompatActivity() {
      * @param message The body of the email.
      */
     private fun sendEmail(subject: String, message: String) {
-        val username = "systhingsboard@gmail.com" // Replace with your Gmail address
-        val password = BuildConfig.GOOGLE_APP_PASS   // Replace with your generated app password
+        val username = "systhingsboard@gmail.com"
+        val password = BuildConfig.GOOGLE_APP_PASS
 
         val props = Properties().apply {
             put("mail.smtp.auth", "true")
@@ -125,10 +134,8 @@ class FeedbackActivity : AppCompatActivity() {
         val toastView = toast.view
         val text = toastView?.findViewById<TextView>(android.R.id.message)
 
-        // Position the toast at the bottom
         toast.setGravity(Gravity.BOTTOM, 0, 100)
 
-        // Customize the text color based on success or failure
         if (success) {
             text?.setTextColor(Color.GREEN)
         } else {
@@ -136,5 +143,17 @@ class FeedbackActivity : AppCompatActivity() {
         }
 
         toast.show()
+    }
+
+    /**
+     * Shows or hides the loading spinner dialog.
+     * @param show Boolean indicating whether to show (true) or hide (false) the loading UI.
+     */
+    private fun showLoading(show: Boolean) {
+        if (show) {
+            loadingDialog.showLoading(supportFragmentManager)
+        } else {
+            loadingDialog.hideLoading()
+        }
     }
 }
