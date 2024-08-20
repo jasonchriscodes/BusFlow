@@ -1,36 +1,37 @@
 package com.jason.publisher
 
-import MailerSendService
+import android.graphics.Color
 import android.os.Bundle
+import android.view.Gravity
 import android.widget.Button
 import android.widget.EditText
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.jason.publisher.services.ApiServiceBuilder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Response
-
-// Data classes to map the JSON structure
-data class EmailRecipient(val email: String, val name: String)
-data class EmailData(
-    val from: EmailRecipient,
-    val to: List<EmailRecipient>,
-    val subject: String,
-    val text: String
-)
-data class ResponseData(val messageId: String)
+import java.util.Properties
+import javax.mail.Authenticator
+import javax.mail.Message
+import javax.mail.PasswordAuthentication
+import javax.mail.Session
+import javax.mail.Transport
+import javax.mail.internet.InternetAddress
+import javax.mail.internet.MimeMessage
 
 class FeedbackActivity : AppCompatActivity() {
 
+    // Declare UI components
     private lateinit var nameEditText: EditText
     private lateinit var feedbackEditText: EditText
     private lateinit var submitFeedbackButton: Button
     private lateinit var backButton: Button
 
+    /**
+     * Called when the activity is first created.
+     * Initializes the UI components and sets up click listeners.
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_feedback)
@@ -41,53 +42,99 @@ class FeedbackActivity : AppCompatActivity() {
         submitFeedbackButton = findViewById(R.id.submitFeedbackButton)
         backButton = findViewById(R.id.backButton)
 
-        // Initialize the MailerSend service
-        val mailerSendService = ApiServiceBuilder.buildEmailService(MailerSendService::class.java)
-
+        // Handle send feedback button click
         submitFeedbackButton.setOnClickListener {
             val name = nameEditText.text.toString()
             val feedback = feedbackEditText.text.toString()
 
             if (name.isNotEmpty() && feedback.isNotEmpty()) {
-                sendFeedback(mailerSendService, name, feedback)
+                sendFeedback(name, feedback)
             } else {
-                Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show()
+                showCustomToast("Please fill in all fields", false)
             }
         }
 
+        // Handle back button click
         backButton.setOnClickListener {
             finish() // Closes FeedbackActivity and goes back to MainActivity
         }
     }
 
-    private fun sendFeedback(service: MailerSendService, name: String, feedback: String) {
-        val emailData = EmailData(
-            from = EmailRecipient("admin@thingsboard.io", "Admin"),  // Replace with your sender email
-            to = listOf(EmailRecipient("vlrs13542@gmail.com", "Admin")),  // Replace with your recipient email
-            subject = "Feedback from $name",
-            text = feedback
-        )
+    /**
+     * Sends feedback by email.
+     * @param name The name of the user providing feedback.
+     * @param feedback The feedback content.
+     */
+    private fun sendFeedback(name: String, feedback: String) {
+        val subject = "Feedback from $name"
+        val message = "Hi Admin,\n\nYou received feedback from $name:\n$feedback\n\nThanks."
 
         CoroutineScope(Dispatchers.IO).launch {
-            service.sendEmail(emailData).enqueue(object : Callback<ResponseData> {
-                override fun onResponse(call: Call<ResponseData>, response: Response<ResponseData>) {
-                    if (response.isSuccessful) {
-                        runOnUiThread {
-                            Toast.makeText(this@FeedbackActivity, "Email sent successfully! ID: ${response.body()?.messageId}", Toast.LENGTH_SHORT).show()
-                        }
-                    } else {
-                        runOnUiThread {
-                            Toast.makeText(this@FeedbackActivity, "Failed to send email. Response code: ${response.code()}", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+            try {
+                sendEmail(subject, message)
+                runOnUiThread {
+                    showCustomToast("Your message has been successfully sent.", true)
                 }
-
-                override fun onFailure(call: Call<ResponseData>, t: Throwable) {
-                    runOnUiThread {
-                        Toast.makeText(this@FeedbackActivity, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
-                    }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    showCustomToast("Your message failed to send.", false)
                 }
-            })
+            }
         }
+    }
+
+    /**
+     * Sends an email using Gmail SMTP.
+     * @param subject The subject of the email.
+     * @param message The body of the email.
+     */
+    private fun sendEmail(subject: String, message: String) {
+        val username = "systhingsboard@gmail.com" // Replace with your Gmail address
+        val password = BuildConfig.GOOGLE_APP_PASS   // Replace with your generated app password
+
+        val props = Properties().apply {
+            put("mail.smtp.auth", "true")
+            put("mail.smtp.starttls.enable", "true")
+            put("mail.smtp.host", "smtp.gmail.com")
+            put("mail.smtp.port", "587")
+        }
+
+        val session = Session.getInstance(props, object : Authenticator() {
+            override fun getPasswordAuthentication(): PasswordAuthentication {
+                return PasswordAuthentication(username, password)
+            }
+        })
+
+        val mimeMessage = MimeMessage(session).apply {
+            setFrom(InternetAddress(username, "VLRS Thingsboard"))
+            setRecipients(Message.RecipientType.TO, InternetAddress.parse("systhingsboard@gmail.com"))
+            setSubject(subject)
+            setText(message)
+        }
+
+        Transport.send(mimeMessage)
+    }
+
+    /**
+     * Displays a custom Toast message at the bottom of the screen.
+     * @param message The message to display.
+     * @param success Indicates whether the operation was successful (true) or failed (false).
+     */
+    private fun showCustomToast(message: String, success: Boolean) {
+        val toast = Toast.makeText(this, message, Toast.LENGTH_LONG)
+        val toastView = toast.view
+        val text = toastView?.findViewById<TextView>(android.R.id.message)
+
+        // Position the toast at the bottom
+        toast.setGravity(Gravity.BOTTOM, 0, 100)
+
+        // Customize the text color based on success or failure
+        if (success) {
+            text?.setTextColor(Color.GREEN)
+        } else {
+            text?.setTextColor(Color.RED)
+        }
+
+        toast.show()
     }
 }

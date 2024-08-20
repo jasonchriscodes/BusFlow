@@ -13,6 +13,7 @@ env:
   GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
   OpenRouteService_API_KEY: ${{ secrets.OpenRouteService_API_KEY }}
   MAILERSEND_API_KEY: ${{ secrets.MAILERSEND_API_KEY }}
+  GOOGLE_APP_PASS: ${{ secrets.GOOGLE_APP_PASS }}
 
 jobs:
   build:
