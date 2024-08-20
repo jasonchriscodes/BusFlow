@@ -3,6 +3,7 @@ package com.jason.publisher
 import NetworkReceiver
 import android.annotation.SuppressLint
 import android.content.DialogInterface
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Rect
 import android.location.Location
@@ -197,6 +198,16 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         networkReceiver = NetworkReceiver(this)
         val intentFilter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
         registerReceiver(networkReceiver, intentFilter)
+
+
+        // Inside onCreate method or wherever you handle the button click
+        binding.feedbackButton.setOnClickListener {
+            // Start the FeedbackActivity when the feedback button is clicked
+            val intent = Intent(this, FeedbackActivity::class.java)
+            intent.putExtra("TOKEN", token)  // Pass the token to FeedbackActivity
+            startActivity(intent)
+        }
+
     }
 
     /**

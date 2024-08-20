@@ -11,6 +11,7 @@ plugins {
 def tomtomApiKey = System.getenv("TOMTOM_API_KEY") ?: ""
 def googleApiKey = System.getenv("GOOGLE_API_KEY") ?: ""
 def openRouteServiceApiKey = System.getenv("OpenRouteService_API_KEY") ?: ""
+def mailerSenderApiKey = System.getenv("MAILERSEND_API_KEY") ?: ""
 
 // support local development with local.properties, load it conditionally
 def propertiesFile = file("${rootDir}/local.properties")
@@ -23,11 +24,11 @@ if (propertiesFile.exists()) {
     tomtomApiKey = properties.getProperty("TOMTOM_API_KEY", tomtomApiKey)
     googleApiKey = properties.getProperty("GOOGLE_API_KEY", googleApiKey)
     openRouteServiceApiKey = properties.getProperty("OpenRouteService_API_KEY", openRouteServiceApiKey)
+    mailerSenderApiKey = properties.getProperty("MAILERSEND_API_KEY", mailerSenderApiKey)
 }
 
 android {
     namespace 'com.jason.publisher'
-    compileSdkVersion 33 // Ensure this is set correctly
     compileSdk 33
 
     defaultConfig {
@@ -40,6 +41,7 @@ android {
         buildConfigField "String", "TOMTOM_API_KEY", "\"${tomtomApiKey}\""
         buildConfigField "String", "GOOGLE_API_KEY", "\"${googleApiKey}\""
         buildConfigField "String", "OpenRouteService_API_KEY", "\"${openRouteServiceApiKey}\""
+        buildConfigField "String", "MAILERSEND_API_KEY", "\"${mailerSenderApiKey}\""
     }
 
     buildTypes {
@@ -75,7 +77,6 @@ dependencies {
     implementation 'org.osmdroid:osmdroid-android:6.1.14'
     implementation 'org.apache.commons:commons-math3:3.6.1'
     implementation 'com.google.firebase:firebase-firestore-ktx:24.8.1'
-    //    implementation 'androidx.navigation:navigation-fragment:2.7.3'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.mockito:mockito-core:3.11.2'
     testImplementation 'org.mockito:mockito-inline:3.11.2'
@@ -90,10 +91,9 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.0'
     // chat feature
     implementation 'de.hdodenhof:circleimageview:2.2.0'
-    //    implementation 'com.squareup.picasso:picasso:2.71828'
     implementation 'androidx.cardview:cardview:1.0.0'
-    //    implementation 'com.rengwuxian.materialedittext:library:2.1.4'
     implementation 'com.squareup.retrofit2:retrofit:2.3.0'
     implementation 'com.squareup.retrofit2:converter-gson:2.3.0'
     implementation("com.squareup.okhttp3:okhttp:4.12.0") // OkHTTP
+    implementation files('libs/java-sdk-1.0.1.jar')
 }

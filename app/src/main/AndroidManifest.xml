@@ -19,23 +19,26 @@
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.NavTrack"
+        android:usesCleartextTraffic="true"
         tools:targetApi="31">
         <activity
-            android:name=".TestActivity"
-            android:screenOrientation="landscape"
+            android:name=".FeedbackActivity"
             android:exported="false" />
+        <activity
+            android:name=".TestActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
         <activity
             android:name=".Contacts.ChatActivity"
-            android:screenOrientation="landscape"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="landscape" />
         <activity
             android:name=".MainActivity"
-            android:screenOrientation="landscape"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="landscape" />
 
         <service android:name="org.eclipse.paho.android.service.MqttService" />
 
@@ -55,8 +58,8 @@
         </activity>
         <activity
             android:name=".OfflineActivity"
-            android:screenOrientation="landscape"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="landscape" />
     </application>
 
 </manifest>

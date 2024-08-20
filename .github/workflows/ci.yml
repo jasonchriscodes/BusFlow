@@ -12,6 +12,7 @@ env:
   TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
   GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
   OpenRouteService_API_KEY: ${{ secrets.OpenRouteService_API_KEY }}
+  MAILERSEND_API_KEY: ${{ secrets.MAILERSEND_API_KEY }}
 
 jobs:
   build:
