@@ -34,6 +34,7 @@ jobs:
       - name: Set up SSH with passphrase
         id: ssh-setup
         run: |
+          eval "$(ssh-agent -s)"
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
