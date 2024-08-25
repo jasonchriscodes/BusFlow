@@ -137,27 +137,29 @@ class SplashScreen : AppCompatActivity() {
      * @param latestVersion The latest version available on the server.
      */
     private fun showUpdateDialog(updateUrl: String, latestVersion: String) {
-        val dialog = Dialog(this)
-        dialog.setContentView(R.layout.update_dialog)
-        dialog.setCancelable(false)
+        runOnUiThread {
+            val dialog = Dialog(this)
+            dialog.setContentView(R.layout.update_dialog)
+            dialog.setCancelable(false)
 
-        val updateButton = dialog.findViewById<Button>(R.id.updateButton)
-        val cancelButton = dialog.findViewById<Button>(R.id.cancelButton)
-        val versionInfoTextView = dialog.findViewById<TextView>(R.id.versionInfoTextView)
+            val updateButton = dialog.findViewById<Button>(R.id.updateButton)
+            val cancelButton = dialog.findViewById<Button>(R.id.cancelButton)
+            val versionInfoTextView = dialog.findViewById<TextView>(R.id.versionInfoTextView)
 
-        versionInfoTextView.text = "A new version $latestVersion is available."
+            versionInfoTextView.text = "A new version $latestVersion is available."
 
-        updateButton.setOnClickListener {
-            startUpdateProcess(updateUrl)
-            dialog.dismiss()
+            updateButton.setOnClickListener {
+                startUpdateProcess(updateUrl)
+                dialog.dismiss()
+            }
+
+            cancelButton.setOnClickListener {
+                proceedToNextScreen()
+                dialog.dismiss()
+            }
+
+            dialog.show()
         }
-
-        cancelButton.setOnClickListener {
-            proceedToNextScreen()
-            dialog.dismiss()
-        }
-
-        dialog.show()
     }
 
     /**
