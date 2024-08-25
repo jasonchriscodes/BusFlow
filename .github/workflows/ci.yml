@@ -43,6 +43,8 @@ jobs:
           eval "$(ssh-agent -s)"
           # Add the private key to SSH agent
           echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+          # Create the .ssh directory if it doesn't exist
+          mkdir -p ~/.ssh
           # Add the server to known hosts
           ssh-keyscan -H 43.226.218.98 >> ~/.ssh/known_hosts
           # Test SSH connection
@@ -51,3 +53,4 @@ jobs:
           scp -o StrictHostKeyChecking=no app/build/outputs/apk/release/app-release.apk root@43.226.218.98:/var/www/ota_update_server/apk/app-v1.0.1.apk
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
