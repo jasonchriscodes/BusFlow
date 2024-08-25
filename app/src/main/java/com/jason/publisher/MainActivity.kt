@@ -79,6 +79,8 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private lateinit var reconnectProgressBar: ProgressBar
     private lateinit var connectionStatusTextView: TextView
     private lateinit var attemptingToConnectTextView: TextView
+    private lateinit var versionTextView: TextView
+    private lateinit var versionName: TextView
     private val handler = Handler(Looper.getMainLooper())
     private var dotCount = 0
 
@@ -133,6 +135,12 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
         // Initialize UI components
         initializeUIComponents()
+
+        // Set the version name in the bottom right corner
+        val versionTextView = findViewById<TextView>(R.id.versionTextView)
+//        val versionName = packageManager.getPackageInfo(packageName, 0).versionName
+        val versionName = "1.0.1"
+        versionTextView.text = "Version $versionName"
 
         // Load configuration
         Configuration.getInstance().load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
