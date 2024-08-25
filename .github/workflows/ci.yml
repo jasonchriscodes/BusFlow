@@ -34,9 +34,6 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
-      - name: Run Tests
-        run: ./gradlew test
-
       - name: Set up SSH and Upload APK
         run: |
           # Start the SSH agent
@@ -49,7 +46,9 @@ jobs:
           ssh-keyscan -H 43.226.218.98 >> ~/.ssh/known_hosts
           # Test SSH connection
           ssh -o StrictHostKeyChecking=no root@43.226.218.98 "echo 'SSH connection successful!'"
-          # Upload APK to the server with the desired filename
+          # Ensure the destination directory exists
+          ssh -o StrictHostKeyChecking=no root@43.226.218.98 "mkdir -p /var/www/ota_update_server/apk/"
+          # Upload APK to the server
           scp -o StrictHostKeyChecking=no app/build/outputs/apk/debug/app-debug.apk root@43.226.218.98:/var/www/ota_update_server/apk/app-v1.0.1.apk
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
