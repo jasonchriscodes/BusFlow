@@ -31,32 +31,16 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      - name: Update Version Name
-        id: update_version
-        run: |
-          version_name=$(grep versionName app/build.gradle | awk '{print $2}' | tr -d '"')
-          new_version=$(echo $version_name | awk -F. -v OFS=. '{$NF += 1 ; print}')
-          sed -i "s/versionName \"$version_name\"/versionName \"$new_version\"/" app/build.gradle
-          echo "Updated version name to $new_version"
-          echo "::set-output name=version::$new_version"
-
-      - name: Build APK
-        run: ./gradlew assembleRelease
+      - name: Build with Gradle
+        run: ./gradlew build
 
       - name: Run Tests
         run: ./gradlew test
 
-      - name: Upload APK to Server
-        run: |
-          scp -o StrictHostKeyChecking=no app/build/outputs/apk/release/app-release.apk user@43.226.218.98:/var/www/ota_update_server/apk/app-v${{ steps.update_version.outputs.version }}.apk
-          curl -X POST http://43.226.218.98:5000/api/update-version -H "Content-Type: application/json" -d "{\"url\": \"http://43.226.218.98/apk/app-v${{ steps.update_version.outputs.version }}.apk\", \"release_notes\": \"Auto-deployed version ${{ steps.update_version.outputs.version }}.\"}"
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Commit and push version update
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add app/build.gradle
-          git commit -m "chore: Bump version to ${{ steps.update_version.outputs.version }}"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload APK to Server
+        run: scp -o StrictHostKeyChecking=no app/build/outputs/apk/release/app-release.apk user@43.226.218.98:/var/www/ota_update_server/apk/app-v1.0.1.apk
