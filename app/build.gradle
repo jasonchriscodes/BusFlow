@@ -38,7 +38,7 @@ android {
         minSdk 21
         targetSdk 33
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
 
         buildConfigField "String", "TOMTOM_API_KEY", "\"${tomtomApiKey}\""
         buildConfigField "String", "GOOGLE_API_KEY", "\"${googleApiKey}\""

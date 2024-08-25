@@ -3,50 +3,39 @@ package com.jason.publisher
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Dialog
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
-import android.view.animation.AnimationUtils
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.view.animation.AnimationUtils
 import android.widget.Button
 import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivitySplashScreenBinding
-import com.jason.publisher.model.Bus
-import com.jason.publisher.model.BusData
-import com.jason.publisher.model.BusItem
 import com.jason.publisher.services.LocationManager
-import com.jason.publisher.services.ModeSelectionDialog
-import com.jason.publisher.services.MqttManager
 import com.jason.publisher.services.SharedPrefMananger
+import okhttp3.*
 import org.json.JSONObject
+import java.io.IOException
 
-/**
- * SplashScreen activity responsible for initializing the application and handling initial setup.
- * It retrieves necessary data, such as device ID and configuration, then routes to the appropriate screen.
- */
 @SuppressLint("CustomSplashScreen")
 class SplashScreen : AppCompatActivity() {
+
     private lateinit var locationManager: LocationManager
-    private lateinit var sharedPrefMananger: SharedPrefMananger
-    private lateinit var modeSelectionDialog: ModeSelectionDialog
+    private lateinit var sharedPrefManager: SharedPrefMananger
     private lateinit var binding: ActivitySplashScreenBinding
-    private var data: String? = null
+    private val client = OkHttpClient()
+
     var name = ""
-    private var accessToken = ""
     private var aaid = ""
     private var latitude = 0.0
     private var longitude = 0.0
@@ -63,12 +52,11 @@ class SplashScreen : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        modeSelectionDialog = ModeSelectionDialog(this)
+
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-        sharedPrefMananger = SharedPrefMananger(this)
+        sharedPrefManager = SharedPrefMananger(this)
         locationManager = LocationManager(this)
         startLocationUpdate()
-        routeToNextScreen()
 
         // Start animation
         val logoExplorer = findViewById<ImageView>(R.id.logoExplorer)
@@ -76,51 +64,121 @@ class SplashScreen : AppCompatActivity() {
         val animation = AnimationUtils.loadAnimation(this, R.anim.fade_in)
         logoExplorer.startAnimation(animation)
         logoFullers.startAnimation(animation)
+
+        checkForUpdates()
     }
 
     /**
-     * Routes to the next screen after a specified delay.
+     * Checks for updates by sending a request to the update server. If an update is available,
+     * it shows an update dialog; otherwise, it proceeds to the next screen.
      */
-    private fun routeToNextScreen() {
-        Handler(Looper.getMainLooper()).postDelayed({
-            showOptionDialog()
-        }, 5000)
+    private fun checkForUpdates() {
+        val request = Request.Builder()
+            .url("http://43.226.218.98:5000/api/latest-version")
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("SplashScreen", "Failed to check for updates", e)
+                runOnUiThread {
+                    proceedToNextScreen()
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    val responseData = response.body?.string()
+                    val json = JSONObject(responseData!!)
+                    val latestVersion = json.getString("version")
+                    val updateUrl = json.getString("url")
+                    val currentVersion = BuildConfig.VERSION_NAME
+
+                    if (isUpdateAvailable(currentVersion, latestVersion)) {
+                        runOnUiThread {
+                            showUpdateDialog(updateUrl, latestVersion)
+                        }
+                    } else {
+                        runOnUiThread {
+                            proceedToNextScreen()
+                        }
+                    }
+                } else {
+                    runOnUiThread {
+                        proceedToNextScreen()
+                    }
+                }
+            }
+        })
     }
 
     /**
-     * Shows the mode selection dialog and handles the selected mode.
+     * Compares the current version of the app with the latest version from the server.
+     * @param currentVersion The current version of the app.
+     * @param latestVersion The latest version available on the server.
+     * @return true if an update is available, false otherwise.
      */
-    private fun showOptionDialog() {
+    private fun isUpdateAvailable(currentVersion: String, latestVersion: String): Boolean {
+        val currentVersionParts = currentVersion.split('.').map { it.toInt() }
+        val latestVersionParts = latestVersion.split('.').map { it.toInt() }
+
+        for (i in currentVersionParts.indices) {
+            if (latestVersionParts[i] > currentVersionParts[i]) {
+                return true
+            } else if (latestVersionParts[i] < currentVersionParts[i]) {
+                return false
+            }
+        }
+        return false
+    }
+
+    /**
+     * Displays a dialog to the user indicating that a new version is available for download.
+     * @param updateUrl The URL where the new version can be downloaded.
+     * @param latestVersion The latest version available on the server.
+     */
+    private fun showUpdateDialog(updateUrl: String, latestVersion: String) {
         val dialog = Dialog(this)
-        dialog.setContentView(R.layout.mode_selection_dialog)
+        dialog.setContentView(R.layout.update_dialog)
+        dialog.setCancelable(false)
 
-        val onlineModeButton = dialog.findViewById<Button>(R.id.onlineModeButton)
-        val offlineModeButton = dialog.findViewById<Button>(R.id.offlineModeButton)
+        val updateButton = dialog.findViewById<Button>(R.id.updateButton)
+        val cancelButton = dialog.findViewById<Button>(R.id.cancelButton)
+        val versionInfoTextView = dialog.findViewById<TextView>(R.id.versionInfoTextView)
 
-        // Find the "Who am I" button
-        val whoAmIButton = dialog.findViewById<Button>(R.id.whoAmIButton)
+        versionInfoTextView.text = "A new version $latestVersion is available."
 
-        onlineModeButton.setOnClickListener {
-            val intent = Intent(this, MainActivity::class.java)
-            startActivity(intent)
+        updateButton.setOnClickListener {
+            startUpdateProcess(updateUrl)
             dialog.dismiss()
         }
 
-        offlineModeButton.setOnClickListener {
-            val intent = Intent(this, OfflineActivity::class.java)
-            startActivity(intent)
+        cancelButton.setOnClickListener {
+            proceedToNextScreen()
             dialog.dismiss()
-        }
-
-        whoAmIButton.setOnClickListener {
-            val aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = ClipData.newPlainText("Device AID", aid)
-            clipboard.setPrimaryClip(clip)
-            Toast.makeText(this, "Device AID copied to clipboard", Toast.LENGTH_SHORT).show()
         }
 
         dialog.show()
+    }
+
+    /**
+     * Initiates the update process by opening the download URL in the device's browser.
+     * @param updateUrl The URL where the new version can be downloaded.
+     */
+    private fun startUpdateProcess(updateUrl: String) {
+        val intent = Intent(Intent.ACTION_VIEW)
+        intent.data = android.net.Uri.parse(updateUrl)
+        startActivity(intent)
+    }
+
+    /**
+     * Proceeds to the next screen (MainActivity) after a delay.
+     */
+    private fun proceedToNextScreen() {
+        Handler(Looper.getMainLooper()).postDelayed({
+            val intent = Intent(this, MainActivity::class.java)
+            startActivity(intent)
+            finish()
+        }, 2000)
     }
 
     /**
