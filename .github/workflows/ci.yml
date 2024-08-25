@@ -43,4 +43,4 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Upload APK to Server
-        run: scp -o StrictHostKeyChecking=no app/build/outputs/apk/release/app-release.apk user@43.226.218.98:/var/www/ota_update_server/apk/app-v1.0.1.apk
+        run: scp -o StrictHostKeyChecking=no app/build/outputs/apk/release/app-release.apk root@43.226.218.98:/var/www/ota_update_server/apk/app-v1.0.1.apk
