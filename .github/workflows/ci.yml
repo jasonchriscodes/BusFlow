@@ -22,6 +22,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Install sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
@@ -37,15 +40,14 @@ jobs:
           eval "$(ssh-agent -s)"
           # Create SSH directory
           mkdir -p ~/.ssh
-          # Add the private key to SSH agent
-          echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+          # Add the private key to SSH agent using sshpass
+          echo "$SSH_PRIVATE_KEY" | tr -d '\r' | sshpass -p "$SSH_PASSPHRASE" ssh-add -
           # Set the appropriate permissions on the private key file
           chmod 600 ~/.ssh/id_rsa
           # Add the server to known hosts
           ssh-keyscan -H 43.226.218.98 >> ~/.ssh/known_hosts
           # Upload the APK
-          scp -o StrictHostKeyChecking=no app/build/outputs/apk/release/app-release.apk root@43.226.218.98:/var/www/ota_update_server/apk/app-v${{ steps.version.outputs.VERSION_NAME }}.apk
+          sshpass -p "$SSH_PASSPHRASE" scp -o StrictHostKeyChecking=no app/build/outputs/apk/release/app-release.apk root@43.226.218.98:/var/www/ota_update_server/apk/app-v${{ steps.version.outputs.VERSION_NAME }}.apk
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SSH_PASSPHRASE: ${{ secrets.SSH_PASSPHRASE }}
-
