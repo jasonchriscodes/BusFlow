@@ -8,16 +8,10 @@ on:
     branches:
       - main
 
-env:
-  TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
-  GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-  OpenRouteService_API_KEY: ${{ secrets.OpenRouteService_API_KEY }}
-  MAILERSEND_API_KEY: ${{ secrets.MAILERSEND_API_KEY }}
-  GOOGLE_APP_PASS: ${{ secrets.GOOGLE_APP_PASS }}
-
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Set up JDK 17
         uses: actions/setup-java@v3
@@ -37,10 +31,17 @@ jobs:
       - name: Run Tests
         run: ./gradlew test
 
-      - name: Set up SSH key
-        uses: webfactory/ssh-agent@v0.5.3
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Set up SSH with passphrase
+        id: ssh-setup
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 43.226.218.98 >> ~/.ssh/known_hosts
+          echo "$SSH_PASSPHRASE" | ssh-add ~/.ssh/id_rsa
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PASSPHRASE: ${{ secrets.SSH_PASSPHRASE }}
 
       - name: Upload APK to Server
-        run: scp -o StrictHostKeyChecking=no app/build/outputs/apk/release/app-release.apk root@43.226.218.98:/var/www/ota_update_server/apk/app-v1.0.1.apk
+        run: scp -o StrictHostKeyChecking=no app/build/outputs/apk/release/app-release.apk root@43.226.218.98:/var/www/ota_update_server/apk/app-v${{ steps.version.outputs.VERSION_NAME }}.apk
