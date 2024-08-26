@@ -3,6 +3,9 @@ package com.jason.publisher
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Dialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
@@ -31,7 +34,7 @@ import java.io.IOException
 class SplashScreen : AppCompatActivity() {
 
     private lateinit var locationManager: LocationManager
-    private lateinit var sharedPrefManager: SharedPrefMananger
+    private lateinit var sharedPrefMananger: SharedPrefMananger
     private lateinit var binding: ActivitySplashScreenBinding
     private val client = OkHttpClient()
 
@@ -54,7 +57,7 @@ class SplashScreen : AppCompatActivity() {
         setContentView(binding.root)
 
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-        sharedPrefManager = SharedPrefMananger(this)
+        sharedPrefMananger = SharedPrefMananger(this)
         locationManager = LocationManager(this)
         startLocationUpdate()
 
@@ -65,12 +68,13 @@ class SplashScreen : AppCompatActivity() {
         logoExplorer.startAnimation(animation)
         logoFullers.startAnimation(animation)
 
+        // Check for updates and then show the mode selection dialog
         checkForUpdates()
     }
 
     /**
      * Checks for updates by sending a request to the update server. If an update is available,
-     * it shows an update dialog; otherwise, it proceeds to the next screen.
+     * it shows an update dialog; otherwise, it proceeds to the mode selection dialog.
      */
     private fun checkForUpdates() {
         val request = Request.Builder()
@@ -81,7 +85,7 @@ class SplashScreen : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 Log.e("SplashScreen", "Failed to check for updates", e)
                 runOnUiThread {
-                    proceedToNextScreen()
+                    showOptionDialog()
                 }
             }
 
@@ -99,12 +103,12 @@ class SplashScreen : AppCompatActivity() {
                         }
                     } else {
                         runOnUiThread {
-                            proceedToNextScreen()
+                            showOptionDialog()
                         }
                     }
                 } else {
                     runOnUiThread {
-                        proceedToNextScreen()
+                        showOptionDialog()
                     }
                 }
             }
@@ -137,29 +141,27 @@ class SplashScreen : AppCompatActivity() {
      * @param latestVersion The latest version available on the server.
      */
     private fun showUpdateDialog(updateUrl: String, latestVersion: String) {
-        runOnUiThread {
-            val dialog = Dialog(this)
-            dialog.setContentView(R.layout.update_dialog)
-            dialog.setCancelable(false)
+        val dialog = Dialog(this)
+        dialog.setContentView(R.layout.update_dialog)
+        dialog.setCancelable(false)
 
-            val updateButton = dialog.findViewById<Button>(R.id.updateButton)
-            val cancelButton = dialog.findViewById<Button>(R.id.cancelButton)
-            val versionInfoTextView = dialog.findViewById<TextView>(R.id.versionInfoTextView)
+        val updateButton = dialog.findViewById<Button>(R.id.updateButton)
+        val cancelButton = dialog.findViewById<Button>(R.id.cancelButton)
+        val versionInfoTextView = dialog.findViewById<TextView>(R.id.versionInfoTextView)
 
-            versionInfoTextView.text = "A new version $latestVersion is available."
+        versionInfoTextView.text = "A new version $latestVersion is available."
 
-            updateButton.setOnClickListener {
-                startUpdateProcess(updateUrl)
-                dialog.dismiss()
-            }
-
-            cancelButton.setOnClickListener {
-                proceedToNextScreen()
-                dialog.dismiss()
-            }
-
-            dialog.show()
+        updateButton.setOnClickListener {
+            startUpdateProcess(updateUrl)
+            dialog.dismiss()
         }
+
+        cancelButton.setOnClickListener {
+            dialog.dismiss()
+            showOptionDialog()
+        }
+
+        dialog.show()
     }
 
     /**
@@ -173,14 +175,39 @@ class SplashScreen : AppCompatActivity() {
     }
 
     /**
-     * Proceeds to the next screen (MainActivity) after a delay.
+     * Shows the mode selection dialog and handles the selected mode.
      */
-    private fun proceedToNextScreen() {
-        Handler(Looper.getMainLooper()).postDelayed({
+    private fun showOptionDialog() {
+        val dialog = Dialog(this)
+        dialog.setContentView(R.layout.mode_selection_dialog)
+
+        val onlineModeButton = dialog.findViewById<Button>(R.id.onlineModeButton)
+        val offlineModeButton = dialog.findViewById<Button>(R.id.offlineModeButton)
+
+        // Find the "Who am I" button
+        val whoAmIButton = dialog.findViewById<Button>(R.id.whoAmIButton)
+
+        onlineModeButton.setOnClickListener {
             val intent = Intent(this, MainActivity::class.java)
             startActivity(intent)
-            finish()
-        }, 2000)
+            dialog.dismiss()
+        }
+
+        offlineModeButton.setOnClickListener {
+            val intent = Intent(this, OfflineActivity::class.java)
+            startActivity(intent)
+            dialog.dismiss()
+        }
+
+        whoAmIButton.setOnClickListener {
+            val aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("Device AID", aid)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(this, "Device AID copied to clipboard", Toast.LENGTH_SHORT).show()
+        }
+
+        dialog.show()
     }
 
     /**
