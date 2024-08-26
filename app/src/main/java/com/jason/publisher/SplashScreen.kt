@@ -77,6 +77,7 @@ class SplashScreen : AppCompatActivity() {
      * it shows an update dialog; otherwise, it proceeds to the mode selection dialog.
      */
     private fun checkForUpdates() {
+        val currentVersion = BuildConfig.VERSION_NAME
         val request = Request.Builder()
             .url("http://43.226.218.98:5000/api/latest-version")
             .build()
@@ -94,8 +95,7 @@ class SplashScreen : AppCompatActivity() {
                     val responseData = response.body?.string()
                     val json = JSONObject(responseData!!)
                     val latestVersion = json.getString("version")
-                    val updateUrl = json.getString("url")
-                    val currentVersion = BuildConfig.VERSION_NAME
+                    val updateUrl = "http://43.226.218.98:5000/apk/app-v$latestVersion.apk"
 
                     if (isUpdateAvailable(currentVersion, latestVersion)) {
                         runOnUiThread {

@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
 
 env:
   TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
@@ -31,24 +28,38 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
+      - name: Increment version
+        run: |
+          current_version=$(grep versionName build.gradle | awk '{print $2}' | tr -d '"')
+          IFS='.' read -r -a version_parts <<< "$current_version"
+          patch=${version_parts[2]}
+          minor=${version_parts[1]}
+          major=${version_parts[0]}
+          patch=$((patch + 1))
+          if [ "$patch" -ge 10 ]; then
+              patch=0
+              minor=$((minor + 1))
+          fi
+          new_version="$major.$minor.$patch"
+          sed -i "s/versionName \".*\"/versionName \"$new_version\"/" build.gradle
+          sed -i "s/VERSION_NAME = \".*\"/VERSION_NAME = \"$new_version\"/" app/src/main/java/com/jason/publisher/BuildConfig.java
+          git config --global user.email "jasonchristian1234@gmail.com"
+          git config --global user.name "jasonchriscodes"
+          git add build.gradle app/src/main/java/com/jason/publisher/BuildConfig.java
+          git commit -m "chore: bump version to $new_version"
+          git push origin main
+
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
       - name: Set up SSH and Upload APK
         run: |
-          # Start the SSH agent
           eval "$(ssh-agent -s)"
-          # Add the private key to SSH agent
           echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-          # Create the .ssh directory if it doesn't exist
           mkdir -p ~/.ssh
-          # Add the server to known hosts
           ssh-keyscan -H 43.226.218.98 >> ~/.ssh/known_hosts
-          # Test SSH connection
           ssh -o StrictHostKeyChecking=no root@43.226.218.98 "echo 'SSH connection successful!'"
-          # Ensure the destination directory exists
           ssh -o StrictHostKeyChecking=no root@43.226.218.98 "mkdir -p /var/www/ota_update_server/apk/"
-          # Upload APK to the server
-          scp -o StrictHostKeyChecking=no app/build/outputs/apk/debug/app-debug.apk root@43.226.218.98:/var/www/ota_update_server/apk/app-v1.0.1.apk
+          scp -o StrictHostKeyChecking=no app/build/outputs/apk/debug/app-debug.apk root@43.226.218.98:/var/www/ota_update_server/apk/app-v$new_version.apk
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
