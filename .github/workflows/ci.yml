@@ -37,14 +37,12 @@ jobs:
           minor=${version_parts[1]}
           major=${version_parts[0]}
           patch=$((patch + 1))
-          if [ "$patch" -ge 10 ]; then  # Fix the syntax error by adding a space before ]
+          if [ "$patch" -ge 10 ]; then
               patch=0
               minor=$((minor + 1))
           fi
           new_version="$major.$minor.$patch"
           sed -i "s/versionName \".*\"/versionName \"$new_version\"/" build.gradle
-          # Comment out or remove the line modifying BuildConfig.java if it's auto-generated
-          # sed -i 's/VERSION_NAME = ".*"/VERSION_NAME = "'$new_version'"/' app/build/generated/source/buildConfig/debug/com/jason/publisher/BuildConfig.java
           git config --global user.email "jasonchristian1234@gmail.com"
           git config --global user.name "jasonchriscodes"
           git add build.gradle
