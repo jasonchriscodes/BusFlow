@@ -1,9 +1,10 @@
 name: Android CI
 
 on:
-  push:
+  pull_request:
     branches:
       - main
+      - development
 
 env:
   TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
@@ -36,7 +37,7 @@ jobs:
           minor=${version_parts[1]}
           major=${version_parts[0]}
           patch=$((patch + 1))
-          if [ "$patch" -ge 10 ]; then
+          if [ "$patch" -ge 10]; then
               patch=0
               minor=$((minor + 1))
           fi
