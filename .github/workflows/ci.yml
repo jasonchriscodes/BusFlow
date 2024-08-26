@@ -42,7 +42,7 @@ jobs:
           fi
           new_version="$major.$minor.$patch"
           sed -i "s/versionName \".*\"/versionName \"$new_version\"/" build.gradle
-          sed -i "s/VERSION_NAME = \".*\"/VERSION_NAME = \"$new_version\"/" app/src/main/java/com/jason/publisher/BuildConfig.java
+          sed -i 's/VERSION_NAME = ".*"/VERSION_NAME = "'$new_version'"/' app/build/generated/source/buildConfig/debug/com/jason/publisher/BuildConfig.java
           git config --global user.email "jasonchristian1234@gmail.com"
           git config --global user.name "jasonchriscodes"
           git add build.gradle app/src/main/java/com/jason/publisher/BuildConfig.java
