@@ -138,8 +138,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
         // Set the version name in the bottom right corner
         val versionTextView = findViewById<TextView>(R.id.versionTextView)
-//        val versionName = packageManager.getPackageInfo(packageName, 0).versionName
-        val versionName = "1.0.1"
+        val versionName = BuildConfig.VERSION_NAME
         versionTextView.text = "Version $versionName"
 
         // Load configuration
