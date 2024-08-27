@@ -25,13 +25,11 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v2
-        with:
-          ref: ${{ github.head_ref }}
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      - name: Increment version
+      - name: Increment version in build.gradle
         run: |
           current_version=$(grep versionName build.gradle | awk '{print $2}' | tr -d '"')
           IFS='.' read -r -a version_parts <<< "$current_version"
@@ -46,7 +44,7 @@ jobs:
           new_version="$major.$minor.$patch"
           sed -i "s/versionName \".*\"/versionName \"$new_version\"/" build.gradle
 
-      - name: Build Debug APK
+      - name: Build Debug APK using updated version
         run: ./gradlew assembleDebug
 
       - name: Set up SSH and Upload APK
