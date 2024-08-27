@@ -41,21 +41,25 @@ jobs:
           new_version="$major.$minor.$patch"
           echo "new_version=$new_version" >> $GITHUB_ENV
           echo "New version: $new_version"
+
       - name: Update version in build.gradle
         run: |
           sed -i "s/versionName \".*\"/versionName \"$new_version\"/" build.gradle
+
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
       - name: Set up SSH and Upload APK
         run: |
           eval "$(ssh-agent -s)"
-          echo "$SSH_PRIVATE_KEY" | base64 -d | tr -d '\r' | ssh-add -
+          echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
           mkdir -p ~/.ssh
           ssh-keyscan -H 43.226.218.98 >> ~/.ssh/known_hosts
           scp -o StrictHostKeyChecking=no app/build/outputs/apk/debug/app-debug.apk root@43.226.218.98:/var/www/ota_update_server/apk/app-v${{ env.new_version }}.apk
+          scp -o StrictHostKeyChecking=no app/build/outputs/apk/debug/app-debug.apk root@43.226.218.98:/var/www/ota_update_server/apk/latest/app-debug.apk
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
       - name: Push new version to the server
         run: |
           curl -X POST "http://43.226.218.98:5000/api/update-version" \
