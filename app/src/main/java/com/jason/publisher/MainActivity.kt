@@ -79,8 +79,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private lateinit var reconnectProgressBar: ProgressBar
     private lateinit var connectionStatusTextView: TextView
     private lateinit var attemptingToConnectTextView: TextView
-    private lateinit var versionTextView: TextView
-    private lateinit var versionName: TextView
     private val handler = Handler(Looper.getMainLooper())
     private var dotCount = 0
 
@@ -133,12 +131,14 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Get the version from the Intent or use the BuildConfig version as fallback
+        val versionName = intent.getStringExtra("LATEST_VERSION") ?: BuildConfig.VERSION_NAME
+
         // Initialize UI components
         initializeUIComponents()
 
         // Set the version name in the bottom right corner
         val versionTextView = findViewById<TextView>(R.id.versionTextView)
-        val versionName = BuildConfig.VERSION_NAME
         versionTextView.text = "Version $versionName"
 
         // Load configuration
