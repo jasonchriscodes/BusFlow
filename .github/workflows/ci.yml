@@ -29,23 +29,17 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      - name: Fetch latest version from server and increment
+      - name: Increment version in build.gradle
         run: |
-          latest_version=$(curl -s "http://43.226.218.98:5000/api/latest-version" | jq -r '.version')
-          echo "Latest version: $latest_version"
-          IFS='.' read -r -a version_parts <<< "$latest_version"
+          current_version=$(grep "versionName" build.gradle | awk '{print $2}' | tr -d '"')
+          IFS='.' read -r -a version_parts <<< "$current_version"
           major=${version_parts[0]}
           minor=${version_parts[1]}
           patch=${version_parts[2]}
           patch=$((patch + 1))
           new_version="$major.$minor.$patch"
+          sed -i "s/versionName \"$current_version\"/versionName \"$new_version\"/" build.gradle
           echo "new_version=$new_version" >> $GITHUB_ENV
-          echo "New version: $new_version"
-
-      - name: Update version in build.gradle
-        run: |
-          sed -i "s/versionName \".*\"/versionName \"$new_version\"/" build.gradle
-
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
@@ -56,10 +50,5 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H 43.226.218.98 >> ~/.ssh/known_hosts
           scp -o StrictHostKeyChecking=no app/build/outputs/apk/debug/app-debug.apk root@43.226.218.98:/var/www/ota_update_server/apk/app-v${{ env.new_version }}.apk
-          scp -o StrictHostKeyChecking=no app/build/outputs/apk/debug/app-debug.apk root@43.226.218.98:/var/www/ota_update_server/apk/latest/app-debug.apk
-
-      - name: Push new version to the server
-        run: |
-          curl -X POST "http://43.226.218.98:5000/api/update-version" \
-          -H "Content-Type: application/json" \
-          -d "{\"version\": \"${new_version}\", \"url\": \"http://43.226.218.98/apk/app-v${new_version}.apk\", \"release_notes\": \"Auto incremented version\"}"
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
