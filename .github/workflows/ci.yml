@@ -49,19 +49,9 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
-      - name: Set up SSH and Upload APK
+      - name: Upload APK using Flask API
         run: |
-          eval "$(ssh-agent -s)"
-          echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-          mkdir -p ~/.ssh
-          ssh-keyscan -H 43.226.218.98 >> ~/.ssh/known_hosts
-          scp -o StrictHostKeyChecking=no app/build/outputs/apk/debug/app-debug.apk root@43.226.218.98:/var/www/ota_update_server/apk/app-v${{ env.new_version }}.apk
-          scp -o StrictHostKeyChecking=no app/build/outputs/apk/debug/app-debug.apk root@43.226.218.98:/var/www/ota_update_server/apk/latest/app-debug.apk
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Push new version to the server
-        run: |
-          curl -X POST "http://43.226.218.98:5000/api/update-version" \
-          -H "Content-Type: application/json" \
-          -d "{\"version\": \"${new_version}\", \"url\": \"http://43.226.218.98/apk/app-v${new_version}.apk\", \"release_notes\": \"Auto incremented version\"}"
+          curl -X POST "http://43.226.218.98:5000/api/upload-apk" \
+          -F "file=@app/build/outputs/apk/debug/app-debug.apk" \
+          -F "version=${new_version}" \
+          -F "release_notes=Auto incremented version"
