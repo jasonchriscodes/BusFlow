@@ -42,22 +42,15 @@ jobs:
           echo "new_version=$new_version" >> $GITHUB_ENV
           echo "New version: $new_version"
 
-      - name: Update version in build.gradle
+      - name: Update version on the server
         run: |
-          sed -i "s/versionName \".*\"/versionName \"$new_version\"/" build.gradle
-
-      - name: Debug build.gradle
-        run: cat build.gradle
-
-      - name: Stage changes
-        run: git add gradlew
-
-      - name: Commit version update
-        run: |
-          git config --local user.email "jasonchristian1234@gmail.com"
-          git config --local user.name "jasonchriscodes"
-          git commit -m "ci: update version to $new_version"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          curl -X POST "http://43.226.218.98:5000/api/update-version" \
+          -H "Content-Type: application/json" \
+          -d '{
+                "version": "'"$new_version"'",
+                "url": "http://43.226.218.98/apk/app-v'"$new_version"'.apk",
+                "release_notes": "Auto incremented version"
+              }'
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug
