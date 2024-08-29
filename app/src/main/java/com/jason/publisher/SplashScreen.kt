@@ -78,7 +78,7 @@ class SplashScreen : AppCompatActivity() {
 
         // Create the JSON body
         val jsonBody = JSONObject().apply {
-            put("tabletId", tabletId)
+            put("device_id", tabletId)  // Ensure key matches the server expectation
             put("version", currentVersion)
         }.toString()
 
@@ -134,10 +134,9 @@ class SplashScreen : AppCompatActivity() {
                             showUpdateDialog(updateUrl, latestVersion)
                         }
                     } else {
-                        val intent = Intent(this@SplashScreen, MainActivity::class.java)
-                        intent.putExtra("LATEST_VERSION", latestVersion)
-                        startActivity(intent)
-                        finish()
+                        runOnUiThread {
+                            showOptionDialog()  // Show the mode selection dialog after checking for updates
+                        }
                     }
                 } else {
                     runOnUiThread {
