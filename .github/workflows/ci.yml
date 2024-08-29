@@ -74,5 +74,6 @@ jobs:
           git add app/build.gradle
           git commit -m "ci: update version to $new_version"
           git push origin version-update
-          gh pr checkout ${{ github.event.pull_request.number }} 
-          gh pr merge version-update --rebase --delete-branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+
