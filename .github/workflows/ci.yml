@@ -11,6 +11,8 @@ env:
   OpenRouteService_API_KEY: ${{ secrets.OpenRouteService_API_KEY }}
   MAILERSEND_API_KEY: ${{ secrets.MAILERSEND_API_KEY }}
   GOOGLE_APP_PASS: ${{ secrets.GOOGLE_APP_PASS }}
+  ACTIONS_RUNNER_DEBUG: true
+  ACTIONS_STEP_DEBUG: true
 
 jobs:
   build:
@@ -28,9 +30,6 @@ jobs:
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
-
-      - name: Install jq
-        run: sudo apt-get install -y jq
 
       - name: Fetch latest version from server and increment
         id: versioning
@@ -67,18 +66,12 @@ jobs:
           -F "release_notes=Auto incremented version"
 
       - name: Commit changes back to the PR branch
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }} # Ensure this matches the name of the secret in GitHub
         run: |
-          git config --local user.email "jasonchristian1234@gmail.com"
-          git config --local user.name "jasonchriscodes"
+          git config --local user.email "${{ github.actor }}@users.noreply.github.com"
+          git config --local user.name "${{ github.actor }}"
           git checkout -b version-update
           git add app/build.gradle
           git commit -m "ci: update version to $new_version"
-          git push https://jasonchriscodes:${{ secrets.GH_PAT }}@github.com/jasonchriscodes/VLRS-mqtt-publisher.git version-update
-
-
-
-
-
-
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git version-update
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
