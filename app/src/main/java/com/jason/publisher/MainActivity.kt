@@ -59,11 +59,14 @@ import org.osmdroid.views.overlay.Polyline
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
-import java.lang.Math.atan2
 import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.view.View
 import android.widget.ProgressBar
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.IOException
+import java.lang.Math.atan2
 
 class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
@@ -125,21 +128,19 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private lateinit var timer: CountDownTimer
     private var firstTime = true
 
+    private val client = OkHttpClient()
+
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Get the version from the Intent or use the BuildConfig version as fallback
-        val versionName = intent.getStringExtra("LATEST_VERSION") ?: BuildConfig.VERSION_NAME
+        // Fetch the latest version from the server and update the versionTextView
+        fetchLatestVersion()
 
         // Initialize UI components
         initializeUIComponents()
-
-        // Set the version name in the bottom right corner
-        val versionTextView = findViewById<TextView>(R.id.versionTextView)
-        versionTextView.text = "Version $versionName"
 
         // Load configuration
         Configuration.getInstance().load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
@@ -246,6 +247,43 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         sharedPrefMananger = SharedPrefMananger(this)
         notificationManager = NotificationManager(this)
         soundManager = SoundManager(this)
+    }
+
+    /**
+     * Fetches the latest version of the app from the server and updates the versionTextView
+     * in the MainActivity with the retrieved version.
+     */
+    private fun fetchLatestVersion() {
+        val request = Request.Builder()
+            .url("http://43.226.218.98:5000/api/latest-version")
+            .build()
+
+        client.newCall(request).enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: IOException) {
+                Log.e("MainActivity", "Failed to fetch latest version", e)
+                // Optionally, set a default value or handle the failure case
+                runOnUiThread {
+                    findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
+                }
+            }
+
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                if (response.isSuccessful) {
+                    val responseData = response.body?.string()
+                    val json = JSONObject(responseData!!)
+                    val latestVersion = json.getString("version")
+
+                    runOnUiThread {
+                        // Update the versionTextView with the latest version
+                        findViewById<TextView>(R.id.versionTextView).text = "Version $latestVersion"
+                    }
+                } else {
+                    runOnUiThread {
+                        findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
+                    }
+                }
+            }
+        })
     }
 
     /**
