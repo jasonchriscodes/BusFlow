@@ -136,8 +136,8 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Fetch the latest version from the server and update the versionTextView
-        fetchLatestVersion()
+        // Fetch the current version from the server and update the versionTextView
+        fetchCurrentVersion()
 
         // Initialize UI components
         initializeUIComponents()
@@ -250,17 +250,17 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     }
 
     /**
-     * Fetches the latest version of the app from the server and updates the versionTextView
+     * Fetches the current version of the app from the server and updates the versionTextView
      * in the MainActivity with the retrieved version.
      */
-    private fun fetchLatestVersion() {
+    private fun fetchCurrentVersion() {
         val request = Request.Builder()
-            .url("http://43.226.218.98:5000/api/latest-version")
+            .url("http://43.226.218.98:5000/api/current-version")
             .build()
 
         client.newCall(request).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: IOException) {
-                Log.e("MainActivity", "Failed to fetch latest version", e)
+                Log.e("MainActivity", "Failed to fetch current version", e)
                 // Optionally, set a default value or handle the failure case
                 runOnUiThread {
                     findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
@@ -271,11 +271,11 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 if (response.isSuccessful) {
                     val responseData = response.body?.string()
                     val json = JSONObject(responseData!!)
-                    val latestVersion = json.getString("version")
+                    val currentVersion = json.getString("version")
 
                     runOnUiThread {
-                        // Update the versionTextView with the latest version
-                        findViewById<TextView>(R.id.versionTextView).text = "Version $latestVersion"
+                        // Update the versionTextView with the current version
+                        findViewById<TextView>(R.id.versionTextView).text = "Version $currentVersion"
                     }
                 } else {
                     runOnUiThread {
