@@ -11,8 +11,6 @@ env:
   OpenRouteService_API_KEY: ${{ secrets.OpenRouteService_API_KEY }}
   MAILERSEND_API_KEY: ${{ secrets.MAILERSEND_API_KEY }}
   GOOGLE_APP_PASS: ${{ secrets.GOOGLE_APP_PASS }}
-  ACTIONS_RUNNER_DEBUG: true
-  ACTIONS_STEP_DEBUG: true
 
 jobs:
   build:
@@ -32,7 +30,6 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Fetch latest version from server and increment
-        id: versioning
         run: |
           latest_version=$(curl -s "http://43.226.218.98:5000/api/latest-version" | jq -r '.version')
           echo "Latest version: $latest_version"
@@ -42,15 +39,12 @@ jobs:
           patch=${version_parts[2]}
           patch=$((patch + 1))
           new_version="$major.$minor.$patch"
-          new_version_code=$((major * 10000 + minor * 100 + patch))
           echo "new_version=$new_version" >> $GITHUB_ENV
-          echo "new_version_code=$new_version_code" >> $GITHUB_ENV
           echo "New version: $new_version"
 
-      - name: Update version in build.gradle (temporary)
+      - name: Update version in build.gradle
         run: |
-          sed -i "s/versionName \".*\"/versionName \"$new_version\"/" app/build.gradle
-          sed -i "s/versionCode [0-9]\+/versionCode $new_version_code/" app/build.gradle
+          sed -i "s/versionName \".*\"/versionName \"$new_version\"/" build.gradle
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug
