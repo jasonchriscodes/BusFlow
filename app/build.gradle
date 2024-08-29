@@ -14,21 +14,6 @@ def openRouteServiceApiKey = System.getenv("OpenRouteService_API_KEY") ?: ""
 def mailerSenderApiKey = System.getenv("MAILERSEND_API_KEY") ?: ""
 def googleAppPass = System.getenv("GOOGLE_APP_PASS") ?: ""
 
-// support local development with local.properties, load it conditionally
-def propertiesFile = file("${rootDir}/local.properties")
-if (propertiesFile.exists()) {
-    def properties = new Properties()
-    propertiesFile.withInputStream { stream ->
-        properties.load(stream)
-    }
-    // Override environment variables with local properties if they exist
-    tomtomApiKey = properties.getProperty("TOMTOM_API_KEY", tomtomApiKey)
-    googleApiKey = properties.getProperty("GOOGLE_API_KEY", googleApiKey)
-    openRouteServiceApiKey = properties.getProperty("OpenRouteService_API_KEY", openRouteServiceApiKey)
-    mailerSenderApiKey = properties.getProperty("MAILERSEND_API_KEY", mailerSenderApiKey)
-    googleAppPass = properties.getProperty("GOOGLE_APP_PASS", googleAppPass)
-}
-
 android {
     namespace 'com.jason.publisher'
     compileSdk 33
@@ -37,8 +22,10 @@ android {
         applicationId "com.jason.publisher"
         minSdk 21
         targetSdk 33
-        versionCode 1
-        versionName "1.0.0"
+
+        // Use environment variables for versionName and versionCode
+        versionCode System.getenv("VERSION_CODE")?.toInteger() ?: 1
+        versionName System.getenv("VERSION_NAME") ?: "1.0.0"
 
         buildConfigField "String", "TOMTOM_API_KEY", "\"${tomtomApiKey}\""
         buildConfigField "String", "GOOGLE_API_KEY", "\"${googleApiKey}\""
@@ -68,7 +55,6 @@ android {
     }
 
     packagingOptions {
-        // Exclude the conflicting files
         exclude 'META-INF/NOTICE.md'
         exclude 'META-INF/LICENSE.md'
     }

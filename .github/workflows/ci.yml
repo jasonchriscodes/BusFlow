@@ -42,18 +42,15 @@ jobs:
           patch=${version_parts[2]}
           patch=$((patch + 1))
           new_version="$major.$minor.$patch"
+          new_version_code=$((major * 10000 + minor * 100 + patch))
           echo "new_version=$new_version" >> $GITHUB_ENV
+          echo "new_version_code=$new_version_code" >> $GITHUB_ENV
           echo "New version: $new_version"
 
-      - name: Update versionName in build.gradle
+      - name: Update version in build.gradle (temporary)
         run: |
           sed -i "s/versionName \".*\"/versionName \"$new_version\"/" app/build.gradle
-
-      - name: Update versionCode in build.gradle
-        run: |
-          current_version_code=$(grep -oP 'versionCode \K\d+' app/build.gradle)
-          new_version_code=$((current_version_code + 1))
-          sed -i "s/versionCode $current_version_code/versionCode $new_version_code/" app/build.gradle
+          sed -i "s/versionCode [0-9]\+/versionCode $new_version_code/" app/build.gradle
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug
@@ -64,14 +61,3 @@ jobs:
           -F "file=@app/build/outputs/apk/debug/app-debug.apk" \
           -F "version=${new_version}" \
           -F "release_notes=Auto incremented version"
-
-      - name: Commit changes back to the PR branch
-        run: |
-          git config --local user.email "${{ github.actor }}@users.noreply.github.com"
-          git config --local user.name "${{ github.actor }}"
-          git checkout -b version-update
-          git add app/build.gradle
-          git commit -m "ci: update version to $new_version"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git version-update
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
