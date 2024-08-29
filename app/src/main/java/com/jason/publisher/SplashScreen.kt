@@ -2,7 +2,7 @@ package com.jason.publisher
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.Dialog
+import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -10,10 +10,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.view.LayoutInflater
 import android.view.animation.AnimationUtils
 import android.widget.Button
 import android.widget.ImageView
@@ -144,15 +143,19 @@ class SplashScreen : AppCompatActivity() {
      * @param latestVersion The latest version available on the server.
      */
     private fun showUpdateDialog(updateUrl: String, latestVersion: String) {
-        val dialog = Dialog(this)
-        dialog.setContentView(R.layout.update_dialog)
-        dialog.setCancelable(false)
+        val builder = AlertDialog.Builder(this)
+        val inflater = layoutInflater
+        val dialogView = inflater.inflate(R.layout.update_dialog, null)
+        builder.setView(dialogView)
 
-        val updateButton = dialog.findViewById<Button>(R.id.updateButton)
-        val cancelButton = dialog.findViewById<Button>(R.id.cancelButton)
-        val versionInfoTextView = dialog.findViewById<TextView>(R.id.versionInfoTextView)
+        val updateButton = dialogView.findViewById<Button>(R.id.updateButton)
+        val cancelButton = dialogView.findViewById<Button>(R.id.cancelButton)
+        val versionInfoTextView = dialogView.findViewById<TextView>(R.id.versionInfoTextView)
 
         versionInfoTextView.text = "A new version $latestVersion is available."
+
+        val dialog = builder.create()
+        dialog.setCancelable(false)
 
         updateButton.setOnClickListener {
             startUpdateProcess(updateUrl)
@@ -181,25 +184,23 @@ class SplashScreen : AppCompatActivity() {
      * Shows the mode selection dialog and handles the selected mode.
      */
     private fun showOptionDialog() {
-        val dialog = Dialog(this)
-        dialog.setContentView(R.layout.mode_selection_dialog)
+        val builder = AlertDialog.Builder(this)
+        val inflater = layoutInflater
+        val dialogView = inflater.inflate(R.layout.mode_selection_dialog, null)
+        builder.setView(dialogView)
 
-        val onlineModeButton = dialog.findViewById<Button>(R.id.onlineModeButton)
-        val offlineModeButton = dialog.findViewById<Button>(R.id.offlineModeButton)
-
-        // Find the "Who am I" button
-        val whoAmIButton = dialog.findViewById<Button>(R.id.whoAmIButton)
+        val onlineModeButton = dialogView.findViewById<Button>(R.id.onlineModeButton)
+        val offlineModeButton = dialogView.findViewById<Button>(R.id.offlineModeButton)
+        val whoAmIButton = dialogView.findViewById<Button>(R.id.whoAmIButton)
 
         onlineModeButton.setOnClickListener {
             val intent = Intent(this, MainActivity::class.java)
             startActivity(intent)
-            dialog.dismiss()
         }
 
         offlineModeButton.setOnClickListener {
             val intent = Intent(this, OfflineActivity::class.java)
             startActivity(intent)
-            dialog.dismiss()
         }
 
         whoAmIButton.setOnClickListener {
@@ -210,6 +211,7 @@ class SplashScreen : AppCompatActivity() {
             Toast.makeText(this, "Device AID copied to clipboard", Toast.LENGTH_SHORT).show()
         }
 
+        val dialog = builder.create()
         dialog.show()
     }
 
