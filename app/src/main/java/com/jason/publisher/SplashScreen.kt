@@ -12,7 +12,6 @@ import android.location.Location
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
-import android.view.LayoutInflater
 import android.view.animation.AnimationUtils
 import android.widget.Button
 import android.widget.ImageView
@@ -21,7 +20,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivitySplashScreenBinding
 import com.jason.publisher.services.LocationManager
 import com.jason.publisher.services.SharedPrefMananger
@@ -37,7 +35,6 @@ class SplashScreen : AppCompatActivity() {
     private lateinit var binding: ActivitySplashScreenBinding
     private val client = OkHttpClient()
 
-    var name = ""
     private var aaid = ""
     private var latitude = 0.0
     private var longitude = 0.0
@@ -55,22 +52,27 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Log the version name for debugging purposes
         Log.d("version name", "test version v1.0.2")
 
+        // Retrieve the Android ID and initialize shared preferences and location manager
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         sharedPrefMananger = SharedPrefMananger(this)
         locationManager = LocationManager(this)
         startLocationUpdate()
 
-        // Start animation
+        // Start the fade-in animation for the logos
         val logoExplorer = findViewById<ImageView>(R.id.logoExplorer)
         val logoFullers = findViewById<ImageView>(R.id.logoFullers)
         val animation = AnimationUtils.loadAnimation(this, R.anim.fade_in)
         logoExplorer.startAnimation(animation)
         logoFullers.startAnimation(animation)
 
-        // Check for updates and then show the mode selection dialog
-        checkForUpdates()
+        // Optionally check for updates (commented out)
+        // checkForUpdates()
+
+        // Show version information after checking for updates
+        versionInfo()
     }
 
     /**
@@ -240,5 +242,97 @@ class SplashScreen : AppCompatActivity() {
                 123
             )
         }
+    }
+
+    /**
+     * Extracts the app version from the APK filename.
+     * Assumes the APK filename follows the pattern "app-vX.X.X.apk".
+     */
+    private fun getAppVersionFromFileName(): String {
+        val packageManager = packageManager
+        val packageName = packageName
+        return try {
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            val apkFile = appInfo.sourceDir // Path to the APK file
+            val fileName = apkFile.substring(apkFile.lastIndexOf('/') + 1)
+
+            // Extract version from filename, assuming a naming convention like "app-v1.0.2.apk"
+            fileName.substringAfter("app-v").substringBefore(".apk")
+        } catch (e: Exception) {
+            e.printStackTrace()
+            BuildConfig.VERSION_NAME // Fallback to BuildConfig version
+        }
+    }
+
+    /**
+     * Displays a dialog box with the current app version and the latest version available.
+     * This method will be called after checking for updates.
+     */
+    private fun versionInfo() {
+        // Fetch the latest version from the server
+        val request = Request.Builder()
+            .url("http://43.226.218.98:5000/api/latest-version")
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("SplashScreen", "Failed to fetch version information", e)
+                // Show a failure dialog if the request fails
+                runOnUiThread {
+                    showFailureDialog("Failed to fetch version information. Please check your connection.")
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    val responseData = response.body?.string()
+                    val json = JSONObject(responseData!!)
+                    val latestVersion = json.getString("version")
+                    val currentVersion = getAppVersionFromFileName() // Get version from APK file name
+
+                    // Show the version info dialog on the UI thread
+                    runOnUiThread {
+                        showVersionDialog(currentVersion, latestVersion)
+                    }
+                } else {
+                    // Handle non-200 responses
+                    runOnUiThread {
+                        showFailureDialog("Unexpected server response.")
+                    }
+                }
+            }
+        })
+    }
+
+    /**
+     * Displays a dialog with the app version information.
+     * @param currentVersion The current version of the app.
+     * @param latestVersion The latest version available from the server.
+     */
+    private fun showVersionDialog(currentVersion: String, latestVersion: String) {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Version Information")
+        builder.setMessage("Your app version is $currentVersion. The latest version is $latestVersion.")
+        builder.setPositiveButton("OK") { dialog, _ ->
+            dialog.dismiss()
+            // Optionally, you can proceed to the next screen here
+        }
+        builder.setCancelable(false)
+        builder.show()
+    }
+
+    /**
+     * Displays a failure dialog when there is an issue with fetching data.
+     * @param message The error message to display.
+     */
+    private fun showFailureDialog(message: String) {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Error")
+        builder.setMessage(message)
+        builder.setPositiveButton("OK") { dialog, _ ->
+            dialog.dismiss()
+        }
+        builder.setCancelable(false)
+        builder.show()
     }
 }
