@@ -21,7 +21,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivitySplashScreenBinding
 import com.jason.publisher.services.LocationManager
 import com.jason.publisher.services.SharedPrefMananger
@@ -69,8 +68,11 @@ class SplashScreen : AppCompatActivity() {
         logoExplorer.startAnimation(animation)
         logoFullers.startAnimation(animation)
 
-        // Check for updates and then show the mode selection dialog
-        checkForUpdates()
+        // Check for updates and then show the version info dialog
+        // checkForUpdates()
+
+        // Show version information after checking for updates
+        versionInfo()
     }
 
     /**
@@ -240,5 +242,77 @@ class SplashScreen : AppCompatActivity() {
                 123
             )
         }
+    }
+
+    /**
+     * Displays a dialog box with the current app version and the latest version available.
+     * This method will be called after checking for updates.
+     */
+    private fun versionInfo() {
+        // Fetch the latest version from the server
+        val request = Request.Builder()
+            .url("http://43.226.218.98:5000/api/latest-version")
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("SplashScreen", "Failed to fetch version information", e)
+                // Show a failure dialog if the request fails
+                runOnUiThread {
+                    showFailureDialog("Failed to fetch version information. Please check your connection.")
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    val responseData = response.body?.string()
+                    val json = JSONObject(responseData!!)
+                    val latestVersion = json.getString("version")
+                    val currentVersion = BuildConfig.VERSION_NAME
+
+                    // Show the version info dialog on the UI thread
+                    runOnUiThread {
+                        showVersionDialog(currentVersion, latestVersion)
+                    }
+                } else {
+                    // Handle non-200 responses
+                    runOnUiThread {
+                        showFailureDialog("Unexpected server response.")
+                    }
+                }
+            }
+        })
+    }
+
+    /**
+     * Displays a dialog with the app version information.
+     * @param currentVersion The current version of the app.
+     * @param latestVersion The latest version available from the server.
+     */
+    private fun showVersionDialog(currentVersion: String, latestVersion: String) {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Version Information")
+        builder.setMessage("Your app version is $currentVersion. The latest version is $latestVersion.")
+        builder.setPositiveButton("OK") { dialog, _ ->
+            dialog.dismiss()
+            // Optionally, you can proceed to the next screen here
+        }
+        builder.setCancelable(false)
+        builder.show()
+    }
+
+    /**
+     * Displays a failure dialog when there is an issue with fetching data.
+     * @param message The error message to display.
+     */
+    private fun showFailureDialog(message: String) {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Error")
+        builder.setMessage(message)
+        builder.setPositiveButton("OK") { dialog, _ ->
+            dialog.dismiss()
+        }
+        builder.setCancelable(false)
+        builder.show()
     }
 }
