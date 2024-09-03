@@ -69,10 +69,9 @@ class SplashScreen : AppCompatActivity() {
         logoFullers.startAnimation(animation)
 
         // Check for updates and then show the version info dialog
-        // checkForUpdates()
+         checkForUpdates()
 
-        // Show version information after checking for updates
-        versionInfo()
+        showOptionDialog()
     }
 
     /**
@@ -80,15 +79,19 @@ class SplashScreen : AppCompatActivity() {
      * it shows an update dialog; otherwise, it proceeds to the mode selection dialog.
      */
     private fun checkForUpdates() {
-        val request = Request.Builder()
+        val requestLatest = Request.Builder()
             .url("http://43.226.218.98:5000/api/latest-version")
             .build()
+        val requestCurrent = Request.Builder()
+            .url("http://43.226.218.98:5000/api/current-version")
+            .build()
 
-        client.newCall(request).enqueue(object : Callback {
+        // First, fetch the current version
+        client.newCall(requestCurrent).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                Log.e("SplashScreen", "Failed to check for updates", e)
+                Log.e("SplashScreen", "Failed to fetch current version information", e)
                 runOnUiThread {
-                    showOptionDialog()
+                    showFailureDialog("Failed to fetch current version information. Please check your connection.")
                 }
             }
 
@@ -96,20 +99,35 @@ class SplashScreen : AppCompatActivity() {
                 if (response.isSuccessful) {
                     val responseData = response.body?.string()
                     val json = JSONObject(responseData!!)
-                    val latestVersion = json.getString("version")
-                    val updateUrl = "http://43.226.218.98:5000/apk/app-v$latestVersion.apk"
+                    val currentVersion = json.getString("version")
 
-                    if (isUpdateAvailable(BuildConfig.VERSION_NAME, latestVersion)) {
-                        runOnUiThread {
-                            showUpdateDialog(updateUrl, latestVersion)
+                    // After fetching current version, fetch the latest version
+                    client.newCall(requestLatest).enqueue(object : Callback {
+                        override fun onFailure(call: Call, e: IOException) {
+                            Log.e("SplashScreen", "Failed to fetch latest version information", e)
+                            runOnUiThread {
+                                showFailureDialog("Failed to fetch latest version information. Please check your connection.")
+                            }
                         }
-                    } else {
-                        // Pass the version to MainActivity
-                        val intent = Intent(this@SplashScreen, MainActivity::class.java)
-                        intent.putExtra("LATEST_VERSION", latestVersion)
-                        startActivity(intent)
-                        finish()  // End SplashScreen activity
-                    }
+
+                        override fun onResponse(call: Call, response: Response) {
+                            if (response.isSuccessful) {
+                                val responseData = response.body?.string()
+                                val json = JSONObject(responseData!!)
+                                val latestVersion = json.getString("version")
+
+                                // Show version information in the dialog
+                                runOnUiThread {
+                                    showVersionDialog(currentVersion, latestVersion)
+                                }
+                            } else {
+                                runOnUiThread {
+                                    showFailureDialog("Unexpected server response while fetching latest version.")
+                                }
+                            }
+                        }
+                    })
+
                 } else {
                     runOnUiThread {
                         showFailureDialog("Unexpected server response while fetching current version.")
@@ -190,13 +208,57 @@ class SplashScreen : AppCompatActivity() {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Version Information")
         builder.setMessage("Your app version is $currentVersion. The latest version is $latestVersion.")
-        builder.setPositiveButton("OK") { dialog, _ ->
+
+        // Add Cancel button
+        builder.setNegativeButton("Cancel") { dialog, _ ->
             dialog.dismiss()
-            // Optionally, you can proceed to the next screen here
+            // Optionally, proceed to the next screen
         }
+
+        // Add Update button
+        builder.setPositiveButton("Update") { dialog, _ ->
+            updateCurrentVersionOnServer()
+            dialog.dismiss()
+            // Optionally, proceed to the next screen after updating
+        }
+
         builder.setCancelable(false)
         builder.show()
     }
+
+    /**
+     * Sends a request to update the "current" folder on the server with the contents of the "latest" folder.
+     */
+    private fun updateCurrentVersionOnServer() {
+        // Construct the API request to update the "current" folder on the server
+        val request = Request.Builder()
+            .url("http://43.226.218.98:5000/api/update-current-folder")  // You need to implement this endpoint in your Flask app
+            .post(RequestBody.create(null, ByteArray(0)))  // POST request with an empty body
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("SplashScreen", "Failed to update the current version on the server", e)
+                runOnUiThread {
+                    showFailureDialog("Failed to update the current version on the server. Please check your connection.")
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    runOnUiThread {
+                        Toast.makeText(this@SplashScreen, "Current version updated successfully.", Toast.LENGTH_SHORT).show()
+                        // Optionally, proceed to the next screen
+                    }
+                } else {
+                    runOnUiThread {
+                        showFailureDialog("Unexpected server response while updating the current version.")
+                    }
+                }
+            }
+        })
+    }
+
 
     /**
      * Displays a failure dialog when there is an issue with fetching data.
