@@ -12,6 +12,7 @@ import android.location.Location
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.view.LayoutInflater
 import android.view.animation.AnimationUtils
 import android.widget.Button
 import android.widget.ImageView
@@ -20,11 +21,15 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.jason.publisher.databinding.ActivitySplashScreenBinding
 import com.jason.publisher.services.LocationManager
 import com.jason.publisher.services.SharedPrefMananger
 import okhttp3.*
+import okio.buffer
+import okio.sink
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
 
 @SuppressLint("CustomSplashScreen")
@@ -35,6 +40,7 @@ class SplashScreen : AppCompatActivity() {
     private lateinit var binding: ActivitySplashScreenBinding
     private val client = OkHttpClient()
 
+    var name = ""
     private var aaid = ""
     private var latitude = 0.0
     private var longitude = 0.0
@@ -52,27 +58,24 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Log the version name for debugging purposes
-        Log.d("version name", "test version v1.0.2")
+        Log.d("version name", "test version v1.0.4")
 
-        // Retrieve the Android ID and initialize shared preferences and location manager
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         sharedPrefMananger = SharedPrefMananger(this)
         locationManager = LocationManager(this)
         startLocationUpdate()
 
-        // Start the fade-in animation for the logos
+        // Start animation
         val logoExplorer = findViewById<ImageView>(R.id.logoExplorer)
         val logoFullers = findViewById<ImageView>(R.id.logoFullers)
         val animation = AnimationUtils.loadAnimation(this, R.anim.fade_in)
         logoExplorer.startAnimation(animation)
         logoFullers.startAnimation(animation)
 
-        // Optionally check for updates (commented out)
-        // checkForUpdates()
+        // Check for updates and then show the version info dialog
+         checkForUpdates()
 
-        // Show version information after checking for updates
-        versionInfo()
+        showOptionDialog()
     }
 
     /**
@@ -80,15 +83,19 @@ class SplashScreen : AppCompatActivity() {
      * it shows an update dialog; otherwise, it proceeds to the mode selection dialog.
      */
     private fun checkForUpdates() {
-        val request = Request.Builder()
+        val requestLatest = Request.Builder()
             .url("http://43.226.218.98:5000/api/latest-version")
             .build()
+        val requestCurrent = Request.Builder()
+            .url("http://43.226.218.98:5000/api/current-version")
+            .build()
 
-        client.newCall(request).enqueue(object : Callback {
+        // First, fetch the current version
+        client.newCall(requestCurrent).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                Log.e("SplashScreen", "Failed to check for updates", e)
+                Log.e("SplashScreen", "Failed to fetch current version information", e)
                 runOnUiThread {
-                    showOptionDialog()
+                    showFailureDialog("Failed to fetch current version information. Please check your connection.")
                 }
             }
 
@@ -96,23 +103,45 @@ class SplashScreen : AppCompatActivity() {
                 if (response.isSuccessful) {
                     val responseData = response.body?.string()
                     val json = JSONObject(responseData!!)
-                    val latestVersion = json.getString("version")
-                    val updateUrl = "http://43.226.218.98:5000/apk/app-v$latestVersion.apk"
+                    val currentVersion = json.getString("version")
 
-                    if (isUpdateAvailable(BuildConfig.VERSION_NAME, latestVersion)) {
-                        runOnUiThread {
-                            showUpdateDialog(updateUrl, latestVersion)
+                    // After fetching current version, fetch the latest version
+                    client.newCall(requestLatest).enqueue(object : Callback {
+                        override fun onFailure(call: Call, e: IOException) {
+                            Log.e("SplashScreen", "Failed to fetch latest version information", e)
+                            runOnUiThread {
+                                showFailureDialog("Failed to fetch latest version information. Please check your connection.")
+                            }
                         }
-                    } else {
-                        // Pass the version to MainActivity
-                        val intent = Intent(this@SplashScreen, MainActivity::class.java)
-                        intent.putExtra("LATEST_VERSION", latestVersion)
-                        startActivity(intent)
-                        finish()  // End SplashScreen activity
-                    }
+
+                        override fun onResponse(call: Call, response: Response) {
+                            if (response.isSuccessful) {
+                                val responseData = response.body?.string()
+                                val json = JSONObject(responseData!!)
+                                val latestVersion = json.getString("version")
+
+                                // Check if the current version is up to date
+                                if (currentVersion == latestVersion) {
+                                    runOnUiThread {
+                                        showUpToDateDialog(currentVersion)
+                                    }
+                                } else {
+                                    // Show version information in the dialog
+                                    runOnUiThread {
+                                        showVersionDialog(currentVersion, latestVersion)
+                                    }
+                                }
+                            } else {
+                                runOnUiThread {
+                                    showFailureDialog("Unexpected server response while fetching latest version.")
+                                }
+                            }
+                        }
+                    })
+
                 } else {
                     runOnUiThread {
-                        showOptionDialog()
+                        showFailureDialog("Unexpected server response while fetching current version.")
                     }
                 }
             }
@@ -120,65 +149,91 @@ class SplashScreen : AppCompatActivity() {
     }
 
     /**
-     * Compares the current version of the app with the latest version from the server.
-     * @param currentVersion The current version of the app.
-     * @param latestVersion The latest version available on the server.
-     * @return true if an update is available, false otherwise.
+     * Displays a dialog indicating that the app is up to date.
+     * @param version The version that is up to date.
      */
-    private fun isUpdateAvailable(currentVersion: String, latestVersion: String): Boolean {
-        val currentVersionParts = currentVersion.split('.').map { it.toInt() }
-        val latestVersionParts = latestVersion.split('.').map { it.toInt() }
-
-        for (i in currentVersionParts.indices) {
-            if (latestVersionParts[i] > currentVersionParts[i]) {
-                return true
-            } else if (latestVersionParts[i] < currentVersionParts[i]) {
-                return false
-            }
-        }
-        return false
-    }
-
-    /**
-     * Displays a dialog to the user indicating that a new version is available for download.
-     * @param updateUrl The URL where the new version can be downloaded.
-     * @param latestVersion The latest version available on the server.
-     */
-    private fun showUpdateDialog(updateUrl: String, latestVersion: String) {
+    private fun showUpToDateDialog(version: String) {
         val builder = AlertDialog.Builder(this)
-        val inflater = layoutInflater
-        val dialogView = inflater.inflate(R.layout.update_dialog, null)
-        builder.setView(dialogView)
-
-        val updateButton = dialogView.findViewById<Button>(R.id.updateButton)
-        val cancelButton = dialogView.findViewById<Button>(R.id.cancelButton)
-        val versionInfoTextView = dialogView.findViewById<TextView>(R.id.versionInfoTextView)
-
-        versionInfoTextView.text = "A new version $latestVersion is available."
-
-        val dialog = builder.create()
-        dialog.setCancelable(false)
-
-        updateButton.setOnClickListener {
-            startUpdateProcess(updateUrl)
+        builder.setTitle("Version Information")
+        builder.setMessage("Your version $version is up to date.")
+        builder.setPositiveButton("OK") { dialog, _ ->
             dialog.dismiss()
+            // Optionally, you can proceed to the next screen here
         }
-
-        cancelButton.setOnClickListener {
-            dialog.dismiss()
-            showOptionDialog()
-        }
-
-        dialog.show()
+        builder.setCancelable(false)
+        builder.show()
     }
 
     /**
-     * Initiates the update process by opening the download URL in the device's browser.
-     * @param updateUrl The URL where the new version can be downloaded.
+     * Displays a dialog with the app version information and provides options to update.
+     * @param currentVersion The current version of the app.
+     * @param latestVersion The latest version available from the server.
      */
-    private fun startUpdateProcess(updateUrl: String) {
+    private fun showVersionDialog(currentVersion: String, latestVersion: String) {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Version Information")
+        builder.setMessage("Your app version is $currentVersion. The latest version is $latestVersion.")
+
+        // Add Cancel button
+        builder.setNegativeButton("Cancel") { dialog, _ ->
+            dialog.dismiss()
+            // Optionally, proceed to the next screen
+        }
+
+        // Add Update button
+        builder.setPositiveButton("Update") { dialog, _ ->
+            downloadAndUpdateApp(latestVersion)
+            dialog.dismiss()
+            // Optionally, proceed to the next screen after updating
+        }
+
+        builder.setCancelable(false)
+        builder.show()
+    }
+
+    /**
+     * Downloads the latest APK from the server and triggers installation.
+     * @param latestVersion The version of the latest APK to download.
+     */
+    private fun downloadAndUpdateApp(latestVersion: String) {
+        val apkUrl = "http://43.226.218.98/apk/latest/app-v$latestVersion.apk"
+        val request = Request.Builder().url(apkUrl).build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("SplashScreen", "Failed to download the APK", e)
+                runOnUiThread {
+                    showFailureDialog("Failed to download the update. Please check your connection.")
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    val apkFile = File(getExternalFilesDir(null), "update.apk")
+                    val sink = apkFile.sink().buffer()
+                    sink.writeAll(response.body!!.source())
+                    sink.close()
+
+                    runOnUiThread {
+                        installApk(apkFile)
+                    }
+                } else {
+                    runOnUiThread {
+                        showFailureDialog("Unexpected server response during APK download.")
+                    }
+                }
+            }
+        })
+    }
+
+    /**
+     * Initiates the installation of the downloaded APK.
+     * @param apkFile The file object of the downloaded APK.
+     */
+    private fun installApk(apkFile: File) {
         val intent = Intent(Intent.ACTION_VIEW)
-        intent.data = android.net.Uri.parse(updateUrl)
+        intent.setDataAndType(FileProvider.getUriForFile(this, "$packageName.provider", apkFile), "application/vnd.android.package-archive")
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
         startActivity(intent)
     }
 
@@ -245,81 +300,38 @@ class SplashScreen : AppCompatActivity() {
     }
 
     /**
-     * Extracts the app version from the APK filename.
-     * Assumes the APK filename follows the pattern "app-vX.X.X.apk".
+     * Sends a request to update the "current" folder on the server with the contents of the "latest" folder.
      */
-    private fun getAppVersionFromFileName(): String {
-        val packageManager = packageManager
-        val packageName = packageName
-        return try {
-            val appInfo = packageManager.getApplicationInfo(packageName, 0)
-            val apkFile = appInfo.sourceDir // Path to the APK file
-            val fileName = apkFile.substring(apkFile.lastIndexOf('/') + 1)
-
-            // Extract version from filename, assuming a naming convention like "app-v1.0.2.apk"
-            fileName.substringAfter("app-v").substringBefore(".apk")
-        } catch (e: Exception) {
-            e.printStackTrace()
-            BuildConfig.VERSION_NAME // Fallback to BuildConfig version
-        }
-    }
-
-    /**
-     * Displays a dialog box with the current app version and the latest version available.
-     * This method will be called after checking for updates.
-     */
-    private fun versionInfo() {
-        // Fetch the latest version from the server
+    private fun updateCurrentVersionOnServer() {
+        // Construct the API request to update the "current" folder on the server
         val request = Request.Builder()
-            .url("http://43.226.218.98:5000/api/latest-version")
+            .url("http://43.226.218.98:5000/api/update-current-folder")  // You need to implement this endpoint in your Flask app
+            .post(RequestBody.create(null, ByteArray(0)))  // POST request with an empty body
             .build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                Log.e("SplashScreen", "Failed to fetch version information", e)
-                // Show a failure dialog if the request fails
+                Log.e("SplashScreen", "Failed to update the current version on the server", e)
                 runOnUiThread {
-                    showFailureDialog("Failed to fetch version information. Please check your connection.")
+                    showFailureDialog("Failed to update the current version on the server. Please check your connection.")
                 }
             }
 
             override fun onResponse(call: Call, response: Response) {
                 if (response.isSuccessful) {
-                    val responseData = response.body?.string()
-                    val json = JSONObject(responseData!!)
-                    val latestVersion = json.getString("version")
-                    val currentVersion = getAppVersionFromFileName() // Get version from APK file name
-
-                    // Show the version info dialog on the UI thread
                     runOnUiThread {
-                        showVersionDialog(currentVersion, latestVersion)
+                        Toast.makeText(this@SplashScreen, "Current version updated successfully.", Toast.LENGTH_SHORT).show()
+                        // Optionally, proceed to the next screen
                     }
                 } else {
-                    // Handle non-200 responses
                     runOnUiThread {
-                        showFailureDialog("Unexpected server response.")
+                        showFailureDialog("Unexpected server response while updating the current version.")
                     }
                 }
             }
         })
     }
 
-    /**
-     * Displays a dialog with the app version information.
-     * @param currentVersion The current version of the app.
-     * @param latestVersion The latest version available from the server.
-     */
-    private fun showVersionDialog(currentVersion: String, latestVersion: String) {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("Version Information")
-        builder.setMessage("Your app version is $currentVersion. The latest version is $latestVersion.")
-        builder.setPositiveButton("OK") { dialog, _ ->
-            dialog.dismiss()
-            // Optionally, you can proceed to the next screen here
-        }
-        builder.setCancelable(false)
-        builder.show()
-    }
 
     /**
      * Displays a failure dialog when there is an issue with fetching data.
