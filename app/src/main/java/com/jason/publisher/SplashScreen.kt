@@ -112,74 +112,11 @@ class SplashScreen : AppCompatActivity() {
                     }
                 } else {
                     runOnUiThread {
-                        showOptionDialog()
+                        showFailureDialog("Unexpected server response while fetching current version.")
                     }
                 }
             }
         })
-    }
-
-    /**
-     * Compares the current version of the app with the latest version from the server.
-     * @param currentVersion The current version of the app.
-     * @param latestVersion The latest version available on the server.
-     * @return true if an update is available, false otherwise.
-     */
-    private fun isUpdateAvailable(currentVersion: String, latestVersion: String): Boolean {
-        val currentVersionParts = currentVersion.split('.').map { it.toInt() }
-        val latestVersionParts = latestVersion.split('.').map { it.toInt() }
-
-        for (i in currentVersionParts.indices) {
-            if (latestVersionParts[i] > currentVersionParts[i]) {
-                return true
-            } else if (latestVersionParts[i] < currentVersionParts[i]) {
-                return false
-            }
-        }
-        return false
-    }
-
-    /**
-     * Displays a dialog to the user indicating that a new version is available for download.
-     * @param updateUrl The URL where the new version can be downloaded.
-     * @param latestVersion The latest version available on the server.
-     */
-    private fun showUpdateDialog(updateUrl: String, latestVersion: String) {
-        val builder = AlertDialog.Builder(this)
-        val inflater = layoutInflater
-        val dialogView = inflater.inflate(R.layout.update_dialog, null)
-        builder.setView(dialogView)
-
-        val updateButton = dialogView.findViewById<Button>(R.id.updateButton)
-        val cancelButton = dialogView.findViewById<Button>(R.id.cancelButton)
-        val versionInfoTextView = dialogView.findViewById<TextView>(R.id.versionInfoTextView)
-
-        versionInfoTextView.text = "A new version $latestVersion is available."
-
-        val dialog = builder.create()
-        dialog.setCancelable(false)
-
-        updateButton.setOnClickListener {
-            startUpdateProcess(updateUrl)
-            dialog.dismiss()
-        }
-
-        cancelButton.setOnClickListener {
-            dialog.dismiss()
-            showOptionDialog()
-        }
-
-        dialog.show()
-    }
-
-    /**
-     * Initiates the update process by opening the download URL in the device's browser.
-     * @param updateUrl The URL where the new version can be downloaded.
-     */
-    private fun startUpdateProcess(updateUrl: String) {
-        val intent = Intent(Intent.ACTION_VIEW)
-        intent.data = android.net.Uri.parse(updateUrl)
-        startActivity(intent)
     }
 
     /**
@@ -242,46 +179,6 @@ class SplashScreen : AppCompatActivity() {
                 123
             )
         }
-    }
-
-    /**
-     * Displays a dialog box with the current app version and the latest version available.
-     * This method will be called after checking for updates.
-     */
-    private fun versionInfo() {
-        // Fetch the latest version from the server
-        val request = Request.Builder()
-            .url("http://43.226.218.98:5000/api/latest-version")
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                Log.e("SplashScreen", "Failed to fetch version information", e)
-                // Show a failure dialog if the request fails
-                runOnUiThread {
-                    showFailureDialog("Failed to fetch version information. Please check your connection.")
-                }
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                if (response.isSuccessful) {
-                    val responseData = response.body?.string()
-                    val json = JSONObject(responseData!!)
-                    val latestVersion = json.getString("version")
-                    val currentVersion = BuildConfig.VERSION_NAME
-
-                    // Show the version info dialog on the UI thread
-                    runOnUiThread {
-                        showVersionDialog(currentVersion, latestVersion)
-                    }
-                } else {
-                    // Handle non-200 responses
-                    runOnUiThread {
-                        showFailureDialog("Unexpected server response.")
-                    }
-                }
-            }
-        })
     }
 
     /**
