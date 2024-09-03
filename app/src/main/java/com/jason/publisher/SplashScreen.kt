@@ -58,7 +58,7 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        Log.d("version name", "test v1.1.1")
+        Log.d("version name", "test v1.0.12")
 
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         sharedPrefMananger = SharedPrefMananger(this)
@@ -261,6 +261,9 @@ class SplashScreen : AppCompatActivity() {
         intent.setDataAndType(FileProvider.getUriForFile(this, "$packageName.provider", apkFile), "application/vnd.android.package-archive")
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
         startActivity(intent)
+
+        // After installation, update the server's current version
+        updateCurrentVersionOnServer()
     }
 
     /**
@@ -331,7 +334,7 @@ class SplashScreen : AppCompatActivity() {
     private fun updateCurrentVersionOnServer() {
         // Construct the API request to update the "current" folder on the server
         val request = Request.Builder()
-            .url("http://43.226.218.98:5000/api/update-current-folder")  // You need to implement this endpoint in your Flask app
+            .url("http://43.226.218.98:5000/api/update-current-folder")
             .post(RequestBody.create(null, ByteArray(0)))  // POST request with an empty body
             .build()
 
@@ -348,6 +351,7 @@ class SplashScreen : AppCompatActivity() {
                     runOnUiThread {
                         Toast.makeText(this@SplashScreen, "Current version updated successfully.", Toast.LENGTH_SHORT).show()
                         // Optionally, proceed to the next screen
+                        proceedToNextScreen()
                     }
                 } else {
                     runOnUiThread {
@@ -357,7 +361,6 @@ class SplashScreen : AppCompatActivity() {
             }
         })
     }
-
 
     /**
      * Displays a failure dialog when there is an issue with fetching data.
