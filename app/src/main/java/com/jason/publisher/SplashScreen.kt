@@ -116,9 +116,16 @@ class SplashScreen : AppCompatActivity() {
                                 val json = JSONObject(responseData!!)
                                 val latestVersion = json.getString("version")
 
-                                // Show version information in the dialog
-                                runOnUiThread {
-                                    showVersionDialog(currentVersion, latestVersion)
+                                // Check if the current version is up to date
+                                if (currentVersion == latestVersion) {
+                                    runOnUiThread {
+                                        showUpToDateDialog(currentVersion)
+                                    }
+                                } else {
+                                    // Show version information in the dialog
+                                    runOnUiThread {
+                                        showVersionDialog(currentVersion, latestVersion)
+                                    }
                                 }
                             } else {
                                 runOnUiThread {
@@ -135,6 +142,49 @@ class SplashScreen : AppCompatActivity() {
                 }
             }
         })
+    }
+
+    /**
+     * Displays a dialog indicating that the app is up to date.
+     * @param version The version that is up to date.
+     */
+    private fun showUpToDateDialog(version: String) {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Version Information")
+        builder.setMessage("Your version $version is up to date.")
+        builder.setPositiveButton("OK") { dialog, _ ->
+            dialog.dismiss()
+            // Optionally, you can proceed to the next screen here
+        }
+        builder.setCancelable(false)
+        builder.show()
+    }
+
+    /**
+     * Displays a dialog with the app version information and provides options to update.
+     * @param currentVersion The current version of the app.
+     * @param latestVersion The latest version available from the server.
+     */
+    private fun showVersionDialog(currentVersion: String, latestVersion: String) {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Version Information")
+        builder.setMessage("Your app version is $currentVersion. The latest version is $latestVersion.")
+
+        // Add Cancel button
+        builder.setNegativeButton("Cancel") { dialog, _ ->
+            dialog.dismiss()
+            // Optionally, proceed to the next screen
+        }
+
+        // Add Update button
+        builder.setPositiveButton("Update") { dialog, _ ->
+            updateCurrentVersionOnServer()
+            dialog.dismiss()
+            // Optionally, proceed to the next screen after updating
+        }
+
+        builder.setCancelable(false)
+        builder.show()
     }
 
     /**
@@ -197,33 +247,6 @@ class SplashScreen : AppCompatActivity() {
                 123
             )
         }
-    }
-
-    /**
-     * Displays a dialog with the app version information.
-     * @param currentVersion The current version of the app.
-     * @param latestVersion The latest version available from the server.
-     */
-    private fun showVersionDialog(currentVersion: String, latestVersion: String) {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("Version Information")
-        builder.setMessage("Your app version is $currentVersion. The latest version is $latestVersion.")
-
-        // Add Cancel button
-        builder.setNegativeButton("Cancel") { dialog, _ ->
-            dialog.dismiss()
-            // Optionally, proceed to the next screen
-        }
-
-        // Add Update button
-        builder.setPositiveButton("Update") { dialog, _ ->
-            updateCurrentVersionOnServer()
-            dialog.dismiss()
-            // Optionally, proceed to the next screen after updating
-        }
-
-        builder.setCancelable(false)
-        builder.show()
     }
 
     /**

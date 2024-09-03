@@ -255,7 +255,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      */
     private fun fetchLatestVersion() {
         val request = Request.Builder()
-            .url("http://43.226.218.98:5000/api/latest-version")
+            .url("http://43.226.218.98:5000/api/current-version")
             .build()
 
         client.newCall(request).enqueue(object : okhttp3.Callback {
