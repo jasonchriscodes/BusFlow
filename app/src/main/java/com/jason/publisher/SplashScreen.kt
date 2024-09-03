@@ -58,7 +58,7 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        Log.d("version name", "test v1.1.1")
+        Log.d("version name", "test v1.0.11")
 
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         sharedPrefMananger = SharedPrefMananger(this)
