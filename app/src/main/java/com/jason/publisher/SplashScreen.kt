@@ -21,11 +21,15 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.jason.publisher.databinding.ActivitySplashScreenBinding
 import com.jason.publisher.services.LocationManager
 import com.jason.publisher.services.SharedPrefMananger
 import okhttp3.*
+import okio.buffer
+import okio.sink
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
 
 @SuppressLint("CustomSplashScreen")
@@ -178,13 +182,59 @@ class SplashScreen : AppCompatActivity() {
 
         // Add Update button
         builder.setPositiveButton("Update") { dialog, _ ->
-            updateCurrentVersionOnServer()
+            downloadAndUpdateApp(latestVersion)
             dialog.dismiss()
             // Optionally, proceed to the next screen after updating
         }
 
         builder.setCancelable(false)
         builder.show()
+    }
+
+    /**
+     * Downloads the latest APK from the server and triggers installation.
+     * @param latestVersion The version of the latest APK to download.
+     */
+    private fun downloadAndUpdateApp(latestVersion: String) {
+        val apkUrl = "http://43.226.218.98/apk/latest/app-v$latestVersion.apk"
+        val request = Request.Builder().url(apkUrl).build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("SplashScreen", "Failed to download the APK", e)
+                runOnUiThread {
+                    showFailureDialog("Failed to download the update. Please check your connection.")
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    val apkFile = File(getExternalFilesDir(null), "update.apk")
+                    val sink = apkFile.sink().buffer()
+                    sink.writeAll(response.body!!.source())
+                    sink.close()
+
+                    runOnUiThread {
+                        installApk(apkFile)
+                    }
+                } else {
+                    runOnUiThread {
+                        showFailureDialog("Unexpected server response during APK download.")
+                    }
+                }
+            }
+        })
+    }
+
+    /**
+     * Initiates the installation of the downloaded APK.
+     * @param apkFile The file object of the downloaded APK.
+     */
+    private fun installApk(apkFile: File) {
+        val intent = Intent(Intent.ACTION_VIEW)
+        intent.setDataAndType(FileProvider.getUriForFile(this, "$packageName.provider", apkFile), "application/vnd.android.package-archive")
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+        startActivity(intent)
     }
 
     /**
