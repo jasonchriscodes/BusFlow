@@ -58,7 +58,7 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        Log.d("version name", "test v1.0.4")
+        Log.d("version name", "test v1.0.7")
 
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         sharedPrefMananger = SharedPrefMananger(this)
@@ -178,13 +178,14 @@ class SplashScreen : AppCompatActivity() {
         builder.setNegativeButton("Cancel") { dialog, _ ->
             dialog.dismiss()
             // Optionally, proceed to the next screen
+            proceedToNextScreen()
         }
 
         // Add Update button
         builder.setPositiveButton("Update") { dialog, _ ->
-            downloadAndUpdateApp(latestVersion)
             dialog.dismiss()
-            // Optionally, proceed to the next screen after updating
+            downloadAndUpdateApp()
+            // Optionally, you can proceed to the next screen after updating
         }
 
         builder.setCancelable(false)
@@ -192,34 +193,58 @@ class SplashScreen : AppCompatActivity() {
     }
 
     /**
-     * Downloads the latest APK from the server and triggers installation.
-     * @param latestVersion The version of the latest APK to download.
+     * Proceeds to the next screen after the version dialog is dismissed.
+     * This could be the main activity or another relevant screen in your app.
      */
-    private fun downloadAndUpdateApp(latestVersion: String) {
-        val apkUrl = "http://43.226.218.98/apk/latest/app-v$latestVersion.apk"
+    private fun proceedToNextScreen() {
+        val intent = Intent(this, MainActivity::class.java)
+        startActivity(intent)
+        finish()  // End SplashScreen activity
+    }
+
+    /**
+     * Downloads the latest APK from the server and triggers installation.
+     */
+    private fun downloadAndUpdateApp() {
+        // Use the new API endpoint to download the latest APK
+        val apkUrl = "http://43.226.218.98:5000/api/download-latest-apk"
+        Log.d("SplashScreen", "Attempting to download APK from $apkUrl")
+
         val request = Request.Builder().url(apkUrl).build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                Log.e("SplashScreen", "Failed to download the APK", e)
+                Log.e("SplashScreen", "Failed to download the APK: $e")
                 runOnUiThread {
                     showFailureDialog("Failed to download the update. Please check your connection.")
                 }
             }
 
             override fun onResponse(call: Call, response: Response) {
-                if (response.isSuccessful) {
-                    val apkFile = File(getExternalFilesDir(null), "update.apk")
+                if (!response.isSuccessful) {
+                    Log.e("SplashScreen", "Server responded with code: ${response.code}")
+                    runOnUiThread {
+                        showFailureDialog("Unexpected server response during APK download.")
+                    }
+                    return
+                }
+
+                // Save the APK file
+                val apkFile = File(getExternalFilesDir(null), "update.apk")
+                try {
                     val sink = apkFile.sink().buffer()
                     sink.writeAll(response.body!!.source())
                     sink.close()
+                    Log.d("SplashScreen", "APK downloaded successfully to ${apkFile.absolutePath}")
 
+                    // Install the downloaded APK
                     runOnUiThread {
                         installApk(apkFile)
                     }
-                } else {
+                } catch (e: IOException) {
+                    Log.e("SplashScreen", "Failed to save the APK: $e")
                     runOnUiThread {
-                        showFailureDialog("Unexpected server response during APK download.")
+                        showFailureDialog("Failed to save the update. Please try again.")
                     }
                 }
             }
