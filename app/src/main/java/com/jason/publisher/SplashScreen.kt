@@ -58,7 +58,7 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        Log.d("version name", "test v1.0.9")
+        Log.d("version name", "test v1.1.0")
 
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         sharedPrefMananger = SharedPrefMananger(this)
@@ -132,6 +132,7 @@ class SplashScreen : AppCompatActivity() {
                                     }
                                 }
                             } else {
+                                Log.e("SplashScreen", "Unexpected server response: ${response.code} - ${response.message}")
                                 runOnUiThread {
                                     showFailureDialog("Unexpected server response while fetching latest version.")
                                 }
