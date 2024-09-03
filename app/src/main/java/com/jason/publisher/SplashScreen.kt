@@ -132,6 +132,7 @@ class SplashScreen : AppCompatActivity() {
                                     }
                                 }
                             } else {
+                                Log.e("SplashScreen", "Unexpected server response: ${response.code} - ${response.message}")
                                 runOnUiThread {
                                     showFailureDialog("Unexpected server response while fetching latest version.")
                                 }
