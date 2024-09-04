@@ -5,7 +5,6 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.Location
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -23,6 +22,7 @@ import java.io.IOException
 @SuppressLint("CustomSplashScreen")
 class SplashScreen : AppCompatActivity() {
 
+    /** Declare variables for network client, Android ID (AAID), and view binding */
     private lateinit var client: OkHttpClient
     private lateinit var aaid: String
     private lateinit var binding: ActivitySplashScreenBinding
@@ -32,21 +32,27 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        Log.d("version name", "test v1.0.20")
+        Log.d("version name", "test v1.0.21")
 
+        /** Get the Android ID (AAID) unique to each device */
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         client = OkHttpClient()
 
-        // Start animation
+        /** Start the animation on the splash screen logos */
         val logoExplorer = findViewById<ImageView>(R.id.logoExplorer)
         val logoFullers = findViewById<ImageView>(R.id.logoFullers)
         val animation = AnimationUtils.loadAnimation(this, R.anim.fade_in)
         logoExplorer.startAnimation(animation)
         logoFullers.startAnimation(animation)
 
+        /** Check if there are any updates available for the app */
         checkForUpdates()
     }
 
+    /**
+     * Function to check for app updates.
+     * It retrieves the current version for the device (based on AAID) and the latest available version from the server.
+     */
     private fun checkForUpdates() {
         val requestLatest = Request.Builder()
             .url("http://43.226.218.98:5000/api/latest-version")
@@ -55,7 +61,7 @@ class SplashScreen : AppCompatActivity() {
             .url("http://43.226.218.98:5000/api/current-version/$aaid")
             .build()
 
-        // Fetch the current version for this specific tablet using its aid
+        /** Fetch the current version for this device */
         client.newCall(requestCurrent).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 Log.e("SplashScreen", "Failed to fetch current version information", e)
@@ -68,9 +74,9 @@ class SplashScreen : AppCompatActivity() {
                 if (response.isSuccessful) {
                     val responseData = response.body?.string()
                     val json = JSONObject(responseData!!)
-                    val currentVersion = json.getString("version")
+                    val currentVersion = json.getString("version")  // Get the current version for the device
 
-                    // Fetch the latest version after getting the current version
+                    /** Fetch the latest version after obtaining the current version */
                     client.newCall(requestLatest).enqueue(object : Callback {
                         override fun onFailure(call: Call, e: IOException) {
                             Log.e("SplashScreen", "Failed to fetch latest version information", e)
@@ -83,15 +89,14 @@ class SplashScreen : AppCompatActivity() {
                             if (response.isSuccessful) {
                                 val responseData = response.body?.string()
                                 val json = JSONObject(responseData!!)
-                                val latestVersion = json.getString("version")
+                                val latestVersion = json.getString("version")  // Get the latest version available
 
-                                // If the current version matches the latest version, show that it's up to date
+                                /** Compare current and latest versions */
                                 if (currentVersion == latestVersion) {
                                     runOnUiThread {
                                         showUpToDateDialog(currentVersion)
                                     }
                                 } else {
-                                    // Show the version update dialog
                                     runOnUiThread {
                                         showVersionDialog(currentVersion, latestVersion)
                                     }
@@ -112,29 +117,39 @@ class SplashScreen : AppCompatActivity() {
         })
     }
 
+    /**
+     * Show a dialog if an update is available, allowing the user to update the app.
+     * @param currentVersion The current version of the app.
+     * @param latestVersion The latest version available on the server.
+     */
     private fun showVersionDialog(currentVersion: String, latestVersion: String) {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Version Information")
         builder.setMessage("Your app version is $currentVersion. The latest version is $latestVersion.")
 
+        /** Cancel button to dismiss the dialog */
         builder.setNegativeButton("Cancel") { dialog, _ ->
             dialog.dismiss()
             proceedToNextScreen()
         }
 
+        /** Update button to initiate the update process */
         builder.setPositiveButton("Update") { dialog, _ ->
             dialog.dismiss()
-            updateCurrentVersionOnServer() // Update the current folder for this aid
+            updateCurrentVersionOnServer()  // Update the current folder for this aid
         }
 
         builder.setCancelable(false)
         builder.show()
     }
 
+    /**
+     * Function to update the server's current folder for the specific AAID.
+     */
     private fun updateCurrentVersionOnServer() {
         val request = Request.Builder()
             .url("http://43.226.218.98:5000/api/update-current-folder/$aaid")
-            .post(RequestBody.create(null, ByteArray(0)))
+            .post(RequestBody.create(null, ByteArray(0)))  // POST request with an empty body
             .build()
 
         client.newCall(request).enqueue(object : Callback {
@@ -159,6 +174,9 @@ class SplashScreen : AppCompatActivity() {
         })
     }
 
+    /**
+     * Uninstall the current app version and prompt the user to install the latest version.
+     */
     private fun uninstallApp() {
         val intent = Intent(Intent.ACTION_DELETE)
         intent.data = Uri.parse("package:$packageName")
@@ -166,6 +184,9 @@ class SplashScreen : AppCompatActivity() {
         showDownloadPrompt()
     }
 
+    /**
+     * Show a dialog prompting the user to download the latest version of the app.
+     */
     private fun showDownloadPrompt() {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Download Latest Version")
@@ -178,12 +199,19 @@ class SplashScreen : AppCompatActivity() {
         builder.show()
     }
 
+    /**
+     * Open the URL to download the latest APK in the browser.
+     */
     private fun openDownloadUrl() {
         val downloadUrl = "http://43.226.218.98:5000/api/download-latest-apk"
         val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl))
         startActivity(browserIntent)
     }
 
+    /**
+     * Show an error dialog if fetching data fails.
+     * @param message The error message to display.
+     */
     private fun showFailureDialog(message: String) {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Error")
@@ -195,6 +223,10 @@ class SplashScreen : AppCompatActivity() {
         builder.show()
     }
 
+    /**
+     * Show a dialog when the app is up to date.
+     * @param version The version of the app that is up to date.
+     */
     private fun showUpToDateDialog(version: String) {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Version Information")
@@ -207,6 +239,9 @@ class SplashScreen : AppCompatActivity() {
         builder.show()
     }
 
+    /**
+     * Proceed to the main screen of the app.
+     */
     private fun proceedToNextScreen() {
         val intent = Intent(this, MainActivity::class.java)
         startActivity(intent)
