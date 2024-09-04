@@ -14,21 +14,16 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.view.animation.AnimationUtils
-import android.widget.Button
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import com.jason.publisher.databinding.ActivitySplashScreenBinding
 import com.jason.publisher.services.LocationManager
 import com.jason.publisher.services.SharedPrefMananger
 import okhttp3.*
-import okio.buffer
-import okio.sink
 import org.json.JSONObject
-import java.io.File
 import java.io.IOException
 
 @SuppressLint("CustomSplashScreen")
@@ -192,7 +187,7 @@ class SplashScreen : AppCompatActivity() {
     /**
      * Opens the system's uninstallation screen for the current app.
      * This will prompt the user to manually uninstall the app.
-     * After the app is uninstalled, the user can proceed with downloading and installing the new version.
+     * After the app is uninstalled, the user is instructed to download the latest version from the provided URL.
      */
     private fun uninstallApp() {
         // Create an Intent to initiate the uninstallation process
@@ -204,102 +199,36 @@ class SplashScreen : AppCompatActivity() {
         // Start the activity to display the system's uninstall prompt
         startActivity(intent)
 
-        // After uninstallation, download and install the updated APK
-        downloadAndUpdateApp()
+        // After uninstallation, prompt the user to download the latest version
+        runOnUiThread {
+            showDownloadPrompt()
+        }
     }
 
     /**
-     * Downloads the latest APK from the server and triggers installation.
+     * Prompts the user to download the latest version of the app after uninstallation,
+     * and then opens the browser to the download URL.
      */
-    private fun downloadAndUpdateApp() {
-        val apkUrl = "http://43.226.218.98:5000/api/download-latest-apk"
-        Log.d("SplashScreen", "Attempting to download APK from $apkUrl")
-
-        val request = Request.Builder().url(apkUrl).build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                Log.e("SplashScreen", "Failed to download the APK: $e")
-                runOnUiThread {
-                    showFailureDialog("Failed to download the update. Please check your connection.")
-                }
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                if (!response.isSuccessful) {
-                    Log.e("SplashScreen", "Server responded with code: ${response.code}")
-                    runOnUiThread {
-                        showFailureDialog("Unexpected server response during APK download.")
-                    }
-                    return
-                }
-
-                // Save the APK file
-                val apkFile = File(getExternalFilesDir(null), "update.apk")
-                try {
-                    val sink = apkFile.sink().buffer()
-                    sink.writeAll(response.body!!.source())
-                    sink.close()
-                    Log.d("SplashScreen", "APK downloaded successfully to ${apkFile.absolutePath}")
-
-                    // Install the downloaded APK
-                    runOnUiThread {
-                        installApk(apkFile)
-                    }
-                } catch (e: IOException) {
-                    Log.e("SplashScreen", "Failed to save the APK: $e")
-                    runOnUiThread {
-                        showFailureDialog("Failed to save the update. Please try again.")
-                    }
-                }
-            }
-        })
+    private fun showDownloadPrompt() {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Download Latest Version")
+        builder.setMessage("Please uninstall the app and visit http://43.226.218.98:5000/api/download-latest-apk to download the latest version.")
+        builder.setPositiveButton("OK") { dialog, _ ->
+            dialog.dismiss()
+            // Open the browser to the download URL
+            openDownloadUrl()
+        }
+        builder.setCancelable(false)
+        builder.show()
     }
 
     /**
-     * Initiates the installation of the downloaded APK.
-     * @param apkFile The file object of the downloaded APK.
+     * Opens the device's web browser to the URL where the latest APK can be downloaded.
      */
-    private fun installApk(apkFile: File) {
-        val intent = Intent(Intent.ACTION_VIEW)
-        intent.setDataAndType(FileProvider.getUriForFile(this, "$packageName.provider", apkFile), "application/vnd.android.package-archive")
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-        startActivity(intent)
-
-        // After installation, update the server's current version
-        updateCurrentVersionOnServer()
-    }
-
-    /**
-     * Sends a request to update the "current" folder on the server with the contents of the "latest" folder.
-     */
-    private fun updateCurrentVersionOnServer() {
-        val request = Request.Builder()
-            .url("http://43.226.218.98:5000/api/update-current-folder")
-            .post(RequestBody.create(null, ByteArray(0)))  // POST request with an empty body
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                Log.e("SplashScreen", "Failed to update the current version on the server", e)
-                runOnUiThread {
-                    showFailureDialog("Failed to update the current version on the server. Please check your connection.")
-                }
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                if (response.isSuccessful) {
-                    runOnUiThread {
-                        Toast.makeText(this@SplashScreen, "Current version updated successfully.", Toast.LENGTH_SHORT).show()
-                        proceedToNextScreen()
-                    }
-                } else {
-                    runOnUiThread {
-                        showFailureDialog("Unexpected server response while updating the current version.")
-                    }
-                }
-            }
-        })
+    private fun openDownloadUrl() {
+        val downloadUrl = "http://43.226.218.98:5000/api/download-latest-apk"
+        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl))
+        startActivity(browserIntent)
     }
 
     /**
