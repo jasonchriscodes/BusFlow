@@ -15,6 +15,7 @@ import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.jason.publisher.databinding.ActivitySplashScreenBinding
 import okhttp3.*
 import org.json.JSONObject
 import java.io.IOException
