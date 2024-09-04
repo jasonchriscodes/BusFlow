@@ -1,5 +1,4 @@
 import java.util.Properties
-import groovy.json.JsonSlurper
 
 plugins {
     id 'com.android.application'
@@ -7,31 +6,6 @@ plugins {
     id 'com.google.gms.google-services'
     id 'kotlin-parcelize'
 }
-
-// Function to get version name from the API
-def getVersionNameFromApi() {
-    def defaultVersionName = "1.0.0"  // Default version name in case of failure
-    try {
-        def apiUrl = 'http://43.226.218.98:5000/api/current-version'
-        def connection = new URL(apiUrl).openConnection()
-        connection.setRequestMethod("GET")
-        connection.connect()
-
-        if (connection.responseCode == 200) {
-            def jsonResponse = new JsonSlurper().parse(connection.inputStream)
-            return jsonResponse.version ?: defaultVersionName
-        } else {
-            println "Failed to fetch version name. Response Code: ${connection.responseCode}"
-            return defaultVersionName
-        }
-    } catch (Exception e) {
-        println "Error fetching version name: ${e.message}"
-        return defaultVersionName
-    }
-}
-
-// Fetch the version name before setting the versionName property
-def fetchedVersionName = getVersionNameFromApi()
 
 // Read properties from environment variables first, fallback to local.properties
 def tomtomApiKey = System.getenv("TOMTOM_API_KEY") ?: ""
@@ -64,7 +38,7 @@ android {
         minSdk 21
         targetSdk 33
         versionCode 1
-        versionName fetchedVersionName  // Set versionName to the value fetched from the API
+        versionName "1.0.1"
 
         buildConfigField "String", "TOMTOM_API_KEY", "\"${tomtomApiKey}\""
         buildConfigField "String", "GOOGLE_API_KEY", "\"${googleApiKey}\""
