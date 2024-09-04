@@ -32,36 +32,40 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        Log.d("version name", "test v1.0.22")
+        Log.d("version name", "test v1.0.23")
 
-        /** Get the Android ID (AAID) unique to each device */
+        // Dynamically retrieve the device-specific Android ID (AAID)
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+
+        Log.d("Android ID", aaid)  // Log the Android ID for debugging purposes
+
         client = OkHttpClient()
 
-        /** Start the animation on the splash screen logos */
+        // Start the animation for the splash screen
         val logoExplorer = findViewById<ImageView>(R.id.logoExplorer)
         val logoFullers = findViewById<ImageView>(R.id.logoFullers)
         val animation = AnimationUtils.loadAnimation(this, R.anim.fade_in)
         logoExplorer.startAnimation(animation)
         logoFullers.startAnimation(animation)
 
-        /** Check if there are any updates available for the app */
+        // Check for updates dynamically based on the device-specific aid (Android ID)
         checkForUpdates()
     }
 
     /**
-     * Function to check for app updates.
-     * It retrieves the current version for the device (based on AAID) and the latest available version from the server.
+     * Function to check for app updates dynamically using the tablet's Android ID (aaid).
      */
     private fun checkForUpdates() {
-        val requestLatest = Request.Builder()
-            .url("http://43.226.218.98:5000/api/latest-version")
-            .build()
+        // Fetch the current version for the specific device based on the Android ID
         val requestCurrent = Request.Builder()
             .url("http://43.226.218.98:5000/api/current-version/$aaid")
             .build()
 
-        /** Fetch the current version for this device */
+        // Fetch the latest version available on the server
+        val requestLatest = Request.Builder()
+            .url("http://43.226.218.98:5000/api/latest-version")
+            .build()
+
         client.newCall(requestCurrent).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 Log.e("SplashScreen", "Failed to fetch current version information", e)
@@ -74,9 +78,9 @@ class SplashScreen : AppCompatActivity() {
                 if (response.isSuccessful) {
                     val responseData = response.body?.string()
                     val json = JSONObject(responseData!!)
-                    val currentVersion = json.getString("version")  // Get the current version for the device
+                    val currentVersion = json.getString("version")  // Current version for the device
 
-                    /** Fetch the latest version after obtaining the current version */
+                    // Fetch the latest version after getting the current version
                     client.newCall(requestLatest).enqueue(object : Callback {
                         override fun onFailure(call: Call, e: IOException) {
                             Log.e("SplashScreen", "Failed to fetch latest version information", e)
@@ -89,9 +93,9 @@ class SplashScreen : AppCompatActivity() {
                             if (response.isSuccessful) {
                                 val responseData = response.body?.string()
                                 val json = JSONObject(responseData!!)
-                                val latestVersion = json.getString("version")  // Get the latest version available
+                                val latestVersion = json.getString("version")  // Latest version from the server
 
-                                /** Compare current and latest versions */
+                                // Compare the current version with the latest version
                                 if (currentVersion == latestVersion) {
                                     runOnUiThread {
                                         showUpToDateDialog(currentVersion)
@@ -103,14 +107,14 @@ class SplashScreen : AppCompatActivity() {
                                 }
                             } else {
                                 runOnUiThread {
-                                    showFailureDialog("Unexpected server response while fetching latest version.")
+                                    showFailureDialog("Unexpected server response while fetching the latest version.")
                                 }
                             }
                         }
                     })
                 } else {
                     runOnUiThread {
-                        showFailureDialog("Unexpected server response while fetching current version.")
+                        showFailureDialog("Unexpected server response while fetching the current version.")
                     }
                 }
             }
