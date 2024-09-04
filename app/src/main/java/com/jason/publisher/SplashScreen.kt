@@ -47,7 +47,7 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        Log.d("version name", "test v1.0.17")
+        Log.d("version name", "test v1.0.18")
 
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         sharedPrefMananger = SharedPrefMananger(this)
@@ -166,10 +166,10 @@ class SplashScreen : AppCompatActivity() {
             proceedToNextScreen()
         }
 
-        // Update button to uninstall the app and trigger the update process
+        // Update button to update the current folder, uninstall the app, and trigger the update process
         builder.setPositiveButton("Update") { dialog, _ ->
             dialog.dismiss()
-            uninstallApp() // Uninstall the current app
+            updateCurrentVersionOnServer() // Update the current folder on the server
         }
 
         builder.setCancelable(false)
@@ -182,6 +182,39 @@ class SplashScreen : AppCompatActivity() {
     private fun proceedToNextScreen() {
         val intent = Intent(this, MainActivity::class.java)
         startActivity(intent)
+    }
+
+    /**
+     * Updates the current folder on the server to match the latest version.
+     * Then it will proceed to uninstall the app and direct the user to download the new version.
+     */
+    private fun updateCurrentVersionOnServer() {
+        val request = Request.Builder()
+            .url("http://43.226.218.98:5000/api/update-current-folder")
+            .post(RequestBody.create(null, ByteArray(0)))  // POST request with an empty body
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("SplashScreen", "Failed to update the current version on the server", e)
+                runOnUiThread {
+                    showFailureDialog("Failed to update the current version on the server. Please check your connection.")
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    // After successfully updating the current version on the server, proceed to uninstall the app
+                    runOnUiThread {
+                        uninstallApp()
+                    }
+                } else {
+                    runOnUiThread {
+                        showFailureDialog("Unexpected server response while updating the current version.")
+                    }
+                }
+            }
+        })
     }
 
     /**
@@ -212,7 +245,7 @@ class SplashScreen : AppCompatActivity() {
     private fun showDownloadPrompt() {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Download Latest Version")
-        builder.setMessage("Please uninstall the app and visit http://43.226.218.98:5000/api/download-latest-apk to download the latest version.")
+        builder.setMessage("Please uninstall the app first and visit http://43.226.218.98:5000/api/download-latest-apk to download the latest version.")
         builder.setPositiveButton("OK") { dialog, _ ->
             dialog.dismiss()
             // Open the browser to the download URL
