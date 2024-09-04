@@ -32,6 +32,8 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        Log.d("version name", "test v1.0.20")
+
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         client = OkHttpClient()
 
