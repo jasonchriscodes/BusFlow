@@ -32,7 +32,7 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        Log.d("version name", "test v1.0.24")
+        Log.d("version name", "test v1.0.25")
 
         // Dynamically retrieve the device-specific Android ID (AAID)
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
@@ -94,6 +94,8 @@ class SplashScreen : AppCompatActivity() {
                                 val responseData = response.body?.string()
                                 val json = JSONObject(responseData!!)
                                 val latestVersion = json.getString("version")  // Latest version from the server
+                                Log.d("currentVersion", currentVersion)
+                                Log.d("latestVersion", latestVersion)
 
                                 // Compare the current version with the latest version
                                 if (currentVersion == latestVersion) {
