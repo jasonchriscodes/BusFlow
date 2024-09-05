@@ -3,6 +3,9 @@ package com.jason.publisher
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -10,7 +13,9 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.view.animation.AnimationUtils
+import android.widget.Button
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -32,7 +37,7 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        Log.d("version name", "test v1.0.26")
+        Log.d("version name", "test v1.0.27")
 
         // Dynamically retrieve the device-specific Android ID (AAID)
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
@@ -50,6 +55,8 @@ class SplashScreen : AppCompatActivity() {
 
         // Check for updates dynamically based on the device-specific aid (Android ID)
         checkForUpdates()
+
+        showOptionDialog()
     }
 
     /**
@@ -124,6 +131,41 @@ class SplashScreen : AppCompatActivity() {
     }
 
     /**
+     * Shows the mode selection dialog and handles the selected mode.
+     */
+    private fun showOptionDialog() {
+        val builder = AlertDialog.Builder(this)
+        val inflater = layoutInflater
+        val dialogView = inflater.inflate(R.layout.mode_selection_dialog, null)
+        builder.setView(dialogView)
+
+        val onlineModeButton = dialogView.findViewById<Button>(R.id.onlineModeButton)
+        val offlineModeButton = dialogView.findViewById<Button>(R.id.offlineModeButton)
+        val whoAmIButton = dialogView.findViewById<Button>(R.id.whoAmIButton)
+
+        onlineModeButton.setOnClickListener {
+            val intent = Intent(this, MainActivity::class.java)
+            startActivity(intent)
+        }
+
+        offlineModeButton.setOnClickListener {
+            val intent = Intent(this, OfflineActivity::class.java)
+            startActivity(intent)
+        }
+
+        whoAmIButton.setOnClickListener {
+            val aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("Device AID", aid)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(this, "Device AID copied to clipboard", Toast.LENGTH_SHORT).show()
+        }
+
+        val dialog = builder.create()
+        dialog.show()
+    }
+
+    /**
      * Show a dialog if an update is available, allowing the user to update the app.
      * @param currentVersion The current version of the app.
      * @param latestVersion The latest version available on the server.
@@ -136,7 +178,6 @@ class SplashScreen : AppCompatActivity() {
         /** Cancel button to dismiss the dialog */
         builder.setNegativeButton("Cancel") { dialog, _ ->
             dialog.dismiss()
-            proceedToNextScreen()
         }
 
         /** Update button to initiate the update process */
@@ -239,17 +280,8 @@ class SplashScreen : AppCompatActivity() {
         builder.setMessage("Your version $version is up to date.")
         builder.setPositiveButton("OK") { dialog, _ ->
             dialog.dismiss()
-            proceedToNextScreen()
         }
         builder.setCancelable(false)
         builder.show()
-    }
-
-    /**
-     * Proceed to the main screen of the app.
-     */
-    private fun proceedToNextScreen() {
-        val intent = Intent(this, MainActivity::class.java)
-        startActivity(intent)
     }
 }
