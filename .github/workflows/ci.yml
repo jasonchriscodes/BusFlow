@@ -30,6 +30,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Fetch latest version from server and increment
+        id: get_version
         run: |
           latest_version=$(curl -s "http://43.226.218.98:5000/api/latest-version" | jq -r '.version')
           echo "Latest version: $latest_version"
@@ -54,14 +55,17 @@ jobs:
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug
+        env:
+          new_version: ${{ env.new_version }}
 
       - name: Upload APK using Flask API
         run: |
           response=$(curl -X POST "http://43.226.218.98:5000/api/upload-apk" \
             -F "file=@app/build/outputs/apk/debug/app-debug.apk" \
-            -F "version=${new_version}" \
+            -F "version=${{ env.new_version }}" \
             -F "release_notes=Auto incremented version")
           echo "Upload response: $response"
 
       - name: Verify uploaded version
         run: curl http://43.226.218.98:5000/api/latest-version
+
