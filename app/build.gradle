@@ -37,10 +37,8 @@ android {
         applicationId "com.jason.publisher"
         minSdk 21
         targetSdk 33
-
-        // Dynamically set versionCode and versionName using environment variables
-        versionCode 1 // Increment based on your needs, maybe by using a script
-        versionName "${System.getenv('new_version') ?: '1.0.1'}" // Fallback to 1.0.0 if not set
+        versionCode 1
+        versionName "1.0.1"
 
         buildConfigField "String", "TOMTOM_API_KEY", "\"${tomtomApiKey}\""
         buildConfigField "String", "GOOGLE_API_KEY", "\"${googleApiKey}\""
