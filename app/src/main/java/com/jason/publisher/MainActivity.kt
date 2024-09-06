@@ -254,14 +254,22 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      * in the MainActivity with the retrieved version.
      */
     private fun fetchLatestVersion() {
-        val request = Request.Builder()
-            .url("http://43.226.218.98:5000/api/current-version")
+        // Fetch the current version for the specific device based on the Android ID (similar to SplashScreen)
+        val aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+
+        // Request current version for the specific device
+        val requestCurrent = Request.Builder()
+            .url("http://43.226.218.98:5000/api/current-version/$aaid")
             .build()
 
-        client.newCall(request).enqueue(object : okhttp3.Callback {
+        // Request latest version available on the server
+        val requestLatest = Request.Builder()
+            .url("http://43.226.218.98:5000/api/latest-version")
+            .build()
+
+        client.newCall(requestCurrent).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: IOException) {
-                Log.e("MainActivity", "Failed to fetch latest version", e)
-                // Optionally, set a default value or handle the failure case
+                Log.e("MainActivity", "Failed to fetch current version", e)
                 runOnUiThread {
                     findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
                 }
@@ -271,12 +279,38 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 if (response.isSuccessful) {
                     val responseData = response.body?.string()
                     val json = JSONObject(responseData!!)
-                    val latestVersion = json.getString("version")
+                    val currentVersion = json.getString("version")
 
-                    runOnUiThread {
-                        // Update the versionTextView with the latest version
-                        findViewById<TextView>(R.id.versionTextView).text = "Version $latestVersion"
-                    }
+                    // After fetching the current version, request the latest version
+                    client.newCall(requestLatest).enqueue(object : okhttp3.Callback {
+                        override fun onFailure(call: okhttp3.Call, e: IOException) {
+                            Log.e("MainActivity", "Failed to fetch latest version", e)
+                            runOnUiThread {
+                                findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
+                            }
+                        }
+
+                        override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                            if (response.isSuccessful) {
+                                val responseData = response.body?.string()
+                                val json = JSONObject(responseData!!)
+                                val latestVersion = json.getString("version")
+
+                                runOnUiThread {
+                                    // Compare the current version with the latest version
+                                    if (currentVersion == latestVersion) {
+                                        findViewById<TextView>(R.id.versionTextView).text = "Version $currentVersion (Up to date)"
+                                    } else {
+                                        findViewById<TextView>(R.id.versionTextView).text = "Version $currentVersion (Update available: $latestVersion)"
+                                    }
+                                }
+                            } else {
+                                runOnUiThread {
+                                    findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
+                                }
+                            }
+                        }
+                    })
                 } else {
                     runOnUiThread {
                         findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
