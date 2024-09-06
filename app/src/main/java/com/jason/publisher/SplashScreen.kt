@@ -8,18 +8,25 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Location
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.animation.AnimationUtils
 import android.widget.Button
 import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivitySplashScreenBinding
+import com.jason.publisher.services.LocationManager
+import com.jason.publisher.services.SharedPrefMananger
 import okhttp3.*
 import org.json.JSONObject
 import java.io.IOException
@@ -28,9 +35,18 @@ import java.io.IOException
 class SplashScreen : AppCompatActivity() {
 
     /** Declare variables for network client, Android ID (AAID), and view binding */
+    private lateinit var locationManager: LocationManager
+    private lateinit var sharedPrefManager: SharedPrefMananger
     private lateinit var client: OkHttpClient
     private lateinit var aaid: String
     private lateinit var binding: ActivitySplashScreenBinding
+
+    var name = ""
+    private var latitude = 0.0
+    private var longitude = 0.0
+    private var bearing = 0.0F
+    private var speed = 0.0F
+    private var direction = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,6 +61,10 @@ class SplashScreen : AppCompatActivity() {
         Log.d("Android ID", aaid)  // Log the Android ID for debugging purposes
 
         client = OkHttpClient()
+
+        sharedPrefManager = SharedPrefMananger(this)
+        locationManager = LocationManager(this)
+        startLocationUpdate()
 
         // Start the animation for the splash screen
         val logoExplorer = findViewById<ImageView>(R.id.logoExplorer)
@@ -284,4 +304,32 @@ class SplashScreen : AppCompatActivity() {
         builder.setCancelable(false)
         builder.show()
     }
+
+    /**
+     * Starts location updates if the necessary permissions are granted.
+     */
+    private fun startLocationUpdate() {
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            locationManager.startLocationUpdates(object : LocationListener {
+                override fun onLocationUpdate(location: Location) {
+                    latitude = location.latitude
+                    longitude = location.longitude
+                    bearing = location.bearing
+                    speed = location.speed
+                    direction = Helper.bearingToDirection(location.bearing)
+                }
+            })
+        } else {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                123
+            )
+        }
+    }
 }
+
