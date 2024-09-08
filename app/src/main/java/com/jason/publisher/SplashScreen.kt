@@ -50,7 +50,7 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        Log.d("version name", "test v1.0.31")
+        Log.d("version name", "test v1.0.32")
 
         // Retrieve the device-specific Android ID (AAID)
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
