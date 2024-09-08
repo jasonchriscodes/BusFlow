@@ -11,42 +11,39 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.animation.AnimationUtils
 import android.widget.Button
 import android.widget.ImageView
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivitySplashScreenBinding
 import com.jason.publisher.services.LocationManager
 import com.jason.publisher.services.SharedPrefMananger
 import okhttp3.*
 import org.json.JSONObject
 import java.io.IOException
+import java.util.UUID
+import android.content.SharedPreferences
 
 @SuppressLint("CustomSplashScreen")
 class SplashScreen : AppCompatActivity() {
 
-    /** Declare variables for network client, Android ID (AAID), and view binding */
-    private lateinit var locationManager: LocationManager
-    private lateinit var sharedPrefManager: SharedPrefMananger
     private lateinit var client: OkHttpClient
+    private lateinit var uuid: String
     private lateinit var aaid: String
     private lateinit var binding: ActivitySplashScreenBinding
+    private lateinit var locationManager: LocationManager
+    private lateinit var sharedPrefManager: SharedPrefMananger
 
-    var name = ""
-    private var latitude = 0.0
-    private var longitude = 0.0
-    private var bearing = 0.0F
-    private var speed = 0.0F
-    private var direction = ""
+    var latitude = 0.0
+    var longitude = 0.0
+    var bearing = 0.0F
+    var speed = 0.0F
+    var direction = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,13 +52,18 @@ class SplashScreen : AppCompatActivity() {
 
         Log.d("version name", "test v1.0.30")
 
-        // Dynamically retrieve the device-specific Android ID (AAID)
+        // Retrieve the device-specific Android ID (AAID)
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
 
-        Log.d("Android ID", aaid)  // Log the Android ID for debugging purposes
+        // Generate or retrieve the UUID for the app installation
+        uuid = getUuid()
+
+        Log.d("UUID", uuid)
+        Log.d("Android ID", aaid)
 
         client = OkHttpClient()
 
+        // Initialize shared preference manager and location manager
         sharedPrefManager = SharedPrefMananger(this)
         locationManager = LocationManager(this)
         startLocationUpdate()
@@ -73,22 +75,32 @@ class SplashScreen : AppCompatActivity() {
         logoExplorer.startAnimation(animation)
         logoFullers.startAnimation(animation)
 
-        // Check for updates dynamically based on the device-specific aid (Android ID)
+        // Check for updates based on UUID
         checkForUpdates()
 
         showOptionDialog()
     }
 
-    /**
-     * Function to check for app updates dynamically using the tablet's Android ID (aaid).
-     */
+    /** Retrieve the UUID from shared preferences or create a new one. */
+    private fun getUuid(): String {
+        val sharedPref = getSharedPreferences("app_preferences", Context.MODE_PRIVATE)
+        var uuid = sharedPref.getString("uuid", null)
+        if (uuid == null) {
+            uuid = UUID.randomUUID().toString()
+            with(sharedPref.edit()) {
+                putString("uuid", uuid)
+                apply()
+            }
+        }
+        return uuid
+    }
+
+    /** Check for app updates using the generated UUID. */
     private fun checkForUpdates() {
-        // Fetch the current version for the specific device based on the Android ID
         val requestCurrent = Request.Builder()
-            .url("http://43.226.218.98:5000/api/current-version/$aaid")
+            .url("http://43.226.218.98:5000/api/current-version/$uuid")
             .build()
 
-        // Fetch the latest version available on the server
         val requestLatest = Request.Builder()
             .url("http://43.226.218.98:5000/api/latest-version")
             .build()
@@ -105,9 +117,8 @@ class SplashScreen : AppCompatActivity() {
                 if (response.isSuccessful) {
                     val responseData = response.body?.string()
                     val json = JSONObject(responseData!!)
-                    val currentVersion = json.getString("version")  // Current version for the device
+                    val currentVersion = json.getString("version")
 
-                    // Fetch the latest version after getting the current version
                     client.newCall(requestLatest).enqueue(object : Callback {
                         override fun onFailure(call: Call, e: IOException) {
                             Log.e("SplashScreen", "Failed to fetch latest version information", e)
@@ -120,11 +131,11 @@ class SplashScreen : AppCompatActivity() {
                             if (response.isSuccessful) {
                                 val responseData = response.body?.string()
                                 val json = JSONObject(responseData!!)
-                                val latestVersion = json.getString("version")  // Latest version from the server
+                                val latestVersion = json.getString("version")
+
                                 Log.d("currentVersion", currentVersion)
                                 Log.d("latestVersion", latestVersion)
 
-                                // Compare the current version with the latest version
                                 if (currentVersion == latestVersion) {
                                     runOnUiThread {
                                         showUpToDateDialog(currentVersion)
@@ -150,9 +161,7 @@ class SplashScreen : AppCompatActivity() {
         })
     }
 
-    /**
-     * Shows the mode selection dialog and handles the selected mode.
-     */
+    /** Shows a dialog with options for online, offline modes, and device information. */
     private fun showOptionDialog() {
         val builder = AlertDialog.Builder(this)
         val inflater = layoutInflater
@@ -174,105 +183,45 @@ class SplashScreen : AppCompatActivity() {
         }
 
         whoAmIButton.setOnClickListener {
-            val aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = ClipData.newPlainText("Device AID", aid)
-            clipboard.setPrimaryClip(clip)
-            Toast.makeText(this, "Device AID copied to clipboard", Toast.LENGTH_SHORT).show()
+            showWhoAmIDialog()
         }
 
         val dialog = builder.create()
         dialog.show()
     }
 
-    /**
-     * Show a dialog if an update is available, allowing the user to update the app.
-     * @param currentVersion The current version of the app.
-     * @param latestVersion The latest version available on the server.
-     */
-    private fun showVersionDialog(currentVersion: String, latestVersion: String) {
+    /** Show a dialog with Android ID and UUID options to copy to clipboard. */
+    private fun showWhoAmIDialog() {
         val builder = AlertDialog.Builder(this)
-        builder.setTitle("Version Information")
-        builder.setMessage("Your app version is $currentVersion. The latest version is $latestVersion.")
+        builder.setTitle("Device Information")
 
-        /** Cancel button to dismiss the dialog */
-        builder.setNegativeButton("Cancel") { dialog, _ ->
+        builder.setMessage("Android ID: $aaid\nUUID: $uuid")
+
+        builder.setPositiveButton("Copy Android ID") { dialog, _ ->
+            copyToClipboard("Android ID", aaid)
+            Toast.makeText(this, "Android ID copied to clipboard", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
         }
 
-        /** Update button to initiate the update process */
-        builder.setPositiveButton("Update") { dialog, _ ->
+        builder.setNegativeButton("Copy UUID") { dialog, _ ->
+            copyToClipboard("UUID", uuid)
+            Toast.makeText(this, "UUID copied to clipboard", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
-            updateCurrentVersionOnServer()  // Update the current folder for this aid
+        }
+
+        builder.setNeutralButton("Cancel") { dialog, _ ->
+            dialog.dismiss()
         }
 
         builder.setCancelable(false)
         builder.show()
     }
 
-    /**
-     * Function to update the server's current folder for the specific AAID.
-     */
-    private fun updateCurrentVersionOnServer() {
-        val request = Request.Builder()
-            .url("http://43.226.218.98:5000/api/update-current-folder/$aaid")
-            .post(RequestBody.create(null, ByteArray(0)))  // POST request with an empty body
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                Log.e("SplashScreen", "Failed to update the current version on the server", e)
-                runOnUiThread {
-                    showFailureDialog("Failed to update the current version on the server. Please check your connection.")
-                }
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                if (response.isSuccessful) {
-                    runOnUiThread {
-                        uninstallApp()
-                    }
-                } else {
-                    runOnUiThread {
-                        showFailureDialog("Unexpected server response while updating the current version.")
-                    }
-                }
-            }
-        })
-    }
-
-    /**
-     * Uninstall the current app version and prompt the user to install the latest version.
-     */
-    private fun uninstallApp() {
-        val intent = Intent(Intent.ACTION_DELETE)
-        intent.data = Uri.parse("package:$packageName")
-        startActivity(intent)
-        showDownloadPrompt()
-    }
-
-    /**
-     * Show a dialog prompting the user to download the latest version of the app.
-     */
-    private fun showDownloadPrompt() {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("Download Latest Version")
-        builder.setMessage("Please uninstall the app first and visit http://43.226.218.98:5000/api/download-latest-apk to download the latest version.")
-        builder.setPositiveButton("OK") { dialog, _ ->
-            dialog.dismiss()
-            openDownloadUrl()
-        }
-        builder.setCancelable(false)
-        builder.show()
-    }
-
-    /**
-     * Open the URL to download the latest APK in the browser.
-     */
-    private fun openDownloadUrl() {
-        val downloadUrl = "http://43.226.218.98:5000/api/download-latest-apk"
-        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl))
-        startActivity(browserIntent)
+    /** Copy a specific text to the clipboard. */
+    private fun copyToClipboard(label: String, text: String) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText(label, text)
+        clipboard.setPrimaryClip(clip)
     }
 
     /**
@@ -305,9 +254,54 @@ class SplashScreen : AppCompatActivity() {
         builder.show()
     }
 
-    /**
-     * Starts location updates if the necessary permissions are granted.
-     */
+    /** Show a dialog with version information and update option if available. */
+    private fun showVersionDialog(currentVersion: String, latestVersion: String) {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Version Information")
+        builder.setMessage("Your app version is $currentVersion. The latest version is $latestVersion.")
+
+        builder.setNegativeButton("Cancel") { dialog, _ ->
+            dialog.dismiss()
+        }
+
+        builder.setPositiveButton("Update") { dialog, _ ->
+            dialog.dismiss()
+            updateCurrentVersionOnServer()
+        }
+
+        builder.setCancelable(false)
+        builder.show()
+    }
+
+    /** Update the current folder on the server with the latest version for the device UUID. */
+    private fun updateCurrentVersionOnServer() {
+        val request = Request.Builder()
+            .url("http://43.226.218.98:5000/api/update-current-folder/$uuid")
+            .post(RequestBody.create(null, ByteArray(0)))
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("SplashScreen", "Failed to update the current version on the server", e)
+                runOnUiThread {
+                    showFailureDialog("Failed to update the current version on the server. Please check your connection.")
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    runOnUiThread {
+                    }
+                } else {
+                    runOnUiThread {
+                        showFailureDialog("Unexpected server response while updating the current version.")
+                    }
+                }
+            }
+        })
+    }
+
+    /** Start location updates if permissions are granted. */
     private fun startLocationUpdate() {
         if (ContextCompat.checkSelfPermission(
                 this,
@@ -332,4 +326,3 @@ class SplashScreen : AppCompatActivity() {
         }
     }
 }
-
