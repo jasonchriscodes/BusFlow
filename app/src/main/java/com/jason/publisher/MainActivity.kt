@@ -136,6 +136,9 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        aid = intent.getStringExtra("AID") ?: "Unknown"
+        Log.d("AID in MainActivity", aid)
+
         // Fetch the latest version from the server and update the versionTextView
         fetchLatestVersion()
 
@@ -254,20 +257,17 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      * in the MainActivity with the retrieved version.
      */
     private fun fetchLatestVersion() {
-        // Retrieve the UUID from SharedPreferences
-        val sharedPreferences = getSharedPreferences("MyAppPrefs", MODE_PRIVATE)
-        val uuid = sharedPreferences.getString("uuid", null)
 
-        if (uuid != null) {
-            // Request current version for the specific device based on the UUID
             val requestCurrent = Request.Builder()
-                .url("http://43.226.218.98:5000/api/current-version/$uuid")
+                .url("http://43.226.218.98:5000/api/current-version/$aid")
                 .build()
 
             // Request latest version available on the server
             val requestLatest = Request.Builder()
                 .url("http://43.226.218.98:5000/api/latest-version")
                 .build()
+
+        Log.d("aidMain", aid)
 
             client.newCall(requestCurrent).enqueue(object : okhttp3.Callback {
                 override fun onFailure(call: okhttp3.Call, e: IOException) {
@@ -298,6 +298,9 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                                     val json = JSONObject(responseData!!)
                                     val latestVersion = json.getString("version")
 
+                                    Log.d("currentVersionMain", currentVersion)
+                                    Log.d("latestVersionMain", latestVersion)
+
                                     runOnUiThread {
                                         if (currentVersion == latestVersion) {
                                             findViewById<TextView>(R.id.versionTextView).text = "Version $currentVersion (Up to date)"
@@ -319,9 +322,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                     }
                 }
             })
-        } else {
-            Log.e("MainActivity", "UUID is null, cannot fetch version.")
-        }
     }
 
     /**
