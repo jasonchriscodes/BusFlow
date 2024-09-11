@@ -9,9 +9,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
-import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.telephony.TelephonyManager
 import android.util.Log
 import android.view.animation.AnimationUtils
 import android.widget.Button
@@ -26,14 +27,12 @@ import com.jason.publisher.services.SharedPrefMananger
 import okhttp3.*
 import org.json.JSONObject
 import java.io.IOException
-import java.util.UUID
-import android.content.SharedPreferences
 
 @SuppressLint("CustomSplashScreen")
 class SplashScreen : AppCompatActivity() {
 
     private lateinit var client: OkHttpClient
-    private lateinit var uuid: String
+    private lateinit var imei: String
     private lateinit var aaid: String
     private lateinit var binding: ActivitySplashScreenBinding
     private lateinit var locationManager: LocationManager
@@ -54,11 +53,6 @@ class SplashScreen : AppCompatActivity() {
 
         // Retrieve the device-specific Android ID (AAID)
         aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-
-        // Generate or retrieve the UUID for the app installation
-        uuid = getUuid()
-
-        Log.d("UUID", uuid)
         Log.d("Android ID", aaid)
 
         client = OkHttpClient()
@@ -75,62 +69,81 @@ class SplashScreen : AppCompatActivity() {
         logoExplorer.startAnimation(animation)
         logoFullers.startAnimation(animation)
 
-        // Check for updates based on UUID
-        checkForUpdates()
+        // Request permission and get the IMEI
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_PHONE_STATE), 1)
+        } else {
+            imei = getIMEI()
+            Log.d("IMEI", imei)
+            checkForUpdates()
+        }
 
         showOptionDialog()
     }
 
-    /** Retrieve the UUID from shared preferences or create a new one. */
-    private fun getUuid(): String {
-        val sharedPref = getSharedPreferences("app_preferences", Context.MODE_PRIVATE)
-        var uuid = sharedPref.getString("uuid", null)
-        if (uuid == null) {
-            uuid = UUID.randomUUID().toString()
-            with(sharedPref.edit()) {
-                putString("uuid", uuid)
-                apply()
+    /**
+     * Handle the result of the permission request
+     */
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                imei = getIMEI()
+                Log.d("IMEI", imei)
+                checkForUpdates()
+            } else {
+                Toast.makeText(this, "Permission denied to read phone state", Toast.LENGTH_SHORT).show()
             }
         }
-        return uuid
     }
 
-    /** Check for app updates using the generated UUID. */
+    /**
+     * Get IMEI from device
+     */
+    @SuppressLint("HardwareIds")
+    private fun getIMEI(): String {
+        val telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // For Android 10 and above
+            telephonyManager.imei ?: "Unknown"
+        } else {
+            telephonyManager.deviceId ?: "Unknown"
+        }
+    }
+
+    /** Check for app updates using IMEI. */
     private fun checkForUpdates() {
-        val requestCurrent = Request.Builder()
-            .url("http://43.226.218.98:5000/api/current-version/$uuid")
+        val request = okhttp3.Request.Builder()
+            .url("http://43.226.218.98:5000/api/current-version/$imei")
             .build()
 
         val requestLatest = Request.Builder()
             .url("http://43.226.218.98:5000/api/latest-version")
             .build()
 
-        client.newCall(requestCurrent).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                Log.e("SplashScreen", "Failed to fetch current version information", e)
-                runOnUiThread {
-                    showFailureDialog("Failed to fetch current version information. Please check your connection.")
-                }
+        client.newCall(request).enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: IOException) {
+                Log.e("SplashScreen", "Failed to fetch version info", e)
             }
 
-            override fun onResponse(call: Call, response: Response) {
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
                 if (response.isSuccessful) {
                     val responseData = response.body?.string()
-                    val json = JSONObject(responseData!!)
-                    val currentVersion = json.getString("version")
+                    Log.d("Version Info", responseData ?: "No response")
 
-                    client.newCall(requestLatest).enqueue(object : Callback {
-                        override fun onFailure(call: Call, e: IOException) {
+                    client.newCall(requestLatest).enqueue(object : okhttp3.Callback {
+                        override fun onFailure(call: okhttp3.Call, e: IOException) {
                             Log.e("SplashScreen", "Failed to fetch latest version information", e)
                             runOnUiThread {
                                 showFailureDialog("Failed to fetch latest version information. Please check your connection.")
                             }
                         }
 
-                        override fun onResponse(call: Call, response: Response) {
+                        override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
                             if (response.isSuccessful) {
                                 val responseData = response.body?.string()
                                 val json = JSONObject(responseData!!)
+                                val currentVersion = json.getString("version")
                                 val latestVersion = json.getString("version")
 
                                 Log.d("currentVersion", currentVersion)
@@ -190,12 +203,12 @@ class SplashScreen : AppCompatActivity() {
         dialog.show()
     }
 
-    /** Show a dialog with Android ID and UUID options to copy to clipboard. */
+    /** Show a dialog with Android ID and IMEI options to copy to clipboard. */
     private fun showWhoAmIDialog() {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Device Information")
 
-        builder.setMessage("Android ID: $aaid\nUUID: $uuid")
+        builder.setMessage("Android ID: $aaid\nIMEI: $imei")
 
         builder.setPositiveButton("Copy Android ID") { dialog, _ ->
             copyToClipboard("Android ID", aaid)
@@ -203,9 +216,9 @@ class SplashScreen : AppCompatActivity() {
             dialog.dismiss()
         }
 
-        builder.setNegativeButton("Copy UUID") { dialog, _ ->
-            copyToClipboard("UUID", uuid)
-            Toast.makeText(this, "UUID copied to clipboard", Toast.LENGTH_SHORT).show()
+        builder.setNegativeButton("Copy IMEI") { dialog, _ ->
+            copyToClipboard("IMEI", imei)
+            Toast.makeText(this, "IMEI copied to clipboard", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
         }
 
@@ -273,10 +286,10 @@ class SplashScreen : AppCompatActivity() {
         builder.show()
     }
 
-    /** Update the current folder on the server with the latest version for the device UUID. */
+    /** Update the current folder on the server with the latest version for the device IMEI. */
     private fun updateCurrentVersionOnServer() {
         val request = Request.Builder()
-            .url("http://43.226.218.98:5000/api/update-current-folder/$uuid")
+            .url("http://43.226.218.98:5000/api/update-current-folder/$imei")
             .post(RequestBody.create(null, ByteArray(0)))
             .build()
 
