@@ -51,7 +51,7 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        Log.d("version name", "test v1.0.33")
+        Log.d("version name", "test v1.0.34")
         requestStoragePermissions()
         aid = getOrCreateAid()
         Log.d("Android ID", aid)
