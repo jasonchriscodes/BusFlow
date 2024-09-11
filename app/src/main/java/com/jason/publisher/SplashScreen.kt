@@ -28,13 +28,13 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.UUID
 import android.content.SharedPreferences
+import java.io.File
 
 @SuppressLint("CustomSplashScreen")
 class SplashScreen : AppCompatActivity() {
 
     private lateinit var client: OkHttpClient
-    private lateinit var uuid: String
-    private lateinit var aaid: String
+    private lateinit var aid: String
     private lateinit var binding: ActivitySplashScreenBinding
     private lateinit var locationManager: LocationManager
     private lateinit var sharedPrefManager: SharedPrefMananger
@@ -50,16 +50,11 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        Log.d("version name", "test v1.0.32")
+        Log.d("version name", "test v1.0.33")
 
-        // Retrieve the device-specific Android ID (AAID)
-        aaid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        aid = getOrCreateAid()
 
-        // Generate or retrieve the UUID for the app installation
-        uuid = getUuid()
-
-        Log.d("UUID", uuid)
-        Log.d("Android ID", aaid)
+        Log.d("Android ID", aid)
 
         client = OkHttpClient()
 
@@ -81,24 +76,28 @@ class SplashScreen : AppCompatActivity() {
         showOptionDialog()
     }
 
-    /** Retrieve the UUID from shared preferences or create a new one. */
-    private fun getUuid(): String {
-        val sharedPref = getSharedPreferences("app_preferences", Context.MODE_PRIVATE)
-        var uuid = sharedPref.getString("uuid", null)
-        if (uuid == null) {
-            uuid = UUID.randomUUID().toString()
-            with(sharedPref.edit()) {
-                putString("uuid", uuid)
-                apply()
-            }
+    /** Retrieve the AID from the external folder or generate a new one */
+    @SuppressLint("HardwareIds")
+    private fun getOrCreateAid(): String {
+        val hiddenDir = File(getExternalFilesDir(null), ".vlrshiddenfolder")
+        if (!hiddenDir.exists()) {
+            hiddenDir.mkdirs()
         }
-        return uuid
+        val aidFile = File(hiddenDir, "aid.txt")
+
+        return if (aidFile.exists()) {
+            aidFile.readText()
+        } else {
+            val newAid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            aidFile.writeText(newAid)
+            newAid
+        }
     }
 
     /** Check for app updates using the generated UUID. */
     private fun checkForUpdates() {
         val requestCurrent = Request.Builder()
-            .url("http://43.226.218.98:5000/api/current-version/$uuid")
+            .url("http://43.226.218.98:5000/api/current-version/$aid")
             .build()
 
         val requestLatest = Request.Builder()
@@ -161,6 +160,14 @@ class SplashScreen : AppCompatActivity() {
         })
     }
 
+    /** Proceed to MainActivity and pass the AID */
+    private fun proceedToMainActivity() {
+        val intent = Intent(this, MainActivity::class.java)
+        intent.putExtra("AID", aid)  // Pass the AID to MainActivity
+        startActivity(intent)
+        finish()
+    }
+
     /** Shows a dialog with options for online, offline modes, and device information. */
     private fun showOptionDialog() {
         val builder = AlertDialog.Builder(this)
@@ -173,8 +180,7 @@ class SplashScreen : AppCompatActivity() {
         val whoAmIButton = dialogView.findViewById<Button>(R.id.whoAmIButton)
 
         onlineModeButton.setOnClickListener {
-            val intent = Intent(this, MainActivity::class.java)
-            startActivity(intent)
+            proceedToMainActivity()
         }
 
         offlineModeButton.setOnClickListener {
@@ -195,17 +201,11 @@ class SplashScreen : AppCompatActivity() {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Device Information")
 
-        builder.setMessage("Android ID: $aaid\nUUID: $uuid")
+        builder.setMessage("Android ID: $aid")
 
         builder.setPositiveButton("Copy Android ID") { dialog, _ ->
-            copyToClipboard("Android ID", aaid)
+            copyToClipboard("Android ID", aid)
             Toast.makeText(this, "Android ID copied to clipboard", Toast.LENGTH_SHORT).show()
-            dialog.dismiss()
-        }
-
-        builder.setNegativeButton("Copy UUID") { dialog, _ ->
-            copyToClipboard("UUID", uuid)
-            Toast.makeText(this, "UUID copied to clipboard", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
         }
 
@@ -267,6 +267,25 @@ class SplashScreen : AppCompatActivity() {
         builder.setPositiveButton("Update") { dialog, _ ->
             dialog.dismiss()
             updateCurrentVersionOnServer()
+            showUninstallPrompt()
+        }
+
+        builder.setCancelable(false)
+        builder.show()
+    }
+
+    /** Show a prompt asking the user to uninstall the current app and download the latest version from the browser. */
+    private fun showUninstallPrompt() {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Uninstall and Download")
+        builder.setMessage("To update to the latest version, please uninstall the current app and download the latest one from the browser.")
+
+        builder.setPositiveButton("OK") { dialog, _ ->
+            dialog.dismiss()
+            // Redirect to browser to download the latest APK
+            val apkDownloadUrl = "http://43.226.218.98:5000/api/download-latest-apk"
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(apkDownloadUrl))
+            startActivity(intent)
         }
 
         builder.setCancelable(false)
@@ -276,7 +295,7 @@ class SplashScreen : AppCompatActivity() {
     /** Update the current folder on the server with the latest version for the device UUID. */
     private fun updateCurrentVersionOnServer() {
         val request = Request.Builder()
-            .url("http://43.226.218.98:5000/api/update-current-folder/$uuid")
+            .url("http://43.226.218.98:5000/api/update-current-folder/$aid")
             .post(RequestBody.create(null, ByteArray(0)))
             .build()
 
