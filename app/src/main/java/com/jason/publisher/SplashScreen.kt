@@ -28,6 +28,7 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.UUID
 import android.content.SharedPreferences
+import android.os.Environment
 import java.io.File
 
 @SuppressLint("CustomSplashScreen")
@@ -51,9 +52,8 @@ class SplashScreen : AppCompatActivity() {
         setContentView(binding.root)
 
         Log.d("version name", "test v1.0.33")
-
+        requestStoragePermissions()
         aid = getOrCreateAid()
-
         Log.d("Android ID", aid)
 
         client = OkHttpClient()
@@ -76,18 +76,34 @@ class SplashScreen : AppCompatActivity() {
         showOptionDialog()
     }
 
+    /**
+     * Requesting external storage permission
+     */
+    private fun requestStoragePermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 1)
+        }
+    }
+
     /** Retrieve the AID from the external folder or generate a new one */
     @SuppressLint("HardwareIds")
     private fun getOrCreateAid(): String {
-        val hiddenDir = File(getExternalFilesDir(null), ".vlrshiddenfolder")
-        if (!hiddenDir.exists()) {
-            hiddenDir.mkdirs()
-        }
-        val aidFile = File(hiddenDir, "aid.txt")
+        // Get the path to the internal storage's Documents folder
+        val documentsDir = File(Environment.getExternalStorageDirectory(), "Documents/.vlrshiddenfolder")
 
+        // Create the directory if it doesn't exist
+        if (!documentsDir.exists()) {
+            documentsDir.mkdirs()
+        }
+
+        // Create or access the aid.txt file within the hidden folder
+        val aidFile = File(documentsDir, "aid.txt")
+
+        // If the file exists, read and return the AID, else generate a new one
         return if (aidFile.exists()) {
             aidFile.readText()
         } else {
+            // Generate a new AID using the Android ID and save it in the aid.txt file
             val newAid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             aidFile.writeText(newAid)
             newAid
