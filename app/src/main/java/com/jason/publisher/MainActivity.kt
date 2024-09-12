@@ -409,7 +409,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     @SuppressLint("HardwareIds")
     private fun getAccessToken() {
         val listConfig = config
-        aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         for (configItem in listConfig.orEmpty()) {
             if (configItem.aid == aid) {
                 token = configItem.accessToken
@@ -983,10 +982,10 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         lastMessage = sharedPrefMananger.getString(LAST_MSG_KEY, "").toString()
 
         busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
-//        Toast.makeText(this, "arrBusDataOnline1: ${arrBusData}", Toast.LENGTH_SHORT).show()
+        Log.d("arrBusDataOnline1", arrBusData.toString())
         arrBusData = config!!
         arrBusData = arrBusData.filter { it.aid != aid }
-//        Toast.makeText(this, "arrBusDataOnline2: ${arrBusData}", Toast.LENGTH_SHORT).show()
+        Log.d("arrBusDataOnline2", arrBusData.toString())
         for (bus in arrBusData) {
             markerBus[bus.accessToken] = Marker(binding.map)
             markerBus[bus.accessToken]!!.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow2, null)
