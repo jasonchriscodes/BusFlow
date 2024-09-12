@@ -88,22 +88,15 @@ class SplashScreen : AppCompatActivity() {
     /** Retrieve the AID from the external folder or generate a new one */
     @SuppressLint("HardwareIds")
     private fun getOrCreateAid(): String {
-        // Get the path to the internal storage's Documents folder
-        val documentsDir = File(Environment.getExternalStorageDirectory(), "Documents/.vlrshiddenfolder")
-
-        // Create the directory if it doesn't exist
-        if (!documentsDir.exists()) {
-            documentsDir.mkdirs()
+        val hiddenDir = File(getExternalFilesDir(null), ".vlrshiddenfolder")
+        if (!hiddenDir.exists()) {
+            hiddenDir.mkdirs()
         }
+        val aidFile = File(hiddenDir, "aid.txt")
 
-        // Create or access the aid.txt file within the hidden folder
-        val aidFile = File(documentsDir, "aid.txt")
-
-        // If the file exists, read and return the AID, else generate a new one
         return if (aidFile.exists()) {
             aidFile.readText()
         } else {
-            // Generate a new AID using the Android ID and save it in the aid.txt file
             val newAid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             aidFile.writeText(newAid)
             newAid
