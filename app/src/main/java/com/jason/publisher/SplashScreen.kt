@@ -28,6 +28,7 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.UUID
 import android.content.SharedPreferences
+import android.os.Build
 import android.os.Environment
 import java.io.File
 
@@ -39,6 +40,8 @@ class SplashScreen : AppCompatActivity() {
     private lateinit var binding: ActivitySplashScreenBinding
     private lateinit var locationManager: LocationManager
     private lateinit var sharedPrefManager: SharedPrefMananger
+    private val REQUEST_MANAGE_EXTERNAL_STORAGE = 1001
+    private val REQUEST_WRITE_PERMISSION = 1002
 
     var latitude = 0.0
     var longitude = 0.0
@@ -51,7 +54,10 @@ class SplashScreen : AppCompatActivity() {
         binding = ActivitySplashScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        Log.d("version name", "test v1.0.34")
+        // Check and request permission
+        checkAndRequestStoragePermission()
+
+        Log.d("version name", "test v1.0.35")
         requestStoragePermissions()
         aid = getOrCreateAid()
         Log.d("Android ID", aid)
@@ -77,6 +83,64 @@ class SplashScreen : AppCompatActivity() {
     }
 
     /**
+     * Ensure permissions are requested before accessing external storage
+     */
+    private fun checkAndRequestStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = Uri.parse("package:$packageName")
+                startActivityForResult(intent, REQUEST_MANAGE_EXTERNAL_STORAGE)
+            }
+        } else {
+            // For Android 10 and below, request WRITE_EXTERNAL_STORAGE permission
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                REQUEST_WRITE_PERMISSION
+            )
+        }
+    }
+
+    /**
+     * Handle the result of the permission request
+     */
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        if (requestCode == REQUEST_WRITE_PERMISSION) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission granted, proceed with file operations
+                getOrCreateAid()
+            } else {
+                // Permission denied
+                Toast.makeText(this, "Storage permission denied", Toast.LENGTH_SHORT).show()
+            }
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+
+    /**
+     * The results of the permission request
+     */
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_MANAGE_EXTERNAL_STORAGE) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                if (Environment.isExternalStorageManager()) {
+                    // Permission granted, proceed with file operations
+                    getOrCreateAid()
+                } else {
+                    // Permission denied
+                    Toast.makeText(this, "Manage external storage permission denied", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    /**
      * Requesting external storage permission
      */
     private fun requestStoragePermissions() {
@@ -88,22 +152,15 @@ class SplashScreen : AppCompatActivity() {
     /** Retrieve the AID from the external folder or generate a new one */
     @SuppressLint("HardwareIds")
     private fun getOrCreateAid(): String {
-        // Get the path to the internal storage's Documents folder
-        val documentsDir = File(Environment.getExternalStorageDirectory(), "Documents/.vlrshiddenfolder")
-
-        // Create the directory if it doesn't exist
+        val documentsDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vlrshiddenfolder")
         if (!documentsDir.exists()) {
             documentsDir.mkdirs()
         }
-
-        // Create or access the aid.txt file within the hidden folder
         val aidFile = File(documentsDir, "aid.txt")
 
-        // If the file exists, read and return the AID, else generate a new one
         return if (aidFile.exists()) {
             aidFile.readText()
         } else {
-            // Generate a new AID using the Android ID and save it in the aid.txt file
             val newAid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             aidFile.writeText(newAid)
             newAid
