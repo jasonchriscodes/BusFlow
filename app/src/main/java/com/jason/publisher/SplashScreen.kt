@@ -42,6 +42,7 @@ class SplashScreen : AppCompatActivity() {
     private lateinit var sharedPrefManager: SharedPrefMananger
     private val REQUEST_MANAGE_EXTERNAL_STORAGE = 1001
     private val REQUEST_WRITE_PERMISSION = 1002
+    private var optionDialog: AlertDialog? = null
 
     var latitude = 0.0
     var longitude = 0.0
@@ -57,7 +58,7 @@ class SplashScreen : AppCompatActivity() {
         // Check and request permission
         checkAndRequestStoragePermission()
 
-        Log.d("version name", "test v1.0.35")
+        Log.d("version name", "test v1.0.36")
         requestStoragePermissions()
         aid = getOrCreateAid()
         Log.d("Android ID", aid)
@@ -243,6 +244,8 @@ class SplashScreen : AppCompatActivity() {
 
     /** Shows a dialog with options for online, offline modes, and device information. */
     private fun showOptionDialog() {
+        if (isFinishing) return  // Don't show the dialog if the activity is finishing
+
         val builder = AlertDialog.Builder(this)
         val inflater = layoutInflater
         val dialogView = inflater.inflate(R.layout.mode_selection_dialog, null)
@@ -254,19 +257,22 @@ class SplashScreen : AppCompatActivity() {
 
         onlineModeButton.setOnClickListener {
             proceedToMainActivity()
+            optionDialog?.dismiss()  // Dismiss the dialog before transitioning
         }
 
         offlineModeButton.setOnClickListener {
             val intent = Intent(this, OfflineActivity::class.java)
             startActivity(intent)
+            optionDialog?.dismiss()  // Dismiss the dialog before transitioning
         }
 
         whoAmIButton.setOnClickListener {
             showWhoAmIDialog()
         }
 
-        val dialog = builder.create()
-        dialog.show()
+        // Create and show the dialog
+        optionDialog = builder.create()
+        optionDialog?.show()
     }
 
     /** Show a dialog with Android ID and UUID options to copy to clipboard. */
@@ -416,5 +422,9 @@ class SplashScreen : AppCompatActivity() {
                 123
             )
         }
+    }
+    override fun onDestroy() {
+        optionDialog?.dismiss() // Dismiss the dialog to prevent leaks
+        super.onDestroy()
     }
 }

@@ -59,6 +59,7 @@ import org.osmdroid.views.overlay.Polyline
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import java.lang.Math.atan2
 import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.view.View
@@ -66,7 +67,6 @@ import android.widget.ProgressBar
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
-import java.lang.Math.atan2
 
 class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
@@ -127,7 +127,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var isFirstTime = false
     private lateinit var timer: CountDownTimer
     private var firstTime = true
-
     private val client = OkHttpClient()
 
     @RequiresApi(Build.VERSION_CODES.Q)
@@ -258,70 +257,70 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      */
     private fun fetchLatestVersion() {
 
-            val requestCurrent = Request.Builder()
-                .url("http://43.226.218.98:5000/api/current-version/$aid")
-                .build()
+        val requestCurrent = Request.Builder()
+            .url("http://43.226.218.98:5000/api/current-version/$aid")
+            .build()
 
-            // Request latest version available on the server
-            val requestLatest = Request.Builder()
-                .url("http://43.226.218.98:5000/api/latest-version")
-                .build()
+        // Request latest version available on the server
+        val requestLatest = Request.Builder()
+            .url("http://43.226.218.98:5000/api/latest-version")
+            .build()
 
         Log.d("aidMain", aid)
 
-            client.newCall(requestCurrent).enqueue(object : okhttp3.Callback {
-                override fun onFailure(call: okhttp3.Call, e: IOException) {
-                    Log.e("MainActivity", "Failed to fetch current version", e)
-                    runOnUiThread {
-                        findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
-                    }
+        client.newCall(requestCurrent).enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: IOException) {
+                Log.e("MainActivity", "Failed to fetch current version", e)
+                runOnUiThread {
+                    findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
                 }
+            }
 
-                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
-                    if (response.isSuccessful) {
-                        val responseData = response.body?.string()
-                        val json = JSONObject(responseData!!)
-                        val currentVersion = json.getString("version")
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                if (response.isSuccessful) {
+                    val responseData = response.body?.string()
+                    val json = JSONObject(responseData!!)
+                    val currentVersion = json.getString("version")
 
-                        // After fetching the current version, request the latest version
-                        client.newCall(requestLatest).enqueue(object : okhttp3.Callback {
-                            override fun onFailure(call: okhttp3.Call, e: IOException) {
-                                Log.e("MainActivity", "Failed to fetch latest version", e)
+                    // After fetching the current version, request the latest version
+                    client.newCall(requestLatest).enqueue(object : okhttp3.Callback {
+                        override fun onFailure(call: okhttp3.Call, e: IOException) {
+                            Log.e("MainActivity", "Failed to fetch latest version", e)
+                            runOnUiThread {
+                                findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
+                            }
+                        }
+
+                        override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                            if (response.isSuccessful) {
+                                val responseData = response.body?.string()
+                                val json = JSONObject(responseData!!)
+                                val latestVersion = json.getString("version")
+
+                                Log.d("currentVersionMain", currentVersion)
+                                Log.d("latestVersionMain", latestVersion)
+
+                                runOnUiThread {
+                                    if (currentVersion == latestVersion) {
+                                        findViewById<TextView>(R.id.versionTextView).text = "Version $currentVersion (Up to date)"
+                                    } else {
+                                        findViewById<TextView>(R.id.versionTextView).text = "Version $currentVersion (Update available: $latestVersion)"
+                                    }
+                                }
+                            } else {
                                 runOnUiThread {
                                     findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
                                 }
                             }
-
-                            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
-                                if (response.isSuccessful) {
-                                    val responseData = response.body?.string()
-                                    val json = JSONObject(responseData!!)
-                                    val latestVersion = json.getString("version")
-
-                                    Log.d("currentVersionMain", currentVersion)
-                                    Log.d("latestVersionMain", latestVersion)
-
-                                    runOnUiThread {
-                                        if (currentVersion == latestVersion) {
-                                            findViewById<TextView>(R.id.versionTextView).text = "Version $currentVersion (Up to date)"
-                                        } else {
-                                            findViewById<TextView>(R.id.versionTextView).text = "Version $currentVersion (Update available: $latestVersion)"
-                                        }
-                                    }
-                                } else {
-                                    runOnUiThread {
-                                        findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
-                                    }
-                                }
-                            }
-                        })
-                    } else {
-                        runOnUiThread {
-                            findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
                         }
+                    })
+                } else {
+                    runOnUiThread {
+                        findViewById<TextView>(R.id.versionTextView).text = "Version unknown"
                     }
                 }
-            })
+            }
+        })
     }
 
     /**
@@ -409,7 +408,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     @SuppressLint("HardwareIds")
     private fun getAccessToken() {
         val listConfig = config
-        aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         for (configItem in listConfig.orEmpty()) {
             if (configItem.aid == aid) {
                 token = configItem.accessToken
