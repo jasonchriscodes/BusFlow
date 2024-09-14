@@ -4,8 +4,9 @@ import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
-import android.content.DialogInterface
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
 import android.widget.Toast
@@ -16,6 +17,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.jason.publisher.LocationListener
+import com.jason.publisher.MainActivity
 
 /**
  * Class responsible for managing location updates.
@@ -26,7 +28,7 @@ class LocationManager(private val context: Context) {
 
     private val fusLocation: FusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(context)
 
-    private val locationRequest: LocationRequest = LocationRequest().apply {
+    private val locationRequest: LocationRequest = LocationRequest.create().apply {
         interval = 1000
         fastestInterval = 500
         priority = LocationRequest.PRIORITY_HIGH_ACCURACY
@@ -47,6 +49,13 @@ class LocationManager(private val context: Context) {
                 }
             }
         }
+        checkLocationPermission()
+    }
+
+    /**
+     * Checks if the location permission is granted. If not, it requests the permission and keeps prompting until the user grants it.
+     */
+    private fun checkLocationPermission() {
         if (ActivityCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -55,16 +64,16 @@ class LocationManager(private val context: Context) {
                 Manifest.permission.ACCESS_COARSE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            // Permission is not granted, so return without requesting updates
-//            Toast.makeText(context, "Application need location access", Toast.LENGTH_LONG).show()
+            // Permission is not granted
             showWarningDialog()
-            return
+        } else {
+            // Permission is granted, start requesting location updates
+            fusLocation.requestLocationUpdates(
+                locationRequest,
+                locationCallback as LocationCallback,
+                null
+            )
         }
-        fusLocation.requestLocationUpdates(
-            locationRequest,
-            locationCallback as LocationCallback,
-            null
-        )
     }
 
     /**
@@ -73,21 +82,33 @@ class LocationManager(private val context: Context) {
     private fun showWarningDialog() {
         val builder = AlertDialog.Builder(context)
         builder.setTitle("Warning")
-        builder.setMessage("VLRS need location access")
+        builder.setMessage("VLRS needs location access")
         builder.setCancelable(false)
         builder.setOnKeyListener { _, key, _ ->
             key == KeyEvent.KEYCODE_BACK
         }
-        // Set the "OK" button to request location permissions
         builder.setPositiveButton("OK") { _, _ ->
-            // Request location permissions here
             ActivityCompat.requestPermissions(
                 context as Activity,
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
                 123
             )
+            showRestartAppPrompt()
         }
+        builder.show()
+    }
+
+    /**
+     * Displays a dialog prompting the user to restart the app to apply changes.
+     */
+    private fun showRestartAppPrompt() {
+        val builder = AlertDialog.Builder(context)
+        builder.setTitle("Restart Required")
+        builder.setMessage("Please restart the app to apply the changes.")
         builder.setCancelable(false)
+        builder.setPositiveButton("OK") { dialog, _ ->
+            dialog.dismiss()
+        }
         builder.show()
     }
 
@@ -106,7 +127,6 @@ class LocationManager(private val context: Context) {
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             // Permission is not granted, so return without getting location
-
             return
         }
         fusLocation.lastLocation.addOnSuccessListener { location ->
