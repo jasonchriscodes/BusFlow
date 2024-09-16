@@ -158,7 +158,8 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
             override fun onLocationUpdate(location: Location) {
                 latitude = location.latitude
                 longitude = location.longitude
-
+                Log.d("Latitude", latitude.toString())
+                Log.d("Longitude", longitude.toString())
                 // Update UI components with the current location
                 latitudeTextView.text = "Latitude: $latitude"
                 longitudeTextView.text = "Longitude: $longitude"
@@ -1035,6 +1036,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                             for (bus in arrBusData) {
                                 if (token == bus.accessToken) {
                                     val marker = markerBus[token]
+                                    Log.d("MC", markerBus.toString())
                                     if (marker != null) {
                                         marker.position = GeoPoint(lat, lon)
                                         marker.rotation = ber
