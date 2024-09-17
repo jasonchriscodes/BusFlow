@@ -58,7 +58,7 @@ class SplashScreen : AppCompatActivity() {
         // Check and request permission
         checkAndRequestStoragePermission()
 
-        Log.d("version name", "test v1.0.37")
+        Log.d("version name", "test v1.0.36")
         requestStoragePermissions()
         aid = getOrCreateAid()
         Log.d("Android ID", aid)
