@@ -499,8 +499,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                     return@runOnUiThread
                 }
 
-                val tabletAid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-                val matchingAid = config!!.any { it.aid == tabletAid }
+                val matchingAid = config!!.any { it.aid == aid }
 
                 if (!matchingAid) {
                     Toast.makeText(this, "AID does not match.", Toast.LENGTH_SHORT).show()
