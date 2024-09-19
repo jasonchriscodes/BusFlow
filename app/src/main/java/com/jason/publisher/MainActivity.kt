@@ -492,6 +492,8 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 val data = gson.fromJson(message, Bus::class.java)
                 config = data.shared?.config?.busConfig
                 arrBusData = config.orEmpty() // Ensure arrBusData is assigned
+                Log.d("config subscribeSharedData", config.toString())
+                Log.d("arrBusData subscribeSharedData", arrBusData.toString())
 
                 if (config.isNullOrEmpty()) {
                     Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
