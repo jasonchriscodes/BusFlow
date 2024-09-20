@@ -115,6 +115,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var totalMessage = 0
 
     private var token = ""
+    private var tokenConfigData = "oRSsbeuqDMSckyckcMyE"
     private var apiService = ApiServiceBuilder.buildService(ApiService::class.java)
     private var markerBus = HashMap<String, Marker>()
     private var arrBusData: List<BusItem> = emptyList()
@@ -137,6 +138,9 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
         aid = intent.getStringExtra("AID") ?: "Unknown"
         Log.d("AID in MainActivity", aid)
+
+        // Initialize mqttManager before using it
+        mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = tokenConfigData)
 
         // Fetch the latest version from the server and update the versionTextView
         fetchLatestVersion()
@@ -172,11 +176,11 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         // Fetch and initialize config
         fetchConfig {
             if (it) {
-                // Initialize MQTT manager
+                // Get access token for MQTT connection
                 getAccessToken()
                 mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
 
-                // Connect and subscribe
+                // Connect and subscribe to MQTT after config is fetched
                 connectAndSubscribe()
             } else {
                 // Handle config initialization failure
@@ -210,15 +214,12 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         val intentFilter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
         registerReceiver(networkReceiver, intentFilter)
 
-
-        // Inside onCreate method or wherever you handle the button click
+        // Set up feedback button
         binding.feedbackButton.setOnClickListener {
-            // Start the FeedbackActivity when the feedback button is clicked
             val intent = Intent(this, FeedbackActivity::class.java)
             intent.putExtra("TOKEN", token)  // Pass the token to FeedbackActivity
             startActivity(intent)
         }
-
     }
 
     /**
@@ -392,14 +393,23 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      * Calls the provided callback with true if successful, false otherwise.
      */
     private fun fetchConfig(callback: (Boolean) -> Unit) {
-        // Simulate fetching config data
-        val listConfig = OnlineData.getConfig()
-        if (listConfig.isNotEmpty()) {
-            config = listConfig
-            callback(true)
-        } else {
-            config = emptyList()  // Ensure config is set to an empty list if no data is available
-            callback(false)
+        Log.d("MainActivity", "Fetching config...")
+        mqttManager.fetchSharedAttributes(tokenConfigData) { listConfig ->
+            if (listConfig.isNotEmpty()) {
+                config = listConfig
+                Log.d("MainActivity", "Config received: $config")
+                runOnUiThread {
+                    Toast.makeText(this, "Config initialized successfully", Toast.LENGTH_SHORT).show()
+                }
+                callback(true)
+            } else {
+                config = emptyList()
+                Log.e("MainActivity", "Failed to initialize config. No bus information available.")
+                runOnUiThread {
+                    Toast.makeText(this, "Failed to initialize config. No bus information available.", Toast.LENGTH_SHORT).show()
+                }
+                callback(false)
+            }
         }
     }
 
