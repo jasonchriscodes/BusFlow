@@ -1,11 +1,17 @@
 package com.jason.publisher.services
 
 import android.util.Log
+import com.jason.publisher.model.BusItem
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.eclipse.paho.client.mqttv3.MqttClient
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.MqttException
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import org.json.JSONException
+import org.json.JSONObject
+import java.io.IOException
 
 /**
  * Class responsible for managing MQTT connections, publishing, and subscribing to topics.
@@ -17,7 +23,7 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 class MqttManager(
     serverUri: String,
     clientId: String,
-    private var username: String = "cngz9qqls7dk5zgi3y4j" // Bus A
+    private var username: String = "oRSsbeuqDMSckyckcMyE" // Config Data
 ) {
     private val persistence = MemoryPersistence()
     private val mqttClient = MqttClient(serverUri, clientId, persistence)
@@ -29,6 +35,73 @@ class MqttManager(
         connectOptions.connectionTimeout = 10
         connectOptions.keepAliveInterval = 60
         Log.d("MqttManager", "Initializing MQTT client")
+    }
+
+    private val client = OkHttpClient()
+
+    /**
+     * Function to fetch shared attributes from ThingsBoard
+     */
+    fun fetchSharedAttributes(deviceToken: String, callback: (List<BusItem>) -> Unit) {
+        val url = "http://43.226.218.97:8080/api/v1/$deviceToken/attributes?sharedKeys=config"
+
+        val request = Request.Builder()
+            .url(url)
+            .build()
+
+        client.newCall(request).enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: IOException) {
+                e.printStackTrace()
+                Log.e("MqttManager", "Failed to fetch shared attributes", e)
+                callback(emptyList()) // Return an empty list in case of failure
+            }
+
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                if (response.isSuccessful) {
+                    val responseData = response.body?.string()
+                    Log.d("MqttManager", "Response data: $responseData") // Log the entire response for debugging
+
+                    try {
+                        val jsonObject = JSONObject(responseData!!)
+                        val sharedObject = jsonObject.optJSONObject("shared")
+
+                        // Access "config" inside "shared"
+                        if (sharedObject != null && sharedObject.has("config")) {
+                            val configObject = sharedObject.getJSONObject("config")
+
+                            // Now look for "busConfig" inside "config"
+                            if (configObject.has("busConfig")) {
+                                val configJson = configObject.getJSONArray("busConfig")
+                                val busList = mutableListOf<BusItem>()
+
+                                for (i in 0 until configJson.length()) {
+                                    val busConfigItem = configJson.getJSONObject(i)
+                                    val aid = busConfigItem.getString("aid")
+                                    val bus = busConfigItem.getString("bus")
+                                    val accessToken = busConfigItem.getString("accessToken")
+                                    busList.add(BusItem(aid, bus, accessToken))
+                                }
+
+                                Log.d("MqttManager", "Parsed bus config: $busList")
+                                callback(busList)
+                            } else {
+                                Log.e("MqttManager", "No 'busConfig' found in the config.")
+                                callback(emptyList()) // Return empty list if no busConfig found
+                            }
+                        } else {
+                            Log.e("MqttManager", "No 'config' found in the shared attributes.")
+                            callback(emptyList()) // Return empty list if no config found
+                        }
+                    } catch (e: JSONException) {
+                        Log.e("MqttManager", "Failed to parse JSON", e)
+                        callback(emptyList()) // Handle JSON parsing errors
+                    }
+                } else {
+                    Log.e("MqttManager", "Response was not successful: ${response.message}")
+                    callback(emptyList()) // Return empty list if response failed
+                }
+            }
+        })
     }
 
     /**
