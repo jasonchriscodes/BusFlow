@@ -28,10 +28,31 @@
         android:hint="Password"
         android:inputType="textPassword"
         android:padding="10dp"
-        android:layout_marginBottom="16dp"
+        android:layout_marginBottom="8dp"
         android:background="@android:drawable/edit_text"
         android:drawableStart="@android:drawable/ic_lock_idle_lock"
         android:drawablePadding="10dp" />
+
+    <!-- Show Password Checkbox -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="start"
+        android:layout_marginBottom="16dp">
+
+        <CheckBox
+            android:id="@+id/showPasswordCheckbox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Show Password"
+            android:textColor="@android:color/black" />
+    </LinearLayout>
 
     <!-- Login Button -->
     <Button
@@ -55,23 +76,21 @@
             android:id="@+id/backButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:text="Back"
-            android:layout_marginEnd="8dp"
             android:background="@android:color/darker_gray"
             android:textColor="@android:color/white"
-            android:padding="8dp" />
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp" />
 
         <!-- Register Button -->
         <Button
             android:id="@+id/registerButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:text="Register"
             android:background="@color/teal_700"
             android:textColor="@android:color/white"
-            android:padding="8dp" />
+            android:layout_weight="1"
+            android:layout_marginStart="4dp" />
     </LinearLayout>
-
 </LinearLayout>

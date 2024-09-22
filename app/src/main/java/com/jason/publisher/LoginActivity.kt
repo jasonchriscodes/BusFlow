@@ -2,7 +2,9 @@ package com.jason.publisher
 
 import android.content.Intent
 import android.os.Bundle
+import android.text.InputType
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -45,6 +47,8 @@ class LoginActivity : AppCompatActivity() {
         loginButton = findViewById(R.id.loginButton)
         backButton = findViewById(R.id.backButton)
         registerButton = findViewById(R.id.registerButton)
+        val showPasswordCheckbox = findViewById<CheckBox>(R.id.showPasswordCheckbox)
+        val passwordEditText = findViewById<EditText>(R.id.passwordEditText)
 
         // Initialize mqttManager before using it
         mqttManager = MqttManager(
@@ -52,6 +56,18 @@ class LoginActivity : AppCompatActivity() {
             clientId = MainActivity.CLIENT_ID,
             username = tokenConfigData
         )
+
+        showPasswordCheckbox.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                // Show Password
+                passwordEditText.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+            } else {
+                // Hide Password
+                passwordEditText.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+            // Move cursor to the end of the text
+            passwordEditText.setSelection(passwordEditText.text.length)
+        }
 
         // Set onClickListener for Login button
         loginButton.setOnClickListener {
