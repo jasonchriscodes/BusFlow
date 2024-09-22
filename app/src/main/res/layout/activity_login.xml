@@ -43,22 +43,35 @@
         android:background="@color/purple_500"
         android:textColor="@android:color/white" />
 
-    <!-- Register Button -->
-    <Button
-        android:id="@+id/registerButton"
+    <!-- Container for Register and Back Buttons -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Register"
-        android:layout_marginBottom="8dp"
-        android:background="@color/teal_700"
-        android:textColor="@android:color/white" />
+        android:orientation="horizontal"
+        android:gravity="center">
 
-    <!-- Back Button -->
-    <Button
-        android:id="@+id/backButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Back"
-        android:background="@android:color/darker_gray"
-        android:textColor="@android:color/white" />
+        <!-- Back Button -->
+        <Button
+            android:id="@+id/backButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Back"
+            android:layout_marginEnd="8dp"
+            android:background="@android:color/darker_gray"
+            android:textColor="@android:color/white"
+            android:padding="8dp" />
+
+        <!-- Register Button -->
+        <Button
+            android:id="@+id/registerButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Register"
+            android:background="@color/teal_700"
+            android:textColor="@android:color/white"
+            android:padding="8dp" />
+    </LinearLayout>
+
 </LinearLayout>
