@@ -234,10 +234,10 @@ class SplashScreen : AppCompatActivity() {
         })
     }
 
-    /** Proceed to MainActivity and pass the AID */
+    /** Proceed to LoginActivity and pass the AID */
     private fun proceedToMainActivity() {
-        val intent = Intent(this, MainActivity::class.java)
-        intent.putExtra("AID", aid)  // Pass the AID to MainActivity
+        val intent = Intent(this, LoginActivity::class.java)
+        intent.putExtra("AID", aid)  // Pass the AID to LoginActivity
         startActivity(intent)
         finish()
     }

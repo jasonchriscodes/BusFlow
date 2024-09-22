@@ -136,6 +136,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Retrieve AID from intent
         aid = intent.getStringExtra("AID") ?: "Unknown"
         Log.d("AID in MainActivity", aid)
 
