@@ -74,8 +74,11 @@ class LoginActivity : AppCompatActivity() {
         loginButton.setOnClickListener {
             val companyName = companyNameEditText.text.toString()
             val password = passwordEditText.text.toString()
+            aid = intent.getStringExtra("AID")
 
             if (companyName.isNotBlank() && password.isNotBlank()) {
+                // Disable the login button to prevent multiple clicks
+                loginButton.isEnabled = false
                 checkLoginCredentials(companyName, password)
             } else {
                 Toast.makeText(this, "Please enter both fields", Toast.LENGTH_SHORT).show()
@@ -115,6 +118,7 @@ class LoginActivity : AppCompatActivity() {
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
+                    loginButton.isEnabled = true // Re-enable the login button
                     Toast.makeText(this@LoginActivity, "Failed to connect to the server", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -134,6 +138,13 @@ class LoginActivity : AppCompatActivity() {
                             tokenConfigData = configFile.getString("tokenConfigData")
                             foundMatch = true
 
+                            // Initialize mqttManager with the correct tokenConfigData
+                            mqttManager = MqttManager(
+                                serverUri = MainActivity.SERVER_URI,
+                                clientId = MainActivity.CLIENT_ID,
+                                username = tokenConfigData
+                            )
+
                             runOnUiThread {
                                 // Proceed to MainActivity and pass AID
                                 val intent = Intent(this@LoginActivity, MainActivity::class.java)
@@ -147,11 +158,13 @@ class LoginActivity : AppCompatActivity() {
 
                     if (!foundMatch) {
                         runOnUiThread {
+                            loginButton.isEnabled = true // Re-enable the login button
                             Toast.makeText(this@LoginActivity, "Invalid credentials. Please try again or register.", Toast.LENGTH_SHORT).show()
                         }
                     }
                 } else {
                     runOnUiThread {
+                        loginButton.isEnabled = true // Re-enable the login button
                         Toast.makeText(this@LoginActivity, "Failed to fetch config files", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -209,9 +222,18 @@ class LoginActivity : AppCompatActivity() {
 
                     runOnUiThread {
                         if (aidFoundInDifferentCompany) {
-                            Toast.makeText(this@LoginActivity, "The AID '$aid' is already registered under the company name '$existingCompanyName'. Please use a different AID.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(
+                                this@LoginActivity,
+                                "The AID '$aid' is already registered under the company name '$existingCompanyName'. Please use a different AID.",
+                                Toast.LENGTH_LONG
+                            ).show()
                         } else {
-                            promptForTokenConfigData(companyName, password)
+                            // Go to RegisterActivity for a new registration
+                            val intent = Intent(this@LoginActivity, RegisterActivity::class.java)
+                            intent.putExtra("companyName", companyName)
+                            intent.putExtra("password", password)
+                            intent.putExtra("AID", aid)
+                            startActivity(intent)
                         }
                     }
                 } else {

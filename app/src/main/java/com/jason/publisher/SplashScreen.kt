@@ -30,6 +30,7 @@ import java.util.UUID
 import android.content.SharedPreferences
 import android.os.Build
 import android.os.Environment
+import androidx.annotation.RequiresApi
 import java.io.File
 
 @SuppressLint("CustomSplashScreen")
@@ -154,19 +155,33 @@ class SplashScreen : AppCompatActivity() {
     @SuppressLint("HardwareIds")
     private fun getOrCreateAid(): String {
         val documentsDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vlrshiddenfolder")
+
+        // Check if the directory exists; if not, try to create it
         if (!documentsDir.exists()) {
-            documentsDir.mkdirs()
+            val success = documentsDir.mkdirs()
+            if (!success) {
+                throw RuntimeException("Failed to create directory: ${documentsDir.absolutePath}")
+            }
         }
+
         val aidFile = File(documentsDir, "aid.txt")
 
-        return if (aidFile.exists()) {
-            aidFile.readText()
-        } else {
-            val newAid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-            aidFile.writeText(newAid)
-            newAid
+        // Check if the aid.txt file exists, if not create and write a default AID
+        if (!aidFile.exists()) {
+            val aid = generateNewAid() // Assume this is a function that generates your AID
+            aidFile.writeText(aid)
+            return aid
         }
+
+        // If the file exists, read the AID from the file
+        return aidFile.readText().trim()
     }
+
+    // Example function to generate a new AID if needed
+    private fun generateNewAid(): String {
+        return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+    }
+
 
     /** Check for app updates using the generated UUID. */
     private fun checkForUpdates() {
