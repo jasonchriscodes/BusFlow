@@ -7,6 +7,7 @@ import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.jason.publisher.services.MqttManager
 import okhttp3.Call
@@ -29,7 +30,7 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var loginButton: Button
     private lateinit var backButton: Button
     private lateinit var registerButton: Button
-    private var tokenConfigData = "oRSsbeuqDMSckyckcMyE"
+    private var tokenConfigData = ""
     private var aid: String? = null  // Variable to hold the received AID
     private val client = OkHttpClient()
     private lateinit var mqttManager: MqttManager
@@ -75,11 +76,7 @@ class LoginActivity : AppCompatActivity() {
             val password = passwordEditText.text.toString()
 
             if (companyName.isNotBlank() && password.isNotBlank()) {
-                // Pass the AID to MainActivity
-                val intent = Intent(this, MainActivity::class.java)
-                intent.putExtra("AID", aid)
-                startActivity(intent)
-                finish()
+                checkLoginCredentials(companyName, password)
             } else {
                 Toast.makeText(this, "Please enter both fields", Toast.LENGTH_SHORT).show()
             }
@@ -97,9 +94,277 @@ class LoginActivity : AppCompatActivity() {
             val companyName = companyNameEditText.text.toString()
             val password = passwordEditText.text.toString()
             if (companyName.isNotBlank() && password.isNotBlank()) {
-                fetchConfigAndUpload(companyName, password)
+                checkAndRegisterCompany(companyName, password)
             } else {
                 Toast.makeText(this, "Please enter both fields", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /**
+     * Checks if the given companyName and password exist on the server for login.
+     */
+    private fun checkLoginCredentials(companyName: String, password: String) {
+        val url = "http://43.226.218.98:5000/api/config-files" // Replace with the actual endpoint to list config files
+
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    Toast.makeText(this@LoginActivity, "Failed to connect to the server", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    val responseData = response.body?.string()
+                    val configFiles = JSONArray(responseData)
+
+                    var foundMatch = false
+                    for (i in 0 until configFiles.length()) {
+                        val configFile = configFiles.getJSONObject(i)
+                        val fileCompanyName = configFile.getString("companyName")
+                        val filePassword = configFile.getString("password")
+
+                        if (companyName == fileCompanyName && password == filePassword) {
+                            tokenConfigData = configFile.getString("tokenConfigData")
+                            foundMatch = true
+
+                            runOnUiThread {
+                                // Proceed to MainActivity and pass AID
+                                val intent = Intent(this@LoginActivity, MainActivity::class.java)
+                                intent.putExtra("AID", aid)
+                                startActivity(intent)
+                                finish()
+                            }
+                            break
+                        }
+                    }
+
+                    if (!foundMatch) {
+                        runOnUiThread {
+                            Toast.makeText(this@LoginActivity, "Invalid credentials. Please try again or register.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } else {
+                    runOnUiThread {
+                        Toast.makeText(this@LoginActivity, "Failed to fetch config files", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        })
+    }
+
+    /**
+     * Checks if the given companyName is already registered on the server.
+     * If not, registers the company by uploading the details to the server.
+     * Also checks if the AID is already registered under a different company.
+     */
+    private fun checkAndRegisterCompany(companyName: String, password: String) {
+        val url = "http://43.226.218.98:5000/api/config-files"
+
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    Toast.makeText(this@LoginActivity, "Failed to connect to the server", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    val responseData = response.body?.string()
+                    val configFiles = JSONArray(responseData)
+
+                    var aidFoundInDifferentCompany = false
+                    var existingCompanyName: String? = null
+
+                    for (i in 0 until configFiles.length()) {
+                        val configFile = configFiles.getJSONObject(i)
+                        val fileCompanyName = configFile.getString("companyName")
+                        val busConfigArray = configFile.getJSONArray("busConfig")
+
+                        for (j in 0 until busConfigArray.length()) {
+                            val busConfigObject = busConfigArray.getJSONObject(j)
+                            val registeredAid = busConfigObject.getString("aid")
+                            if (registeredAid == aid) {
+                                if (fileCompanyName != companyName) {
+                                    aidFoundInDifferentCompany = true
+                                    existingCompanyName = fileCompanyName
+                                }
+                                break
+                            }
+                        }
+
+                        if (aidFoundInDifferentCompany) break
+                    }
+
+                    runOnUiThread {
+                        if (aidFoundInDifferentCompany) {
+                            Toast.makeText(this@LoginActivity, "The AID '$aid' is already registered under the company name '$existingCompanyName'. Please use a different AID.", Toast.LENGTH_LONG).show()
+                        } else {
+                            promptForTokenConfigData(companyName, password)
+                        }
+                    }
+                } else {
+                    runOnUiThread {
+                        Toast.makeText(this@LoginActivity, "Error: Unable to fetch configuration data. Please check your network connection or contact support.", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        })
+    }
+
+    /**
+     * Prompts the user to enter tokenConfigData and verifies the aid registration on ThingsBoard.
+     */
+    private fun promptForTokenConfigData(companyName: String, password: String) {
+        // Prompt the user to enter the tokenConfigData
+        val tokenConfigDataInput = EditText(this)
+        tokenConfigDataInput.hint = "Enter Token Config Data"
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Enter Token Config Data")
+            .setView(tokenConfigDataInput)
+            .setPositiveButton("Submit") { _, _ ->
+                val enteredTokenConfigData = tokenConfigDataInput.text.toString().trim()
+                if (enteredTokenConfigData.isNotBlank()) {
+                    // Now verify the entered tokenConfigData
+                    verifyTokenConfigData(enteredTokenConfigData, companyName, password)
+                } else {
+                    Toast.makeText(this, "Token Config Data cannot be empty.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .create()
+        dialog.show()
+    }
+
+    /**
+     * Verifies if the entered tokenConfigData contains the current AID.
+     */
+    private fun verifyTokenConfigData(enteredTokenConfigData: String, companyName: String, password: String) {
+        mqttManager.fetchSharedAttributes(enteredTokenConfigData) { busConfigList ->
+            var aidFound = false
+
+            // Check if the aid is registered in the fetched bus config list
+            for (busItem in busConfigList) {
+                if (busItem.aid == aid) {
+                    aidFound = true
+                    break
+                }
+            }
+
+            runOnUiThread {
+                if (aidFound) {
+                    // Save the tokenConfigData and proceed to register
+                    tokenConfigData = enteredTokenConfigData
+                    fetchConfigAndUpload(companyName, password)
+                } else {
+                    Toast.makeText(this, "The entered tokenConfigData does not contain the AID. Please check and try again.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    /**
+     * Checks if the given companyName and password match any file within the config folder on the server.
+     */
+    private fun checkCompanyNameAndPassword(companyName: String, password: String) {
+        val url = "http://43.226.218.98:5000/api/config-files" // Replace with the actual endpoint to list config files
+
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    Toast.makeText(this@LoginActivity, "Failed to connect to the server", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    val responseData = response.body?.string()
+                    val configFiles = JSONArray(responseData)
+
+                    var foundMatch = false
+                    for (i in 0 until configFiles.length()) {
+                        val configFile = configFiles.getJSONObject(i)
+                        val fileCompanyName = configFile.getString("companyName")
+                        val filePassword = configFile.getString("password")
+
+                        if (companyName == fileCompanyName && password == filePassword) {
+                            tokenConfigData = configFile.getString("tokenConfigData")
+                            fetchSharedAttributes(tokenConfigData) // Fetch shared attributes
+                            foundMatch = true
+                            break
+                        }
+                    }
+
+                    if (!foundMatch) {
+                        runOnUiThread {
+                            Toast.makeText(this@LoginActivity, "Company not found. Please register.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } else {
+                    runOnUiThread {
+                        Toast.makeText(this@LoginActivity, "Failed to fetch config files", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        })
+    }
+
+    /**
+     * Fetches shared attributes from ThingsBoard using the provided tokenConfigData.
+     */
+    private fun fetchSharedAttributes(tokenConfigData: String) {
+        mqttManager.fetchSharedAttributes(tokenConfigData) { busConfigList ->
+            if (busConfigList.isNotEmpty()) {
+                // Create a JSON object with companyName, password, tokenConfigData, and busConfig
+                val dataToUpload = JSONObject().apply {
+                    put("companyName", companyNameEditText.text.toString())
+                    put("password", passwordEditText.text.toString())
+                    put("tokenConfigData", tokenConfigData)
+
+                    // Convert busConfigList to JSONArray
+                    val busConfigArray = JSONArray()
+                    for (busItem in busConfigList) {
+                        val busConfigObject = JSONObject().apply {
+                            put("aid", busItem.aid)
+                            put("bus", busItem.bus)
+                            put("accessToken", busItem.accessToken)
+                        }
+                        busConfigArray.put(busConfigObject)
+                    }
+                    put("busConfig", busConfigArray)
+                }
+
+                // Upload the updated configuration data to the OTA server
+                uploadConfigFile(dataToUpload)
+
+                // After successful update, start MainActivity and pass the AID
+                runOnUiThread {
+                    val intent = Intent(this, MainActivity::class.java)
+                    intent.putExtra("AID", aid) // Passing the AID to MainActivity
+                    startActivity(intent)
+                    finish()
+                }
+            } else {
+                runOnUiThread {
+                    Toast.makeText(this, "Failed to fetch shared attributes", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -112,8 +377,38 @@ class LoginActivity : AppCompatActivity() {
      * @param password The password for the config file.
      */
     private fun fetchConfigAndUpload(companyName: String, password: String) {
+        // Check if tokenConfigData is correct
+        runOnUiThread {
+            Toast.makeText(
+                this@LoginActivity,
+                "tokenConfigData: $tokenConfigData",
+                Toast.LENGTH_LONG
+            ).show()
+        }
         mqttManager.fetchSharedAttributes(tokenConfigData) { busConfigList ->
+            // Add this line to debug the busConfigList
+            runOnUiThread {
+                Toast.makeText(
+                    this@LoginActivity,
+                    "Fetched busConfigList size: ${busConfigList.size}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
             if (busConfigList.isNotEmpty()) {
+                // Check if the AID is already associated with a different company name
+                val existingAid = busConfigList.find { it.aid == aid }
+                if (existingAid != null) {
+                    runOnUiThread {
+                        Toast.makeText(
+                            this@LoginActivity,
+                            "The AID '$aid' is already registered under a different company name. Please use a unique AID.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    return@fetchSharedAttributes
+                }
+
                 // Create the JSON object with companyName, password, tokenConfigData, and busConfig
                 val dataToUpload = JSONObject().apply {
                     put("companyName", companyName)
@@ -137,7 +432,7 @@ class LoginActivity : AppCompatActivity() {
                 uploadConfigFile(dataToUpload)
             } else {
                 runOnUiThread {
-                    Toast.makeText(this, "Failed to fetch config data", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Error: No configuration data found. Please contact support.", Toast.LENGTH_LONG).show()
                 }
             }
         }
