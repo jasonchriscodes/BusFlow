@@ -50,6 +50,8 @@
             android:name=".Contacts.ChatActivity"
             android:exported="false"
             android:screenOrientation="landscape" />
+        <activity android:name=".LoginActivity"></activity>
+        <activity android:name=".RegisterActivity" />
         <activity
             android:name=".MainActivity"
             android:exported="false"

@@ -111,9 +111,14 @@ class MqttManager(
      */
     fun connect(callback: (Boolean) -> Unit) {
         try {
-            mqttClient.connect(connectOptions)
-            Log.d("MqttManager", "MQTT client connected")
-            callback(true)
+            if (!mqttClient.isConnected) {
+                mqttClient.connect(connectOptions)
+                Log.d("MqttManager", "MQTT client connected")
+                callback(true)
+            } else {
+                Log.d("MqttManager", "MQTT client is already connected")
+                callback(true) // Assume success if already connected
+            }
         } catch (e: MqttException) {
             Log.e("MqttManager", "Failed to connect to MQTT broker: ${e.message}", e)
             callback(false)
@@ -121,13 +126,15 @@ class MqttManager(
     }
 
     fun reconnect() {
-        if (!mqttClient.isConnected) {
+        if (mqttClient != null && !mqttClient.isConnected) {
             try {
                 mqttClient.reconnect()
                 Log.d("MqttManager", "MQTT client reconnected")
             } catch (e: MqttException) {
                 Log.e("MqttManager", "Failed to reconnect to MQTT broker: ${e.message}", e)
             }
+        } else {
+            Log.e("MqttManager", "Cannot reconnect, mqttClient is either null or already connected")
         }
     }
 
