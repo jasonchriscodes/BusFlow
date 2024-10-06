@@ -4,191 +4,246 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="com.jason.publisher.MainActivity">
+    tools:context=".MainActivity">
 
+    <!-- Large Map -->
     <org.osmdroid.views.MapView
         android:id="@+id/map"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/rightColumnContainer"
+        app:layout_constraintBottom_toTopOf="@+id/buttonContainer" />
+
+    <!-- Right Column containing 3 boxes -->
+    <LinearLayout
+        android:id="@+id/rightColumnContainer"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/buttonContainer"
+        app:layout_constraintStart_toEndOf="@id/map"
+        android:padding="8dp">
+
+        <!-- Bus Direction Box -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:background="@android:color/white">
+
+            <TextView
+                android:id="@+id/busDirectionTitleTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Bus Direction"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/black" />
+
+            <ImageView
+                android:id="@+id/busDirectionIcon"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_bus_arrow" />
+        </LinearLayout>
+
+        <!-- Bus Telemetry Data Box -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:background="@android:color/white">
+
+            <TextView
+                android:id="@+id/busTelemetryTitleTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Bus Telemetry Data"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/black" />
+
+            <!-- Telemetry Data Views -->
+            <TextView
+                android:id="@+id/bearingTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="16dp"
+                android:text="Bearing: 0.0"
+                android:textSize="16sp"
+                android:textColor="@android:color/black" />
+
+            <TextView
+                android:id="@+id/latitudeTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:text="Latitude: 0.0"
+                android:textSize="16sp"
+                android:textColor="@android:color/black" />
+
+            <TextView
+                android:id="@+id/longitudeTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:text="Longitude: 0.0"
+                android:textSize="16sp"
+                android:textColor="@android:color/black" />
+
+            <TextView
+                android:id="@+id/directionTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:text="Direction: North"
+                android:textSize="16sp"
+                android:textColor="@android:color/black" />
+
+            <TextView
+                android:id="@+id/speedTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:text="Speed: 0.0"
+                android:textSize="16sp"
+                android:textColor="@android:color/black" />
+
+            <TextView
+                android:id="@+id/busNameTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:text="Bus Name: "
+                android:textSize="16sp"
+                android:textColor="@android:color/black" />
+
+            <TextView
+                android:id="@+id/showDepartureTimeTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:text="Show Departure Time: Yes"
+                android:textSize="16sp"
+                android:textColor="@android:color/black" />
+
+            <!-- TextView to display departureTime -->
+            <TextView
+                android:id="@+id/departureTimeTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:text="Departure Time: 00:00:00"
+                android:textSize="16sp"
+                android:textColor="@android:color/black" />
+
+            <TextView
+                android:id="@+id/etaToNextBStopTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:text="ETA to Next Bus Stop: "
+                android:textSize="16sp"
+                android:textColor="@android:color/black" />
+
+            <TextView
+                android:id="@+id/aidTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:text="AID: "
+                android:textSize="16sp"
+                android:textColor="@android:color/black" />
+
+            <TextView
+                android:id="@+id/closestBusStopToPubDeviceTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:text="Closest Bus Stop: "
+                android:textSize="16sp"
+                android:textColor="@android:color/black" />
+        </LinearLayout>
+
+        <!-- Upcoming Road Box -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:background="@android:color/white">
+
+            <TextView
+                android:id="@+id/upcomingRoadTitleTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Upcoming Road"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/black" />
+
+            <TextView
+                android:id="@+id/upcomingRoadTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Waiheke Library, Oneroa, Waiheke Island 1081"
+                android:textColor="@android:color/black" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Network status elements (to be placed above buttons) -->
+    <!-- TextView to show "Attempting to connect..." -->
+    <TextView
+        android:id="@+id/attemptingToConnectTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Attempting to connect"
+        android:textSize="16sp"
+        android:textColor="@android:color/black"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@+id/map"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- ProgressBar to show reconnecting -->
+    <ProgressBar
+        android:id="@+id/reconnectProgressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/attemptingToConnectTextView"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- View to display network status -->
+    <View
+        android:id="@+id/networkStatusIndicator"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_margin="16dp"
+        android:background="@drawable/circle_shape_green"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/feedbackButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="30dp"
-        android:elevation="2dp"
-        android:src="@drawable/ic_feedback"
-        app:backgroundTint="?attr/colorPrimary"
-        app:layout_constraintBottom_toTopOf="@id/popUpButton"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="@id/popUpButton"
-        app:layout_constraintTop_toTopOf="parent"
-        android:contentDescription="Feedback" />
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/popUpButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="30dp"
-        android:contentDescription="NULL"
-        android:elevation="2dp"
-        android:src="@drawable/ic_pop_up"
-        app:backgroundTint="?attr/colorPrimary"
-        app:layout_constraintBottom_toTopOf="@+id/chatButton"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="@+id/chatButton"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.97"
-        android:scaleType="fitCenter" />
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/chatButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="30dp"
-        android:elevation="2dp"
-        android:src="@drawable/ic_chat"
-        app:backgroundTint="?attr/colorPrimary"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.9"
-        android:contentDescription="@string/fab_chat" />
-
-    <!-- Notification badge TextView -->
-    <TextView
-        android:id="@+id/notificationBadge"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="-2dp"
-        android:layout_marginTop="-2dp"
-        android:background="@drawable/badge_background"
-        android:elevation="10dp"
-        android:paddingStart="4dp"
-        android:paddingTop="2dp"
-        android:paddingEnd="4dp"
-        android:paddingBottom="2dp"
-        android:text="@string/dummy_length_chat"
-        android:textColor="#FFFFFF"
-        android:textSize="12sp"
-        app:layout_constraintEnd_toEndOf="@+id/chatButton"
-        app:layout_constraintTop_toTopOf="@+id/chatButton" />
-
-    <!-- TextView to display bearing -->
-    <TextView
-        android:id="@+id/bearingTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
-        android:text="Bearing: 0.0"
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:background="@android:color/white"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <!-- TextView to display latitude -->
-    <TextView
-        android:id="@+id/latitudeTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
-        android:text="Latitude: 0.0"
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:background="@android:color/white"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/bearingTextView" />
-
-    <!-- TextView to display longitude -->
-    <TextView
-        android:id="@+id/longitudeTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
-        android:text="Longitude: 0.0"
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:background="@android:color/white"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/latitudeTextView" />
-
-    <!-- TextView to display direction -->
-    <TextView
-        android:id="@+id/directionTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
-        android:text="Direction: North"
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:background="@android:color/white"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/longitudeTextView" />
-
-    <!-- TextView to display speed -->
-    <TextView
-        android:id="@+id/speedTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
-        android:text="Speed: 0.0"
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:background="@android:color/white"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/directionTextView" />
-
-    <!-- TextView to display bus name -->
-    <TextView
-        android:id="@+id/busNameTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
-        android:text="Bus Name: "
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:background="@android:color/white"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/speedTextView" />
-
-    <!-- TextView to display showDepartureTime -->
-    <TextView
-        android:id="@+id/showDepartureTimeTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
-        android:text="Show Departure Time: Yes"
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:background="@android:color/white"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/busNameTextView" />
-
-    <!-- TextView to display departureTime -->
-    <TextView
-        android:id="@+id/departureTimeTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
-        android:text="Departure Time: 00:00:00"
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:background="@android:color/white"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/showDepartureTimeTextView" />
 
     <!-- TextView to display connection status -->
     <TextView
@@ -203,84 +258,43 @@
         app:layout_constraintTop_toTopOf="@id/networkStatusIndicator"
         app:layout_constraintBottom_toBottomOf="@id/networkStatusIndicator" />
 
-    <!-- View to display network status -->
-    <View
-        android:id="@+id/networkStatusIndicator"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
-        android:layout_margin="16dp"
-        android:background="@drawable/circle_shape_green"
+    <!-- Button Container (Bottom) -->
+    <LinearLayout
+        android:id="@+id/buttonContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:gravity="center">
 
-    <!-- ProgressBar to show reconnecting -->
-    <ProgressBar
-        android:id="@+id/reconnectProgressBar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:visibility="gone"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/attemptingToConnectTextView" />
+        <!-- Pop Up Button -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/popUpButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_pop_up"
+            app:backgroundTint="?attr/colorPrimary" />
 
-    <!-- TextView to show "Attempting to connect..." -->
-    <TextView
-        android:id="@+id/attemptingToConnectTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Attempting to connect"
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:visibility="gone"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        <!-- Chat Button -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/chatButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_chat"
+            app:backgroundTint="?attr/colorPrimary" />
 
-    <!-- TextView to display ETA to Next Bus Stop -->
-    <TextView
-        android:id="@+id/etaToNextBStopTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
-        android:text="ETA to Next Bus Stop: "
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:background="@android:color/white"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/departureTimeTextView" />
+        <!-- Feedback Button -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/feedbackButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_feedback"
+            app:backgroundTint="?attr/colorPrimary" />
+    </LinearLayout>
 
-    <!-- TextView to display AID -->
-    <TextView
-        android:id="@+id/aidTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
-        android:text="AID: "
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:background="@android:color/white"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/etaToNextBStopTextView" />
-
-    <!-- TextView to Closest Bus Stop -->
-    <TextView
-        android:id="@+id/closestBusStopToPubDeviceTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
-        android:text="closestBusStopToPubDevice: "
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:background="@android:color/white"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/aidTextView" />
-
-    <!-- TextView to display app version -->
+    <!-- Version TextView (Bottom-Right) -->
     <TextView
         android:id="@+id/versionTextView"
         android:layout_width="wrap_content"
@@ -292,5 +306,4 @@
         android:textColor="@android:color/black"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
-
 </androidx.constraintlayout.widget.ConstraintLayout>

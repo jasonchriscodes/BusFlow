@@ -63,6 +63,7 @@ import java.lang.Math.atan2
 import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.view.View
+import android.widget.ImageView
 import android.widget.ProgressBar
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -96,6 +97,11 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private lateinit var etaToNextBStopTextView: TextView
     private lateinit var aidTextView: TextView
     private lateinit var closestBusStopToPubDeviceTextView: TextView
+    private lateinit var busDirectionTitleTextView: TextView
+    private lateinit var busDirectionIcon: ImageView
+    private lateinit var busTelemetryTitleTextView: TextView
+    private lateinit var upcomingRoadTitleTextView: TextView
+    private lateinit var upcomingRoadTextView: TextView
 
     private var lastLatitude = 0.0
     private var lastLongitude = 0.0
@@ -110,6 +116,10 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     private var aid = ""
     private var etaToNextBStop = ""
     private var closestBusStopToPubDevice = "none"
+    private var busDirectionTitle = "Bus Direction"
+    private var busTelemetryTitle = "Bus Telemetry Data"
+    private var bupcomingRoadTitle = "Upcoming Road"
+    private var upcomingRoadText = "Waiheke Library, Oneroa, Waiheke Island 1081"
 
     private var lastMessage = ""
     private var totalMessage = 0
@@ -242,6 +252,10 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         attemptingToConnectTextView = findViewById(R.id.attemptingToConnectTextView)
         aidTextView = findViewById(R.id.aidTextView)
         closestBusStopToPubDeviceTextView = findViewById(R.id.closestBusStopToPubDeviceTextView)
+        busDirectionTitleTextView = findViewById(R.id.busDirectionTitleTextView)
+        busTelemetryTitleTextView = findViewById(R.id.busTelemetryTitleTextView)
+        upcomingRoadTitleTextView = findViewById(R.id.upcomingRoadTitleTextView)
+        upcomingRoadTextView = findViewById(R.id.upcomingRoadTextView)
     }
 
     /**
@@ -715,6 +729,10 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         etaToNextBStopTextView.text = "etaToNextBStop: $etaToNextBStop"
         aidTextView.text = "AID: $aid"
         closestBusStopToPubDeviceTextView.text = "closestBusStopToPubDevice: $closestBusStopToPubDevice"
+        busDirectionTitleTextView.text = "$busDirectionTitle"
+        busTelemetryTitleTextView.text = "$busTelemetryTitle"
+        upcomingRoadTitleTextView.text = "$bupcomingRoadTitle"
+        upcomingRoadTextView.text = "$upcomingRoadText"
     }
 
     /**
@@ -1082,7 +1100,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      */
     private fun getMessageCount() {
         totalMessage = sharedPrefMananger.getMessageList(MSG_KEY).size
-        binding.notificationBadge.text = totalMessage.toString()
+//        binding.notificationBadge.text = totalMessage.toString()
     }
 
     /**
