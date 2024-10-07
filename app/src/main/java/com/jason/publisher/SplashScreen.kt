@@ -79,6 +79,8 @@ class SplashScreen : AppCompatActivity() {
         logoExplorer.startAnimation(animation)
         logoFullers.startAnimation(animation)
 
+        checkForUpdates()
+
         showOptionDialog()
     }
 
@@ -132,7 +134,7 @@ class SplashScreen : AppCompatActivity() {
                 if (Environment.isExternalStorageManager()) {
                     // Permission granted, proceed with file operations
                     getOrCreateAid()
-                    checkForUpdates()
+                    locationManager.checkLocationPermission()
                 } else {
                     // Permission denied
                     Toast.makeText(this, "Manage external storage permission denied", Toast.LENGTH_SHORT).show()
@@ -342,7 +344,6 @@ class SplashScreen : AppCompatActivity() {
         builder.setMessage("Your version $version is up to date.")
         builder.setPositiveButton("OK") { dialog, _ ->
             dialog.dismiss()
-            locationManager.checkLocationPermission()
         }
         builder.setCancelable(false)
         builder.show()
@@ -356,7 +357,6 @@ class SplashScreen : AppCompatActivity() {
 
         builder.setNegativeButton("Cancel") { dialog, _ ->
             dialog.dismiss()
-            locationManager.checkLocationPermission()
         }
 
         builder.setPositiveButton("Update") { dialog, _ ->
