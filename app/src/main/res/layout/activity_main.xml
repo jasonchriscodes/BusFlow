@@ -277,6 +277,23 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:paddingStart="16dp">
 
+        <!-- Logout Button - Rectangular -->
+        <FrameLayout
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_margin="8dp">
+
+            <!-- Use the image as a button -->
+            <ImageButton
+                android:id="@+id/logoutButton"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@null"
+                android:src="@drawable/ic_logout"
+                android:scaleType="fitCenter"
+                android:contentDescription="Logout" />
+        </FrameLayout>
+
         <!-- Pop Up Button - Rectangular -->
         <Button
             android:id="@+id/popUpButton"
@@ -307,6 +324,7 @@
             android:textColor="@android:color/white"
             android:layout_margin="8dp" />
     </LinearLayout>
+
 
     <!-- Version TextView (Bottom-Right) -->
     <TextView
