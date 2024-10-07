@@ -31,7 +31,8 @@
         <!-- Bus Direction Box -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="0dp"
+            android:layout_weight="1"
             android:orientation="vertical"
             android:padding="8dp"
             android:background="@android:color/white">
@@ -56,7 +57,8 @@
         <!-- Bus Telemetry Data Box -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="0dp"
+            android:layout_weight="1"
             android:orientation="vertical"
             android:padding="8dp"
             android:background="@android:color/white">
@@ -186,7 +188,8 @@
         <!-- Upcoming Road Box -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="0dp"
+            android:layout_weight="1"
             android:orientation="vertical"
             android:padding="8dp"
             android:background="@android:color/white">
@@ -209,7 +212,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Network status elements (to be placed above buttons) -->
+    <!-- Network status elements -->
     <!-- TextView to show "Attempting to connect..." -->
     <TextView
         android:id="@+id/attemptingToConnectTextView"
@@ -235,7 +238,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
-    <!-- View to display network status -->
     <View
         android:id="@+id/networkStatusIndicator"
         android:layout_width="24dp"
