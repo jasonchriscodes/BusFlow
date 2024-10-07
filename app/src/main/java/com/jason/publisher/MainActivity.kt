@@ -231,6 +231,20 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
             intent.putExtra("TOKEN", token)  // Pass the token to FeedbackActivity
             startActivity(intent)
         }
+
+        // Set click listerner for logout button
+        binding.logoutButton.setOnClickListener {
+            handleLogout()
+        }
+    }
+
+    /**
+     * Handles the logout action
+     */
+    private fun handleLogout(){
+        val intent = Intent(this, SplashScreen::class.java)
+        startActivity(intent)
+        finish()
     }
 
     /**
