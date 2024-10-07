@@ -122,19 +122,29 @@ class MqttManager(
         } catch (e: MqttException) {
             Log.e("MqttManager", "Failed to connect to MQTT broker: ${e.message}", e)
             callback(false)
+        } catch (e: NullPointerException) {
+            Log.e("MqttManager", "MQTT client is not initialized: ${e.message}", e)
+            callback(false)
         }
     }
 
+    /**
+     * Reconnects to the MQTT broker and executes the callback on success or failure.
+     *
+     * @param callback The callback to execute after attempting to connect.
+     */
     fun reconnect() {
-        if (mqttClient != null && !mqttClient.isConnected) {
-            try {
+        try {
+            if (mqttClient.isConnected) {
+                Log.d("MqttManager", "MQTT client is already connected, no need to reconnect.")
+            } else {
                 mqttClient.reconnect()
-                Log.d("MqttManager", "MQTT client reconnected")
-            } catch (e: MqttException) {
-                Log.e("MqttManager", "Failed to reconnect to MQTT broker: ${e.message}", e)
+                Log.d("MqttManager", "MQTT client reconnected successfully.")
             }
-        } else {
-            Log.e("MqttManager", "Cannot reconnect, mqttClient is either null or already connected")
+        } catch (e: MqttException) {
+            Log.e("MqttManager", "Failed to reconnect to MQTT broker: ${e.message}", e)
+        } catch (e: NullPointerException) {
+            Log.e("MqttManager", "MQTT client is not initialized: ${e.message}", e)
         }
     }
 
