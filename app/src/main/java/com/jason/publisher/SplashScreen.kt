@@ -58,6 +58,7 @@ class SplashScreen : AppCompatActivity() {
 
         // Check and request permission
         checkAndRequestStoragePermission()
+//        checkLocationPermission()
 
         Log.d("version name", "test v1.0.38")
         requestStoragePermissions()
@@ -69,7 +70,7 @@ class SplashScreen : AppCompatActivity() {
         // Initialize shared preference manager and location manager
         sharedPrefManager = SharedPrefMananger(this)
         locationManager = LocationManager(this)
-        startLocationUpdate()
+//        startLocationUpdate()
 
         // Start the animation for the splash screen
         val logoExplorer = findViewById<ImageView>(R.id.logoExplorer)
@@ -77,9 +78,6 @@ class SplashScreen : AppCompatActivity() {
         val animation = AnimationUtils.loadAnimation(this, R.anim.fade_in)
         logoExplorer.startAnimation(animation)
         logoFullers.startAnimation(animation)
-
-        // Check for updates based on UUID
-        checkForUpdates()
 
         showOptionDialog()
     }
@@ -134,6 +132,7 @@ class SplashScreen : AppCompatActivity() {
                 if (Environment.isExternalStorageManager()) {
                     // Permission granted, proceed with file operations
                     getOrCreateAid()
+                    checkForUpdates()
                 } else {
                     // Permission denied
                     Toast.makeText(this, "Manage external storage permission denied", Toast.LENGTH_SHORT).show()
@@ -271,8 +270,8 @@ class SplashScreen : AppCompatActivity() {
         val whoAmIButton = dialogView.findViewById<Button>(R.id.whoAmIButton)
 
         onlineModeButton.setOnClickListener {
-            proceedToMainActivity()
             optionDialog?.dismiss()  // Dismiss the dialog before transitioning
+            proceedToMainActivity()
         }
 
         offlineModeButton.setOnClickListener {
@@ -343,6 +342,7 @@ class SplashScreen : AppCompatActivity() {
         builder.setMessage("Your version $version is up to date.")
         builder.setPositiveButton("OK") { dialog, _ ->
             dialog.dismiss()
+            locationManager.checkLocationPermission()
         }
         builder.setCancelable(false)
         builder.show()
@@ -356,6 +356,7 @@ class SplashScreen : AppCompatActivity() {
 
         builder.setNegativeButton("Cancel") { dialog, _ ->
             dialog.dismiss()
+            locationManager.checkLocationPermission()
         }
 
         builder.setPositiveButton("Update") { dialog, _ ->
@@ -414,30 +415,6 @@ class SplashScreen : AppCompatActivity() {
         })
     }
 
-    /** Start location updates if permissions are granted. */
-    private fun startLocationUpdate() {
-        if (ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        ) {
-            locationManager.startLocationUpdates(object : LocationListener {
-                override fun onLocationUpdate(location: Location) {
-                    latitude = location.latitude
-                    longitude = location.longitude
-                    bearing = location.bearing
-                    speed = location.speed
-                    direction = Helper.bearingToDirection(location.bearing)
-                }
-            })
-        } else {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                123
-            )
-        }
-    }
     override fun onDestroy() {
         optionDialog?.dismiss() // Dismiss the dialog to prevent leaks
         super.onDestroy()

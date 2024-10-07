@@ -55,7 +55,7 @@ class LocationManager(private val context: Context) {
     /**
      * Checks if the location permission is granted. If not, it requests the permission and keeps prompting until the user grants it.
      */
-    private fun checkLocationPermission() {
+    fun checkLocationPermission() {
         if (ActivityCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -93,21 +93,6 @@ class LocationManager(private val context: Context) {
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
                 123
             )
-            showRestartAppPrompt()
-        }
-        builder.show()
-    }
-
-    /**
-     * Displays a dialog prompting the user to restart the app to apply changes.
-     */
-    private fun showRestartAppPrompt() {
-        val builder = AlertDialog.Builder(context)
-        builder.setTitle("Restart Required")
-        builder.setMessage("Please restart the app to apply the changes.")
-        builder.setCancelable(false)
-        builder.setPositiveButton("OK") { dialog, _ ->
-            dialog.dismiss()
         }
         builder.show()
     }
