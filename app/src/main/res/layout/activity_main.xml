@@ -13,8 +13,9 @@
         android:layout_height="0dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/buttonContainer"
         app:layout_constraintEnd_toStartOf="@+id/rightColumnContainer"
-        app:layout_constraintBottom_toTopOf="@+id/buttonContainer" />
+        app:layout_constraintHorizontal_weight="4" />
 
     <!-- Right Column containing 3 boxes -->
     <LinearLayout
@@ -25,17 +26,20 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toTopOf="@+id/buttonContainer"
-        app:layout_constraintStart_toEndOf="@id/map"
-        android:padding="8dp">
+        app:layout_constraintStart_toEndOf="@+id/map"
+        app:layout_constraintHorizontal_weight="2"
+        android:padding="8dp"
+        android:background="@android:color/white">
 
         <!-- Bus Direction Box -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
+            android:layout_weight="1.5"
             android:orientation="vertical"
             android:padding="8dp"
-            android:background="@android:color/white">
+            android:background="@drawable/border"
+            android:layout_marginBottom="16dp">
 
             <TextView
                 android:id="@+id/busDirectionTitleTextView"
@@ -58,10 +62,11 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
+            android:layout_weight="3"
             android:orientation="vertical"
             android:padding="8dp"
-            android:background="@android:color/white">
+            android:background="@drawable/border"
+            android:layout_marginBottom="16dp">
 
             <TextView
                 android:id="@+id/busTelemetryTitleTextView"
@@ -192,7 +197,7 @@
             android:layout_weight="1"
             android:orientation="vertical"
             android:padding="8dp"
-            android:background="@android:color/white">
+            android:background="@drawable/border">
 
             <TextView
                 android:id="@+id/upcomingRoadTitleTextView"
@@ -266,34 +271,41 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:gravity="start"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:gravity="center">
+        android:paddingStart="16dp">
 
-        <!-- Pop Up Button -->
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
+        <!-- Pop Up Button - Rectangular -->
+        <Button
             android:id="@+id/popUpButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:src="@drawable/ic_pop_up"
-            app:backgroundTint="?attr/colorPrimary" />
+            android:text="Set Departure Time"
+            android:background="@color/purple_500"
+            android:textColor="@android:color/white"
+            android:layout_margin="8dp" />
 
-        <!-- Chat Button -->
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
+        <!-- Chat Button - Rectangular -->
+        <Button
             android:id="@+id/chatButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:src="@drawable/ic_chat"
-            app:backgroundTint="?attr/colorPrimary" />
+            android:text="Notify Operator"
+            android:background="@color/teal_700"
+            android:textColor="@android:color/white"
+            android:layout_margin="8dp" />
 
-        <!-- Feedback Button -->
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
+        <!-- Feedback Button - Rectangular -->
+        <Button
             android:id="@+id/feedbackButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:src="@drawable/ic_feedback"
-            app:backgroundTint="?attr/colorPrimary" />
+            android:text="Give Us Feedback"
+            android:background="@android:color/darker_gray"
+            android:textColor="@android:color/white"
+            android:layout_margin="8dp" />
     </LinearLayout>
 
     <!-- Version TextView (Bottom-Right) -->
