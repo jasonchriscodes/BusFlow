@@ -726,7 +726,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 
         // Initialize and set up the red arrow for the current device
         busMarker = Marker(binding.map).apply {
-            icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow, null)
+            icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)
             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
             // Ensure the marker is always on top
             setPanToView(true)
@@ -1080,7 +1080,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                                 var marker = markerBus[token]
                                 if (marker == null) {
                                     marker = Marker(binding.map).apply {
-                                        icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow2, null)
+                                        icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol2, null)
                                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                                     }
                                     markerBus[token] = marker

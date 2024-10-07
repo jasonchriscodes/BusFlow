@@ -50,7 +50,7 @@
                 android:layout_width="64dp"
                 android:layout_height="64dp"
                 android:layout_gravity="center"
-                android:src="@drawable/ic_bus_arrow" />
+                android:src="@drawable/ic_bus_symbol" />
         </LinearLayout>
 
         <!-- Bus Telemetry Data Box -->

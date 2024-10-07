@@ -237,25 +237,25 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      * Initialize UI components and assign them to the corresponding views.
      */
     private fun initializeUIComponents() {
-        bearingTextView = findViewById(R.id.bearingTextView)
-        latitudeTextView = findViewById(R.id.latitudeTextView)
-        longitudeTextView = findViewById(R.id.longitudeTextView)
-        directionTextView = findViewById(R.id.directionTextView)
-        speedTextView = findViewById(R.id.speedTextView)
-        busNameTextView = findViewById(R.id.busNameTextView)
-        showDepartureTimeTextView = findViewById(R.id.showDepartureTimeTextView)
-        departureTimeTextView = findViewById(R.id.departureTimeTextView)
-        etaToNextBStopTextView = findViewById(R.id.etaToNextBStopTextView)
-        networkStatusIndicator = findViewById(R.id.networkStatusIndicator)
-        reconnectProgressBar = findViewById(R.id.reconnectProgressBar)
-        connectionStatusTextView = findViewById(R.id.connectionStatusTextView)
-        attemptingToConnectTextView = findViewById(R.id.attemptingToConnectTextView)
-        aidTextView = findViewById(R.id.aidTextView)
-        closestBusStopToPubDeviceTextView = findViewById(R.id.closestBusStopToPubDeviceTextView)
-        busDirectionTitleTextView = findViewById(R.id.busDirectionTitleTextView)
-        busTelemetryTitleTextView = findViewById(R.id.busTelemetryTitleTextView)
-        upcomingRoadTitleTextView = findViewById(R.id.upcomingRoadTitleTextView)
-        upcomingRoadTextView = findViewById(R.id.upcomingRoadTextView)
+        bearingTextView = binding.bearingTextView
+        latitudeTextView = binding.latitudeTextView
+        longitudeTextView = binding.longitudeTextView
+        directionTextView = binding.directionTextView
+        speedTextView = binding.speedTextView
+        busNameTextView = binding.busNameTextView
+        showDepartureTimeTextView = binding.showDepartureTimeTextView
+        departureTimeTextView = binding.departureTimeTextView
+        etaToNextBStopTextView = binding.etaToNextBStopTextView
+        networkStatusIndicator = binding.networkStatusIndicator
+        reconnectProgressBar = binding.reconnectProgressBar
+        connectionStatusTextView = binding.connectionStatusTextView
+        attemptingToConnectTextView = binding.attemptingToConnectTextView
+        aidTextView = binding.aidTextView
+        closestBusStopToPubDeviceTextView = binding.closestBusStopToPubDeviceTextView
+        busDirectionTitleTextView = binding.busDirectionTitleTextView
+        busTelemetryTitleTextView = binding.busTelemetryTitleTextView
+        upcomingRoadTitleTextView = binding.upcomingRoadTitleTextView
+        upcomingRoadTextView = binding.upcomingRoadTextView
     }
 
     /**
@@ -745,7 +745,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         val center = GeoPoint(lat, lon)
 
         val marker = Marker(binding.map)
-        marker.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow, null) // Use custom drawable
+        marker.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null) // Use custom drawable
         marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
 
         mapController = binding.map.controller as MapController
@@ -1018,7 +1018,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
 //        Toast.makeText(this, "arrBusDataOnline2: ${arrBusData}", Toast.LENGTH_SHORT).show()
         for (bus in arrBusData) {
             markerBus[bus.accessToken] = Marker(binding.map)
-            markerBus[bus.accessToken]!!.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_arrow2, null)
+            markerBus[bus.accessToken]!!.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol2, null)
             markerBus[bus.accessToken]!!.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
         }
     }
