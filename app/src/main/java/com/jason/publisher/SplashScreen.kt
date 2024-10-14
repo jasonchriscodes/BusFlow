@@ -31,6 +31,9 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.os.Environment
 import androidx.annotation.RequiresApi
+import androidx.core.content.FileProvider
+import okio.buffer
+import okio.sink
 import java.io.File
 
 @SuppressLint("CustomSplashScreen")
@@ -369,23 +372,94 @@ class SplashScreen : AppCompatActivity() {
         builder.show()
     }
 
-    /** Show a prompt asking the user to uninstall the current app and download the latest version from the browser. */
+    /**
+     * Shows a dialog prompting the user to download and install the latest APK.
+     */
     private fun showUninstallPrompt() {
         val builder = AlertDialog.Builder(this)
-        builder.setTitle("Uninstall and Download")
-        builder.setMessage("To update to the latest version, please download the latest one from the browser.")
+        builder.setTitle("Update Available")
+        builder.setMessage("A new version is available. Do you want to download and install the update?")
 
-        builder.setPositiveButton("OK") { dialog, _ ->
+        builder.setPositiveButton("Download and Install") { dialog, _ ->
             dialog.dismiss()
-            // Redirect to browser to download the latest APK
-            val apkDownloadUrl = "http://43.226.218.98:5000/api/download-latest-apk"
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(apkDownloadUrl))
-            startActivity(intent)
+            downloadAndInstallApk("http://43.226.218.98:5000/api/download-latest-apk")
+        }
+
+        builder.setNegativeButton("Cancel") { dialog, _ ->
+            dialog.dismiss()
         }
 
         builder.setCancelable(false)
         builder.show()
     }
+
+    /**
+     * Downloads the APK from the given URL and triggers the installation process.
+     *
+     * @param apkUrl The URL to download the APK from.
+     */
+    private fun downloadAndInstallApk(apkUrl: String) {
+        // Request the APK file from the server
+        val request = Request.Builder()
+            .url(apkUrl)
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            /**
+             * Called when the APK download fails.
+             */
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    Toast.makeText(this@SplashScreen, "Failed to download APK", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            /**
+             * Called when the APK download succeeds.
+             */
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    val apkFile = File(getExternalFilesDir(null), "update.apk")
+                    val sink = apkFile.sink().buffer()
+
+                    // Write the APK file to disk
+                    response.body?.source()?.let {
+                        sink.writeAll(it)
+                        sink.close()
+
+                        // Once downloaded, trigger the installation
+                        runOnUiThread {
+                            installApk(apkFile)
+                        }
+                    }
+                } else {
+                    runOnUiThread {
+                        Toast.makeText(this@SplashScreen, "Error downloading APK", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        })
+    }
+
+    /**
+     * Installs the APK file by launching an Intent to the package installer.
+     *
+     * @param apkFile The APK file to install.
+     */
+    private fun installApk(apkFile: File) {
+        val intent = Intent(Intent.ACTION_VIEW)
+        val apkUri = FileProvider.getUriForFile(
+            this,
+            "${BuildConfig.APPLICATION_ID}.provider",
+            apkFile
+        )
+
+        intent.setDataAndType(apkUri, "application/vnd.android.package-archive")
+        intent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
+
+        startActivity(intent)
+    }
+
 
     /** Update the current folder on the server with the latest version for the device UUID. */
     private fun updateCurrentVersionOnServer() {
