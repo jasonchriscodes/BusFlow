@@ -373,7 +373,7 @@ class SplashScreen : AppCompatActivity() {
     private fun showUninstallPrompt() {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Uninstall and Download")
-        builder.setMessage("To update to the latest version, please uninstall the current app and download the latest one from the browser.")
+        builder.setMessage("To update to the latest version, please download the latest one from the browser.")
 
         builder.setPositiveButton("OK") { dialog, _ ->
             dialog.dismiss()
