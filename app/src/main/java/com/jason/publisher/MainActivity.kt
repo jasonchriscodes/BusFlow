@@ -185,8 +185,8 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         })
 
         // Fetch and initialize config
-        fetchConfig {
-            if (it) {
+        fetchConfig { success ->
+            if (success) {
                 // Get access token for MQTT connection
                 getAccessToken()
                 mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
