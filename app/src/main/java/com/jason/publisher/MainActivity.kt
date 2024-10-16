@@ -200,6 +200,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
             }
         }
 
+        Log.d("Oncreate config", config.toString())
         getDefaultConfigValue()
         getMessageCount()
         startLocationUpdate()
@@ -422,18 +423,18 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      * Calls the provided callback with true if successful, false otherwise.
      */
     private fun fetchConfig(callback: (Boolean) -> Unit) {
-        Log.d("MainActivity", "Fetching config...")
+        Log.d("MainActivity fetchConfig", "Fetching config...")
         mqttManager.fetchSharedAttributes(tokenConfigData) { listConfig ->
             if (listConfig.isNotEmpty()) {
                 config = listConfig
-                Log.d("MainActivity", "Config received: $config")
+                Log.d("MainActivity fetchConfig", "Config received: $config")
                 runOnUiThread {
                     Toast.makeText(this, "Config initialized successfully", Toast.LENGTH_SHORT).show()
                 }
                 callback(true)
             } else {
                 config = emptyList()
-                Log.e("MainActivity", "Failed to initialize config. No bus information available.")
+                Log.e("MainActivity fetchConfig", "Failed to initialize config. No bus information available.")
                 runOnUiThread {
                     Toast.makeText(this, "Failed to initialize config. No bus information available.", Toast.LENGTH_SHORT).show()
                 }
@@ -448,6 +449,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     @SuppressLint("HardwareIds")
     private fun getAccessToken() {
         val listConfig = config
+        Log.d("getAccessToken config", config.toString())
         for (configItem in listConfig.orEmpty()) {
             if (configItem.aid == aid) {
                 token = configItem.accessToken
@@ -529,10 +531,11 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
             runOnUiThread {
                 val gson = Gson()
                 val data = gson.fromJson(message, Bus::class.java)
+
                 config = data.shared?.config?.busConfig
                 arrBusData = config.orEmpty() // Ensure arrBusData is assigned
-                Log.d("config subscribeSharedData", config.toString())
-                Log.d("arrBusData subscribeSharedData", arrBusData.toString())
+                Log.d("subscribeSharedData config", config.toString())
+                Log.d("subscribeSharedData arrBusData", arrBusData.toString())
 
                 if (config.isNullOrEmpty()) {
                     Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
@@ -1025,13 +1028,18 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         direction = intent.getStringExtra("dir").toString()
         lastMessage = sharedPrefMananger.getString(LAST_MSG_KEY, "").toString()
 
-        busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
+//        busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
 //        Toast.makeText(this, "arrBusDataOnline1: ${arrBusData}", Toast.LENGTH_SHORT).show()
+        Log.d("getDefaultConfigValue busConfig", arrBusData.toString())
+        Log.d("getDefaultConfigValue arrBusDataOnline1", arrBusData.toString())
+        Log.d("getDefaultConfigValue config", config.toString())
         arrBusData = config!!
         arrBusData = arrBusData.filter { it.aid != aid }
-//        Toast.makeText(this, "arrBusDataOnline2: ${arrBusData}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "getDefaultConfigValue arrBusDataOnline2: ${arrBusData}", Toast.LENGTH_SHORT).show()
+        Log.d("getDefaultConfigValue arrBusDataOnline2", arrBusData.toString())
         for (bus in arrBusData) {
             markerBus[bus.accessToken] = Marker(binding.map)
+            Log.d("getDefaultConfigValue MarkerDrawable", "Bus symbol drawable applied")
             markerBus[bus.accessToken]!!.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol2, null)
             markerBus[bus.accessToken]!!.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
         }
