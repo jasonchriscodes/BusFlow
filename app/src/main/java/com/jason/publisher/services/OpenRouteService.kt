@@ -50,7 +50,9 @@ class OpenRouteService {
             originLatitude: Double, originLongitude: Double,
             destinationLatitude: Double, destinationLongitude: Double
         ): String = withContext(Dispatchers.IO) {
-            val url = "https://api.openrouteservice.org/v2/directions/driving-car"
+//            val url = "https://api.openrouteservice.org/v2/directions/driving-car"
+            val url = "http://43.226.218.99:8080/ors/v2/directions/driving-car"
+
 
             // Construct the coordinates array
             val coordinates = JSONArray().apply {
