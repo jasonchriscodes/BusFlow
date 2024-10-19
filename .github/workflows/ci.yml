@@ -46,12 +46,11 @@ jobs:
         run: |
           # Remove dots from versionName to create versionCode
           version_code=$(echo "$new_version" | sed 's/\.//g')
-          new_version_code=$((version_code + 1))
           
-          sed -i "s/versionCode .*/versionCode $new_version_code/" app/build.gradle
+          sed -i "s/versionCode .*/versionCode version_code/" app/build.gradle
           sed -i "s/versionName \".*\"/versionName \"$new_version\"/" app/build.gradle
           
-          echo "Updated versionCode: $new_version_code"
+          echo "Updated versionCode: version_code"
           echo "Updated versionName: $new_version"
           
           grep "versionCode\|versionName" app/build.gradle
@@ -67,12 +66,12 @@ jobs:
               }'
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleRelease
 
       - name: Upload APK using Flask API
         run: |
           response=$(curl -X POST "http://43.226.218.98:5000/api/upload-apk" \
-            -F "file=@app/build/outputs/apk/debug/app-debug.apk" \
+            -F "file=@app/release/app-release.apk" \
             -F "version=${new_version}" \
             -F "release_notes=Auto incremented version")
           echo "Upload response: $response"
