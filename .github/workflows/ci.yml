@@ -66,12 +66,12 @@ jobs:
               }'
 
       - name: Build Debug APK
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleDebug
 
       - name: Upload APK using Flask API
         run: |
           response=$(curl -X POST "http://43.226.218.98:5000/api/upload-apk" \
-            -F "file=@app/release/app-release.apk" \
+            -F "file=@app/build/outputs/apk/debug/app-debug.apk" \
             -F "version=${new_version}" \
             -F "release_notes=Auto incremented version")
           echo "Upload response: $response"

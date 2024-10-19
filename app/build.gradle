@@ -37,8 +37,8 @@ android {
         applicationId "com.jason.publisher"
         minSdk 21
         targetSdk 33
-        versionCode 2
-        versionName "1.0.2"
+        versionCode 1
+        versionName "1.0.1"
 
         buildConfigField "String", "TOMTOM_API_KEY", "\"${tomtomApiKey}\""
         buildConfigField "String", "GOOGLE_API_KEY", "\"${googleApiKey}\""
