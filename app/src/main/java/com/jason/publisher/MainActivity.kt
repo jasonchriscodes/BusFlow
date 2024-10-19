@@ -69,9 +69,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 
-class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
+class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var mqttManagerConfig: MqttManager
     private lateinit var mqttManager: MqttManager
     private lateinit var locationManager: LocationManager
     private lateinit var sharedPrefMananger: SharedPrefMananger
@@ -151,7 +152,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         Log.d("AID in MainActivity", aid)
 
         // Initialize mqttManager before using it
-        mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = tokenConfigData)
+        mqttManagerConfig = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = tokenConfigData)
 
         // Fetch the latest version from the server and update the versionTextView
         fetchLatestVersion()
@@ -187,12 +188,47 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         // Fetch and initialize config
         fetchConfig { success ->
             if (success) {
+                Log.d("Token Main", token)
+                mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
                 // Get access token for MQTT connection
                 getAccessToken()
-                mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
+                getDefaultConfigValue()
+                requestAdminMessage()
 
                 // Connect and subscribe to MQTT after config is fetched
                 connectAndSubscribe()
+                networkReceiver = NetworkReceiver(object : NetworkReceiver.NetworkListener {
+                    /**
+                     * Called when the network becomes available.
+                     * Reconnects the MQTT manager and updates the network status indicator.
+                     */
+                    override fun onNetworkAvailable() {
+                        mqttManager.reconnect()
+                        runOnUiThread {
+                            networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_green)
+                            reconnectProgressBar.visibility = View.GONE
+                            attemptingToConnectTextView.visibility = View.GONE
+                            connectionStatusTextView.text = "Connected"
+                            handler.removeCallbacks(fiveDotRunnable)
+                        }
+                    }
+
+                    /**
+                     * Called when the network becomes unavailable.
+                     * Shows the reconnect spinner and updates the network status indicator.
+                     */
+                    override fun onNetworkUnavailable() {
+                        runOnUiThread {
+                            networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_red)
+                            reconnectProgressBar.visibility = View.VISIBLE
+                            attemptingToConnectTextView.visibility = View.VISIBLE
+                            connectionStatusTextView.text = "Disconnected"
+                            startFiveDotAnimation()
+                        }
+                    }
+                })
+                val intentFilter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
+                registerReceiver(networkReceiver, intentFilter)
             } else {
                 // Handle config initialization failure
                 Toast.makeText(this, "Failed to initialize config. No bus information available.", Toast.LENGTH_SHORT).show()
@@ -201,10 +237,8 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         }
 
         Log.d("Oncreate config", config.toString())
-        getDefaultConfigValue()
         getMessageCount()
         startLocationUpdate()
-        requestAdminMessage()
         sendRequestAttributes()
 
         binding.chatButton.setOnClickListener {
@@ -222,9 +256,9 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         }
 
         // Register NetworkReceiver
-        networkReceiver = NetworkReceiver(this)
+//        networkReceiver = NetworkReceiver(this)
         val intentFilter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
-        registerReceiver(networkReceiver, intentFilter)
+//        registerReceiver(networkReceiver, intentFilter)
 
         // Set up feedback button
         binding.feedbackButton.setOnClickListener {
@@ -356,35 +390,6 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
     }
 
     /**
-     * Called when the network becomes available.
-     * Reconnects the MQTT manager and updates the network status indicator.
-     */
-    override fun onNetworkAvailable() {
-        mqttManager.reconnect()
-        runOnUiThread {
-            networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_green)
-            reconnectProgressBar.visibility = View.GONE
-            attemptingToConnectTextView.visibility = View.GONE
-            connectionStatusTextView.text = "Connected"
-            handler.removeCallbacks(fiveDotRunnable)
-        }
-    }
-
-    /**
-     * Called when the network becomes unavailable.
-     * Shows the reconnect spinner and updates the network status indicator.
-     */
-    override fun onNetworkUnavailable() {
-        runOnUiThread {
-            networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_red)
-            reconnectProgressBar.visibility = View.VISIBLE
-            attemptingToConnectTextView.visibility = View.VISIBLE
-            connectionStatusTextView.text = "Disconnected"
-            startFiveDotAnimation()
-        }
-    }
-
-    /**
      * Starts the five dot animation.
      */
     private fun startFiveDotAnimation() {
@@ -424,20 +429,20 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
      */
     private fun fetchConfig(callback: (Boolean) -> Unit) {
         Log.d("MainActivity fetchConfig", "Fetching config...")
-        mqttManager.fetchSharedAttributes(tokenConfigData) { listConfig ->
+        mqttManagerConfig.fetchSharedAttributes(tokenConfigData) { listConfig ->
             if (listConfig.isNotEmpty()) {
                 config = listConfig
                 Log.d("MainActivity fetchConfig", "Config received: $config")
-                runOnUiThread {
-                    Toast.makeText(this, "Config initialized successfully", Toast.LENGTH_SHORT).show()
-                }
+//                runOnUiThread {
+//                    Toast.makeText(this, "Config initialized successfully", Toast.LENGTH_SHORT).show()
+//                }
                 callback(true)
             } else {
                 config = emptyList()
                 Log.e("MainActivity fetchConfig", "Failed to initialize config. No bus information available.")
-                runOnUiThread {
-                    Toast.makeText(this, "Failed to initialize config. No bus information available.", Toast.LENGTH_SHORT).show()
-                }
+//                runOnUiThread {
+//                    Toast.makeText(this, "Failed to initialize config. No bus information available.", Toast.LENGTH_SHORT).show()
+//                }
                 callback(false)
             }
         }
@@ -589,7 +594,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 subscribeSharedData()
             } else {
                 Log.e("MainActivity", "Failed to connect to MQTT broker")
-                Toast.makeText(this, "Failed to connect to MQTT broker", Toast.LENGTH_SHORT).show()
+//                Toast.makeText(this, "Failed to connect to MQTT broker", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -1035,7 +1040,7 @@ class MainActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         Log.d("getDefaultConfigValue config", config.toString())
         arrBusData = config!!
         arrBusData = arrBusData.filter { it.aid != aid }
-        Toast.makeText(this, "getDefaultConfigValue arrBusDataOnline2: ${arrBusData}", Toast.LENGTH_SHORT).show()
+//        Toast.makeText(this, "getDefaultConfigValue arrBusDataOnline2: ${arrBusData}", Toast.LENGTH_SHORT).show()
         Log.d("getDefaultConfigValue arrBusDataOnline2", arrBusData.toString())
         for (bus in arrBusData) {
             markerBus[bus.accessToken] = Marker(binding.map)
