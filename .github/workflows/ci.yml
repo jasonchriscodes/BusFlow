@@ -44,7 +44,8 @@ jobs:
 
       - name: Update version in build.gradle
         run: |
-          version_code=$(grep "versionCode" app/build.gradle | awk '{print $2}')
+          # Remove dots from versionName to create versionCode
+          version_code=$(echo "$new_version" | sed 's/\.//g')
           new_version_code=$((version_code + 1))
           
           sed -i "s/versionCode .*/versionCode $new_version_code/" app/build.gradle
