@@ -44,8 +44,16 @@ jobs:
 
       - name: Update version in build.gradle
         run: |
-          sed -i "s/versionCode .*/versionCode $((new_version))/" app/build.gradle
+          version_code=$(grep "versionCode" app/build.gradle | awk '{print $2}')
+          new_version_code=$((version_code + 1))
+          
+          sed -i "s/versionCode .*/versionCode $new_version_code/" app/build.gradle
           sed -i "s/versionName \".*\"/versionName \"$new_version\"/" app/build.gradle
+          
+          echo "Updated versionCode: $new_version_code"
+          echo "Updated versionName: $new_version"
+          
+          grep "versionCode\|versionName" app/build.gradle
 
       - name: Update version on the server
         run: |
