@@ -42,6 +42,11 @@ jobs:
           echo "new_version=$new_version" >> $GITHUB_ENV
           echo "New version: $new_version"
 
+      - name: Update version in build.gradle
+        run: |
+          sed -i "s/versionCode .*/versionCode $((new_version))/" app/build.gradle
+          sed -i "s/versionName \".*\"/versionName \"$new_version\"/" app/build.gradle
+
       - name: Update version on the server
         run: |
           curl -X POST "http://43.226.218.98:5000/api/update-version" \
