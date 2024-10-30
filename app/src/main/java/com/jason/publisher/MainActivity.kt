@@ -188,10 +188,10 @@ class MainActivity : AppCompatActivity() {
         // Fetch and initialize config
         fetchConfig { success ->
             if (success) {
-                Log.d("Token Main", token)
-                mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
                 // Get access token for MQTT connection
                 getAccessToken()
+                Log.d("Token Main", token)
+                mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
                 getDefaultConfigValue()
                 requestAdminMessage()
 
@@ -204,6 +204,7 @@ class MainActivity : AppCompatActivity() {
                      */
                     override fun onNetworkAvailable() {
                         mqttManager.reconnect()
+//                        mqttManagerConfig.reconnect()
                         runOnUiThread {
                             networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_green)
                             reconnectProgressBar.visibility = View.GONE
@@ -518,9 +519,11 @@ class MainActivity : AppCompatActivity() {
         val jsonString = jsonObject.toString()
         val handler = Handler(Looper.getMainLooper())
         mqttManager.publish(PUB_MSG_TOPIC, jsonString)
+//        mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonString)
         handler.post(object : Runnable {
             override fun run() {
                 mqttManager.publish(PUB_MSG_TOPIC, jsonString)
+//                mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonString)
                 handler.postDelayed(this, REQUEST_PERIODIC_TIME)
             }
         })
@@ -933,6 +936,8 @@ class MainActivity : AppCompatActivity() {
         jsonObject.put("departureTime", departureTime)
         jsonObject.put("bus", busname)
         jsonObject.put("aid", aid)
+        Log.d("publishTelemetryData latitude", latitude.toString())
+        Log.d("publishTelemetryData longitude", longitude.toString())
 //        Log.d("BusConfig", busConfig)
 //        Log.d("aid", aid)
 
@@ -966,6 +971,7 @@ class MainActivity : AppCompatActivity() {
 
                 val jsonString = jsonObject.toString()
                 mqttManager.publish(MainActivity.PUB_POS_TOPIC, jsonString, 1)
+//                mqttManagerConfig.publish(MainActivity.PUB_POS_TOPIC, jsonString, 1)
                 notificationManager.showNotification(
                     channelId = "channel1",
                     notificationId = 1,
@@ -1009,6 +1015,7 @@ class MainActivity : AppCompatActivity() {
 //        Log.d("ShowDepartureTime", showDepartureTime)
         val jsonString = jsonObject.toString()
         mqttManager.publish(MainActivity.PUB_POS_TOPIC, jsonString, 1)
+//        mqttManagerConfig.publish(MainActivity.PUB_POS_TOPIC, jsonString, 1)
     }
 
     /**
@@ -1020,6 +1027,7 @@ class MainActivity : AppCompatActivity() {
 //        Log.d("ShowDepartureTime", showDepartureTime)
         val jsonString = jsonObject.toString()
         mqttManager.publish(MainActivity.PUB_POS_TOPIC, jsonString, 1)
+//        mqttManagerConfig.publish(MainActivity.PUB_POS_TOPIC, jsonString, 1)
     }
 
     /**
@@ -1150,6 +1158,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         soundManager.stopSound()
         mqttManager.disconnect()
+        mqttManagerConfig.disconnect()
         unregisterReceiver(networkReceiver)
         handler.removeCallbacks(dotRunnable)
         super.onDestroy()
