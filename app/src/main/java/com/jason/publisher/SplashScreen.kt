@@ -181,7 +181,9 @@ class SplashScreen : AppCompatActivity() {
         return aidFile.readText().trim()
     }
 
-    // Example function to generate a new AID if needed
+    /**
+     * Function to generate a new AID if needed
+     */
     private fun generateNewAid(): String {
         return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
     }
