@@ -360,34 +360,7 @@ class SplashScreen : AppCompatActivity() {
         builder.setTitle("Version Information")
         builder.setMessage("Your app version is $currentVersion. The latest version is $latestVersion.")
 
-        builder.setNegativeButton("Cancel") { dialog, _ ->
-            dialog.dismiss()
-        }
-
-        builder.setPositiveButton("Update") { dialog, _ ->
-            dialog.dismiss()
-            updateCurrentVersionOnServer()
-            showUninstallPrompt()
-        }
-
-        builder.setCancelable(false)
-        builder.show()
-    }
-
-    /**
-     * Shows a dialog prompting the user to download and install the latest APK.
-     */
-    private fun showUninstallPrompt() {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("Update Available")
-        builder.setMessage("A new version is available. Do you want to download and install the update?")
-
-        builder.setPositiveButton("Download and Install") { dialog, _ ->
-            dialog.dismiss()
-            downloadAndInstallApk("http://43.226.218.98:5000/api/download-latest-apk")
-        }
-
-        builder.setNegativeButton("Cancel") { dialog, _ ->
+        builder.setNegativeButton("Ok") { dialog, _ ->
             dialog.dismiss()
         }
 
@@ -460,35 +433,6 @@ class SplashScreen : AppCompatActivity() {
         intent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
 
         startActivity(intent)
-    }
-
-
-    /** Update the current folder on the server with the latest version for the device UUID. */
-    private fun updateCurrentVersionOnServer() {
-        val request = Request.Builder()
-            .url("http://43.226.218.98:5000/api/update-current-folder/$aid")
-            .post(RequestBody.create(null, ByteArray(0)))
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                Log.e("SplashScreen", "Failed to update the current version on the server", e)
-                runOnUiThread {
-                    showFailureDialog("Failed to update the current version on the server. Please check your connection.")
-                }
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                if (response.isSuccessful) {
-                    runOnUiThread {
-                    }
-                } else {
-                    runOnUiThread {
-                        showFailureDialog("Unexpected server response while updating the current version.")
-                    }
-                }
-            }
-        })
     }
 
     override fun onDestroy() {
