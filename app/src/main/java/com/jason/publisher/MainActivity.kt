@@ -699,7 +699,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Starts updating the location periodically.
+     * Periodically updates location and checks the nearest route coordinate. If a valid next coordinate
+     * is found, it triggers an API call to retrieve the current road name.
      */
     private fun startLocationUpdate() {
         locationManager.startLocationUpdates(object : LocationListener {
@@ -716,24 +717,69 @@ class MainActivity : AppCompatActivity() {
                 longitude = currentLongitude
                 speed = (location.speed * 3.6).toFloat()
 
-                // Update the last known location
                 lastLatitude = currentLatitude
                 lastLongitude = currentLongitude
 
-                // Find nearest coordinate to the current location
                 val currentLocation = Coordinate(latitude, longitude)
                 val nearestCoordinate = findNearestCoordinate(currentLocation, route.map { Coordinate(it.latitude!!, it.longitude!!) })
 
-                // Log the nearest coordinate
                 runOnUiThread {
                     if (nearestCoordinate != null) {
                         Log.d("startLocationUpdate", "nearest coordinate: $nearestCoordinate")
+                        val nearestIndex = route.indexOfFirst { it.latitude == nearestCoordinate.latitude && it.longitude == nearestCoordinate.longitude }
+
+                        if (nearestIndex != -1 && nearestIndex < route.size - 1) {
+                            val nextCoordinate = route[nearestIndex + 1]
+                            val nextCoordinateAsCoordinate = Coordinate(nextCoordinate.latitude!!, nextCoordinate.longitude!!)
+                            checkRouteName(nearestCoordinate, nextCoordinateAsCoordinate)
+                        }
                     } else {
                         Log.d("startLocationUpdate", "No nearest coordinate found")
                     }
                 }
             }
         })
+    }
+
+    /**
+     * Fetches the road name between two coordinates via API call and updates `upcomingRoadTextView`.
+     *
+     * @param start Starting coordinate.
+     * @param end Ending coordinate.
+     */
+    private fun checkRouteName(start: Coordinate, end: Coordinate) {
+        val url = "http://43.226.218.99:8080/ors/v2/directions/driving-car?start=${start.longitude},${start.latitude}&end=${end.longitude},${end.latitude}&format=geojson"
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val request = Request.Builder().url(url).build()
+                val response = client.newCall(request).execute()
+
+                if (response.isSuccessful) {
+                    val responseData = response.body?.string()
+                    if (responseData != null) {
+                        val jsonResponse = JSONObject(responseData)
+                        val roadName = extractRoadName(jsonResponse)
+
+                        withContext(Dispatchers.Main) {
+                            // Log the road name
+                            Log.d("checkRouteName", "Current road name: $roadName")
+
+                            // Update the upcoming road text view if a valid road name is found
+                            if (roadName != "-") {
+                                upcomingRoadTextView.text = roadName
+                            } else {
+                                Log.d("checkRouteName", "No road name found in response.")
+                            }
+                        }
+                    }
+                } else {
+                    Log.e("checkRouteName", "Failed to fetch route name: ${response.message}")
+                }
+            } catch (e: Exception) {
+                Log.e("checkRouteName", "Error fetching route name: ${e.message}")
+            }
+        }
     }
 
     /**
@@ -780,11 +826,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Extracts the road name from the GeoJSON response JSON object.
-     * Includes detailed logging for debugging purposes.
+     * Extracts the road name from the API JSON response. Returns "-" if no name is found.
      *
-     * @param json The JSON object containing the GeoJSON data from the API.
-     * @return The name of the road if available, otherwise "-".
+     * @param json GeoJSON data.
+     * @return Road name or "-".
      */
     private fun extractRoadName(json: JSONObject): String {
         try {
