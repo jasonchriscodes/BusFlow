@@ -212,7 +212,7 @@
                 android:id="@+id/upcomingRoadTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Waiheke Library, Oneroa, Waiheke Island 1081"
+                android:text=""
                 android:textColor="@android:color/black" />
         </LinearLayout>
     </LinearLayout>

@@ -65,6 +65,9 @@ import android.net.ConnectivityManager
 import android.view.View
 import android.widget.ImageView
 import android.widget.ProgressBar
+import com.jason.publisher.model.Coordinate
+import com.jason.publisher.model.findNearestCoordinate
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
@@ -120,7 +123,8 @@ class MainActivity : AppCompatActivity() {
     private var busDirectionTitle = "Bus Direction"
     private var busTelemetryTitle = "Bus Telemetry Data"
     private var bupcomingRoadTitle = "Upcoming Road"
-    private var upcomingRoadText = "Waiheke Library, Oneroa, Waiheke Island 1081"
+    private var upcomingRoadText = ""
+    var route: List<BusRoute> = emptyList()
 
     private var lastMessage = ""
     private var totalMessage = 0
@@ -306,6 +310,7 @@ class MainActivity : AppCompatActivity() {
         busTelemetryTitleTextView = binding.busTelemetryTitleTextView
         upcomingRoadTitleTextView = binding.upcomingRoadTitleTextView
         upcomingRoadTextView = binding.upcomingRoadTextView
+        busDirectionIcon = binding.busDirectionIcon
     }
 
     /**
@@ -560,9 +565,10 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (firstTime) {
-                    val route = data.shared?.busRoute1
+                    route = data.shared?.busRoute1 ?: emptyList()  // Initialize the route variable
+                    Log.d("routeMainActivity", route.toString())
                     val stops = data.shared?.busStop1
-                    if (route != null && stops != null) {
+                    if (route.isNotEmpty() && stops != null) {
                         generatePolyline(route, stops)
                         firstTime = false
                     }
@@ -713,6 +719,19 @@ class MainActivity : AppCompatActivity() {
                 // Update the last known location
                 lastLatitude = currentLatitude
                 lastLongitude = currentLongitude
+
+                // Find nearest coordinate to the current location
+                val currentLocation = Coordinate(latitude, longitude)
+                val nearestCoordinate = findNearestCoordinate(currentLocation, route.map { Coordinate(it.latitude!!, it.longitude!!) })
+
+                // Log the nearest coordinate
+                runOnUiThread {
+                    if (nearestCoordinate != null) {
+                        Log.d("startLocationUpdate", "nearest coordinate: $nearestCoordinate")
+                    } else {
+                        Log.d("startLocationUpdate", "No nearest coordinate found")
+                    }
+                }
             }
         })
     }
@@ -761,6 +780,42 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Extracts the road name from the GeoJSON response JSON object.
+     * Includes detailed logging for debugging purposes.
+     *
+     * @param json The JSON object containing the GeoJSON data from the API.
+     * @return The name of the road if available, otherwise "-".
+     */
+    private fun extractRoadName(json: JSONObject): String {
+        try {
+            Log.d("extractRoadName", "Extracting road name from JSON response.")
+
+            val features = json.optJSONArray("features")
+            if (features != null && features.length() > 0) {
+                val properties = features.getJSONObject(0).optJSONObject("properties")
+                val segments = properties?.optJSONArray("segments")
+                if (segments != null && segments.length() > 0) {
+                    val steps = segments.getJSONObject(0).optJSONArray("steps")
+                    if (steps != null && steps.length() > 0) {
+                        val name = steps.getJSONObject(0).optString("name", "-")
+                        Log.d("extractRoadName", "Road name found: $name")
+                        return name
+                    } else {
+                        Log.d("extractRoadName", "No steps found in segments.")
+                    }
+                } else {
+                    Log.d("extractRoadName", "No segments found in properties.")
+                }
+            } else {
+                Log.d("extractRoadName", "No features found in JSON.")
+            }
+        } catch (e: Exception) {
+            Log.e("extractRoadName", "Error extracting road name: ${e.message}")
+        }
+        return "-"
+    }
+
+    /**
      * Sets up the map view and initializes markers and polylines with the provided coordinates.
      *
      * @param lat The latitude for the initial map center.
@@ -786,7 +841,6 @@ class MainActivity : AppCompatActivity() {
         }
         updateMarkerPosition(marker)
     }
-
 
     /**
      * Generates polylines and markers for the bus route and stops.
