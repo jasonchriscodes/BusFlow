@@ -155,12 +155,18 @@ class SplashScreen : AppCompatActivity() {
         }
     }
 
-    /** Retrieve the AID from the external folder or generate a new one */
+    /**
+     * Retrieves the Android ID (AID) from a hidden file in the app-specific documents directory.
+     * If the file or directory does not exist, it creates them and generates a new AID.
+     *
+     * @return The AID (Android ID) as a String.
+     */
     @SuppressLint("HardwareIds")
     private fun getOrCreateAid(): String {
-        val documentsDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vlrshiddenfolder")
+        // Use getExternalFilesDir to get an app-specific directory in public storage
+        val documentsDir = File(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), ".vlrshiddenfolder")
 
-        // Check if the directory exists; if not, try to create it
+        // Check if the directory exists; if not, create it
         if (!documentsDir.exists()) {
             val success = documentsDir.mkdirs()
             if (!success) {
@@ -168,26 +174,29 @@ class SplashScreen : AppCompatActivity() {
             }
         }
 
+        // Define the file that will store the AID
         val aidFile = File(documentsDir, "aid.txt")
 
-        // Check if the aid.txt file exists, if not create and write a default AID
+        // If the AID file does not exist, generate a new AID and write it to the file
         if (!aidFile.exists()) {
-            val aid = generateNewAid() // Assume this is a function that generates your AID
-            aidFile.writeText(aid)
-            return aid
+            val newAid = generateNewAid()  // Generates a unique identifier for the device
+            aidFile.writeText(newAid)
+            return newAid
         }
 
-        // If the file exists, read the AID from the file
+        // If the AID file exists, read and return its contents
         return aidFile.readText().trim()
     }
 
     /**
-     * Function to generate a new AID if needed
+     * Generates a new Android ID (AID) using the device's secure Android ID.
+     *
+     * @return A unique Android ID as a String.
      */
+    @SuppressLint("HardwareIds")
     private fun generateNewAid(): String {
         return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
     }
-
 
     /** Check for app updates using the generated UUID. */
     private fun checkForUpdates() {
