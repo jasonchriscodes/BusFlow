@@ -104,8 +104,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var busDirectionTitleTextView: TextView
     private lateinit var busDirectionIcon: ImageView
     private lateinit var busTelemetryTitleTextView: TextView
-    private lateinit var upcomingRoadTitleTextView: TextView
+//    private lateinit var upcomingRoadTitleTextView: TextView
     private lateinit var upcomingRoadTextView: TextView
+    private lateinit var currentRoadTextView: TextView
 
     private var lastLatitude = 0.0
     private var lastLongitude = 0.0
@@ -122,9 +123,16 @@ class MainActivity : AppCompatActivity() {
     private var closestBusStopToPubDevice = "none"
     private var busDirectionTitle = "Bus Direction"
     private var busTelemetryTitle = "Bus Telemetry Data"
-    private var bupcomingRoadTitle = "Upcoming Road"
+//    private var bupcomingRoadTitle = "Upcoming Road"
     private var upcomingRoadText = ""
-    var route: List<BusRoute> = emptyList()
+    private var route: List<BusRoute> = emptyList()
+    private var currentRoadName: String? = null
+    private var passesRoadName: String? = null
+    private var tempRoadName: String? = null
+    private var upcomingRoadName: String? = null
+    private var previousRoadName: String? = null // Add this variable to track previous road name
+    private var isUpcomingRoadLocked = false // Flag to lock upcoming road updates
+    private var liveRouteName: String? = null
 
     private var lastMessage = ""
     private var totalMessage = 0
@@ -308,7 +316,8 @@ class MainActivity : AppCompatActivity() {
         closestBusStopToPubDeviceTextView = binding.closestBusStopToPubDeviceTextView
         busDirectionTitleTextView = binding.busDirectionTitleTextView
         busTelemetryTitleTextView = binding.busTelemetryTitleTextView
-        upcomingRoadTitleTextView = binding.upcomingRoadTitleTextView
+        currentRoadTextView = binding.currentRoadTextView
+//        upcomingRoadTitleTextView = binding.upcomingRoadTitleTextView
         upcomingRoadTextView = binding.upcomingRoadTextView
         busDirectionIcon = binding.busDirectionIcon
     }
@@ -708,6 +717,7 @@ class MainActivity : AppCompatActivity() {
                 val currentLatitude = location.latitude
                 val currentLongitude = location.longitude
 
+                // Calculate bearing and update variables as before
                 if (lastLatitude != 0.0 && lastLongitude != 0.0) {
                     bearing = calculateBearing(lastLatitude, lastLongitude, currentLatitude, currentLongitude)
                     direction = Helper.bearingToDirection(bearing)
@@ -716,7 +726,6 @@ class MainActivity : AppCompatActivity() {
                 latitude = currentLatitude
                 longitude = currentLongitude
                 speed = (location.speed * 3.6).toFloat()
-
                 lastLatitude = currentLatitude
                 lastLongitude = currentLongitude
 
@@ -734,9 +743,11 @@ class MainActivity : AppCompatActivity() {
 
                             // Use a coroutine to fetch the road name and find the upcoming road
                             CoroutineScope(Dispatchers.IO).launch {
-                                val currentRoadName = checkRouteName(nearestCoordinate, nextCoordinateAsCoordinate)
+                                val fetchedCurrentRoadName = checkRouteName(nearestCoordinate, nextCoordinateAsCoordinate)
                                 withContext(Dispatchers.Main) {
-                                    findUpcomingRoad(nearestCoordinate, currentRoadName)
+                                    currentRoadName = fetchedCurrentRoadName // Update current road name
+                                    currentRoadTextView.text = "Current Road: $currentRoadName" // Update UI with current road name
+                                    findUpcomingRoad(nearestCoordinate, fetchedCurrentRoadName)
                                 }
                             }
                         }
@@ -755,36 +766,87 @@ class MainActivity : AppCompatActivity() {
      * @param nearestCoordinate The coordinate closest to the current position to start the search.
      * @param currentRoadName The name of the current road to compare against.
      */
-    private fun findUpcomingRoad(nearestCoordinate: Coordinate, currentRoadName: String) {
-        val nearestIndex = route.indexOfFirst { it.latitude == nearestCoordinate.latitude && it.longitude == nearestCoordinate.longitude }
+    private suspend fun findUpcomingRoad(nearestCoordinate: Coordinate, currentRoadName: String) {
+        // Find the index of the nearest coordinate in the route
+        val nearestIndex = route.indexOfFirst {
+            it.latitude == nearestCoordinate.latitude && it.longitude == nearestCoordinate.longitude
+        }
 
+        // If the nearest coordinate is not found or is the last in the route, log an error and exit
         if (nearestIndex == -1 || nearestIndex >= route.size - 1) {
             Log.e("findUpcomingRoad", "Nearest coordinate not found or is the last in the route")
             return
         }
 
-        CoroutineScope(Dispatchers.IO).launch {
-            var upcomingRoadName: String? = null
+        // Get the next coordinate on the route to determine the road segment for API checking
+        val endCoordinate = route.getOrNull(nearestIndex + 1)?.let {
+            Coordinate(it.latitude!!, it.longitude!!)
+        } ?: nearestCoordinate
 
-            for (i in nearestIndex until route.size - 1) {
-                val start = Coordinate(route[i].latitude!!, route[i].longitude!!)
-                val end = Coordinate(route[i + 1].latitude!!, route[i + 1].longitude!!)
-                val roadName = getRoadNameFromApi(start, end)
+        // Set liveRouteName only if the currentRoadName is valid and not "-"
+        if (currentRoadName != "-") {
+            liveRouteName = currentRoadName
+            Log.d("findUpcomingRoad", "Live route name set to: $liveRouteName")
+        } else {
+            Log.d("findUpcomingRoad", "Skipping update of liveRouteName due to invalid road name")
+        }
 
-                if (roadName != null && roadName != currentRoadName) {
-                    upcomingRoadName = roadName
-                    break
+        // Unlock if current road has reached the upcoming road
+        if (liveRouteName == upcomingRoadName && isUpcomingRoadLocked) {
+            isUpcomingRoadLocked = false
+            Log.d("findUpcomingRoad", "Unlocked upcoming road update as bus reached $liveRouteName")
+        }
+
+        // If road updates are still locked, prevent further updates
+        if (isUpcomingRoadLocked) {
+            Log.d("findUpcomingRoad", "Upcoming road update is locked to: $upcomingRoadText")
+            return
+        }
+
+        // Check if we need to update the upcoming road based on tempRoadName and current road name
+        if (upcomingRoadName != tempRoadName || (upcomingRoadName == null && tempRoadName == null)) {
+            CoroutineScope(Dispatchers.Default).launch {
+                Log.d("findUpcomingRoad", "Checking upcoming road starting from index: $nearestIndex")
+
+                for (i in nearestIndex until route.size - 1) {
+                    val start = Coordinate(route[i].latitude!!, route[i].longitude!!)
+                    val end = Coordinate(route[i + 1].latitude!!, route[i + 1].longitude!!)
+                    tempRoadName = getRoadNameFromApi(start, end)
+
+                    Log.d("findUpcomingRoad", "Checking segment $i: Start = $start, End = $end, Temp Road Name = $tempRoadName")
+
+                    // Update the upcoming road if a valid name is found that differs from the current road
+                    if (tempRoadName != null && tempRoadName != currentRoadName &&
+                        tempRoadName != upcomingRoadText && tempRoadName != "-" && tempRoadName!!.isNotEmpty()) {
+
+                        withContext(Dispatchers.Main) {
+                            if (upcomingRoadName != tempRoadName) {
+                                upcomingRoadName = tempRoadName
+                                upcomingRoadText = upcomingRoadName!!
+                                upcomingRoadTextView.text = "Upcoming Road: $upcomingRoadText"
+                                Log.d("findUpcomingRoad", "Updated upcoming road to: $upcomingRoadText")
+
+                                // Lock updates to upcoming road once it’s set to a new road
+                                isUpcomingRoadLocked = true
+                                Log.d("findUpcomingRoad", "Locked upcoming road update to: $upcomingRoadText")
+                            }
+                        }
+                        break
+                    }
                 }
             }
-
-            withContext(Dispatchers.Main) {
-                if (upcomingRoadName != null) {
-                    Log.d("findUpcomingRoad", "Upcoming road name: $upcomingRoadName")
-                    upcomingRoadTextView.text = upcomingRoadName
-                } else {
-                    Log.d("findUpcomingRoad", "No upcoming road found different from current road.")
-                }
+        } else {
+            // If current road changes, reset upcoming and temporary road names
+            if (previousRoadName != currentRoadName) {
+                Log.d("findUpcomingRoad", "Detected change in currentRoadName from $previousRoadName to $currentRoadName")
+                previousRoadName = currentRoadName
             }
+
+            synchronized(this@MainActivity) {
+                upcomingRoadName = null
+                tempRoadName = null
+            }
+            Log.d("findUpcomingRoad", "Reset upcomingRoadName and tempRoadName due to currentRoadName change")
         }
     }
 
@@ -828,10 +890,11 @@ class MainActivity : AppCompatActivity() {
                 val responseData = response.body?.string()
                 if (responseData != null) {
                     val jsonResponse = JSONObject(responseData)
-                    val currentRoadName = extractRoadName(jsonResponse)
+                    currentRoadName = extractRoadName(jsonResponse) ?: "-"
+                    passesRoadName = currentRoadName
 
                     Log.d("checkRouteName", "Current road name: $currentRoadName")
-                    currentRoadName
+                    currentRoadName!!
                 } else {
                     "-"
                 }
@@ -844,6 +907,7 @@ class MainActivity : AppCompatActivity() {
             "-"
         }
     }
+
 
     /**
      * Calculates the bearing between two geographical points.
@@ -884,8 +948,9 @@ class MainActivity : AppCompatActivity() {
         closestBusStopToPubDeviceTextView.text = "closestBusStopToPubDevice: $closestBusStopToPubDevice"
         busDirectionTitleTextView.text = "$busDirectionTitle"
         busTelemetryTitleTextView.text = "$busTelemetryTitle"
-        upcomingRoadTitleTextView.text = "$bupcomingRoadTitle"
-        upcomingRoadTextView.text = "$upcomingRoadText"
+//        upcomingRoadTitleTextView.text = "$bupcomingRoadTitle"
+        upcomingRoadTextView.text = "Upcoming Road: $upcomingRoadText"
+        currentRoadTextView.text = "Current Road: $currentRoadName"
     }
 
     /**

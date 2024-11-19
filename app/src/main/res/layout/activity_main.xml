@@ -199,20 +199,27 @@
             android:padding="8dp"
             android:background="@drawable/border">
 
+<!--            <TextView-->
+<!--                android:id="@+id/upcomingRoadTitleTextView"-->
+<!--                android:layout_width="wrap_content"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:text="Upcoming Road"-->
+<!--                android:textSize="18sp"-->
+<!--                android:textStyle="bold"-->
+<!--                android:textColor="@android:color/black" />-->
+
             <TextView
-                android:id="@+id/upcomingRoadTitleTextView"
+                android:id="@+id/currentRoadTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Upcoming Road"
-                android:textSize="18sp"
-                android:textStyle="bold"
+                android:text="Current Road: $currentRoadName"
                 android:textColor="@android:color/black" />
 
             <TextView
                 android:id="@+id/upcomingRoadTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text=""
+                android:text="Upcoming Road: $upcomingRoadName"
                 android:textColor="@android:color/black" />
         </LinearLayout>
     </LinearLayout>
