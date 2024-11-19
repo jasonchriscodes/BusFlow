@@ -101,7 +101,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etaToNextBStopTextView: TextView
     private lateinit var aidTextView: TextView
     private lateinit var closestBusStopToPubDeviceTextView: TextView
-    private lateinit var busDirectionTitleTextView: TextView
+//    private lateinit var busDirectionTitleTextView: TextView
     private lateinit var busDirectionIcon: ImageView
     private lateinit var busTelemetryTitleTextView: TextView
 //    private lateinit var upcomingRoadTitleTextView: TextView
@@ -314,7 +314,7 @@ class MainActivity : AppCompatActivity() {
         attemptingToConnectTextView = binding.attemptingToConnectTextView
         aidTextView = binding.aidTextView
         closestBusStopToPubDeviceTextView = binding.closestBusStopToPubDeviceTextView
-        busDirectionTitleTextView = binding.busDirectionTitleTextView
+//        busDirectionTitleTextView = binding.busDirectionTitleTextView
         busTelemetryTitleTextView = binding.busTelemetryTitleTextView
         currentRoadTextView = binding.currentRoadTextView
 //        upcomingRoadTitleTextView = binding.upcomingRoadTitleTextView
@@ -946,7 +946,7 @@ class MainActivity : AppCompatActivity() {
         etaToNextBStopTextView.text = "etaToNextBStop: $etaToNextBStop"
         aidTextView.text = "AID: $aid"
         closestBusStopToPubDeviceTextView.text = "closestBusStopToPubDevice: $closestBusStopToPubDevice"
-        busDirectionTitleTextView.text = "$busDirectionTitle"
+//        busDirectionTitleTextView.text = "$busDirectionTitle"
         busTelemetryTitleTextView.text = "$busTelemetryTitle"
 //        upcomingRoadTitleTextView.text = "$bupcomingRoadTitle"
         upcomingRoadTextView.text = "Upcoming Road: $upcomingRoadText"
