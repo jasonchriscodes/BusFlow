@@ -30,159 +30,163 @@ object OfflineData {
         """.trimIndent()
         val jsonString3 = """
          [
-  {
-    "latitude": -36.855647,
-    "longitude": 174.765249
-  },
-  {
-    "latitude": -36.85565,
-    "longitude": 174.76524
-  },
-  {
-    "latitude": -36.855486,
-    "longitude": 174.765141
-  },
-  {
-    "latitude": -36.855308,
-    "longitude": 174.765044
-  },
-  {
-    "latitude": -36.855152,
-    "longitude": 174.764956
-  },
-  {
-    "latitude": -36.854757,
-    "longitude": 174.764723
-  },
-  {
-    "latitude": -36.854597,
-    "longitude": 174.764628
-  },
-  {
-    "latitude": -36.854379,
-    "longitude": 174.764499
-  },
-  {
-    "latitude": -36.85433,
-    "longitude": 174.764492
-  },
-  {
-    "latitude": -36.854303,
-    "longitude": 174.764476
-  },
-  {
-    "latitude": -36.854305,
-    "longitude": 174.764472
-  },
-  {
-    "latitude": -36.854303,
-    "longitude": 174.764476
-  },
-  {
-    "latitude": -36.854294,
-    "longitude": 174.764509
-  },
-  {
-    "latitude": -36.854267,
-    "longitude": 174.764554
-  },
-  {
-    "latitude": -36.854086,
-    "longitude": 174.765017
-  },
-  {
-    "latitude": -36.854041,
-    "longitude": 174.765134
-  },
-  {
-    "latitude": -36.853993,
-    "longitude": 174.765263
-  },
-  {
-    "latitude": -36.853807,
-    "longitude": 174.765795
-  },
-  {
-    "latitude": -36.853804,
-    "longitude": 174.765794
-  },
-  {
-    "latitude": -36.853807,
-    "longitude": 174.765795
-  },
-  {
-    "latitude": -36.853806,
-    "longitude": 174.765798
-  },
-  {
-    "latitude": -36.853904,
-    "longitude": 174.766751
-  },
-  {
-    "latitude": -36.854016,
-    "longitude": 174.767695
-  },
-  {
-    "latitude": -36.854029,
-    "longitude": 174.767811
-  },
-  {
-    "latitude": -36.854048,
-    "longitude": 174.768003
-  },
-  {
-    "latitude": -36.854071,
-    "longitude": 174.768128
-  },
-  {
-    "latitude": -36.854068,
-    "longitude": 174.768134
-  },
-  {
-    "latitude": -36.854072,
-    "longitude": 174.768137
-  },
-  {
-    "latitude": -36.854453,
-    "longitude": 174.767823
-  },
-  {
-    "latitude": -36.854798,
-    "longitude": 174.767514
-  },
-  {
-    "latitude": -36.855162,
-    "longitude": 174.767097
-  },
-  {
-    "latitude": -36.85541,
-    "longitude": 174.766811
-  },
-  {
-    "latitude": -36.855856,
-    "longitude": 174.766291
-  },
-  {
-    "latitude": -36.856556,
-    "longitude": 174.765552
-  },
-  {
-    "latitude": -36.856405,
-    "longitude": 174.765534
-  },
-  {
-    "latitude": -36.856189,
-    "longitude": 174.76565
-  },
-  {
-    "latitude": -36.855917,
-    "longitude": 174.765404
-  },
-  {
-    "latitude": -36.855647,
-    "longitude": 174.765249
-  }
-]
+           {
+             "latitude": -36.855647,
+             "longitude": 174.765249
+           },
+           {
+             "latitude": -36.85565,
+             "longitude": 174.76524
+           },
+           {
+             "latitude": -36.855486,
+             "longitude": 174.765141
+           },
+           {
+             "latitude": -36.855308,
+             "longitude": 174.765044
+           },
+           {
+             "latitude": -36.855152,
+             "longitude": 174.764956
+           },
+           {
+             "latitude": -36.854757,
+             "longitude": 174.764723
+           },
+           {
+             "latitude": -36.854597,
+             "longitude": 174.764628
+           },
+           {
+             "latitude": -36.854379,
+             "longitude": 174.764499
+           },
+           {
+             "latitude": -36.85433,
+             "longitude": 174.764492
+           },
+           {
+             "latitude": -36.854303,
+             "longitude": 174.764476
+           },
+           {
+             "latitude": -36.854305,
+             "longitude": 174.764472
+           },
+           {
+             "latitude": -36.854304,
+             "longitude": 174.764477
+           },
+           {
+             "latitude": -36.85433,
+             "longitude": 174.764492
+           },
+           {
+             "latitude": -36.854294,
+             "longitude": 174.764509
+           },
+           {
+             "latitude": -36.854267,
+             "longitude": 174.764554
+           },
+           {
+             "latitude": -36.854086,
+             "longitude": 174.765017
+           },
+           {
+             "latitude": -36.854041,
+             "longitude": 174.765134
+           },
+           {
+             "latitude": -36.853993,
+             "longitude": 174.765263
+           },
+           {
+             "latitude": -36.853807,
+             "longitude": 174.765795
+           },
+           {
+             "latitude": -36.853804,
+             "longitude": 174.765794
+           },
+           {
+             "latitude": -36.853807,
+             "longitude": 174.765795
+           },
+           {
+             "latitude": -36.853806,
+             "longitude": 174.765798
+           },
+           {
+             "latitude": -36.853904,
+             "longitude": 174.766751
+           },
+           {
+             "latitude": -36.854016,
+             "longitude": 174.767695
+           },
+           {
+             "latitude": -36.854029,
+             "longitude": 174.767811
+           },
+           {
+             "latitude": -36.854048,
+             "longitude": 174.768003
+           },
+           {
+             "latitude": -36.854071,
+             "longitude": 174.768128
+           },
+           {
+             "latitude": -36.854068,
+             "longitude": 174.768134
+           },
+           {
+             "latitude": -36.854072,
+             "longitude": 174.768137
+           },
+           {
+             "latitude": -36.854453,
+             "longitude": 174.767823
+           },
+           {
+             "latitude": -36.854798,
+             "longitude": 174.767514
+           },
+           {
+             "latitude": -36.855162,
+             "longitude": 174.767097
+           },
+           {
+             "latitude": -36.85541,
+             "longitude": 174.766811
+           },
+           {
+             "latitude": -36.855856,
+             "longitude": 174.766291
+           },
+           {
+             "latitude": -36.856556,
+             "longitude": 174.765552
+           },
+           {
+             "latitude": -36.856405,
+             "longitude": 174.765534
+           },
+           {
+             "latitude": -36.856189,
+             "longitude": 174.76565
+           },
+           {
+             "latitude": -36.855917,
+             "longitude": 174.765404
+           },
+           {
+             "latitude": -36.855647,
+             "longitude": 174.765249
+           }
+         ]
         """.trimIndent()
         val jsonArray = JSONArray(jsonString2)
 
