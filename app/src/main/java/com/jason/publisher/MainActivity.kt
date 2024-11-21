@@ -101,11 +101,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etaToNextBStopTextView: TextView
     private lateinit var aidTextView: TextView
     private lateinit var closestBusStopToPubDeviceTextView: TextView
-//    private lateinit var busDirectionTitleTextView: TextView
+    private lateinit var busDirectionTitleTextView: TextView
     private lateinit var busDirectionBearing: TextView
     private lateinit var busDirectionIcon: ImageView
     private lateinit var busTelemetryTitleTextView: TextView
-//    private lateinit var upcomingRoadTitleTextView: TextView
+    private lateinit var upcomingRoadTitleTextView: TextView
     private lateinit var upcomingRoadTextView: TextView
     private lateinit var currentRoadTextView: TextView
 
@@ -124,7 +124,7 @@ class MainActivity : AppCompatActivity() {
     private var closestBusStopToPubDevice = "none"
     private var busDirectionTitle = "Bus Direction"
     private var busTelemetryTitle = "Bus Telemetry Data"
-//    private var bupcomingRoadTitle = "Upcoming Road"
+    private var bupcomingRoadTitle = "Upcoming Road"
     private var upcomingRoadText = ""
     private var route: List<BusRoute> = emptyList()
     private var currentRoadName: String? = null
@@ -315,10 +315,10 @@ class MainActivity : AppCompatActivity() {
         attemptingToConnectTextView = binding.attemptingToConnectTextView
         aidTextView = binding.aidTextView
         closestBusStopToPubDeviceTextView = binding.closestBusStopToPubDeviceTextView
-//        busDirectionTitleTextView = binding.busDirectionTitleTextView
+        busDirectionTitleTextView = binding.busDirectionTitleTextView
         busTelemetryTitleTextView = binding.busTelemetryTitleTextView
         currentRoadTextView = binding.currentRoadTextView
-//        upcomingRoadTitleTextView = binding.upcomingRoadTitleTextView
+        upcomingRoadTitleTextView = binding.upcomingRoadTitleTextView
         upcomingRoadTextView = binding.upcomingRoadTextView
         busDirectionBearing = binding.busDirectionBearing
         busDirectionIcon = binding.busDirectionIcon
@@ -936,9 +936,9 @@ class MainActivity : AppCompatActivity() {
         etaToNextBStopTextView.text = "etaToNextBStop: $etaToNextBStop"
         aidTextView.text = "AID: $aid"
         closestBusStopToPubDeviceTextView.text = "closestBusStopToPubDevice: $closestBusStopToPubDevice"
-//        busDirectionTitleTextView.text = "$busDirectionTitle"
+        busDirectionTitleTextView.text = "$busDirectionTitle"
         busTelemetryTitleTextView.text = "$busTelemetryTitle"
-//        upcomingRoadTitleTextView.text = "$bupcomingRoadTitle"
+        upcomingRoadTitleTextView.text = "$bupcomingRoadTitle"
         upcomingRoadTextView.text = "Upcoming Road: $upcomingRoadText"
         currentRoadTextView.text = "Current Road: $currentRoadName"
     }

@@ -41,14 +41,14 @@
             android:background="@drawable/border"
             android:layout_marginBottom="16dp">
 
-<!--            <TextView-->
-<!--                android:id="@+id/busDirectionTitleTextView"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:text="Bus Direction"-->
-<!--                android:textSize="18sp"-->
-<!--                android:textStyle="bold"-->
-<!--                android:textColor="@android:color/black" />-->
+            <TextView
+                android:id="@+id/busDirectionTitleTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Bus Direction"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/black" />
 
             <ImageView
                 android:id="@+id/busDirectionIcon"
@@ -205,19 +205,19 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
+            android:layout_weight="1.5"
             android:orientation="vertical"
             android:padding="8dp"
             android:background="@drawable/border">
 
-<!--            <TextView-->
-<!--                android:id="@+id/upcomingRoadTitleTextView"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:text="Upcoming Road"-->
-<!--                android:textSize="18sp"-->
-<!--                android:textStyle="bold"-->
-<!--                android:textColor="@android:color/black" />-->
+            <TextView
+                android:id="@+id/upcomingRoadTitleTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Upcoming Road"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/black" />
 
             <TextView
                 android:id="@+id/currentRoadTextView"
