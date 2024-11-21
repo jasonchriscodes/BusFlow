@@ -42,7 +42,29 @@ class BusStopProximityManager {
          *
          * @return The name of the closest bus stop.
          */
-        fun getTheClosestBusStopToPubDevice(lat: Double, lng: Double, currentClosestBusStop : String): String {
+        fun getTheClosestBusStopToPubDeviceOffline(lat: Double, lng: Double, currentClosestBusStop : String): String {
+            val busStopWithShortestDistance : String = findTheBusStopWithClosestDistance(lat, lng)
+
+            if(currentClosestBusStop == "none") return busStopWithShortestDistance;
+            else if(isBusStopInSequence(currentClosestBusStop, busStopWithShortestDistance) && isBusStopClose(lat, lng, busStopWithShortestDistance)){
+                return busStopWithShortestDistance;
+            }
+
+            return currentClosestBusStop;
+        }
+
+        /**
+         * Determines the closest bus stop to the given location.
+         * If the current closest bus stop is "none", it returns the newly found closest bus stop.
+         * If the bus stop is in sequence and within close proximity, it updates the closest bus stop.
+         *
+         * @param lat Latitude of the current location.
+         * @param lng Longitude of the current location.
+         * @param currentClosestBusStop Name of the current closest bus stop.
+         *
+         * @return The name of the closest bus stop.
+         */
+        fun getTheClosestBusStopToPubDeviceOnline(lat: Double, lng: Double, currentClosestBusStop : String): String {
             val busStopWithShortestDistance : String = findTheBusStopWithClosestDistance(lat, lng)
 
             if(currentClosestBusStop == "none") return busStopWithShortestDistance;
@@ -149,7 +171,40 @@ class BusStopProximityManager {
          *
          * @return The next bus stop information or null if not found.
          */
-        fun getNextBusStopInSequence(currentAssignedBusStop: String): BusStopInfo? {
+        fun getNextBusStopInSequenceOffline(currentAssignedBusStop: String): BusStopInfo? {
+            val busStopList = OfflineData.getBusStopOfflineWithName()
+
+            // Check if the currentAssignedBusStop is the last bus stop in the list
+            if (currentAssignedBusStop == busStopList.lastOrNull()?.busStopName) {
+                return BusStopInfo(
+                    busStopList.first().latitude,
+                    busStopList.first().longitude,
+                    busStopList.first().busStopName
+                )
+            }
+
+            // Iterate through the bus stop list to find the next bus stop
+            for (i in 0 until busStopList.size - 1) {
+                if (busStopList[i].busStopName == currentAssignedBusStop) {
+                    return BusStopInfo(
+                        busStopList[i + 1].latitude,
+                        busStopList[i + 1].longitude,
+                        busStopList[i + 1].busStopName
+                    )
+                }
+            }
+
+            return null // Handle case where bus stop is not found or list is empty
+        }
+
+        /**
+         * Gets the next bus stop in the sequence based on the current assigned bus stop.
+         *
+         * @param currentAssignedBusStop Name of the current assigned bus stop.
+         *
+         * @return The next bus stop information or null if not found.
+         */
+        fun getNextBusStopInSequenceOnline(currentAssignedBusStop: String): BusStopInfo? {
             val busStopList = OfflineData.getBusStopOfflineWithName()
 
             // Check if the currentAssignedBusStop is the last bus stop in the list

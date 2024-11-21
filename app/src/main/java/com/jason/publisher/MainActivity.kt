@@ -1159,7 +1159,7 @@ class MainActivity : AppCompatActivity() {
 //        Log.d("aid", aid)
 
         // To publish the closest bus stop to the publisher device.
-        closestBusStopToPubDevice = BusStopProximityManager.getTheClosestBusStopToPubDevice(
+        closestBusStopToPubDevice = BusStopProximityManager.getTheClosestBusStopToPubDeviceOnline(
             latitude,
             longitude,
             closestBusStopToPubDevice
@@ -1169,7 +1169,7 @@ class MainActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.Main).launch {
             try {
                 val nextBusStopInSequence =
-                    BusStopProximityManager.getNextBusStopInSequence(closestBusStopToPubDevice)
+                    BusStopProximityManager.getNextBusStopInSequenceOnline(closestBusStopToPubDevice)
                 if (nextBusStopInSequence != null) {
 
                     // Note: uncomment below lines of code to use TomTom API.

@@ -858,7 +858,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         jsonObject.put("aid", aid)
 
         // To publish the closest bus stop to the publisher device.
-        closestBusStopToPubDevice = BusStopProximityManager.getTheClosestBusStopToPubDevice(
+        closestBusStopToPubDevice = BusStopProximityManager.getTheClosestBusStopToPubDeviceOffline(
             latitude,
             longitude,
             closestBusStopToPubDevice
@@ -869,7 +869,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         CoroutineScope(Dispatchers.Main).launch {
             try {
                 val nextBusStopInSequence =
-                    BusStopProximityManager.getNextBusStopInSequence(closestBusStopToPubDevice)
+                    BusStopProximityManager.getNextBusStopInSequenceOffline(closestBusStopToPubDevice)
                 if (nextBusStopInSequence != null) {
 
 //                     Note: uncomment below lines of code to use TomTom API.
