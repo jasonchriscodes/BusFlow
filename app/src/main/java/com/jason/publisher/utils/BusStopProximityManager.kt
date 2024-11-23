@@ -32,6 +32,8 @@ class BusStopProximityManager {
 
     companion object {
 
+        private var busStopList: List<BusStopInfo> = emptyList()
+
         /**
          * Determines the closest bus stop to the given location.
          * If the current closest bus stop is "none", it returns the newly found closest bus stop.
@@ -56,24 +58,35 @@ class BusStopProximityManager {
 
         /**
          * Determines the closest bus stop to the given location.
-         * If the current closest bus stop is "none", it returns the newly found closest bus stop.
-         * If the bus stop is in sequence and within close proximity, it updates the closest bus stop.
-         *
          * @param lat Latitude of the current location.
          * @param lng Longitude of the current location.
          * @param currentClosestBusStop Name of the current closest bus stop.
-         *
          * @return The name of the closest bus stop.
          */
-        fun getTheClosestBusStopToPubDeviceOnline(lat: Double, lng: Double, currentClosestBusStop : String): String {
-            val busStopWithShortestDistance : String = findTheBusStopWithClosestDistance(lat, lng)
-
-            if(currentClosestBusStop == "none") return busStopWithShortestDistance;
-            else if(isBusStopInSequence(currentClosestBusStop, busStopWithShortestDistance) && isBusStopClose(lat, lng, busStopWithShortestDistance)){
-                return busStopWithShortestDistance;
+        fun getTheClosestBusStopToPubDeviceOnline(lat: Double, lng: Double, currentClosestBusStop: String): String {
+            if (busStopList.isEmpty()) {
+                Log.e("getTheClosestBusStop", "busStopList is empty. Returning currentClosestBusStop.")
+                return currentClosestBusStop
             }
 
-            return currentClosestBusStop;
+            val busStopWithShortestDistance = findTheBusStopWithClosestDistance(lat, lng)
+            return if (currentClosestBusStop == "none" ||
+                (isBusStopInSequence(currentClosestBusStop, busStopWithShortestDistance) &&
+                        isBusStopClose(lat, lng, busStopWithShortestDistance))) {
+                busStopWithShortestDistance
+            } else {
+                currentClosestBusStop
+            }
+        }
+
+        /**
+         * Updates the list of bus stops for proximity calculations.
+         *
+         * @param busStops The list of bus stops.
+         */
+        fun setBusStopList(busStops: List<BusStopInfo>) {
+            busStopList = busStops
+            Log.d("BusStopProximityManager", "setBusStopList called. Updated busStopList: $busStopList")
         }
 
         /**
@@ -84,22 +97,25 @@ class BusStopProximityManager {
          *
          * @return The name of the closest bus stop.
          */
-        private fun findTheBusStopWithClosestDistance(lat: Double, lng: Double) : String{
-            val busStopList = OfflineData.getBusStopOfflineWithName()
-            Log.d("busStopList 1", busStopList.toString())
+        private fun findTheBusStopWithClosestDistance(lat: Double, lng: Double): String {
             var minDistance = Double.MAX_VALUE
-            lateinit var closestBusStopName : String
+            var closestBusStopName = ""
+
+            if (busStopList.isEmpty()) {
+                Log.e("busStopList 1", "Bus stop list is empty.")
+            }
+
+            Log.d("busStopList 1", busStopList.toString())
 
             for (busStop in busStopList) {
-                val distance: Double =
-                    calculateDistance(lat, lng, busStop.latitude, busStop.longitude)
+                val distance = calculateDistance(lat, lng, busStop.latitude, busStop.longitude)
                 if (distance < minDistance) {
                     minDistance = distance
                     closestBusStopName = busStop.busStopName
                 }
             }
 
-            return closestBusStopName;
+            return closestBusStopName
         }
 
         /**
@@ -140,7 +156,9 @@ class BusStopProximityManager {
          * @return True if the bus stop is close, false otherwise.
          */
         private fun isBusStopClose(lat: Double, lng: Double, busStopName: String): Boolean {
-            val busStopList = OfflineData.getBusStopOfflineWithName()
+            if (busStopList.isEmpty()) {
+                Log.e("busStopList 2", "Bus stop list is empty.")
+            }
             Log.d("busStopList 2", busStopList.toString())
             val busStop = busStopList.find { it.busStopName == busStopName } ?: return false
             val distance = calculateDistance(lat, lng, busStop.latitude, busStop.longitude)
@@ -156,7 +174,11 @@ class BusStopProximityManager {
          * @return True if the next bus stop is in sequence, false otherwise.
          */
         private fun isBusStopInSequence(currentBusStopName: String, nextBusStopName: String): Boolean {
-            val busStopList = OfflineData.getBusStopOfflineWithName()
+
+            if (busStopList.isEmpty()) {
+                Log.e("busStopList 3", "Bus stop list is empty.")
+            }
+
             Log.d("busStopList 3", busStopList.toString())
 
             for(i in 0 until busStopList.size - 1){
@@ -176,7 +198,11 @@ class BusStopProximityManager {
          * @return The next bus stop information or null if not found.
          */
         fun getNextBusStopInSequenceOffline(currentAssignedBusStop: String): BusStopInfo? {
-            val busStopList = OfflineData.getBusStopOfflineWithName()
+
+            if (busStopList.isEmpty()) {
+                Log.e("busStopList 4", "Bus stop list is empty.")
+            }
+
             Log.d("busStopList 4", busStopList.toString())
 
             // Check if the currentAssignedBusStop is the last bus stop in the list
@@ -210,7 +236,10 @@ class BusStopProximityManager {
          * @return The next bus stop information or null if not found.
          */
         fun getNextBusStopInSequenceOnline(currentAssignedBusStop: String): BusStopInfo? {
-            val busStopList = OfflineData.getBusStopOfflineWithName()
+
+            if (busStopList.isEmpty()) {
+                Log.e("busStopList 5", "Bus stop list is empty.")
+            }
             Log.d("busStopList 5", busStopList.toString())
 
             // Check if the currentAssignedBusStop is the last bus stop in the list

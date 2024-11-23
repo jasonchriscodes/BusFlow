@@ -291,6 +291,44 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Helper function to convert stops to busStopInfo
+     */
+    private fun updateBusStopProximityManager() {
+        if (stops.isNotEmpty()) {
+            busStopInfo = stops.map { stop ->
+                BusStopInfo(
+                    latitude = stop.latitude ?: 0.0,
+                    longitude = stop.longitude ?: 0.0,
+                    busStopName = "BusStop_${stop.latitude}_${stop.longitude}"
+                )
+            }
+            BusStopProximityManager.setBusStopList(busStopInfo)
+            Log.d("updateBusStopProximityManager", "BusStopProximityManager updated with ${busStopInfo.size} stops.")
+            Log.d("updateBusStopProximityManager", "busStopInfo ${busStopInfo.toString()}")
+        } else {
+            Log.d("updateBusStopProximityManager", "No stops available to update BusStopProximityManager.")
+        }
+    }
+
+    /**
+     * function to convert route to the required BusStopInfo format
+     */
+    private fun convertRouteToBusStopInfo(route: List<BusRoute>): List<BusStopInfo> {
+        val result = route.mapIndexed { index, busStop ->
+            BusStopInfo(
+                latitude = busStop.latitude ?: 0.0,
+                longitude = busStop.longitude ?: 0.0,
+                busStopName = when (index) {
+                    0 -> "S/E"
+                    else -> index.toString()
+                }
+            )
+        }
+        Log.d("convertRouteToBusStopInfo", "Converted route to BusStopInfo: $result")
+        return result
+    }
+
+    /**
      * Handles the logout action
      */
     private fun handleLogout(){
@@ -550,51 +588,69 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Subscribes to shared data from the server.
-     * Checks if the configuration is null or empty, and if the `aid` from ThingsBoard matches the tablet's `aid`.
-     * If either check fails, it returns and runs on the UI thread.
+     * Validates configuration, AID matching, and updates the route, stops, and proximity manager.
      */
     private fun subscribeSharedData() {
         mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
             runOnUiThread {
-                val gson = Gson()
-                val data = gson.fromJson(message, Bus::class.java)
+                try {
+                    // Parse incoming message
+                    val gson = Gson()
+                    val data = gson.fromJson(message, Bus::class.java)
 
-                config = data.shared?.config?.busConfig
-                arrBusData = config.orEmpty() // Ensure arrBusData is assigned
-                Log.d("subscribeSharedData config", config.toString())
-                Log.d("subscribeSharedData arrBusData", arrBusData.toString())
+                    // Update configuration
+                    config = data.shared?.config?.busConfig
+                    arrBusData = config.orEmpty()
+                    Log.d("subscribeSharedData", "Config: $config")
+                    Log.d("subscribeSharedData", "arrBusData: $arrBusData")
 
-                if (config.isNullOrEmpty()) {
-                    Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
-                    clearBusData()
-                    return@runOnUiThread
-                }
-
-                val matchingAid = config!!.any { it.aid == aid }
-
-                if (!matchingAid) {
-                    Toast.makeText(this, "AID does not match.", Toast.LENGTH_SHORT).show()
-                    clearBusData()
-                    return@runOnUiThread
-                }
-
-                if (firstTime) {
-                    route = data.shared?.busRoute1 ?: emptyList()  // Initialize the route variable
-                    Log.d("subscribeSharedData route", route.toString())
-                    stops = data.shared?.busStop1 ?: emptyList()
-                    Log.d("subscribeSharedData stops", stops.toString())
-                    // convert stops to busStopInfo
-//                    Log.d("subscribeSharedData busStopInfo", busStopInfo.toString())
-                    if (route.isNotEmpty() && stops != null) {
-                        generatePolyline(route, stops)
-                        firstTime = false
+                    if (config.isNullOrEmpty()) {
+                        Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
+                        clearBusData()
+                        return@runOnUiThread
                     }
-                }
 
-                val msg = data.shared?.message
-                if (lastMessage != msg && msg != null) {
-                    saveNewMessage(msg)
-                    showNotification(msg)
+                    // Check if AID matches any entry in config
+                    val matchingAid = config!!.any { it.aid == aid }
+                    if (!matchingAid) {
+                        Toast.makeText(this, "AID does not match.", Toast.LENGTH_SHORT).show()
+                        clearBusData()
+                        return@runOnUiThread
+                    }
+
+                    // Process route and stops data
+                    route = data.shared?.busRoute1 ?: emptyList()
+                    stops = data.shared?.busStop1 ?: emptyList()
+                    Log.d("subscribeSharedData", "Route: $route")
+                    Log.d("subscribeSharedData", "Stops: $stops")
+
+                    if (route.isNotEmpty()) {
+                        // Convert route to BusStopInfo and update ProximityManager
+                        val busStopInfoList = convertRouteToBusStopInfo(route)
+                        Log.d("subscribeSharedData", "BusStopInfoList: $busStopInfoList")
+                        BusStopProximityManager.setBusStopList(busStopInfoList)
+                        Log.d("subscribeSharedData", "BusStopProximityManager updated.")
+
+                        // Generate polyline and markers on first-time initialization
+                        if (firstTime) {
+                            generatePolyline(route, stops)
+                            firstTime = false
+                        }
+                    } else {
+                        Log.d("subscribeSharedData", "No route data available.")
+                        clearBusData()
+                    }
+
+                    // Process admin messages
+                    val msg = data.shared?.message
+                    if (!msg.isNullOrEmpty() && msg != lastMessage) {
+                        lastMessage = msg
+                        saveNewMessage(msg)
+                        showNotification(msg)
+                    }
+                } catch (e: Exception) {
+                    Log.e("subscribeSharedData", "Error processing shared data: ${e.message}", e)
+                    Toast.makeText(this, "Error processing shared data.", Toast.LENGTH_SHORT).show()
                 }
             }
         }
