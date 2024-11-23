@@ -22,6 +22,7 @@ package com.jason.publisher.utils
 
 import com.jason.publisher.OfflineData
 import android.location.Location
+import android.util.Log
 import com.jason.publisher.model.BusStopInfo
 
 /**
@@ -85,6 +86,7 @@ class BusStopProximityManager {
          */
         private fun findTheBusStopWithClosestDistance(lat: Double, lng: Double) : String{
             val busStopList = OfflineData.getBusStopOfflineWithName()
+            Log.d("busStopList 1", busStopList.toString())
             var minDistance = Double.MAX_VALUE
             lateinit var closestBusStopName : String
 
@@ -139,6 +141,7 @@ class BusStopProximityManager {
          */
         private fun isBusStopClose(lat: Double, lng: Double, busStopName: String): Boolean {
             val busStopList = OfflineData.getBusStopOfflineWithName()
+            Log.d("busStopList 2", busStopList.toString())
             val busStop = busStopList.find { it.busStopName == busStopName } ?: return false
             val distance = calculateDistance(lat, lng, busStop.latitude, busStop.longitude)
             return distance < 300 // Return true if the bus is within n meters radius
@@ -154,6 +157,7 @@ class BusStopProximityManager {
          */
         private fun isBusStopInSequence(currentBusStopName: String, nextBusStopName: String): Boolean {
             val busStopList = OfflineData.getBusStopOfflineWithName()
+            Log.d("busStopList 3", busStopList.toString())
 
             for(i in 0 until busStopList.size - 1){
                 if(busStopList[i].busStopName == currentBusStopName && busStopList[i+1].busStopName == nextBusStopName){
@@ -173,6 +177,7 @@ class BusStopProximityManager {
          */
         fun getNextBusStopInSequenceOffline(currentAssignedBusStop: String): BusStopInfo? {
             val busStopList = OfflineData.getBusStopOfflineWithName()
+            Log.d("busStopList 4", busStopList.toString())
 
             // Check if the currentAssignedBusStop is the last bus stop in the list
             if (currentAssignedBusStop == busStopList.lastOrNull()?.busStopName) {
@@ -206,6 +211,7 @@ class BusStopProximityManager {
          */
         fun getNextBusStopInSequenceOnline(currentAssignedBusStop: String): BusStopInfo? {
             val busStopList = OfflineData.getBusStopOfflineWithName()
+            Log.d("busStopList 5", busStopList.toString())
 
             // Check if the currentAssignedBusStop is the last bus stop in the list
             if (currentAssignedBusStop == busStopList.lastOrNull()?.busStopName) {

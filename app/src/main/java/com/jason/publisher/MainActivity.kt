@@ -65,6 +65,7 @@ import android.net.ConnectivityManager
 import android.view.View
 import android.widget.ImageView
 import android.widget.ProgressBar
+import com.jason.publisher.model.BusStopInfo
 import com.jason.publisher.model.Coordinate
 import com.jason.publisher.model.findNearestCoordinate
 import kotlinx.coroutines.withContext
@@ -127,6 +128,8 @@ class MainActivity : AppCompatActivity() {
     private var bupcomingRoadTitle = "Upcoming Road"
     private var upcomingRoadText = ""
     private var route: List<BusRoute> = emptyList()
+    private var stops: List<BusStop> = emptyList()
+    private var busStopInfo: List<BusStopInfo> = emptyList()
     private var currentRoadName: String? = null
     private var passesRoadName: String? = null
     private var tempRoadName: String? = null
@@ -577,8 +580,11 @@ class MainActivity : AppCompatActivity() {
 
                 if (firstTime) {
                     route = data.shared?.busRoute1 ?: emptyList()  // Initialize the route variable
-                    Log.d("routeMainActivity", route.toString())
-                    val stops = data.shared?.busStop1
+                    Log.d("subscribeSharedData route", route.toString())
+                    stops = data.shared?.busStop1 ?: emptyList()
+                    Log.d("subscribeSharedData stops", stops.toString())
+                    // convert stops to busStopInfo
+//                    Log.d("subscribeSharedData busStopInfo", busStopInfo.toString())
                     if (route.isNotEmpty() && stops != null) {
                         generatePolyline(route, stops)
                         firstTime = false
