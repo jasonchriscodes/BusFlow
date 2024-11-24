@@ -3,6 +3,7 @@ package com.jason.publisher
 import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
+import android.util.Log
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -127,39 +128,46 @@ class LoginActivity : AppCompatActivity() {
                 if (response.isSuccessful) {
                     val responseData = response.body?.string()
                     val configFiles = JSONArray(responseData)
+                    Log.d("checkLoginCredentials", "configFiles: ${configFiles.toString()}")
 
                     var foundMatch = false
+                    var aidFound = false
+
                     for (i in 0 until configFiles.length()) {
                         val configFile = configFiles.getJSONObject(i)
                         val fileCompanyName = configFile.getString("companyName")
                         val filePassword = configFile.getString("password")
+                        val busConfigArray = configFile.getJSONArray("busConfig")
+
+                        // Check if the AID exists in the busConfig array
+                        for (j in 0 until busConfigArray.length()) {
+                            val busConfigObject = busConfigArray.getJSONObject(j)
+                            if (busConfigObject.getString("aid") == aid) {
+                                aidFound = true
+                                break
+                            }
+                        }
 
                         if (companyName == fileCompanyName && password == filePassword) {
                             tokenConfigData = configFile.getString("tokenConfigData")
                             foundMatch = true
-
-                            // Initialize mqttManager with the correct tokenConfigData
-                            mqttManager = MqttManager(
-                                serverUri = MainActivity.SERVER_URI,
-                                clientId = MainActivity.CLIENT_ID,
-                                username = tokenConfigData
-                            )
-
-                            runOnUiThread {
-                                // Proceed to MainActivity and pass AID
-                                val intent = Intent(this@LoginActivity, MainActivity::class.java)
-                                intent.putExtra("AID", aid)
-                                startActivity(intent)
-                                finish()
-                            }
                             break
                         }
                     }
 
-                    if (!foundMatch) {
-                        runOnUiThread {
+                    runOnUiThread {
+                        if (!foundMatch) {
                             loginButton.isEnabled = true // Re-enable the login button
                             Toast.makeText(this@LoginActivity, "Invalid credentials. Please try again or register.", Toast.LENGTH_SHORT).show()
+                        } else if (!aidFound) {
+                            loginButton.isEnabled = true // Re-enable the login button
+                            Toast.makeText(this@LoginActivity, "AID in this company is not found", Toast.LENGTH_LONG).show()
+                        } else {
+                            // Proceed to MainActivity
+                            val intent = Intent(this@LoginActivity, MainActivity::class.java)
+                            intent.putExtra("AID", aid)
+                            startActivity(intent)
+                            finish()
                         }
                     }
                 } else {
