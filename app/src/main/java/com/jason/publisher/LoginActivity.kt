@@ -109,7 +109,7 @@ class LoginActivity : AppCompatActivity() {
      * Checks if the given companyName and password exist on the server for login.
      */
     private fun checkLoginCredentials(companyName: String, password: String) {
-        val url = "http://43.226.218.98:5000/api/config-files" // Replace with the actual endpoint to list config files
+        val url = "http://43.226.218.98:5000/api/config-files"
 
         val request = Request.Builder()
             .url(url)
@@ -119,7 +119,8 @@ class LoginActivity : AppCompatActivity() {
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
-                    loginButton.isEnabled = true // Re-enable the login button
+                    loginButton.isEnabled = true
+                    Log.e("checkLoginCredentials", "Failed to connect to the server: ${e.message}")
                     Toast.makeText(this@LoginActivity, "Failed to connect to the server", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -128,10 +129,13 @@ class LoginActivity : AppCompatActivity() {
                 if (response.isSuccessful) {
                     val responseData = response.body?.string()
                     val configFiles = JSONArray(responseData)
-                    Log.d("checkLoginCredentials", "configFiles: ${configFiles.toString()}")
+                    Log.d("checkLoginCredentials", "Config Files Response: $responseData")
 
                     var foundMatch = false
                     var aidFound = false
+                    val trimmedAid = aid?.trim()
+
+                    Log.d("checkLoginCredentials", "Trimmed AID: $trimmedAid")
 
                     for (i in 0 until configFiles.length()) {
                         val configFile = configFiles.getJSONObject(i)
@@ -139,31 +143,46 @@ class LoginActivity : AppCompatActivity() {
                         val filePassword = configFile.getString("password")
                         val busConfigArray = configFile.getJSONArray("busConfig")
 
-                        // Check if the AID exists in the busConfig array
-                        for (j in 0 until busConfigArray.length()) {
-                            val busConfigObject = busConfigArray.getJSONObject(j)
-                            if (busConfigObject.getString("aid") == aid) {
-                                aidFound = true
-                                break
+                        Log.d("checkLoginCredentials", "Checking companyName: $fileCompanyName, password: $filePassword")
+
+                        if (companyName == fileCompanyName && password == filePassword) {
+                            if (!foundMatch) {
+                                tokenConfigData = configFile.optString("tokenConfigData", "")
+                                Log.d("checkLoginCredentials", "Token Config Data: $tokenConfigData")
+                                foundMatch = true
+                            }
+
+                            for (j in 0 until busConfigArray.length()) {
+                                val busConfigObject = busConfigArray.getJSONObject(j)
+                                val currentAid = busConfigObject.getString("aid").trim()
+
+                                Log.d(
+                                    "checkLoginCredentials",
+                                    "Checking busConfig AID: $currentAid against Trimmed AID: $trimmedAid"
+                                )
+
+                                if (currentAid.equals(trimmedAid, ignoreCase = true)) {
+                                    Log.d("checkLoginCredentials", "AID match found: $currentAid")
+                                    aidFound = true
+                                    break
+                                }
                             }
                         }
 
-                        if (companyName == fileCompanyName && password == filePassword) {
-                            tokenConfigData = configFile.getString("tokenConfigData")
-                            foundMatch = true
-                            break
-                        }
+                        if (aidFound) break // Break the outer loop only if AID is found
                     }
 
                     runOnUiThread {
                         if (!foundMatch) {
-                            loginButton.isEnabled = true // Re-enable the login button
+                            loginButton.isEnabled = true
+                            Log.e("checkLoginCredentials", "No matching companyName and password found.")
                             Toast.makeText(this@LoginActivity, "Invalid credentials. Please try again or register.", Toast.LENGTH_SHORT).show()
                         } else if (!aidFound) {
-                            loginButton.isEnabled = true // Re-enable the login button
-                            Toast.makeText(this@LoginActivity, "AID in this company is not found", Toast.LENGTH_LONG).show()
+                            loginButton.isEnabled = true
+                            Log.e("checkLoginCredentials", "AID not found in the company's configuration.")
+                            Toast.makeText(this@LoginActivity, "AID not found in the company's configuration.", Toast.LENGTH_LONG).show()
                         } else {
-                            // Proceed to MainActivity
+                            Log.d("checkLoginCredentials", "Login successful! Redirecting to MainActivity...")
                             val intent = Intent(this@LoginActivity, MainActivity::class.java)
                             intent.putExtra("AID", aid)
                             startActivity(intent)
@@ -172,7 +191,8 @@ class LoginActivity : AppCompatActivity() {
                     }
                 } else {
                     runOnUiThread {
-                        loginButton.isEnabled = true // Re-enable the login button
+                        loginButton.isEnabled = true
+                        Log.e("checkLoginCredentials", "Server returned unsuccessful response: ${response.code}")
                         Toast.makeText(this@LoginActivity, "Failed to fetch config files", Toast.LENGTH_SHORT).show()
                     }
                 }
