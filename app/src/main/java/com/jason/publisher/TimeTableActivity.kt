@@ -4,8 +4,10 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.jason.publisher.databinding.ActivityTimetableBinding
+import com.jason.publisher.utils.NetworkStatusHelper
 
 class TimeTableActivity : AppCompatActivity() {
 
@@ -21,6 +23,9 @@ class TimeTableActivity : AppCompatActivity() {
         aid = getAndroidId()
         Log.d("TimeTableActivity", "Fetched AID: $aid")
 
+        // Set up network status UI
+        NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
+
         // Set up the "Start Route" button
         binding.startRouteButton.setOnClickListener {
             val intent = Intent(this, MainActivity::class.java)
@@ -29,10 +34,12 @@ class TimeTableActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Fetches the Android ID (AID) of the device.
-     * @return A string representing the Android ID.
-     */
+    override fun onDestroy() {
+        super.onDestroy()
+        NetworkStatusHelper.unregisterReceiver(this)
+    }
+
+    /** Fetches the Android ID (AID) of the device. */
     private fun getAndroidId(): String {
         return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
     }

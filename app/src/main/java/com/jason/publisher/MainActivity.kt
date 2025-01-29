@@ -1,6 +1,5 @@
 package com.jason.publisher
 
-import NetworkReceiver
 import android.annotation.SuppressLint
 import android.content.IntentFilter
 import android.net.ConnectivityManager
@@ -27,6 +26,7 @@ import java.util.*
 import android.content.Intent
 import android.view.View
 import androidx.constraintlayout.widget.ConstraintLayout
+import com.jason.publisher.utils.NetworkStatusHelper
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
@@ -42,7 +42,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mqttManager: MqttManager
     private lateinit var mapController: MapController
     private lateinit var connectionStatusTextView: TextView
-    private lateinit var networkReceiver: NetworkReceiver
     private lateinit var dateTimeHandler: Handler
     private lateinit var dateTimeRunnable: Runnable
 
@@ -70,8 +69,8 @@ class MainActivity : AppCompatActivity() {
         val aid = intent.getStringExtra("AID") ?: "Unknown"
         Log.d("MainActivity", "Received AID: $aid")
 
-        // Initialize UI components
-        connectionStatusTextView = binding.connectionStatusTextView
+        // Set up network status UI
+        NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
 
         // Initialize MQTT manager
         mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID)
@@ -81,9 +80,6 @@ class MainActivity : AppCompatActivity() {
 
         // Automatically open the map from assets
         openMapFromAssets()
-
-        // Register and initialize the NetworkReceiver
-        registerNetworkReceiver()
 
         // Connect and subscribe to MQTT
         connectAndSubscribe()
@@ -220,33 +216,9 @@ class MainActivity : AppCompatActivity() {
         dateTimeHandler.removeCallbacks(dateTimeRunnable)
     }
 
-    /** Registers the network receiver to monitor and display network status. */
-    private fun registerNetworkReceiver() {
-        networkReceiver = NetworkReceiver(object : NetworkReceiver.NetworkListener {
-            override fun onNetworkAvailable() {
-                runOnUiThread {
-                    connectionStatusTextView.text = "Connected"
-                    connectionStatusTextView.setTextColor(getColor(android.R.color.holo_green_dark))
-                    binding.networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_green)
-                }
-            }
-
-            override fun onNetworkUnavailable() {
-                runOnUiThread {
-                    connectionStatusTextView.text = "Disconnected"
-                    connectionStatusTextView.setTextColor(getColor(android.R.color.holo_red_dark))
-                    binding.networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_red)
-                }
-            }
-        })
-        val intentFilter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
-        registerReceiver(networkReceiver, intentFilter)
-    }
-
-    /** Cleans up resources and unregisters the network receiver on activity destruction. */
+    /** Cleans up resources on activity destruction. */
     override fun onDestroy() {
         mqttManager.disconnect()
-        unregisterReceiver(networkReceiver)
         stopDateTimeUpdater()
         super.onDestroy()
     }
