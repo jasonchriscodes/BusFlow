@@ -8,4 +8,5 @@
     <string name="dummy_length_chat">999</string>
     <string name="explorer_logo">Explorer Logo</string>
     <string name="fullers_logo">Fullers Logo</string>
+    <string name="open_local_map">Open Local Map</string>
 </resources>

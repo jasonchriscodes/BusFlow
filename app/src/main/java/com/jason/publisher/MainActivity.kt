@@ -4,12 +4,15 @@ import NetworkReceiver
 import android.annotation.SuppressLint
 import android.content.IntentFilter
 import android.net.ConnectivityManager
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.gms.common.util.AndroidUtilsLight
 import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivityMainBinding
 import com.jason.publisher.model.Bus
@@ -21,6 +24,17 @@ import org.osmdroid.views.MapController
 import org.osmdroid.views.overlay.Marker
 import java.text.SimpleDateFormat
 import java.util.*
+import android.content.Intent
+import android.view.View
+import androidx.constraintlayout.widget.ConstraintLayout
+import org.mapsforge.core.model.LatLong
+import org.mapsforge.map.android.graphics.AndroidGraphicFactory
+import org.mapsforge.map.android.util.AndroidUtil
+import org.mapsforge.map.layer.renderer.TileRendererLayer
+import org.mapsforge.map.reader.MapFile
+import org.mapsforge.map.rendertheme.InternalRenderTheme
+import java.io.File
+import java.io.FileInputStream
 
 class MainActivity : AppCompatActivity() {
 
@@ -48,6 +62,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AndroidGraphicFactory.createInstance(application)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -64,8 +79,8 @@ class MainActivity : AppCompatActivity() {
         // Load configuration
         Configuration.getInstance().load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
 
-        // Setup the map
-        setupMap()
+        // Automatically open the map from assets
+        openMapFromAssets()
 
         // Register and initialize the NetworkReceiver
         registerNetworkReceiver()
@@ -77,11 +92,50 @@ class MainActivity : AppCompatActivity() {
         startDateTimeUpdater()
     }
 
-    /** Sets up the map and configures the initial position and zoom level. */
-    private fun setupMap() {
-        mapController = binding.map.controller as MapController
-        mapController.setZoom(18.0)
-        mapController.setCenter(GeoPoint(latitude, longitude))
+    /** Automatically open the map from assets and configure the map. */
+    private fun openMapFromAssets() {
+        binding.map.mapScaleBar.isVisible = true
+        binding.map.setBuiltInZoomControls(true)
+
+        // Create a tile cache for the map renderer
+        val cache = AndroidUtil.createTileCache(
+            this,
+            "mycache",
+            binding.map.model.displayModel.tileSize,
+            1f,
+            binding.map.model.frameBufferModel.overdrawFactor
+        )
+
+        // Copy the map file from assets to a temporary file
+        val mapFile = copyAssetToFile("new-zealand-2.map")
+
+        // Load the map using the file
+        val mapStore = MapFile(mapFile)
+        val renderLayer = TileRendererLayer(
+            cache,
+            mapStore,
+            binding.map.model.mapViewPosition,
+            AndroidGraphicFactory.INSTANCE
+        )
+        renderLayer.setXmlRenderTheme(
+            InternalRenderTheme.DEFAULT
+        )
+        binding.map.layerManager.layers.add(renderLayer)
+        binding.map.setCenter(LatLong(-36.8485, 174.7633)) // Auckland, New Zealand
+        binding.map.setZoomLevel(12) // A moderate zoom level
+    }
+
+    /** Copies a file from assets to the device's file system and returns the File object. */
+    private fun copyAssetToFile(assetName: String): File {
+        val file = File(cacheDir, assetName)
+        if (!file.exists()) {
+            assets.open(assetName).use { inputStream ->
+                file.outputStream().use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+        }
+        return file
     }
 
     /** Connects to the MQTT broker and subscribes to the required topics. */
@@ -125,17 +179,17 @@ class MainActivity : AppCompatActivity() {
 
     /** Generates route markers and polylines for the bus route on the map. */
     private fun generateRouteMarkers(busRoute: List<BusRoute>) {
-        val routes = busRoute.map { GeoPoint(it.latitude!!, it.longitude!!) }
-        val polyline = org.osmdroid.views.overlay.Polyline()
-        polyline.setPoints(routes)
-
-        val marker = Marker(binding.map)
-        marker.position = GeoPoint(latitude, longitude)
-        marker.rotation = bearing
-
-        binding.map.overlays.add(polyline)
-        binding.map.overlays.add(marker)
-        binding.map.invalidate()
+//        val routes = busRoute.map { GeoPoint(it.latitude!!, it.longitude!!) }
+//        val polyline = org.osmdroid.views.overlay.Polyline()
+//        polyline.setPoints(routes)
+//
+//        val marker = Marker(binding.map)
+//        marker.position = GeoPoint(latitude, longitude)
+//        marker.rotation = bearing
+//
+//        binding.map.overlays.add(polyline)
+//        binding.map.overlays.add(marker)
+//        binding.map.invalidate()
     }
 
     /** Updates the upcoming road name in the UI. */
