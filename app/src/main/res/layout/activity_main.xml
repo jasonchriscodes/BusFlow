@@ -159,6 +159,18 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!-- ProgressBar to show reconnecting -->
+    <ProgressBar
+        android:id="@+id/reconnectProgressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/attemptingToConnectTextView"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        tools:ignore="NotSibling" />
+
     <!-- Network status elements -->
     <View
         android:id="@+id/networkStatusIndicator"
