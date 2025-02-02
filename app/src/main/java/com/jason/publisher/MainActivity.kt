@@ -39,6 +39,7 @@ import com.jason.publisher.services.SharedPrefMananger
 import com.jason.publisher.services.SoundManager
 import com.jason.publisher.utils.BusStopProximityManager
 import com.jason.publisher.utils.NetworkStatusHelper
+import org.json.JSONObject
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
@@ -159,6 +160,7 @@ class MainActivity : AppCompatActivity() {
                 Log.d("MainActivity Token Main", token)
                 mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
                 getDefaultConfigValue()
+                requestAdminMessage()
                 connectAndSubscribe()
             } else {
                 Toast.makeText(this, "Failed to initialize config. No bus information available.", Toast.LENGTH_SHORT).show()
@@ -615,6 +617,25 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return file
+    }
+
+    /**
+     * Requests admin messages periodically.
+     */
+    private fun requestAdminMessage() {
+        val jsonObject = JSONObject()
+        jsonObject.put("sharedKeys","message,busRoute,busStop,config")
+        val jsonString = jsonObject.toString()
+        val handler = Handler(Looper.getMainLooper())
+        mqttManager.publish(PUB_MSG_TOPIC, jsonString)
+//        mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonString)
+        handler.post(object : Runnable {
+            override fun run() {
+                mqttManager.publish(PUB_MSG_TOPIC, jsonString)
+//                mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonString)
+                handler.postDelayed(this, REQUEST_PERIODIC_TIME)
+            }
+        })
     }
 
     /** Connects to the MQTT broker and subscribes to the required topics. */
