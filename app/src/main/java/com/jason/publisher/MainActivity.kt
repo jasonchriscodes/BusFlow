@@ -154,19 +154,7 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        fetchConfig { success ->
-            if (success) {
-                getAccessToken()
-                Log.d("MainActivity Token Main", token)
-                mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
-                getDefaultConfigValue()
-                requestAdminMessage()
-                connectAndSubscribe()
-            } else {
-                Toast.makeText(this, "Failed to initialize config. No bus information available.", Toast.LENGTH_SHORT).show()
-                clearBusData()
-            }
-        }
+
     }
 
     /**
@@ -392,6 +380,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Requests admin messages periodically.
+     */
+    private fun requestAdminMessage() {
+        val jsonObject = JSONObject()
+        jsonObject.put("sharedKeys","message,busRoute,busStop,config")
+        val jsonString = jsonObject.toString()
+        val handler = Handler(Looper.getMainLooper())
+        mqttManager.publish(PUB_MSG_TOPIC, jsonString)
+//        mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonString)
+        handler.post(object : Runnable {
+            override fun run() {
+                mqttManager.publish(PUB_MSG_TOPIC, jsonString)
+//                mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonString)
+                handler.postDelayed(this, REQUEST_PERIODIC_TIME)
+            }
+        })
+    }
+
+    /**
      * Subscribes to shared data from the server.
      * Validates configuration, AID matching, and updates the route, stops, and proximity manager.
      */
@@ -549,26 +556,22 @@ class MainActivity : AppCompatActivity() {
 //        binding.map.invalidate()
 //    }
 
-    /**
-     * Fetches the configuration data and initializes the config variable.
-     * Calls the provided callback with true if successful, false otherwise.
-     */
+    /** Fetches the configuration data and initializes the config variable. */
     private fun fetchConfig(callback: (Boolean) -> Unit) {
         Log.d("MainActivity fetchConfig", "Fetching config...")
 
         mqttManagerConfig.fetchSharedAttributes(tokenConfigData) { listConfig ->
-            if (listConfig.isNotEmpty()) {
-                config = listConfig
-                Log.d("MainActivity fetchConfig", "✅ Config received: $config")
-
-                // Ensure that MQTT subscription happens after config is fetched
-                subscribeSharedData()
-
-                callback(true)
-            } else {
-                config = emptyList()
-                Log.e("MainActivity fetchConfig", "❌ Failed to initialize config. No bus information available.")
-                callback(false)
+            runOnUiThread {
+                if (listConfig.isNotEmpty()) {
+                    config = listConfig
+                    Log.d("MainActivity fetchConfig", "✅ Config received: $config")
+                    subscribeSharedData()
+                    callback(true)
+                } else {
+                    Log.e("MainActivity fetchConfig", "❌ Failed to initialize config. Running in offline mode.")
+                    Toast.makeText(this@MainActivity, "Running in offline mode. No bus information available.", Toast.LENGTH_SHORT).show()
+                    callback(false)
+                }
             }
         }
     }
@@ -619,25 +622,6 @@ class MainActivity : AppCompatActivity() {
         return file
     }
 
-    /**
-     * Requests admin messages periodically.
-     */
-    private fun requestAdminMessage() {
-        val jsonObject = JSONObject()
-        jsonObject.put("sharedKeys","message,busRoute,busStop,config")
-        val jsonString = jsonObject.toString()
-        val handler = Handler(Looper.getMainLooper())
-        mqttManager.publish(PUB_MSG_TOPIC, jsonString)
-//        mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonString)
-        handler.post(object : Runnable {
-            override fun run() {
-                mqttManager.publish(PUB_MSG_TOPIC, jsonString)
-//                mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonString)
-                handler.postDelayed(this, REQUEST_PERIODIC_TIME)
-            }
-        })
-    }
-
     /** Connects to the MQTT broker and subscribes to the required topics. */
     private fun connectAndSubscribe() {
         mqttManager.connect { isConnected ->
@@ -645,7 +629,10 @@ class MainActivity : AppCompatActivity() {
                 Log.d("MainActivity connectAndSubscribe", "✅ Connected to MQTT broker successfully.")
                 subscribeSharedData()
             } else {
-                Log.e("MainActivity connectAndSubscribe", "❌ Failed to connect to MQTT broker.")
+                Log.e("MainActivity connectAndSubscribe", "❌ Failed to connect to MQTT broker. Running in offline mode.")
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "Running in offline mode. No connection to server.", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
