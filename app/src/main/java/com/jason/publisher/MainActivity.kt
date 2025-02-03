@@ -131,9 +131,6 @@ class MainActivity : AppCompatActivity() {
         // Load configuration
         Configuration.getInstance().load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
 
-        // Automatically open the map from assets
-        openMapFromAssets()
-
         // Connect and subscribe to MQTT
         connectAndSubscribe()
 
@@ -154,7 +151,21 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
+        // Load offline map first
+        openMapFromAssets()
 
+        fetchConfig { success ->
+            if (success) {
+                getAccessToken()
+                Log.d("MainActivity Token Main", token)
+                mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
+                getDefaultConfigValue()
+                requestAdminMessage()
+                connectAndSubscribe()
+            } else {
+                Log.e("MainActivity", "Failed to fetch config, running in offline mode.")
+            }
+        }
     }
 
     /**
