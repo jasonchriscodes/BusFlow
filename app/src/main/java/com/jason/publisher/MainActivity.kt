@@ -214,7 +214,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Retrieves the Android ID (AID) from a hidden file in the app-specific documents directory.
+     * Retrieves the Android ID (AID) from a hidden JSON file in the app-specific documents directory.
      * If the file or directory does not exist, it creates them and generates a new AID.
      *
      * @return The AID (Android ID) as a String.
@@ -247,21 +247,31 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val aidFile = File(hiddenFolder, "busDataCache.txt")
+        val aidFile = File(hiddenFolder, "busDataCache.json")
         Log.d("MainActivity getOrCreateAid", "Attempting to create: ${aidFile.absolutePath}")
 
         if (!aidFile.exists()) {
             val newAid = generateNewAid()
+            val jsonObject = JSONObject().apply {
+                put("aid", newAid)
+            }
             try {
-                aidFile.writeText(newAid)
-                Toast.makeText(this, "AID saved successfully in busDataCache.txt", Toast.LENGTH_SHORT).show()
+                aidFile.writeText(jsonObject.toString())
+                Toast.makeText(this, "AID saved successfully in busDataCache.json", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 Log.e("MainActivity getOrCreateAid", "Error writing to file: ${e.message}")
                 return "Error writing file"
             }
             return newAid
         }
-        return aidFile.readText().trim()
+
+        return try {
+            val jsonContent = JSONObject(aidFile.readText())
+            jsonContent.getString("aid").trim()
+        } catch (e: Exception) {
+            Log.e("MainActivity getOrCreateAid", "Error reading JSON file: ${e.message}")
+            "Error reading file"
+        }
     }
 
     /**
