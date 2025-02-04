@@ -1,5 +1,6 @@
 package com.jason.publisher
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.IntentFilter
 import android.net.ConnectivityManager
@@ -24,11 +25,17 @@ import org.osmdroid.views.overlay.Marker
 import java.text.SimpleDateFormat
 import java.util.*
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.location.Location
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
 import android.view.View
 import android.widget.Toast
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.jason.publisher.model.BusItem
 import com.jason.publisher.model.BusStop
@@ -64,6 +71,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var connectionStatusTextView: TextView
     private lateinit var dateTimeHandler: Handler
     private lateinit var dateTimeRunnable: Runnable
+    private val REQUEST_MANAGE_EXTERNAL_STORAGE = 1001
+    private val REQUEST_WRITE_PERMISSION = 1002
 
     private var token = ""
     private var tokenConfigData = "oRSsbeuqDMSckyckcMyE"
@@ -79,6 +88,7 @@ class MainActivity : AppCompatActivity() {
     private var busConfig = ""
     private var busname = ""
     private var aid = ""
+    private var busDataCache = ""
     private var config: List<BusItem>? = emptyList()
     private var route: List<BusRoute> = emptyList()
     private var stops: List<BusStop> = emptyList()
@@ -109,12 +119,30 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Check and request permission
+        requestAllFilesAccessPermission()
+
+        busDataCache = getOrCreateAid()
+        val file = File("/storage/emulated/0/Documents/.vlrshiddenfolder/busDataCache.txt")
+        if (file.exists()) {
+            Log.d("MainActivity onCreate", "✅ File exists: ${file.absolutePath}")
+        } else {
+            Log.e("MainActivity onCreate", "❌ File creation failed!")
+        }
+
+        val file2 = File("/storage/emulated/0/Documents/.vlrshiddenfolder/aid.txt")
+        if (file.exists()) {
+            Log.d("MainActivity onCreate", "✅ File exists: ${file2.absolutePath}")
+        } else {
+            Log.e("MainActivity onCreate", "❌ File creation failed!")
+        }
+
         // Initialize managers before using them
         initializeManagers()
 
         // Retrieve AID passed from TimeTableActivity
         aid = intent.getStringExtra("AID") ?: "Unknown"
-        Log.d("MainActivity", "Received AID: $aid")
+        Log.d("MainActivity onCreate", "Received AID: $aid")
 
         // Initialize UI components
         initializeUIComponents()
@@ -142,8 +170,8 @@ class MainActivity : AppCompatActivity() {
             override fun onLocationUpdate(location: Location) {
                 latitude = location.latitude
                 longitude = location.longitude
-                Log.d("MainActivity Latitude", latitude.toString())
-                Log.d("MainActivity Longitude", longitude.toString())
+                Log.d("MainActivity onCreate Latitude", latitude.toString())
+                Log.d("MainActivity onCreate Longitude", longitude.toString())
 
                 // Update UI components with the current location
                 latitudeTextView.text = "Latitude: $latitude"
@@ -157,13 +185,107 @@ class MainActivity : AppCompatActivity() {
         fetchConfig { success ->
             if (success) {
                 getAccessToken()
-                Log.d("MainActivity Token Main", token)
+                Log.d("MainActivity onCreate Token", token)
                 mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
                 getDefaultConfigValue()
                 requestAdminMessage()
                 connectAndSubscribe()
             } else {
-                Log.e("MainActivity", "Failed to fetch config, running in offline mode.")
+                Log.e("MainActivity onCreate", "Failed to fetch config, running in offline mode.")
+            }
+        }
+    }
+
+    /**
+     * All Files Access Permission (MANAGE_EXTERNAL_STORAGE).
+     */
+    private fun requestAllFilesAccessPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                try {
+                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    intent.data = Uri.parse("package:$packageName")
+                    startActivityForResult(intent, REQUEST_MANAGE_EXTERNAL_STORAGE)
+                } catch (e: Exception) {
+                    Log.e("MainActivity requestAllFilesAccessPermission", "Error requesting storage permission: ${e.message}")
+                }
+            }
+        }
+    }
+
+    /**
+     * Retrieves the Android ID (AID) from a hidden file in the app-specific documents directory.
+     * If the file or directory does not exist, it creates them and generates a new AID.
+     *
+     * @return The AID (Android ID) as a String.
+     */
+    @SuppressLint("HardwareIds")
+    private fun getOrCreateAid(): String {
+        // Ensure we have the correct storage permission
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                Log.e("MainActivity getOrCreateAid", "Storage permission not granted.")
+                return "Permission Denied"
+            }
+        } else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+                Log.e("MainActivity getOrCreateAid", "Storage permission not granted.")
+                return "Permission Denied"
+            }
+        }
+
+        // Use External Storage Public Directory for Documents
+        val externalDocumentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+        val hiddenFolder = File(externalDocumentsDir, ".vlrshiddenfolder")
+
+        if (!hiddenFolder.exists()) {
+            val success = hiddenFolder.mkdirs()
+            if (!success) {
+                Log.e("MainActivity getOrCreateAid", "Failed to create directory: ${hiddenFolder.absolutePath}")
+                return "Failed to create directory"
+            }
+        }
+
+        val aidFile = File(hiddenFolder, "busDataCache.txt")
+        Log.d("MainActivity getOrCreateAid", "Attempting to create: ${aidFile.absolutePath}")
+
+        if (!aidFile.exists()) {
+            val newAid = generateNewAid()
+            try {
+                aidFile.writeText(newAid)
+                Toast.makeText(this, "AID saved successfully in busDataCache.txt", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Log.e("MainActivity getOrCreateAid", "Error writing to file: ${e.message}")
+                return "Error writing file"
+            }
+            return newAid
+        }
+        return aidFile.readText().trim()
+    }
+
+    /**
+     * Generates a new Android ID (AID) using the device's secure Android ID.
+     *
+     * @return A unique Android ID as a String.
+     */
+    @SuppressLint("HardwareIds")
+    private fun generateNewAid(): String {
+        return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+    }
+
+    /**
+     * onActivityResult to handle permission grant
+     */
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_MANAGE_EXTERNAL_STORAGE) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                if (Environment.isExternalStorageManager()) {
+                    Log.d("MainActivity", "All files access granted.")
+                } else {
+                    Log.e("MainActivity", "User denied all files access.")
+                }
             }
         }
     }
@@ -414,26 +536,26 @@ class MainActivity : AppCompatActivity() {
      * Validates configuration, AID matching, and updates the route, stops, and proximity manager.
      */
     private fun subscribeSharedData() {
-        Log.d("MainActivity subscribeSharedData", "Enter subscribeSharedData")
+//        Log.d("MainActivity subscribeSharedData", "Enter subscribeSharedData")
 
         mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
             runOnUiThread {
                 try {
-                    Log.d("MainActivity subscribeSharedData", "Received message: $message")
+//                    Log.d("MainActivity subscribeSharedData", "Received message: $message")
 
                     // Parse incoming message
                     val gson = Gson()
                     val data = gson.fromJson(message, Bus::class.java)
 
                     // Debugging received JSON structure
-                    Log.d("MainActivity subscribeSharedData", "Parsed Bus Object: $data")
+//                    Log.d("MainActivity subscribeSharedData", "Parsed Bus Object: $data")
 
                     // Update configuration
                     config = data.shared?.config?.busConfig
                     arrBusData = config.orEmpty()
 
-                    Log.d("MainActivity subscribeSharedData Config", "Config: $config")
-                    Log.d("MainActivity subscribeSharedData arrBusData", "arrBusData: $arrBusData")
+//                    Log.d("MainActivity subscribeSharedData Config", "Config: $config")
+//                    Log.d("MainActivity subscribeSharedData arrBusData", "arrBusData: $arrBusData")
 
                     if (config.isNullOrEmpty()) {
                         Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
@@ -452,15 +574,15 @@ class MainActivity : AppCompatActivity() {
                     // Process route and stops data
                     route = data.shared?.busRoute1 ?: emptyList()
                     stops = data.shared?.busStop1 ?: emptyList()
-                    Log.d("MainActivity subscribeSharedData", "Route: $route")
-                    Log.d("MainActivity subscribeSharedData", "Stops: $stops")
+//                    Log.d("MainActivity subscribeSharedData", "Route: $route")
+//                    Log.d("MainActivity subscribeSharedData", "Stops: $stops")
 
                     if (route.isNotEmpty()) {
                         // Convert route to BusStopInfo and update ProximityManager
                         val busStopInfoList = convertRouteToBusStopInfo(route)
-                        Log.d("MainActivity subscribeSharedData", "BusStopInfoList: $busStopInfoList")
+//                        Log.d("MainActivity subscribeSharedData", "BusStopInfoList: $busStopInfoList")
                         BusStopProximityManager.setBusStopList(busStopInfoList)
-                        Log.d("MainActivity subscribeSharedData", "BusStopProximityManager updated.")
+//                        Log.d("MainActivity subscribeSharedData", "BusStopProximityManager updated.")
 
                         // Generate polyline and markers on first-time initialization
                         if (firstTime) {
