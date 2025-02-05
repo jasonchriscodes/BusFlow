@@ -37,6 +37,7 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
+import com.jason.publisher.model.BusDataCache
 import com.jason.publisher.model.BusItem
 import com.jason.publisher.model.BusStop
 import com.jason.publisher.model.BusStopInfo
@@ -122,17 +123,20 @@ class MainActivity : AppCompatActivity() {
         // Check and request permission
         requestAllFilesAccessPermission()
 
-        busDataCache = getOrCreateAid()
+        // Check internet connection
+        if (!NetworkStatusHelper.isNetworkAvailable(this)) {
+            // No internet, load cached bus data
+            Toast.makeText(this, "You are disconnected from the internet. Loading data from tablet cache.", Toast.LENGTH_LONG).show()
+            loadBusDataFromCache()
+            Log.d("MainActivity oncreate config", config.toString())
+            Log.d("MainActivity oncreate busRoute", route.toString())
+            Log.d("MainActivity oncreate busStop", stops.toString())
+        }
+
+//        busDataCache = getOrCreateAid()
         val file = File("/storage/emulated/0/Documents/.vlrshiddenfolder/busDataCache.txt")
         if (file.exists()) {
             Log.d("MainActivity onCreate", "✅ File exists: ${file.absolutePath}")
-        } else {
-            Log.e("MainActivity onCreate", "❌ File creation failed!")
-        }
-
-        val file2 = File("/storage/emulated/0/Documents/.vlrshiddenfolder/aid.txt")
-        if (file.exists()) {
-            Log.d("MainActivity onCreate", "✅ File exists: ${file2.absolutePath}")
         } else {
             Log.e("MainActivity onCreate", "❌ File creation failed!")
         }
@@ -190,9 +194,87 @@ class MainActivity : AppCompatActivity() {
                 getDefaultConfigValue()
                 requestAdminMessage()
                 connectAndSubscribe()
+//                Log.d("MainActivity oncreate fetchConfig config", config.toString())
+//                Log.d("MainActivity oncreate fetchConfig busRoute", route.toString())
+//                Log.d("MainActivity oncreate fetchConfig busStop", stops.toString())
             } else {
                 Log.e("MainActivity onCreate", "Failed to fetch config, running in offline mode.")
             }
+        }
+    }
+
+    /**
+     * Saves the latest bus data to the cache file.
+     */
+    private fun saveBusDataToCache() {
+        val cacheFile = File(getHiddenFolder(), "busDataCache.txt") // Change extension to .txt
+//        Log.d("MainActivity saveBusDataToCache aid", aid.toString())
+//        Log.d("MainActivity saveBusDataToCache config", config.toString())
+//        Log.d("MainActivity saveBusDataToCache busRoute", routeCache.toString())
+//        Log.d("MainActivity saveBusDataToCache busStop", stopsCache.toString())
+
+        try {
+            val busData = BusDataCache(
+                aid = aid,
+                config = config,
+                busRoute = route,
+                busStop = stops
+            )
+
+            val jsonString = Gson().toJson(busData) // Format data as JSON
+            cacheFile.writeText(jsonString) // Save as a .txt file but in JSON format
+            Log.d("MainActivity", "✅ Bus data cache updated successfully in busDataCache.txt.")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "❌ Error saving bus data cache: ${e.message}")
+        }
+    }
+
+    /**
+     * Gets the hidden folder directory where cached bus data is stored.
+     * Creates the folder if it does not exist.
+     *
+     * @return File representing the hidden directory.
+     */
+    private fun getHiddenFolder(): File {
+        val externalDocumentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+        val hiddenFolder = File(externalDocumentsDir, ".vlrshiddenfolder")
+
+        if (!hiddenFolder.exists()) {
+            hiddenFolder.mkdirs()
+        }
+
+        return hiddenFolder
+    }
+
+    /**
+     * Loads bus data from the cache file if it exists.
+     * If no cache is found, returns a default AID.
+     *
+     * @return AID or an error message.
+     */
+    private fun loadBusDataFromCache(): String {
+        val cacheFile = File(getHiddenFolder(), "busDataCache.txt") // Change extension to .txt
+
+        return if (cacheFile.exists()) {
+            try {
+                val jsonContent = cacheFile.readText()
+                val cachedData = Gson().fromJson(jsonContent, BusDataCache::class.java)
+
+                // Update global variables with cached data
+                aid = cachedData.aid
+                config = cachedData.config ?: emptyList()
+                route = cachedData.busRoute ?: emptyList()
+                stops = cachedData.busStop ?: emptyList()
+
+                Log.d("MainActivity loadBusDataFromCache", "✅ Loaded cached bus data from busDataCache.txt.")
+                cachedData.aid // Return the AID
+            } catch (e: Exception) {
+                Log.e("MainActivity loadBusDataFromCache", "❌ Error reading bus data cache: ${e.message}")
+                "Error reading cache"
+            }
+        } else {
+            Log.e("MainActivity", "❌ No cached bus data found in busDataCache.txt.")
+            "No cache found"
         }
     }
 
@@ -564,7 +646,7 @@ class MainActivity : AppCompatActivity() {
                     config = data.shared?.config?.busConfig
                     arrBusData = config.orEmpty()
 
-//                    Log.d("MainActivity subscribeSharedData Config", "Config: $config")
+                    Log.d("MainActivity subscribeSharedData Config", "Config: $config")
 //                    Log.d("MainActivity subscribeSharedData arrBusData", "arrBusData: $arrBusData")
 
                     if (config.isNullOrEmpty()) {
@@ -584,8 +666,13 @@ class MainActivity : AppCompatActivity() {
                     // Process route and stops data
                     route = data.shared?.busRoute1 ?: emptyList()
                     stops = data.shared?.busStop1 ?: emptyList()
-//                    Log.d("MainActivity subscribeSharedData", "Route: $route")
-//                    Log.d("MainActivity subscribeSharedData", "Stops: $stops")
+                    Log.d("MainActivity subscribeSharedData", "Route: $route")
+                    Log.d("MainActivity subscribeSharedData", "Stops: $stops")
+
+                    // Save data **only after all values are updated**
+                    if (config!!.isNotEmpty() && route.isNotEmpty() && stops.isNotEmpty()) {
+                        saveBusDataToCache()
+                    }
 
                     if (route.isNotEmpty()) {
                         // Convert route to BusStopInfo and update ProximityManager
@@ -771,6 +858,9 @@ class MainActivity : AppCompatActivity() {
             if (isConnected) {
                 Log.d("MainActivity connectAndSubscribe", "✅ Connected to MQTT broker successfully.")
                 subscribeSharedData()
+//                Log.d("MainActivity connectAndSubscribe config", config.toString())
+//                Log.d("MainActivity connectAndSubscribe busRoute", route.toString())
+//                Log.d("MainActivity connectAndSubscribe busStop", stops.toString())
             } else {
                 Log.e("MainActivity connectAndSubscribe", "❌ Failed to connect to MQTT broker. Running in offline mode.")
                 runOnUiThread {
