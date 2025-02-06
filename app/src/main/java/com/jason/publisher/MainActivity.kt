@@ -105,6 +105,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var longitudeTextView: TextView
 
     private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
+    private var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
+
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -191,6 +193,9 @@ class MainActivity : AppCompatActivity() {
         // Load offline map first
         openMapFromAssets()
 
+        // Start tracking the location and updating the marker
+        startLocationUpdate()
+
         fetchConfig { success ->
             if (success) {
                 getAccessToken()
@@ -227,7 +232,7 @@ class MainActivity : AppCompatActivity() {
 
             // **Set up paint for polyline**
             val polylinePaint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
-                color = Color.RED  // Change color to RED for visibility
+                color = Color.BLUE  // Change color to RED for visibility
                 strokeWidth = 8f  // Increase thickness for better visibility
                 setStyle(org.mapsforge.core.graphics.Style.STROKE)
             }
@@ -452,14 +457,44 @@ class MainActivity : AppCompatActivity() {
                     direction = Helper.bearingToDirection(bearing)
                 }
 
+                // Update global variables
                 latitude = currentLatitude
                 longitude = currentLongitude
                 speed = (location.speed * 3.6).toFloat()
                 lastLatitude = currentLatitude
                 lastLongitude = currentLongitude
+
+                // Update the bus marker position
+                updateBusMarkerPosition(latitude, longitude)
             }
         })
     }
+
+    /**
+     * Move the bus marker dynamically
+     */
+    private fun updateBusMarkerPosition(lat: Double, lon: Double) {
+        val newPosition = LatLong(lat, lon)
+
+        // Remove old marker if it exists
+        busMarker?.let {
+            binding.map.layerManager.layers.remove(it)
+        }
+
+        val markerDrawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)
+        val markerBitmap = AndroidGraphicFactory.convertToBitmap(markerDrawable)
+
+        // Create a new marker at the updated position
+        busMarker = org.mapsforge.map.layer.overlay.Marker(
+            newPosition, markerBitmap, 0, 0
+        )
+        binding.map.layerManager.layers.add(busMarker)
+
+        // Keep the map centered on the bus location
+        binding.map.setCenter(newPosition)
+        binding.map.invalidate()
+    }
+
 
     /**
      * Calculates the bearing between two geographical points.
@@ -887,13 +922,17 @@ class MainActivity : AppCompatActivity() {
             binding.map.layerManager.layers.add(renderLayer)
             Log.d("MainActivity openMapFromAssets", "✅ Offline map added successfully.")
         } else {
-            Log.w("MainActivity openMapFromAssets", "⚠️ Offline map layer already exists. Skipping duplicate addition.")
+            Log.d("MainActivity openMapFromAssets", "⚠️ Offline map layer already exists. Skipping duplicate addition.")
         }
 
-        binding.map.setCenter(LatLong(-36.855647, 174.765249)) // Airedale
+        binding.map.setCenter(LatLong(latitude, longitude)) // Set the default location to center the bus marker
+//        binding.map.setCenter(LatLong(-36.855647, 174.765249)) // Airedale
 //        binding.map.setCenter(LatLong(-36.8485, 174.7633)) // Auckland, NZ
         binding.map.setZoomLevel(17) // Set default zoom level
 //        binding.map.setZoomLevel(11) // Set default zoom level
+
+        // **Initialize the bus marker**
+        addBusMarker(latitude, longitude)
 
         // **Ensure the map is fully loaded before drawing the polyline**
         binding.map.post {
@@ -901,6 +940,27 @@ class MainActivity : AppCompatActivity() {
             drawPolyline()  // Draw polyline only after map is loaded
             addBusStopMarkers(stops)
         }
+    }
+
+    /**
+     * Place the bus marker at a given latitude and longitude
+     */
+    private fun addBusMarker(lat: Double, lon: Double) {
+        val busPosition = LatLong(lat, lon)
+
+        val markerDrawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)
+        val markerBitmap = AndroidGraphicFactory.convertToBitmap(markerDrawable)
+
+        // Remove previous marker if it exists
+        busMarker?.let {
+            binding.map.layerManager.layers.remove(it)
+        }
+
+        // Create and add a new marker
+        busMarker = org.mapsforge.map.layer.overlay.Marker(
+            busPosition, markerBitmap, 0, 0
+        )
+        binding.map.layerManager.layers.add(busMarker)
     }
 
     /**
