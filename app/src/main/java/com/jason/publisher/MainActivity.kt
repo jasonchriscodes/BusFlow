@@ -101,6 +101,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var latitudeTextView: TextView
     private lateinit var longitudeTextView: TextView
 
+    private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
+
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
         const val CLIENT_ID = "jasonAndroidClientId"
@@ -200,6 +202,49 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Log.e("MainActivity onCreate", "Failed to fetch config, running in offline mode.")
             }
+        }
+    }
+
+    /**
+     * Draws a polyline on the Mapsforge map using the busRoute data.
+     */
+    private fun drawPolyline() {
+        Log.d("MainActivity drawPolyline", "Drawing polyline with route: $route")
+
+        if (route.isNotEmpty()) {
+            val routePoints = route.map { LatLong(it.latitude!!, it.longitude!!) }
+
+            // **Remove existing polyline before adding a new one**
+            routePolyline?.let {
+                binding.map.layerManager.layers.remove(it)
+            }
+
+            // **Ensure Mapsforge factory is initialized**
+            AndroidGraphicFactory.createInstance(application)
+
+            // **Set up paint for polyline**
+            val polylinePaint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
+                color = Color.RED  // Change color to RED for visibility
+                strokeWidth = 8f  // Increase thickness for better visibility
+                setStyle(org.mapsforge.core.graphics.Style.STROKE)
+            }
+
+            // **Create polyline with proper style**
+            routePolyline = org.mapsforge.map.layer.overlay.Polyline(polylinePaint, AndroidGraphicFactory.INSTANCE).apply {
+                addPoints(routePoints)
+            }
+
+            // **Ensure polyline is added to the map**
+            if (!binding.map.layerManager.layers.contains(routePolyline)) {
+                binding.map.layerManager.layers.add(routePolyline)
+            }
+
+            // **Force map redraw**
+            binding.map.invalidate()
+
+            Log.d("MainActivity drawPolyline", "✅ Polyline drawn with ${routePoints.size} points.")
+        } else {
+            Log.e("MainActivity drawPolyline", "❌ No route data available for polyline.")
         }
     }
 
@@ -806,12 +851,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Automatically open the map from assets and configure the map. */
+    /**
+     * Loads the offline map from assets and configures the map.
+     * Prevents adding duplicate layers.
+     */
     private fun openMapFromAssets() {
         binding.map.mapScaleBar.isVisible = true
         binding.map.setBuiltInZoomControls(true)
 
-        // Create a tile cache for the map renderer
         val cache = AndroidUtil.createTileCache(
             this,
             "mycache",
@@ -820,23 +867,36 @@ class MainActivity : AppCompatActivity() {
             binding.map.model.frameBufferModel.overdrawFactor
         )
 
-        // Copy the map file from assets to a temporary file
         val mapFile = copyAssetToFile("new-zealand-2.map")
-
-        // Load the map using the file
         val mapStore = MapFile(mapFile)
+
         val renderLayer = TileRendererLayer(
             cache,
             mapStore,
             binding.map.model.mapViewPosition,
             AndroidGraphicFactory.INSTANCE
-        )
-        renderLayer.setXmlRenderTheme(
-            InternalRenderTheme.DEFAULT
-        )
-        binding.map.layerManager.layers.add(renderLayer)
-        binding.map.setCenter(LatLong(-36.8485, 174.7633)) // Auckland, New Zealand
-        binding.map.setZoomLevel(12) // A moderate zoom level
+        ).apply {
+            setXmlRenderTheme(InternalRenderTheme.DEFAULT)
+        }
+
+        // **Check if layer already exists before adding**
+        if (!binding.map.layerManager.layers.contains(renderLayer)) {
+            binding.map.layerManager.layers.add(renderLayer)
+            Log.d("MainActivity openMapFromAssets", "✅ Offline map added successfully.")
+        } else {
+            Log.w("MainActivity openMapFromAssets", "⚠️ Offline map layer already exists. Skipping duplicate addition.")
+        }
+
+        binding.map.setCenter(LatLong(-36.855647, 174.765249)) // Airedale
+//        binding.map.setCenter(LatLong(-36.8485, 174.7633)) // Auckland, NZ
+        binding.map.setZoomLevel(17) // Set default zoom level
+//        binding.map.setZoomLevel(11) // Set default zoom level
+
+        // **Ensure the map is fully loaded before drawing the polyline**
+        binding.map.post {
+            Log.d("MainActivity", "Map is fully initialized. Drawing polyline now.")
+            drawPolyline()  // Draw polyline only after map is loaded
+        }
     }
 
     /** Copies a file from assets to the device's file system and returns the File object. */
@@ -918,5 +978,12 @@ class MainActivity : AppCompatActivity() {
         mqttManager.disconnect()
         stopDateTimeUpdater()
         super.onDestroy()
+
+        // Remove polyline from Mapsforge map
+        routePolyline?.let {
+            binding.map.layerManager.layers.remove(it)
+            binding.map.invalidate()
+        }
+        Log.d("MainActivity", "🗑️ Removed polyline on destroy.")
     }
 }
