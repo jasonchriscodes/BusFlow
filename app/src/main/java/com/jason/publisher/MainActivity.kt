@@ -48,9 +48,12 @@ import com.jason.publisher.services.SoundManager
 import com.jason.publisher.utils.BusStopProximityManager
 import com.jason.publisher.utils.NetworkStatusHelper
 import org.json.JSONObject
+import org.mapsforge.core.graphics.Bitmap
+import org.mapsforge.core.graphics.Paint
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
+import org.mapsforge.map.layer.overlay.Circle
 import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.InternalRenderTheme
@@ -896,7 +899,35 @@ class MainActivity : AppCompatActivity() {
         binding.map.post {
             Log.d("MainActivity", "Map is fully initialized. Drawing polyline now.")
             drawPolyline()  // Draw polyline only after map is loaded
+            addBusStopMarkers(stops)
         }
+    }
+
+    /**
+     * Adds bus stops to the map using OverlayItem instead of Marker.
+     */
+    private fun addBusStopMarkers(busStops: List<BusStop>) {
+        busStops.forEachIndexed { index, stop ->
+            val busStopNumber = index + 1
+
+            // Create a custom bitmap for the marker
+            val busStopSymbol = Helper.createBusStopSymbol(applicationContext, busStopNumber, busStops.size)
+            val markerBitmap = AndroidGraphicFactory.convertToBitmap(busStopSymbol)
+
+            // Create a Mapsforge Marker
+            val marker = org.mapsforge.map.layer.overlay.Marker(
+                LatLong(stop.latitude!!, stop.longitude!!), // LatLong position
+                markerBitmap, // Marker icon
+                0, // Horizontal offset
+                0 // Vertical offset
+            )
+
+            // Add marker to Mapsforge Layer Manager
+            binding.map.layerManager.layers.add(marker)
+        }
+
+        // Refresh the map after adding all markers
+        binding.map.invalidate()
     }
 
     /** Copies a file from assets to the device's file system and returns the File object. */
