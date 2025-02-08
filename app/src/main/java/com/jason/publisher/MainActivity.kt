@@ -107,6 +107,10 @@ class MainActivity : AppCompatActivity() {
     private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
     private var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
 
+    private lateinit var simulationHandler: Handler
+    private lateinit var simulationRunnable: Runnable
+    private var currentRouteIndex = 0
+    private var isSimulating = false
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -194,7 +198,7 @@ class MainActivity : AppCompatActivity() {
         openMapFromAssets()
 
         // Start tracking the location and updating the marker
-        startLocationUpdate()
+//        startLocationUpdate()
 
         fetchConfig { success ->
             if (success) {
@@ -210,6 +214,61 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Log.e("MainActivity onCreate", "Failed to fetch config, running in offline mode.")
             }
+        }
+
+        binding.startSimulationButton.setOnClickListener {
+            startSimulation()
+        }
+
+        binding.stopSimulationButton.setOnClickListener {
+            stopSimulation()
+        }
+
+
+    }
+
+    /** Starts the simulation, updating marker every second */
+    private fun startSimulation() {
+        if (route.isEmpty()) {
+            Toast.makeText(this, "No route data available", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (isSimulating) {
+            Toast.makeText(this, "Simulation already running", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        isSimulating = true
+        simulationHandler = Handler(Looper.getMainLooper())
+
+        simulationRunnable = object : Runnable {
+            override fun run() {
+                if (route.isNotEmpty()) {
+                    val nextPosition = route[currentRouteIndex]
+                    val lat = nextPosition.latitude ?: return
+                    val lon = nextPosition.longitude ?: return
+                    updateBusMarkerPosition(lat, lon)
+
+                    // Move to the next coordinate, loop back to start if at the end
+                    currentRouteIndex = (currentRouteIndex + 1) % route.size
+
+                    // Schedule the next update
+                    simulationHandler.postDelayed(this, 1000) // Update every 1 second
+                }
+            }
+        }
+
+        simulationHandler.post(simulationRunnable)
+        Toast.makeText(this, "Simulation started", Toast.LENGTH_SHORT).show()
+    }
+
+    /** Stops the simulation and resets state */
+    private fun stopSimulation() {
+        if (::simulationHandler.isInitialized) {
+            simulationHandler.removeCallbacks(simulationRunnable)
+            isSimulating = false
+            Toast.makeText(this, "Simulation stopped", Toast.LENGTH_SHORT).show()
         }
     }
 
