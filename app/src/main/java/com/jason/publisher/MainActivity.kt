@@ -20,6 +20,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.location.Location
 import android.os.Build
@@ -38,6 +39,7 @@ import com.jason.publisher.utils.BusStopProximityManager
 import com.jason.publisher.utils.NetworkStatusHelper
 import org.json.JSONObject
 import org.mapsforge.core.model.LatLong
+import org.mapsforge.map.android.graphics.AndroidBitmap
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.layer.renderer.TileRendererLayer
@@ -45,6 +47,8 @@ import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.InternalRenderTheme
 import java.io.File
 import java.lang.Math.atan2
+import java.lang.Math.cos
+import java.lang.Math.sin
 
 class MainActivity : AppCompatActivity() {
 
@@ -85,6 +89,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var latitudeTextView: TextView
     private lateinit var longitudeTextView: TextView
+    private lateinit var bearingTextView: TextView
 
     private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
     private var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
@@ -237,18 +242,28 @@ class MainActivity : AppCompatActivity() {
                     val lat = nextPosition.latitude ?: return
                     val lon = nextPosition.longitude ?: return
 
-                    // Update the Bus Tablet Data TextViews
+                    // Update bearing
+                    if (currentRouteIndex > 0) {
+                        val prevPosition = route[currentRouteIndex - 1]
+                        val prevLat = prevPosition.latitude ?: return
+                        val prevLon = prevPosition.longitude ?: return
+
+                        bearing = calculateBearing(prevLat, prevLon, lat, lon)
+                    }
+
+                    // Update UI
                     latitudeTextView.text = "Latitude: $lat"
                     longitudeTextView.text = "Longitude: $lon"
+                    bearingTextView.text = "Bearing: $bearing°"  // ✅ Update bearing text view
 
-                    // Update the map marker position
+                    // Update map marker
                     updateBusMarkerPosition(lat, lon)
 
-                    // Move to the next coordinate, loop back to start if at the end
+                    // Move to next position
                     currentRouteIndex = (currentRouteIndex + 1) % route.size
 
                     // Schedule the next update
-                    simulationHandler.postDelayed(this, 1000) // Update every 1 second
+                    simulationHandler.postDelayed(this, 1000) // Update every second
                 }
             }
         }
@@ -495,11 +510,10 @@ class MainActivity : AppCompatActivity() {
     private fun startLocationUpdate() {
         locationManager.startLocationUpdates(object : LocationListener {
             override fun onLocationUpdate(location: Location) {
-                Log.d("MainActivity startLocationUpdate", "enter startLocationUpdate()")
                 val currentLatitude = location.latitude
                 val currentLongitude = location.longitude
 
-                // Calculate bearing and update variables as before
+                // Calculate bearing and update variables
                 if (lastLatitude != 0.0 && lastLongitude != 0.0) {
                     bearing = calculateBearing(
                         lastLatitude,
@@ -517,6 +531,11 @@ class MainActivity : AppCompatActivity() {
                 lastLatitude = currentLatitude
                 lastLongitude = currentLongitude
 
+                // Update UI
+                latitudeTextView.text = "Latitude: $latitude"
+                longitudeTextView.text = "Longitude: $longitude"
+                bearingTextView.text = "Bearing: $bearing°"
+
                 // Update the bus marker position
                 updateBusMarkerPosition(latitude, longitude)
             }
@@ -529,17 +548,25 @@ class MainActivity : AppCompatActivity() {
     private fun updateBusMarkerPosition(lat: Double, lon: Double) {
         val newPosition = LatLong(lat, lon)
 
+        // Calculate the bearing to the average of the next five route points
+        val avgLatLon = calculateAverageNextCoordinates(lat, lon, 5)
+        val angle = if (avgLatLon != null) {
+            calculateBearing(lat, lon, avgLatLon.first, avgLatLon.second)
+        } else {
+            0.0F // Default angle if there are no upcoming coordinates
+        }
+
+        // Convert Drawable to Bitmap and rotate it
+        val rotatedBitmap = rotateDrawable(angle)
+
         // Remove old marker if it exists
         busMarker?.let {
             binding.map.layerManager.layers.remove(it)
         }
 
-        val markerDrawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)
-        val markerBitmap = AndroidGraphicFactory.convertToBitmap(markerDrawable)
-
-        // Create a new marker at the updated position
+        // Create a new rotated marker at the updated position
         busMarker = org.mapsforge.map.layer.overlay.Marker(
-            newPosition, markerBitmap, 0, 0
+            newPosition, rotatedBitmap, 0, 0
         )
         binding.map.layerManager.layers.add(busMarker)
 
@@ -547,9 +574,81 @@ class MainActivity : AppCompatActivity() {
         binding.map.setCenter(newPosition)
         binding.map.invalidate()
 
-        // Update TextViews
-        latitudeTextView.text = "Latitude: $lat"
-        longitudeTextView.text = "Longitude: $lon"
+        // Update global variables
+        lastLatitude = lat
+        lastLongitude = lon
+    }
+
+    /**
+     * Calculates the average latitude and longitude of the next 'count' points in the busRoute.
+     */
+    private fun calculateAverageNextCoordinates(lat: Double, lon: Double, count: Int): Pair<Double, Double>? {
+        if (route.isEmpty()) return null
+
+        var totalLat = 0.0
+        var totalLon = 0.0
+        var validPoints = 0
+
+        // Find the current position in the route
+        val currentIndex = route.indexOfFirst { it.latitude == lat && it.longitude == lon }
+        if (currentIndex == -1) return null // Current position not found
+
+        // Take the next 'count' points
+        for (i in 1..count) {
+            val nextIndex = currentIndex + i
+            if (nextIndex < route.size) {
+                totalLat += route[nextIndex].latitude ?: 0.0
+                totalLon += route[nextIndex].longitude ?: 0.0
+                validPoints++
+            } else {
+                break // Stop if we run out of points
+            }
+        }
+
+        return if (validPoints > 0) {
+            Pair(totalLat / validPoints, totalLon / validPoints)
+        } else {
+            null
+        }
+    }
+
+    /**
+     * Rotates the bus symbol drawable based on the given angle.
+     *
+     * @param angle The angle in degrees.
+     * @return Rotated Bitmap.
+     */
+    private fun rotateDrawable(angle: Float): org.mapsforge.core.graphics.Bitmap {
+        val markerDrawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)
+
+        if (markerDrawable == null) {
+            Log.e("rotateDrawable", "Drawable is null!")
+            // Use an alternative way to create a blank Bitmap
+            val emptyBitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            return AndroidBitmap(emptyBitmap)
+        }
+
+        // Convert Drawable to Android Bitmap
+        val androidBitmap = android.graphics.Bitmap.createBitmap(
+            markerDrawable.intrinsicWidth,
+            markerDrawable.intrinsicHeight,
+            android.graphics.Bitmap.Config.ARGB_8888
+        )
+
+        val canvas = android.graphics.Canvas(androidBitmap)
+        markerDrawable.setBounds(0, 0, canvas.width, canvas.height)
+        markerDrawable.draw(canvas) // Draw the drawable onto the canvas
+
+        // Apply rotation
+        val matrix = android.graphics.Matrix()
+        matrix.postRotate(angle)
+
+        val rotatedAndroidBitmap = android.graphics.Bitmap.createBitmap(
+            androidBitmap, 0, 0, androidBitmap.width, androidBitmap.height, matrix, true
+        )
+
+        // Wrap rotated Android Bitmap inside an AndroidBitmap
+        return AndroidBitmap(rotatedAndroidBitmap)
     }
 
     /**
@@ -562,14 +661,14 @@ class MainActivity : AppCompatActivity() {
      * @return The bearing between the two points in degrees.
      */
     private fun calculateBearing(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
-        val deltaLon = lon2 - lon1
-        val deltaLat = lat2 - lat1
+        val lat1Rad = Math.toRadians(lat1)
+        val lat2Rad = Math.toRadians(lat2)
+        val deltaLon = Math.toRadians(lon2 - lon1)
 
-        val angleRad = atan2(deltaLat, deltaLon)
-        var angleDeg = Math.toDegrees(angleRad)
-
-        // Adjusting the angle to ensure 0 degrees points to the right
-        angleDeg = (angleDeg + 360) % 360
+        val y = sin(deltaLon) * cos(lat2Rad)
+        val x = cos(lat1Rad) * sin(lat2Rad) - sin(lat1Rad) * cos(lat2Rad) * cos(deltaLon)
+        val angleRad = atan2(y, x)
+        val angleDeg = (Math.toDegrees(angleRad) + 360) % 360
 
         return angleDeg.toFloat()
     }
@@ -644,6 +743,7 @@ class MainActivity : AppCompatActivity() {
 //            bearingTextView = binding.bearingTextView
         latitudeTextView = binding.latitudeTextView
         longitudeTextView = binding.longitudeTextView
+        bearingTextView = binding.bearingTextView
 //            directionTextView = binding.directionTextView
 //            speedTextView = binding.speedTextView
 //            busNameTextView = binding.busNameTextView

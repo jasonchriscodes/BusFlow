@@ -81,10 +81,9 @@
                 android:id="@+id/bearingTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="Bearing: 0.0"
+                android:text="Bearing: 0°"
                 android:textSize="16sp"
-                android:textColor="@android:color/black" />
+                android:textColor="@android:color/black"/>
 
             <TextView
                 android:id="@+id/latitudeTextView"
