@@ -49,6 +49,7 @@ import java.io.File
 import java.lang.Math.atan2
 import java.lang.Math.cos
 import java.lang.Math.sin
+import java.lang.Math.sqrt
 
 class MainActivity : AppCompatActivity() {
 
@@ -90,6 +91,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var latitudeTextView: TextView
     private lateinit var longitudeTextView: TextView
     private lateinit var bearingTextView: TextView
+    private lateinit var speedTextView: TextView
 
     private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
     private var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
@@ -220,7 +222,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Starts the simulation, updating marker every second */
+    /** Starts the simulation with realistic speed */
     private fun startSimulation() {
         if (route.isEmpty()) {
             Toast.makeText(this, "No route data available", Toast.LENGTH_SHORT).show()
@@ -234,42 +236,107 @@ class MainActivity : AppCompatActivity() {
 
         isSimulating = true
         simulationHandler = Handler(Looper.getMainLooper())
+        currentRouteIndex = 0
 
         simulationRunnable = object : Runnable {
             override fun run() {
-                if (route.isNotEmpty()) {
-                    val nextPosition = route[currentRouteIndex]
-                    val lat = nextPosition.latitude ?: return
-                    val lon = nextPosition.longitude ?: return
+                if (currentRouteIndex < route.size - 1) {
+                    val start = route[currentRouteIndex]
+                    val end = route[currentRouteIndex + 1]
 
-                    // Update bearing
-                    if (currentRouteIndex > 0) {
-                        val prevPosition = route[currentRouteIndex - 1]
-                        val prevLat = prevPosition.latitude ?: return
-                        val prevLon = prevPosition.longitude ?: return
+                    if (start.latitude == null || start.longitude == null ||
+                        end.latitude == null || end.longitude == null) return
 
-                        bearing = calculateBearing(prevLat, prevLon, lat, lon)
-                    }
+                    val startLat = start.latitude!!
+                    val startLon = start.longitude!!
+                    val endLat = end.latitude!!
+                    val endLon = end.longitude!!
 
-                    // Update UI
-                    latitudeTextView.text = "Latitude: $lat"
-                    longitudeTextView.text = "Longitude: $lon"
-                    bearingTextView.text = "Bearing: $bearing°"  // ✅ Update bearing text view
+                    // Calculate distance and estimated travel time at 30 km/h (8.33 m/s)
+                    val distanceMeters = calculateDistance(startLat, startLon, endLat, endLon)
+                    val travelTimeSeconds = distanceMeters / 8.33  // Time needed at 30 km/h
+                    val steps = (travelTimeSeconds * 10).toInt() // Update every 100ms
 
-                    // Update map marker
-                    updateBusMarkerPosition(lat, lon)
+                    // Interpolate and update position gradually
+                    simulateMovement(startLat, startLon, endLat, endLon, steps)
 
-                    // Move to next position
-                    currentRouteIndex = (currentRouteIndex + 1) % route.size
-
-                    // Schedule the next update
-                    simulationHandler.postDelayed(this, 1000) // Update every second
+                    // Move to next point after completion
+                    simulationHandler.postDelayed({
+                        currentRouteIndex++
+                        simulationHandler.post(this)
+                    }, (travelTimeSeconds * 1000).toLong()) // Wait until movement completes
+                } else {
+                    isSimulating = false
+                    Toast.makeText(this@MainActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
                 }
             }
         }
 
         simulationHandler.post(simulationRunnable)
         Toast.makeText(this, "Simulation started", Toast.LENGTH_SHORT).show()
+    }
+
+    /** Interpolates movement between two points with dynamic bearing and speed updates */
+    private fun simulateMovement(startLat: Double, startLon: Double, endLat: Double, endLon: Double, steps: Int) {
+        val latStep = (endLat - startLat) / steps
+        val lonStep = (endLon - startLon) / steps
+
+        var step = 0
+        val stepHandler = Handler(Looper.getMainLooper())
+
+        val stepRunnable = object : Runnable {
+            override fun run() {
+                if (step < steps) {
+                    val newLat = startLat + (latStep * step)
+                    val newLon = startLon + (lonStep * step)
+
+                    // Calculate speed dynamically (meters per second)
+                    if (step > 0) {
+                        val distance = calculateDistance(lastLatitude, lastLongitude, newLat, newLon)
+                        speed = (distance / 0.1).toFloat() // 0.1 seconds per step (100ms)
+                    }
+
+                    // Update bearing dynamically at each step
+                    if (step > 0) {
+                        bearing = calculateBearing(lastLatitude, lastLongitude, newLat, newLon)
+                    }
+
+                    // Update UI
+                    latitudeTextView.text = "Latitude: $newLat"
+                    longitudeTextView.text = "Longitude: $newLon"
+                    bearingTextView.text = "Bearing: $bearing°"
+                    speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
+
+                    // Move the bus marker
+                    updateBusMarkerPosition(newLat, newLon, bearing)
+
+                    // Save last location
+                    lastLatitude = newLat
+                    lastLongitude = newLon
+
+                    step++
+                    stepHandler.postDelayed(this, 100) // Update every 100ms
+                }
+            }
+        }
+
+        stepHandler.post(stepRunnable)
+    }
+
+    /** Calculates distance between two lat/lon points in meters */
+    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val R = 6371000 // Radius of Earth in meters
+        val lat1Rad = Math.toRadians(lat1)
+        val lat2Rad = Math.toRadians(lat2)
+        val deltaLat = Math.toRadians(lat2 - lat1)
+        val deltaLon = Math.toRadians(lon2 - lon1)
+
+        val a = sin(deltaLat / 2) * sin(deltaLat / 2) +
+                cos(lat1Rad) * cos(lat2Rad) *
+                sin(deltaLon / 2) * sin(deltaLon / 2)
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+
+        return R * c // Distance in meters
     }
 
     /** Stops the simulation and resets state */
@@ -537,27 +604,17 @@ class MainActivity : AppCompatActivity() {
                 bearingTextView.text = "Bearing: $bearing°"
 
                 // Update the bus marker position
-                updateBusMarkerPosition(latitude, longitude)
+                updateBusMarkerPosition(latitude, longitude, bearing)
             }
         })
     }
 
-    /**
-     * Move the bus marker dynamically
-     */
-    private fun updateBusMarkerPosition(lat: Double, lon: Double) {
+    /** Move the bus marker dynamically with updated bearing */
+    private fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float) {
         val newPosition = LatLong(lat, lon)
 
-        // Calculate the bearing to the average of the next five route points
-        val avgLatLon = calculateAverageNextCoordinates(lat, lon, 5)
-        val angle = if (avgLatLon != null) {
-            calculateBearing(lat, lon, avgLatLon.first, avgLatLon.second)
-        } else {
-            0.0F // Default angle if there are no upcoming coordinates
-        }
-
         // Convert Drawable to Bitmap and rotate it
-        val rotatedBitmap = rotateDrawable(angle)
+        val rotatedBitmap = rotateDrawable(bearing)
 
         // Remove old marker if it exists
         busMarker?.let {
@@ -573,10 +630,6 @@ class MainActivity : AppCompatActivity() {
         // Keep the map centered on the bus location
         binding.map.setCenter(newPosition)
         binding.map.invalidate()
-
-        // Update global variables
-        lastLatitude = lat
-        lastLongitude = lon
     }
 
     /**
@@ -744,6 +797,7 @@ class MainActivity : AppCompatActivity() {
         latitudeTextView = binding.latitudeTextView
         longitudeTextView = binding.longitudeTextView
         bearingTextView = binding.bearingTextView
+        speedTextView = binding.speedTextView
 //            directionTextView = binding.directionTextView
 //            speedTextView = binding.speedTextView
 //            busNameTextView = binding.busNameTextView
@@ -889,7 +943,7 @@ class MainActivity : AppCompatActivity() {
 //                    Log.d("MainActivity subscribeSharedData arrBusData", "arrBusData: $arrBusData")
 
                     if (config.isNullOrEmpty()) {
-                        Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
+//                        Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
                         clearBusData()
                         return@runOnUiThread
                     }
@@ -1038,7 +1092,7 @@ class MainActivity : AppCompatActivity() {
                     callback(true)
                 } else {
                     Log.e("MainActivity fetchConfig", "❌ Failed to initialize config. Running in offline mode.")
-                    Toast.makeText(this@MainActivity, "Running in offline mode. No bus information available.", Toast.LENGTH_SHORT).show()
+//                    Toast.makeText(this@MainActivity, "Running in offline mode. No bus information available.", Toast.LENGTH_SHORT).show()
                     callback(false)
                 }
             }
