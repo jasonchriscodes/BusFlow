@@ -207,16 +207,12 @@ class MainActivity : AppCompatActivity() {
                 Log.e("MainActivity onCreate", "Failed to fetch config, running in offline mode.")
             }
         }
-
         binding.startSimulationButton.setOnClickListener {
             startSimulation()
         }
-
         binding.stopSimulationButton.setOnClickListener {
             stopSimulation()
         }
-
-
     }
 
     /** Starts the simulation, updating marker every second */
@@ -240,6 +236,12 @@ class MainActivity : AppCompatActivity() {
                     val nextPosition = route[currentRouteIndex]
                     val lat = nextPosition.latitude ?: return
                     val lon = nextPosition.longitude ?: return
+
+                    // Update the Bus Tablet Data TextViews
+                    latitudeTextView.text = "Latitude: $lat"
+                    longitudeTextView.text = "Longitude: $lon"
+
+                    // Update the map marker position
                     updateBusMarkerPosition(lat, lon)
 
                     // Move to the next coordinate, loop back to start if at the end
@@ -544,8 +546,11 @@ class MainActivity : AppCompatActivity() {
         // Keep the map centered on the bus location
         binding.map.setCenter(newPosition)
         binding.map.invalidate()
-    }
 
+        // Update TextViews
+        latitudeTextView.text = "Latitude: $lat"
+        longitudeTextView.text = "Longitude: $lon"
+    }
 
     /**
      * Calculates the bearing between two geographical points.
