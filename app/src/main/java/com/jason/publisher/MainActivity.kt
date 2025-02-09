@@ -2,26 +2,20 @@ package com.jason.publisher
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.IntentFilter
-import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.widget.TextView
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.gms.common.util.AndroidUtilsLight
 import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivityMainBinding
 import com.jason.publisher.model.Bus
 import com.jason.publisher.model.BusRoute
 import com.jason.publisher.services.MqttManager
 import org.osmdroid.config.Configuration
-import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapController
-import org.osmdroid.views.overlay.Marker
 import java.text.SimpleDateFormat
 import java.util.*
 import android.content.Intent
@@ -31,38 +25,25 @@ import android.location.Location
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
-import android.view.View
 import android.widget.Toast
-import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.jason.publisher.model.BusDataCache
 import com.jason.publisher.model.BusItem
 import com.jason.publisher.model.BusStop
 import com.jason.publisher.model.BusStopInfo
+import com.jason.publisher.model.RouteData
 import com.jason.publisher.services.LocationManager
-import com.jason.publisher.services.NotificationManager
-import com.jason.publisher.services.SharedPrefMananger
-import com.jason.publisher.services.SoundManager
 import com.jason.publisher.utils.BusStopProximityManager
 import com.jason.publisher.utils.NetworkStatusHelper
 import org.json.JSONObject
-import org.mapsforge.core.graphics.Bitmap
-import org.mapsforge.core.graphics.Paint
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
-import org.mapsforge.map.layer.overlay.Circle
 import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.InternalRenderTheme
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.overlay.ItemizedIconOverlay
-import org.osmdroid.views.overlay.OverlayItem
 import java.io.File
-import java.io.FileInputStream
 import java.lang.Math.atan2
 
 class MainActivity : AppCompatActivity() {
@@ -96,6 +77,7 @@ class MainActivity : AppCompatActivity() {
     private var config: List<BusItem>? = emptyList()
     private var route: List<BusRoute> = emptyList()
     private var stops: List<BusStop> = emptyList()
+    private var durationBetweenStops: List<Double> = emptyList()
     private var busStopInfo: List<BusStopInfo> = emptyList()
     private var arrBusData: List<BusItem> = emptyList()
     private var firstTime = true
@@ -139,9 +121,19 @@ class MainActivity : AppCompatActivity() {
             // No internet, load cached bus data
             Toast.makeText(this, "You are disconnected from the internet. Loading data from tablet cache.", Toast.LENGTH_LONG).show()
             loadBusDataFromCache()
-            Log.d("MainActivity oncreate config", config.toString())
-            Log.d("MainActivity oncreate busRoute", route.toString())
-            Log.d("MainActivity oncreate busStop", stops.toString())
+
+            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached config: $config")
+            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busRoute: $route")
+            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busStop: $stops")
+
+            // Load bus route information from offline data
+            val jsonString = OfflineData.getBusRoutesOffline().toString()
+            Log.d("MainActivity onCreate NetworkStatusHelper jsonString", jsonString)
+            val (route, stops, durationBetweenStops) = RouteData.fromJson(jsonString)
+
+            Log.d("MainActivity onCreate NetworkStatusHelper offline", "Updated busRoute: $route")
+            Log.d("MainActivity onCreate  NetworkStatusHelperoffline", "Updated busStop: $stops")
+            Log.d("MainActivity onCreate  NetworkStatusHelperoffline", "Updated durationBetweenStops: $durationBetweenStops")
         }
 
 //        busDataCache = getOrCreateAid()
