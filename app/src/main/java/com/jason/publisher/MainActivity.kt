@@ -356,13 +356,18 @@ class MainActivity : AppCompatActivity() {
         return R * c // Distance in meters
     }
 
-    /** Stops the simulation and resets state */
+    /** Stops the simulation and resets MainActivity */
     private fun stopSimulation() {
         if (::simulationHandler.isInitialized) {
             simulationHandler.removeCallbacks(simulationRunnable)
-            isSimulating = false
-            Toast.makeText(this, "Simulation stopped", Toast.LENGTH_SHORT).show()
         }
+        isSimulating = false
+
+        // Restart MainActivity
+        val intent = Intent(this, MainActivity::class.java)
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
+        finish() // Close current instance
     }
 
     /**
