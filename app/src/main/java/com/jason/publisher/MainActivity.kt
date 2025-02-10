@@ -158,6 +158,8 @@ class MainActivity : AppCompatActivity() {
         aid = intent.getStringExtra("AID") ?: "Unknown"
         Log.d("MainActivity onCreate", "Received AID: $aid")
 
+        updateBusNameFromConfig()
+
         // Initialize UI components
         initializeUIComponents()
 
@@ -219,6 +221,21 @@ class MainActivity : AppCompatActivity() {
         }
         binding.stopSimulationButton.setOnClickListener {
             stopSimulation()
+        }
+    }
+
+    /** Updates bus name if AID matches a config entry */
+    private fun updateBusNameFromConfig() {
+        if (config.isNullOrEmpty()) return // No config available
+
+        val matchingBus = config!!.find { it.aid == aid } // Find matching AID
+
+        if (matchingBus != null) {
+            busname = matchingBus.bus
+            runOnUiThread { binding.busNameTextView.text = "Bus Name: $busname" }
+            Log.d("MainActivity", "✅ Bus name updated: $busname for AID: $aid")
+        } else {
+            Log.e("MainActivity", "❌ No matching bus found for AID: $aid")
         }
     }
 
