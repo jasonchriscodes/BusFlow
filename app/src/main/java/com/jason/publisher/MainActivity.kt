@@ -84,6 +84,7 @@ class MainActivity : AppCompatActivity() {
     private var config: List<BusItem>? = emptyList()
     private var route: List<BusRoute> = emptyList()
     private var stops: List<BusStop> = emptyList()
+    private var busRouteData: List<RouteData> = emptyList()
     private var durationBetweenStops: List<Double> = emptyList()
     private var busStopInfo: List<BusStopInfo> = emptyList()
     private var arrBusData: List<BusItem> = emptyList()
@@ -134,6 +135,7 @@ class MainActivity : AppCompatActivity() {
 
             Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached config: $config")
             Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busRoute: $route")
+            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busStop: $stops")
             Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busStop: $stops")
 
             // Load bus route information from offline data
@@ -1065,7 +1067,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun requestAdminMessage() {
         val jsonObject = JSONObject()
-        jsonObject.put("sharedKeys","message,busRoute,busStop,config")
+        jsonObject.put("sharedKeys","message,busRoute,busStop,config,busRouteData")
         val jsonStringSharedKeys = jsonObject.toString()
         val handler = Handler(Looper.getMainLooper())
         mqttManager.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
@@ -1081,32 +1083,23 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Subscribes to shared data from the server.
-     * Validates configuration, AID matching, and updates the route, stops, and proximity manager.
+     * Validates configuration, AID matching, and updates the route, stops, and durationBetweenStops.
      */
     private fun subscribeSharedData() {
-//        Log.d("MainActivity subscribeSharedData", "Enter subscribeSharedData")
-
         mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
             runOnUiThread {
                 try {
-//                    Log.d("MainActivity subscribeSharedData", "Received message: $message")
-
                     // Parse incoming message
                     val gson = Gson()
                     val data = gson.fromJson(message, Bus::class.java)
-
-                    // Debugging received JSON structure
-//                    Log.d("MainActivity subscribeSharedData", "Parsed Bus Object: $data")
 
                     // Update configuration
                     config = data.shared?.config?.busConfig
                     arrBusData = config.orEmpty()
 
-                    Log.d("MainActivity subscribeSharedData Config", "Config: $config")
-//                    Log.d("MainActivity subscribeSharedData arrBusData", "arrBusData: $arrBusData")
+                    Log.d("MainActivity subscribeSharedData", "Config: $config")
 
                     if (config.isNullOrEmpty()) {
-//                        Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
                         clearBusData()
                         return@runOnUiThread
                     }
@@ -1119,11 +1112,19 @@ class MainActivity : AppCompatActivity() {
                         return@runOnUiThread
                     }
 
-                    // Process route and stops data
-                    route = data.shared?.busRoute1 ?: emptyList()
-                    stops = data.shared?.busStop1 ?: emptyList()
-                    Log.d("MainActivity subscribeSharedData", "Route: $route")
-                    Log.d("MainActivity subscribeSharedData", "Stops: $stops")
+                    // Retrieve `busRouteData` from ThingsBoard
+                    busRouteData = data.shared?.busRouteData1 ?: emptyList()
+                    Log.d("MainActivity subscribeSharedData", "busRouteData: $busRouteData")
+
+                    // Extract `route`, `stops`, and `durationBetweenStops` from `busRouteData`
+                    val extractedData = processBusRouteData(busRouteData)
+                    route = extractedData.first
+                    stops = extractedData.second
+                    durationBetweenStops = extractedData.third
+
+                    Log.d("MainActivity subscribeSharedData", "Extracted Route: $route")
+                    Log.d("MainActivity subscribeSharedData", "Extracted Stops: $stops")
+                    Log.d("MainActivity subscribeSharedData", "Extracted Duration Between Stops: $durationBetweenStops")
 
                     // Save data **only after all values are updated**
                     if (config!!.isNotEmpty() && route.isNotEmpty() && stops.isNotEmpty()) {
@@ -1133,9 +1134,7 @@ class MainActivity : AppCompatActivity() {
                     if (route.isNotEmpty()) {
                         // Convert route to BusStopInfo and update ProximityManager
                         val busStopInfoList = convertRouteToBusStopInfo(route)
-//                        Log.d("MainActivity subscribeSharedData", "BusStopInfoList: $busStopInfoList")
                         BusStopProximityManager.setBusStopList(busStopInfoList)
-//                        Log.d("MainActivity subscribeSharedData", "BusStopProximityManager updated.")
 
                         // Generate polyline and markers on first-time initialization
                         if (firstTime) {
@@ -1151,6 +1150,42 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Processes `busRouteData` and extracts `route`, `stops`, and `durationBetweenStops`.
+     *
+     * @param busRouteData List of RouteData received from ThingsBoard.
+     * @return Triple containing:
+     *   - List<BusRoute>: All coordinates forming the route.
+     *   - List<BusStop>: All stops along the route.
+     *   - List<Double>: Durations between stops.
+     */
+    private fun processBusRouteData(busRouteData: List<RouteData>): Triple<List<BusRoute>, List<BusStop>, List<Double>> {
+        val newRoute = mutableListOf<BusRoute>()
+        val newStops = mutableListOf<BusStop>()
+        val newDurations = mutableListOf<Double>()
+
+        for (routeData in busRouteData) {
+            // Add starting point as the first stop
+            newStops.add(BusStop(latitude = routeData.startingPoint.latitude, longitude = routeData.startingPoint.longitude))
+
+            for (nextPoint in routeData.nextPoints) {
+                // Add stops
+                newStops.add(BusStop(latitude = nextPoint.latitude, longitude = nextPoint.longitude))
+
+                // Add route coordinates
+                for (coord in nextPoint.routeCoordinates) {
+                    newRoute.add(BusRoute(latitude = coord[1], longitude = coord[0]))
+                }
+
+                // Extract duration
+                val durationValue = nextPoint.duration.split(" ")[0].toDoubleOrNull() ?: 0.0
+                newDurations.add(durationValue)
+            }
+        }
+
+        return Triple(newRoute, newStops, newDurations)
     }
 
     /**
