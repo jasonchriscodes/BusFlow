@@ -307,6 +307,12 @@ class MainActivity : AppCompatActivity() {
                     val newLat = startLat + (latStep * step)
                     val newLon = startLon + (lonStep * step)
 
+                    // Check if the bus has passed any stops
+                    checkPassedStops(newLat, newLon) //
+
+                    // Update upcoming stop based on simulated movement
+//                    getUpcomingBusStop(newLat, newLon, jsonString)
+
                     // Calculate speed dynamically (meters per second)
                     if (step > 0) {
                         val distance = calculateDistance(lastLatitude, lastLongitude, newLat, newLon)
@@ -338,6 +344,168 @@ class MainActivity : AppCompatActivity() {
         }
 
         stepHandler.post(stepRunnable)
+    }
+
+    /**
+     * Finds and logs the nearest bus stop that has been passed.
+     * After passing a stop, it moves to the next stop in the list.
+     *
+     * @param currentLat The current latitude of the bus.
+     * @param currentLon The current longitude of the bus.
+     */
+    private val passedStops = mutableListOf<BusStop>() // Track stops that have been passed
+    private var currentStopIndex = 0 // Keep track of the current stop in order
+
+    private fun checkPassedStops(currentLat: Double, currentLon: Double) {
+        if (stops.isEmpty()) {
+            Log.d("MainActivity checkPassedStops", "❌ No bus stops available.")
+            return
+        }
+
+        if (currentStopIndex >= stops.size) {
+            Log.d("MainActivity checkPassedStops", "✅ All stops have been passed.")
+            return
+        }
+
+        // Get the next stop to be passed
+        val nextStop = stops[currentStopIndex]
+        val stopLat = nextStop.latitude ?: return
+        val stopLon = nextStop.longitude ?: return
+
+        val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
+
+        // Define the threshold for passing a stop
+        val stopPassThreshold = 15.0 // 15 meters
+
+        if (distance <= stopPassThreshold) {
+            // Stop has been passed, log and move to next stop
+            Log.d(
+                "MainActivity checkPassedStops",
+                "✅ Nearest stop passed: ${nextStop.latitude}, ${nextStop.longitude} (Distance: ${"%.2f".format(distance)} meters)"
+            )
+
+            // Add to passed stops and move to the next stop in the list
+            passedStops.add(nextStop)
+            currentStopIndex++
+
+            // If there's another stop, log the next nearest stop
+            if (currentStopIndex < stops.size) {
+                val upcomingStop = stops[currentStopIndex]
+                Log.d(
+                    "MainActivity checkPassedStops",
+                    "🛑 No stop passed. Nearest stop: ${upcomingStop.latitude}, ${upcomingStop.longitude} is ${"%.2f".format(distance)} meters away."
+                )
+            } else {
+                Log.d("MainActivity checkPassedStops", "✅ All stops have been passed.")
+            }
+        } else {
+            // Stop not yet passed, log its distance
+            Log.d(
+                "MainActivity checkPassedStops",
+                "🛑 No stop passed. Nearest stop: ${nextStop.latitude}, ${nextStop.longitude} is ${"%.2f".format(distance)} meters away."
+            )
+        }
+    }
+
+    /**
+     * Finds the upcoming bus stop based on the nearest route coordinate.
+     * If the nearest coordinate is not found, checks if a bus stop has been passed
+     * and determines the next stop accordingly.
+     */
+    private fun getUpcomingBusStop(currentLat: Double, currentLon: Double, jsonString: String) {
+
+        val gson = Gson()
+        val jsonObject = JSONArray(jsonString)
+
+        // Step 1: Find nearest coordinate
+        val nearestPoint = findNearestCoordinate(currentLat, currentLon, routeAndStopList)
+        if (nearestPoint == null) {
+            Log.e("getUpcomingBusStop", "No nearby coordinate found")
+            return
+        }
+
+        Log.d("getUpcomingBusStop", "Nearest Point: $nearestPoint")
+
+        // Step 2: Find matching route segment in JSON
+        var upcomingStop: String? = null
+        for (i in 0 until jsonObject.length()) {
+            val segment = jsonObject.getJSONObject(i)
+            val nextPoints = segment.getJSONArray("next_points")
+
+            for (j in 0 until nextPoints.length()) {
+                val point = nextPoints.getJSONObject(j)
+                val routeCoordinates = point.getJSONArray("route_coordinates")
+
+                for (k in 0 until routeCoordinates.length()) {
+                    val coord = routeCoordinates.getJSONArray(k)
+                    val lat = coord.getDouble(1)
+                    val lon = coord.getDouble(0)
+
+                    if (lat == nearestPoint.latitude && lon == nearestPoint.longitude) {
+                        upcomingStop = point.getString("address")
+                        break
+                    }
+                }
+                if (upcomingStop != null) break
+            }
+            if (upcomingStop != null) break
+        }
+
+        // Step 3: Handle case when no upcoming stop is found
+        if (upcomingStop == null) {
+            Log.d("getUpcomingBusStop", "Could not find upcoming stop, checking passed stops...")
+            val lastPassedStop = findLastPassedStop(routeAndStopList)
+            if (lastPassedStop != null) {
+                Log.d("getUpcomingBusStop", "Last passed stop: $lastPassedStop")
+                upcomingStop = findNextUpcomingStop(lastPassedStop, jsonObject)
+            }
+        }
+
+        // Step 4: Update UI with the found upcoming stop
+        if (upcomingStop != null) {
+            this.upcomingStop = upcomingStop
+            runOnUiThread {
+                upcomingBusStopTextView.text = "Upcoming Stop: $upcomingStop"
+            }
+        }
+    }
+
+    /** Finds the nearest coordinate from routeAndStopList */
+    private fun findNearestCoordinate(currentLat: Double, currentLon: Double, list: List<BusRoute>): BusRoute? {
+        return list.minByOrNull {
+            calculateDistance(currentLat, currentLon, it.latitude ?: 0.0, it.longitude ?: 0.0)
+        }
+    }
+
+    /** Finds the last passed stop in the route */
+    private fun findLastPassedStop(routeList: List<BusRoute>): BusRoute? {
+        return routeList.lastOrNull {
+            val lat = it.latitude ?: return@lastOrNull false
+            val lon = it.longitude ?: return@lastOrNull false
+            lat <= latitude && lon <= longitude
+        }
+    }
+
+    /** Find the next upcoming stop from the JSON object */
+    private fun findNextUpcomingStop(lastStop: BusRoute, jsonObject: JSONArray): String? {
+        for (i in 0 until jsonObject.length()) {
+            val segment = jsonObject.getJSONObject(i)
+            val nextPoints = segment.getJSONArray("next_points")
+
+            for (j in 0 until nextPoints.length()) {
+                val point = nextPoints.getJSONObject(j)
+                if (point.getDouble("latitude") == lastStop.latitude &&
+                    point.getDouble("longitude") == lastStop.longitude
+                ) {
+                    return if (j + 1 < nextPoints.length()) {
+                        nextPoints.getJSONObject(j + 1).getString("address")
+                    } else {
+                        null
+                    }
+                }
+            }
+        }
+        return null
     }
 
     /** Calculates distance between two lat/lon points in meters */
