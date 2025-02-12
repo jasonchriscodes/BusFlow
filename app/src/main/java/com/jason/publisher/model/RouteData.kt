@@ -4,10 +4,10 @@ import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 
 data class RouteData(
-    @SerializedName("starting_point") val startingPoint: Point,
+    @SerializedName("starting_point") val startingPoint: StartingPoint,
     @SerializedName("next_points") val nextPoints: List<NextPoint>
 ) {
-    data class Point(
+    data class StartingPoint(
         val latitude: Double,
         val longitude: Double,
         val address: String

@@ -37,6 +37,7 @@ import com.jason.publisher.model.RouteData
 import com.jason.publisher.services.LocationManager
 import com.jason.publisher.utils.BusStopProximityManager
 import com.jason.publisher.utils.NetworkStatusHelper
+import org.json.JSONArray
 import org.json.JSONObject
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidBitmap
@@ -79,6 +80,7 @@ class MainActivity : AppCompatActivity() {
     private var busname = ""
     private var aid = ""
     private var busDataCache = ""
+    private var jsonString = ""
     private var config: List<BusItem>? = emptyList()
     private var route: List<BusRoute> = emptyList()
     private var stops: List<BusStop> = emptyList()
@@ -86,12 +88,13 @@ class MainActivity : AppCompatActivity() {
     private var busStopInfo: List<BusStopInfo> = emptyList()
     private var arrBusData: List<BusItem> = emptyList()
     private var firstTime = true
-    private var upcomingRoadName: String = "Unknown"
+    private var upcomingStop: String = "Unknown"
 
     private lateinit var latitudeTextView: TextView
     private lateinit var longitudeTextView: TextView
     private lateinit var bearingTextView: TextView
     private lateinit var speedTextView: TextView
+    private lateinit var upcomingBusStopTextView: TextView
 
     private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
     private var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
@@ -134,7 +137,8 @@ class MainActivity : AppCompatActivity() {
             Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busStop: $stops")
 
             // Load bus route information from offline data
-            val jsonString = OfflineData.getBusRoutesOffline().toString()
+            // Note in getBusRoutesOffline() the route is already contain bus stop in it
+            jsonString = OfflineData.getBusRoutesOffline().toString()
             Log.d("MainActivity onCreate NetworkStatusHelper jsonString", jsonString)
             val (route, stops, durationBetweenStops) = RouteData.fromJson(jsonString)
 
@@ -308,10 +312,7 @@ class MainActivity : AppCompatActivity() {
                     val newLon = startLon + (lonStep * step)
 
                     // Check if the bus has passed any stops
-                    checkPassedStops(newLat, newLon) //
-
-                    // Update upcoming stop based on simulated movement
-//                    getUpcomingBusStop(newLat, newLon, jsonString)
+                    checkPassedStops(newLat, newLon)
 
                     // Calculate speed dynamically (meters per second)
                     if (step > 0) {
@@ -342,7 +343,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-
         stepHandler.post(stepRunnable)
     }
 
@@ -367,145 +367,117 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Get the next stop to be passed
         val nextStop = stops[currentStopIndex]
         val stopLat = nextStop.latitude ?: return
         val stopLon = nextStop.longitude ?: return
-
+        val stopAddress = nextStop.address ?: "No more upcoming bus stop"
         val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
 
-        // Define the threshold for passing a stop
         val stopPassThreshold = 15.0 // 15 meters
 
         if (distance <= stopPassThreshold) {
-            // Stop has been passed, log and move to next stop
             Log.d(
                 "MainActivity checkPassedStops",
-                "✅ Nearest stop passed: ${nextStop.latitude}, ${nextStop.longitude} (Distance: ${"%.2f".format(distance)} meters)"
+                "✅ Nearest stop passed: $stopLat, $stopLon (Distance: ${"%.2f".format(distance)} meters) at $stopAddress"
             )
 
-            // Add to passed stops and move to the next stop in the list
+            runOnUiThread {
+                upcomingBusStopTextView.text = "$stopAddress"
+            }
+
             passedStops.add(nextStop)
             currentStopIndex++
 
-            // If there's another stop, log the next nearest stop
             if (currentStopIndex < stops.size) {
                 val upcomingStop = stops[currentStopIndex]
+                val upcomingStopName = getUpcomingBusStopName(upcomingStop.latitude ?: 0.0, upcomingStop.longitude ?: 0.0)
+
                 Log.d(
                     "MainActivity checkPassedStops",
-                    "🛑 No stop passed. Nearest stop: ${upcomingStop.latitude}, ${upcomingStop.longitude} is ${"%.2f".format(distance)} meters away."
+                    "🛑 No stop passed. Nearest stop: ${upcomingStop.latitude}, ${upcomingStop.longitude} is ${
+                        "%.2f".format(distance)
+                    } meters away at $upcomingStopName."
                 )
+
+                runOnUiThread {
+                    upcomingBusStopTextView.text = "$upcomingStopName"
+                }
             } else {
                 Log.d("MainActivity checkPassedStops", "✅ All stops have been passed.")
             }
         } else {
-            // Stop not yet passed, log its distance
+            val upcomingStopName = getUpcomingBusStopName(stopLat, stopLon)
+
             Log.d(
                 "MainActivity checkPassedStops",
-                "🛑 No stop passed. Nearest stop: ${nextStop.latitude}, ${nextStop.longitude} is ${"%.2f".format(distance)} meters away."
+                "🛑 No stop passed. Nearest stop: ${nextStop.latitude}, ${nextStop.longitude} is ${
+                    "%.2f".format(distance)
+                } meters away at $upcomingStopName."
             )
-        }
-    }
 
-    /**
-     * Finds the upcoming bus stop based on the nearest route coordinate.
-     * If the nearest coordinate is not found, checks if a bus stop has been passed
-     * and determines the next stop accordingly.
-     */
-    private fun getUpcomingBusStop(currentLat: Double, currentLon: Double, jsonString: String) {
-
-        val gson = Gson()
-        val jsonObject = JSONArray(jsonString)
-
-        // Step 1: Find nearest coordinate
-        val nearestPoint = findNearestCoordinate(currentLat, currentLon, routeAndStopList)
-        if (nearestPoint == null) {
-            Log.e("getUpcomingBusStop", "No nearby coordinate found")
-            return
-        }
-
-        Log.d("getUpcomingBusStop", "Nearest Point: $nearestPoint")
-
-        // Step 2: Find matching route segment in JSON
-        var upcomingStop: String? = null
-        for (i in 0 until jsonObject.length()) {
-            val segment = jsonObject.getJSONObject(i)
-            val nextPoints = segment.getJSONArray("next_points")
-
-            for (j in 0 until nextPoints.length()) {
-                val point = nextPoints.getJSONObject(j)
-                val routeCoordinates = point.getJSONArray("route_coordinates")
-
-                for (k in 0 until routeCoordinates.length()) {
-                    val coord = routeCoordinates.getJSONArray(k)
-                    val lat = coord.getDouble(1)
-                    val lon = coord.getDouble(0)
-
-                    if (lat == nearestPoint.latitude && lon == nearestPoint.longitude) {
-                        upcomingStop = point.getString("address")
-                        break
-                    }
-                }
-                if (upcomingStop != null) break
-            }
-            if (upcomingStop != null) break
-        }
-
-        // Step 3: Handle case when no upcoming stop is found
-        if (upcomingStop == null) {
-            Log.d("getUpcomingBusStop", "Could not find upcoming stop, checking passed stops...")
-            val lastPassedStop = findLastPassedStop(routeAndStopList)
-            if (lastPassedStop != null) {
-                Log.d("getUpcomingBusStop", "Last passed stop: $lastPassedStop")
-                upcomingStop = findNextUpcomingStop(lastPassedStop, jsonObject)
-            }
-        }
-
-        // Step 4: Update UI with the found upcoming stop
-        if (upcomingStop != null) {
-            this.upcomingStop = upcomingStop
             runOnUiThread {
-                upcomingBusStopTextView.text = "Upcoming Stop: $upcomingStop"
+                upcomingBusStopTextView.text = "$upcomingStopName"
             }
         }
     }
 
-    /** Finds the nearest coordinate from routeAndStopList */
-    private fun findNearestCoordinate(currentLat: Double, currentLon: Double, list: List<BusRoute>): BusRoute? {
-        return list.minByOrNull {
-            calculateDistance(currentLat, currentLon, it.latitude ?: 0.0, it.longitude ?: 0.0)
-        }
-    }
+    /** Finds the nearest upcoming bus stop */
+    private fun getUpcomingBusStopName(lat: Double, lon: Double): String {
+        try {
+            Log.d("MainActivity getUpcomingBusStopName", "JSON String: $jsonString")
 
-    /** Finds the last passed stop in the route */
-    private fun findLastPassedStop(routeList: List<BusRoute>): BusRoute? {
-        return routeList.lastOrNull {
-            val lat = it.latitude ?: return@lastOrNull false
-            val lon = it.longitude ?: return@lastOrNull false
-            lat <= latitude && lon <= longitude
-        }
-    }
+            // Convert jsonString into a JSONArray
+            val jsonArray = JSONArray(jsonString)
 
-    /** Find the next upcoming stop from the JSON object */
-    private fun findNextUpcomingStop(lastStop: BusRoute, jsonObject: JSONArray): String? {
-        for (i in 0 until jsonObject.length()) {
-            val segment = jsonObject.getJSONObject(i)
-            val nextPoints = segment.getJSONArray("next_points")
+            if (jsonArray.length() == 0) {
+                Log.e("MainActivity getUpcomingBusStopName", "JSON array is empty")
+                return "No Upcoming Stop"
+            }
 
-            for (j in 0 until nextPoints.length()) {
-                val point = nextPoints.getJSONObject(j)
-                if (point.getDouble("latitude") == lastStop.latitude &&
-                    point.getDouble("longitude") == lastStop.longitude
-                ) {
-                    return if (j + 1 < nextPoints.length()) {
-                        nextPoints.getJSONObject(j + 1).getString("address")
-                    } else {
-                        null
-                    }
+            // Get the first object in the array
+            val jsonObject = jsonArray.getJSONObject(0)
+
+            // Ensure the key exists
+            if (!jsonObject.has("next_points")) {
+                Log.e("MainActivity getUpcomingBusStopName", "Missing 'next_points' key")
+                return "No Upcoming Stop"
+            }
+
+            val routeArray = jsonObject.getJSONArray("next_points")
+
+            if (routeArray.length() == 0) {
+                Log.e("MainActivity getUpcomingBusStopName", "next_points array is empty")
+                return "No Upcoming Stop"
+            }
+
+            var nearestStop: String? = null
+            var minDistance = Double.MAX_VALUE
+
+            for (i in 0 until routeArray.length()) {
+                val stop = routeArray.getJSONObject(i)
+
+                if (!stop.has("latitude") || !stop.has("longitude") || !stop.has("address")) {
+                    Log.e("MainActivity getUpcomingBusStopName", "Missing stop fields at index $i")
+                    continue
+                }
+
+                val stopLat = stop.getDouble("latitude")
+                val stopLon = stop.getDouble("longitude")
+                val stopAddress = stop.getString("address")
+
+                val distance = calculateDistance(lat, lon, stopLat, stopLon)
+
+                if (distance < minDistance) {
+                    minDistance = distance
+                    nearestStop = stopAddress
                 }
             }
+
+            return nearestStop ?: "Unknown Stop"
+        } catch (e: Exception) {
+            Log.e("MainActivity getUpcomingBusStopName", "Error: ${e.localizedMessage}", e)
+            return "MainActivity getUpcomingBusStopName Error Retrieving Stop"
         }
-        return null
     }
 
     /** Calculates distance between two lat/lon points in meters */
@@ -599,8 +571,8 @@ class MainActivity : AppCompatActivity() {
                 busStop = stops
             )
 
-            val jsonString = Gson().toJson(busData) // Format data as JSON
-            cacheFile.writeText(jsonString) // Save as a .txt file but in JSON format
+            val jsonStringBusData = Gson().toJson(busData) // Format data as JSON
+            cacheFile.writeText(jsonStringBusData) // Save as a .txt file but in JSON format
             Log.d("MainActivity", "✅ Bus data cache updated successfully in busDataCache.txt.")
         } catch (e: Exception) {
             Log.e("MainActivity", "❌ Error saving bus data cache: ${e.message}")
@@ -988,6 +960,7 @@ class MainActivity : AppCompatActivity() {
         longitudeTextView = binding.longitudeTextView
         bearingTextView = binding.bearingTextView
         speedTextView = binding.speedTextView
+        upcomingBusStopTextView = binding.upcomingBusStopTextView
 //            directionTextView = binding.directionTextView
 //            speedTextView = binding.speedTextView
 //            busNameTextView = binding.busNameTextView
@@ -1093,14 +1066,14 @@ class MainActivity : AppCompatActivity() {
     private fun requestAdminMessage() {
         val jsonObject = JSONObject()
         jsonObject.put("sharedKeys","message,busRoute,busStop,config")
-        val jsonString = jsonObject.toString()
+        val jsonStringSharedKeys = jsonObject.toString()
         val handler = Handler(Looper.getMainLooper())
-        mqttManager.publish(PUB_MSG_TOPIC, jsonString)
-//        mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonString)
+        mqttManager.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
+//        mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
         handler.post(object : Runnable {
             override fun run() {
-                mqttManager.publish(PUB_MSG_TOPIC, jsonString)
-//                mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonString)
+                mqttManager.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
+//                mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
                 handler.postDelayed(this, REQUEST_PERIODIC_TIME)
             }
         })
@@ -1434,14 +1407,6 @@ class MainActivity : AppCompatActivity() {
 //        binding.map.overlays.add(polyline)
 //        binding.map.overlays.add(marker)
 //        binding.map.invalidate()
-    }
-
-    /** Updates the upcoming road name in the UI. */
-    private fun updateUpcomingRoadName() {
-        if (route.isNotEmpty()) {
-            upcomingRoadName = "Test1" ?: "Unknown"
-            binding.upcomingRoadTextView.text = "Upcoming Road: $upcomingRoadName"
-        }
     }
 
     /** Starts a periodic task to update the current date and time in the UI. */

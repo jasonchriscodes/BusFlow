@@ -345,14 +345,14 @@ object OfflineData {
         [
           {
             "starting_point": {
-              "latitude": -36.854685,
-              "longitude": 174.764528,
+              "latitude": -36.854638,
+              "longitude": 174.764622,
               "address": "39 Airedale Street"
             },
             "next_points": [
               {
-                "latitude": -36.853877,
-                "longitude": 174.766055,
+                "latitude": -36.853792,
+                "longitude": 174.765981,
                 "address": "34 St Paul Street",
                 "duration": "0.8 minutes",
                 "route_coordinates": [
@@ -368,13 +368,11 @@ object OfflineData {
                 ]
               },
               {
-                "latitude": -36.854209,
-                "longitude": 174.767755,
+                "latitude": -36.854254,
+                "longitude": 174.767905,
                 "address": "25-29 Symonds Street",
                 "duration": "0.7 minutes",
                 "route_coordinates": [
-                  [174.765308, -36.856044],
-                  [174.765443, -36.855999],
                   [174.765349, -36.855831],
                   [174.765141, -36.855486],
                   [174.765044, -36.855308],
@@ -384,8 +382,8 @@ object OfflineData {
                 ]
               },
               {
-                "latitude": -36.855281,
-                "longitude": 174.767117,
+                "latitude": -36.855171,
+                "longitude": 174.76703,
                 "address": "52 Symonds Street",
                 "duration": "0.9 minutes",
                 "route_coordinates": [
@@ -395,8 +393,8 @@ object OfflineData {
                 ]
               },
               {
-                "latitude": -36.856047,
-                "longitude": 174.765309,
+                "latitude": -36.856104,
+                "longitude": 174.765522,
                 "address": "89 Airedale Street",
                 "duration": "1.0 minutes",
                 "route_coordinates": [
@@ -415,8 +413,8 @@ object OfflineData {
                 ]
               },
               {
-                "latitude": -36.854685,
-                "longitude": 174.764528,
+                "latitude": -36.854638,
+                "longitude": 174.764622,
                 "address": "89 Airedale Street",
                 "duration": "0.7 minutes",
                 "route_coordinates": [
