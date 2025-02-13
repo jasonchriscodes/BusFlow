@@ -127,44 +127,12 @@ class MainActivity : AppCompatActivity() {
         // Check and request permission
         requestAllFilesAccessPermission()
 
-        // Check internet connection
-        if (!NetworkStatusHelper.isNetworkAvailable(this)) {
-            // No internet, load cached bus data
-            Toast.makeText(this, "You are disconnected from the internet. Loading data from tablet cache.", Toast.LENGTH_LONG).show()
-            loadBusDataFromCache()
-
-            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached config: $config")
-            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busRoute: $route")
-            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busStop: $stops")
-            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busStop: $stops")
-
-            // Load bus route information from offline data
-            // Note in getBusRoutesOffline() the route is already contain bus stop in it
-            jsonString = OfflineData.getBusRoutesOffline().toString()
-            Log.d("MainActivity onCreate NetworkStatusHelper jsonString", jsonString)
-            val (route, stops, durationBetweenStops) = RouteData.fromJson(jsonString)
-
-            Log.d("MainActivity onCreate NetworkStatusHelper offline", "Updated busRoute: $route")
-            Log.d("MainActivity onCreate  NetworkStatusHelperoffline", "Updated busStop: $stops")
-            Log.d("MainActivity onCreate  NetworkStatusHelperoffline", "Updated durationBetweenStops: $durationBetweenStops")
-        }
-
-//        busDataCache = getOrCreateAid()
-        val file = File("/storage/emulated/0/Documents/.vlrshiddenfolder/busDataCache.txt")
-        if (file.exists()) {
-            Log.d("MainActivity onCreate", "✅ File exists: ${file.absolutePath}")
-        } else {
-            Log.e("MainActivity onCreate", "❌ File creation failed!")
-        }
-
         // Initialize managers before using them
         initializeManagers()
 
         // Retrieve AID passed from TimeTableActivity
         aid = intent.getStringExtra("AID") ?: "Unknown"
         Log.d("MainActivity onCreate", "Received AID: $aid")
-
-        updateBusNameFromConfig()
 
         // Initialize UI components
         initializeUIComponents()
@@ -187,6 +155,57 @@ class MainActivity : AppCompatActivity() {
         // Initialize the date/time updater
         startDateTimeUpdater()
 
+        // Check internet connection
+        if (!NetworkStatusHelper.isNetworkAvailable(this)) {
+            // **Offline Mode: Load cached data**
+            Toast.makeText(this, "You are disconnected from the internet. Loading data from tablet cache.", Toast.LENGTH_LONG).show()
+            loadBusDataFromCache()
+
+            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached config: $config")
+            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busRoute: $route")
+            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busStop: $stops")
+            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busStop: $stops")
+
+            // Load bus route information from offline data
+            // Note in getBusRoutesOffline() the route is already contain bus stop in it
+            jsonString = OfflineData.getBusRoutesOffline().toString()
+            Log.d("MainActivity onCreate NetworkStatusHelper jsonString", jsonString)
+            val (route, stops, durationBetweenStops) = RouteData.fromJson(jsonString)
+
+            Log.d("MainActivity onCreate NetworkStatusHelper offline", "Updated busRoute: $route")
+            Log.d("MainActivity onCreate  NetworkStatusHelperoffline", "Updated busStop: $stops")
+            Log.d("MainActivity onCreate  NetworkStatusHelperoffline", "Updated durationBetweenStops: $durationBetweenStops")
+        } else {
+            // **Online Mode: Fetch data from ThingsBoard**
+            Toast.makeText(this, "Online mode: Receiving data from Thingsboard.", Toast.LENGTH_LONG).show()
+
+            fetchConfig { success ->
+                if (success) {
+                    getAccessToken()
+                    Log.d("MainActivity onCreate Token", token)
+                    mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
+                    getDefaultConfigValue()
+                    requestAdminMessage()
+                    connectAndSubscribe()
+//                Log.d("MainActivity oncreate fetchConfig config", config.toString())
+//                Log.d("MainActivity oncreate fetchConfig busRoute", route.toString())
+//                Log.d("MainActivity oncreate fetchConfig busStop", stops.toString())
+                } else {
+                    Log.e("MainActivity onCreate", "Failed to fetch config, running in offline mode.")
+                }
+            }
+        }
+
+//        busDataCache = getOrCreateAid()
+        val file = File("/storage/emulated/0/Documents/.vlrshiddenfolder/busDataCache.txt")
+        if (file.exists()) {
+            Log.d("MainActivity onCreate", "✅ File exists: ${file.absolutePath}")
+        } else {
+            Log.e("MainActivity onCreate", "❌ File creation failed!")
+        }
+
+        updateBusNameFromConfig()
+
         // Ensure `locationManager` is properly initialized before use
         locationManager.getCurrentLocation(object : LocationListener {
             override fun onLocationUpdate(location: Location) {
@@ -207,21 +226,6 @@ class MainActivity : AppCompatActivity() {
         // Start tracking the location and updating the marker
 //        startLocationUpdate()
 
-        fetchConfig { success ->
-            if (success) {
-                getAccessToken()
-                Log.d("MainActivity onCreate Token", token)
-                mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
-                getDefaultConfigValue()
-                requestAdminMessage()
-                connectAndSubscribe()
-//                Log.d("MainActivity oncreate fetchConfig config", config.toString())
-//                Log.d("MainActivity oncreate fetchConfig busRoute", route.toString())
-//                Log.d("MainActivity oncreate fetchConfig busStop", stops.toString())
-            } else {
-                Log.e("MainActivity onCreate", "Failed to fetch config, running in offline mode.")
-            }
-        }
         binding.startSimulationButton.setOnClickListener {
             startSimulation()
         }
@@ -558,7 +562,17 @@ class MainActivity : AppCompatActivity() {
     /**
      * Saves the latest bus data to the cache file.
      */
+    private var isCacheUpdated = false // Flag to ensure cache is updated only once
     private fun saveBusDataToCache() {
+        if (!NetworkStatusHelper.isNetworkAvailable(this)) {
+            Log.d("MainActivity saveBusDataToCache", "❌ No internet connection. Skipping cache update.")
+            return
+        }
+        // ✅ Check if cache has already been updated
+        if (isCacheUpdated) {
+            Log.d("MainActivity saveBusDataToCache", "🚫 Skipping cache update (already updated).")
+            return
+        }
         val cacheFile = File(getHiddenFolder(), "busDataCache.txt") // Change extension to .txt
 //        Log.d("MainActivity saveBusDataToCache aid", aid.toString())
 //        Log.d("MainActivity saveBusDataToCache config", config.toString())
@@ -566,18 +580,20 @@ class MainActivity : AppCompatActivity() {
 //        Log.d("MainActivity saveBusDataToCache busStop", stopsCache.toString())
 
         try {
-            val busData = BusDataCache(
-                aid = aid,
-                config = config,
-                busRoute = route,
-                busStop = stops
+            val busData = mapOf(
+                "aid" to aid,
+                "busRouteData" to busRouteData,
+                "config" to config
             )
 
-            val jsonStringBusData = Gson().toJson(busData) // Format data as JSON
-            cacheFile.writeText(jsonStringBusData) // Save as a .txt file but in JSON format
-            Log.d("MainActivity", "✅ Bus data cache updated successfully in busDataCache.txt.")
+            val jsonStringBusData = Gson().toJson(busData) // Convert data to JSON
+            cacheFile.writeText(jsonStringBusData) // Overwrite cache file
+            Log.d("MainActivity saveBusDataToCache", "✅ Bus data cache updated successfully in busDataCache.txt.")
+            Toast.makeText(this, "Bus data cache updated successfully in busDataCache.txt.", Toast.LENGTH_SHORT).show()
+            // ✅ Set flag to true after successful update
+            isCacheUpdated = true
         } catch (e: Exception) {
-            Log.e("MainActivity", "❌ Error saving bus data cache: ${e.message}")
+            Log.e("MainActivity saveBusDataToCache", "❌ Error saving bus data cache: ${e.message}")
         }
     }
 
@@ -1116,6 +1132,14 @@ class MainActivity : AppCompatActivity() {
                     busRouteData = data.shared?.busRouteData1 ?: emptyList()
                     Log.d("MainActivity subscribeSharedData", "busRouteData: $busRouteData")
 
+                    // **Rewrite cache when online**
+                    if (NetworkStatusHelper.isNetworkAvailable(this@MainActivity)) {
+                        // Save data **only after all values are updated**
+                        if (config!!.isNotEmpty() && route.isNotEmpty() && stops.isNotEmpty()) {
+                            saveBusDataToCache()
+                        }
+                    }
+
                     // Extract `route`, `stops`, and `durationBetweenStops` from `busRouteData`
                     val extractedData = processBusRouteData(busRouteData)
                     route = extractedData.first
@@ -1125,11 +1149,6 @@ class MainActivity : AppCompatActivity() {
                     Log.d("MainActivity subscribeSharedData", "Extracted Route: $route")
                     Log.d("MainActivity subscribeSharedData", "Extracted Stops: $stops")
                     Log.d("MainActivity subscribeSharedData", "Extracted Duration Between Stops: $durationBetweenStops")
-
-                    // Save data **only after all values are updated**
-                    if (config!!.isNotEmpty() && route.isNotEmpty() && stops.isNotEmpty()) {
-                        saveBusDataToCache()
-                    }
 
                     if (route.isNotEmpty()) {
                         // Convert route to BusStopInfo and update ProximityManager
