@@ -615,34 +615,40 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Loads bus data from the cache file if it exists.
-     * If no cache is found, returns a default AID.
-     *
-     * @return AID or an error message.
+     * Loads bus data from the cache file if it exists and extracts route-related data.
      */
-    private fun loadBusDataFromCache(): String {
-        val cacheFile = File(getHiddenFolder(), "busDataCache.txt") // Change extension to .txt
+    private fun loadBusDataFromCache() {
+        val cacheFile = File(getHiddenFolder(), "busDataCache.txt")
 
-        return if (cacheFile.exists()) {
+        if (cacheFile.exists()) {
             try {
                 val jsonContent = cacheFile.readText()
                 val cachedData = Gson().fromJson(jsonContent, BusDataCache::class.java)
 
-                // Update global variables with cached data
+                // Ensure all values are updated correctly
                 aid = cachedData.aid
                 config = cachedData.config ?: emptyList()
-                route = cachedData.busRoute ?: emptyList()
-                stops = cachedData.busStop ?: emptyList()
+                busRouteData = cachedData.busRouteData ?: emptyList()
 
-                Log.d("MainActivity loadBusDataFromCache", "✅ Loaded cached bus data from busDataCache.txt.")
-                cachedData.aid // Return the AID
+                Log.d("MainActivity loadBusDataFromCache", "Loaded cached AID: $aid")
+                Log.d("MainActivity loadBusDataFromCache", "Loaded cached Config: $config")
+                Log.d("MainActivity loadBusDataFromCache", "Loaded cached BusRouteData: $busRouteData")
+
+                // Extract `route`, `stops`, and `durationBetweenStops` from `busRouteData`
+                val extractedData = processBusRouteData(busRouteData)
+                route = extractedData.first
+                stops = extractedData.second
+                durationBetweenStops = extractedData.third
+
+                Log.d("MainActivity loadBusDataFromCache", "Extracted Route: $route")
+                Log.d("MainActivity loadBusDataFromCache", "Extracted Stops: $stops")
+                Log.d("MainActivity loadBusDataFromCache", "Extracted Duration Between Stops: $durationBetweenStops")
+
             } catch (e: Exception) {
-                Log.e("MainActivity loadBusDataFromCache", "❌ Error reading bus data cache: ${e.message}")
-                "Error reading cache"
+                Log.e("MainActivity loadBusDataFromCache", "Error reading bus data cache: ${e.message}")
             }
         } else {
-            Log.e("MainActivity", "❌ No cached bus data found in busDataCache.txt.")
-            "No cache found"
+            Log.e("MainActivity loadBusDataFromCache", "No cached bus data found.")
         }
     }
 
