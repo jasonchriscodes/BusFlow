@@ -379,7 +379,7 @@ class MainActivity : AppCompatActivity() {
         val stopAddress = nextStop.address ?: "No more upcoming bus stop"
         val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
 
-        val stopPassThreshold = 15.0 // 15 meters
+        val stopPassThreshold = 25.0
 
         if (distance <= stopPassThreshold) {
             Log.d(
