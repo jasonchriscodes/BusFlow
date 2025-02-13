@@ -785,8 +785,8 @@ class MainActivity : AppCompatActivity() {
                 lastLongitude = currentLongitude
 
                 // Update UI
-                latitudeTextView.text = "Latitude: $latitude"
-                longitudeTextView.text = "Longitude: $longitude"
+                latitudeTextView.text = "Latitude:\n$latitude"
+                longitudeTextView.text = "Longitude:\n$longitude"
                 bearingTextView.text = "Bearing: $bearing°"
 
                 // Update the bus marker position
@@ -1477,7 +1477,7 @@ class MainActivity : AppCompatActivity() {
             override fun run() {
                 val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                 val currentDateTime = dateFormat.format(Date())
-                binding.busDirectionBearing.text = currentDateTime
+                binding.currentDateAndTime.text = currentDateTime
                 dateTimeHandler.postDelayed(this, 1000) // Update every second
             }
         }
