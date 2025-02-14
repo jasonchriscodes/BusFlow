@@ -55,19 +55,11 @@ import java.lang.Math.sqrt
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var mqttManagerConfig: MqttManager
-    private lateinit var mqttManager: MqttManager
     private lateinit var locationManager: LocationManager
     private lateinit var mapController: MapController
     private lateinit var connectionStatusTextView: TextView
     private lateinit var dateTimeHandler: Handler
     private lateinit var dateTimeRunnable: Runnable
-    private val REQUEST_MANAGE_EXTERNAL_STORAGE = 1001
-    private val REQUEST_WRITE_PERMISSION = 1002
-
-    private var token = ""
-    private var tokenConfigData = "oRSsbeuqDMSckyckcMyE"
-    private var markerBus = HashMap<String, org.mapsforge.map.layer.overlay.Marker>()
 
     private var latitude = 0.0
     private var longitude = 0.0
@@ -81,6 +73,7 @@ class MainActivity : AppCompatActivity() {
     private var aid = ""
     private var busDataCache = ""
     private var jsonString = ""
+    private var token = ""
     private var config: List<BusItem>? = emptyList()
     private var route: List<BusRoute> = emptyList()
     private var stops: List<BusStop> = emptyList()
@@ -91,6 +84,7 @@ class MainActivity : AppCompatActivity() {
     private var firstTime = true
     private var upcomingStop: String = "Unknown"
 
+    private lateinit var aidTextView: TextView
     private lateinit var latitudeTextView: TextView
     private lateinit var longitudeTextView: TextView
     private lateinit var bearingTextView: TextView
@@ -99,6 +93,7 @@ class MainActivity : AppCompatActivity() {
 
     private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
     private var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
+    private var markerBus = HashMap<String, org.mapsforge.map.layer.overlay.Marker>()
 
     private lateinit var simulationHandler: Handler
     private lateinit var simulationRunnable: Runnable
@@ -125,85 +120,52 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Check and request permission
-        requestAllFilesAccessPermission()
-
         // Initialize managers before using them
         initializeManagers()
 
-        // Retrieve AID passed from TimeTableActivity
+        // Retrieve data passed from TimeTableActivity
         aid = intent.getStringExtra("AID") ?: "Unknown"
-        Log.d("MainActivity onCreate", "Received AID: $aid")
+        config = intent.getSerializableExtra("CONFIG") as? List<BusItem> ?: emptyList()
+        jsonString = intent.getStringExtra("JSON_STRING") ?: ""
+        route = intent.getSerializableExtra("ROUTE") as? List<BusRoute> ?: emptyList()
+        stops = intent.getSerializableExtra("STOPS") as? List<BusStop> ?: emptyList()
+        durationBetweenStops = intent.getSerializableExtra("DURATION_BETWEEN_BUS_STOP") as? List<Double> ?: emptyList()
+        busRouteData = intent.getSerializableExtra("BUS_ROUTE_DATA") as? List<RouteData> ?: emptyList()
+
+        Log.d("MainActivity onCreate retrieve", "Received aid: $aid")
+        Log.d("MainActivity onCreate retrieve", "Received config: ${config.toString()}")
+        Log.d("MainActivity onCreate retrieve", "Received jsonString: $jsonString")
+        Log.d("MainActivity onCreate retrieve", "Received route: ${route.toString()}")
+        Log.d("MainActivity onCreate retrieve", "Received stops: ${stops.toString()}")
+        Log.d("MainActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
+        Log.d("MainActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
 
         // Initialize UI components
         initializeUIComponents()
 
-        // Initialize mqttManager before using it
-        mqttManagerConfig = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = tokenConfigData)
+        aidTextView.text = "AID: $aid"
 
         // Set up network status UI
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
 
-        // Initialize MQTT manager
-        mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID)
-
-        // Load configuration
-        Configuration.getInstance().load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
-
-        // Connect and subscribe to MQTT
-        connectAndSubscribe()
-
         // Initialize the date/time updater
         startDateTimeUpdater()
 
-        // Check internet connection
-        if (!NetworkStatusHelper.isNetworkAvailable(this)) {
-            // **Offline Mode: Load cached data**
-            Toast.makeText(this, "You are disconnected from the internet. Loading data from tablet cache.", Toast.LENGTH_LONG).show()
-            loadBusDataFromCache()
-
-            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached config: $config")
-            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busRoute: $route")
-            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busStop: $stops")
-            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busStop: $stops")
-
-            // Load bus route information from offline data
-            // Note in getBusRoutesOffline() the route is already contain bus stop in it
-            jsonString = OfflineData.getBusRoutesOffline().toString()
-            Log.d("MainActivity onCreate NetworkStatusHelper jsonString", jsonString)
-            val (route, stops, durationBetweenStops) = RouteData.fromJson(jsonString)
-
-            Log.d("MainActivity onCreate NetworkStatusHelper offline", "Updated busRoute: $route")
-            Log.d("MainActivity onCreate  NetworkStatusHelperoffline", "Updated busStop: $stops")
-            Log.d("MainActivity onCreate  NetworkStatusHelperoffline", "Updated durationBetweenStops: $durationBetweenStops")
-        } else {
-            // **Online Mode: Fetch data from ThingsBoard**
-            Toast.makeText(this, "Online mode: Receiving data from Thingsboard.", Toast.LENGTH_LONG).show()
-
-            fetchConfig { success ->
-                if (success) {
-                    getAccessToken()
-                    Log.d("MainActivity onCreate Token", token)
-                    mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
-                    getDefaultConfigValue()
-                    requestAdminMessage()
-                    connectAndSubscribe()
+//        fetchConfig { success ->
+//            if (success) {
+//                getAccessToken()
+                Log.d("MainActivity onCreate Token", token)
+//                mqttManager = MqttManager(serverUri = TimeTableActivity.SERVER_URI, clientId = TimeTableActivity.CLIENT_ID, username = token)
+                getDefaultConfigValue()
+//                requestAdminMessage()
+//                connectAndSubscribe()
 //                Log.d("MainActivity oncreate fetchConfig config", config.toString())
 //                Log.d("MainActivity oncreate fetchConfig busRoute", route.toString())
 //                Log.d("MainActivity oncreate fetchConfig busStop", stops.toString())
-                } else {
-                    Log.e("MainActivity onCreate", "Failed to fetch config, running in offline mode.")
-                }
-            }
-        }
-
-//        busDataCache = getOrCreateAid()
-        val file = File("/storage/emulated/0/Documents/.vlrshiddenfolder/busDataCache.txt")
-        if (file.exists()) {
-            Log.d("MainActivity onCreate", "✅ File exists: ${file.absolutePath}")
-        } else {
-            Log.e("MainActivity onCreate", "❌ File creation failed!")
-        }
+//            } else {
+//                Log.e("MainActivity onCreate", "Failed to fetch config, running in offline mode.")
+//            }
+//        }
 
         updateBusNameFromConfig()
 
@@ -243,7 +205,9 @@ class MainActivity : AppCompatActivity() {
 
         if (matchingBus != null) {
             busname = matchingBus.bus
-            runOnUiThread { binding.busNameTextView.text = "Bus Name: $busname" }
+            runOnUiThread {
+                binding.busNameTextView.text = "Bus Name: $busname"
+            }
             Log.d("MainActivity", "✅ Bus name updated: $busname for AID: $aid")
         } else {
             Log.e("MainActivity", "❌ No matching bus found for AID: $aid")
@@ -331,9 +295,9 @@ class MainActivity : AppCompatActivity() {
         if (adjustedIndex < 0 || adjustedIndex >= stops.size || adjustedIndex >= durationBetweenStops.size) {
             Log.e(
                 "MainActivity checkScheduleStatus",
-                "❌ Index out of bounds! Resetting schedule. adjustedIndex: $adjustedIndex, stops.size: ${stops.size}, durationBetweenStops.size: ${durationBetweenStops.size}"
+                "❌ Index out of bounds!"
             )
-            resetSchedule() // 🔄 Reset schedule
+//            resetSchedule() // 🔄 Reset schedule
             return
         }
 
@@ -412,29 +376,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Resets the schedule when an index out of bounds error occurs.
-     * - Resets `currentStopIndex` to 0.
-     * - Resets `simulationStartTime`.
-     * - Ensures `expectedTimeSeconds` is set to the first durationBetweenStops value.
-     */
-    private fun resetSchedule() {
-        Log.d("MainActivity resetSchedule", "🔄 Resetting schedule and actual time.")
-
-        currentStopIndex = 0 // ✅ Reset stop index
-        simulationStartTime = System.currentTimeMillis() // ✅ Reset actual time
-
-        // ✅ Ensure expected time is set to the first value from durationBetweenStops
-        val expectedTimeSeconds = if (durationBetweenStops.isNotEmpty()) {
-            (durationBetweenStops.first() * 60).toInt()
-        } else {
-            0 // Default to 0 if durationBetweenStops is empty
-        }
-
-        findViewById<TextView>(R.id.expectedTimeValueTextView).text = formatTime(expectedTimeSeconds)
-
-        Log.d("MainActivity resetSchedule", "✅ Schedule reset complete. Expected time: ${formatTime(expectedTimeSeconds)}. Starting from Stop 0.")
-    }
+//    /**
+//     * Resets the schedule when an index out of bounds error occurs.
+//     * - Resets `currentStopIndex` to 0.
+//     * - Resets `simulationStartTime`.
+//     * - Ensures `expectedTimeSeconds` is set to the first durationBetweenStops value.
+//     */
+//    private fun resetSchedule() {
+//        Log.d("MainActivity resetSchedule", "🔄 Resetting schedule and actual time.")
+//
+//        currentStopIndex = 0 // ✅ Reset stop index
+//        simulationStartTime = System.currentTimeMillis() // ✅ Reset actual time
+//
+//        // ✅ Ensure expected time is set to the first value from durationBetweenStops
+//        val expectedTimeSeconds = if (durationBetweenStops.isNotEmpty()) {
+//            (durationBetweenStops.first() * 60).toInt()
+//        } else {
+//            0 // Default to 0 if durationBetweenStops is empty
+//        }
+//
+//        findViewById<TextView>(R.id.expectedTimeValueTextView).text = formatTime(expectedTimeSeconds)
+//
+//        Log.d("MainActivity resetSchedule", "✅ Schedule reset complete. Expected time: ${formatTime(expectedTimeSeconds)}. Starting from Stop 0.")
+//    }
 
     /**
      * Converts seconds to mm:ss format.
@@ -712,116 +676,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Saves the latest bus data to the cache file.
-     */
-    private var isCacheUpdated = false // Flag to ensure cache is updated only once
-    private fun saveBusDataToCache() {
-        if (!NetworkStatusHelper.isNetworkAvailable(this)) {
-            Log.d("MainActivity saveBusDataToCache", "❌ No internet connection. Skipping cache update.")
-            return
-        }
-        // ✅ Check if cache has already been updated
-        if (isCacheUpdated) {
-            Log.d("MainActivity saveBusDataToCache", "🚫 Skipping cache update (already updated).")
-            return
-        }
-        val cacheFile = File(getHiddenFolder(), "busDataCache.txt") // Change extension to .txt
-//        Log.d("MainActivity saveBusDataToCache aid", aid.toString())
-//        Log.d("MainActivity saveBusDataToCache config", config.toString())
-//        Log.d("MainActivity saveBusDataToCache busRoute", routeCache.toString())
-//        Log.d("MainActivity saveBusDataToCache busStop", stopsCache.toString())
-
-        try {
-            val busData = mapOf(
-                "aid" to aid,
-                "busRouteData" to busRouteData,
-                "config" to config
-            )
-
-            val jsonStringBusData = Gson().toJson(busData) // Convert data to JSON
-            cacheFile.writeText(jsonStringBusData) // Overwrite cache file
-            Log.d("MainActivity saveBusDataToCache", "✅ Bus data cache updated successfully in busDataCache.txt.")
-            Toast.makeText(this, "Bus data cache updated successfully in busDataCache.txt.", Toast.LENGTH_SHORT).show()
-            // ✅ Set flag to true after successful update
-            isCacheUpdated = true
-        } catch (e: Exception) {
-            Log.e("MainActivity saveBusDataToCache", "❌ Error saving bus data cache: ${e.message}")
-        }
-    }
-
-    /**
-     * Gets the hidden folder directory where cached bus data is stored.
-     * Creates the folder if it does not exist.
-     *
-     * @return File representing the hidden directory.
-     */
-    private fun getHiddenFolder(): File {
-        val externalDocumentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
-        val hiddenFolder = File(externalDocumentsDir, ".vlrshiddenfolder")
-
-        if (!hiddenFolder.exists()) {
-            hiddenFolder.mkdirs()
-        }
-
-        return hiddenFolder
-    }
-
-    /**
-     * Loads bus data from the cache file if it exists and extracts route-related data.
-     */
-    private fun loadBusDataFromCache() {
-        val cacheFile = File(getHiddenFolder(), "busDataCache.txt")
-
-        if (cacheFile.exists()) {
-            try {
-                val jsonContent = cacheFile.readText()
-                val cachedData = Gson().fromJson(jsonContent, BusDataCache::class.java)
-
-                // Ensure all values are updated correctly
-                aid = cachedData.aid
-                config = cachedData.config ?: emptyList()
-                busRouteData = cachedData.busRouteData ?: emptyList()
-
-                Log.d("MainActivity loadBusDataFromCache", "Loaded cached AID: $aid")
-                Log.d("MainActivity loadBusDataFromCache", "Loaded cached Config: $config")
-                Log.d("MainActivity loadBusDataFromCache", "Loaded cached BusRouteData: $busRouteData")
-
-                // Extract `route`, `stops`, and `durationBetweenStops` from `busRouteData`
-                val extractedData = processBusRouteData(busRouteData)
-                route = extractedData.first
-                stops = extractedData.second
-                durationBetweenStops = extractedData.third
-
-                Log.d("MainActivity loadBusDataFromCache", "Extracted Route: $route")
-                Log.d("MainActivity loadBusDataFromCache", "Extracted Stops: $stops")
-                Log.d("MainActivity loadBusDataFromCache", "Extracted Duration Between Stops: $durationBetweenStops")
-
-            } catch (e: Exception) {
-                Log.e("MainActivity loadBusDataFromCache", "Error reading bus data cache: ${e.message}")
-            }
-        } else {
-            Log.e("MainActivity loadBusDataFromCache", "No cached bus data found.")
-        }
-    }
-
-    /**
-     * All Files Access Permission (MANAGE_EXTERNAL_STORAGE).
-     */
-    private fun requestAllFilesAccessPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                try {
-                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                    intent.data = Uri.parse("package:$packageName")
-                    startActivityForResult(intent, REQUEST_MANAGE_EXTERNAL_STORAGE)
-                } catch (e: Exception) {
-                    Log.e("MainActivity requestAllFilesAccessPermission", "Error requesting storage permission: ${e.message}")
-                }
-            }
-        }
-    }
-
-    /**
      * Retrieves the Android ID (AID) from a hidden JSON file in the app-specific documents directory.
      * If the file or directory does not exist, it creates them and generates a new AID.
      *
@@ -890,22 +744,6 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("HardwareIds")
     private fun generateNewAid(): String {
         return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-    }
-
-    /**
-     * onActivityResult to handle permission grant
-     */
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_MANAGE_EXTERNAL_STORAGE) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                if (Environment.isExternalStorageManager()) {
-                    Log.d("MainActivity", "All files access granted.")
-                } else {
-                    Log.e("MainActivity", "User denied all files access.")
-                }
-            }
-        }
     }
 
     /**
@@ -1146,7 +984,7 @@ class MainActivity : AppCompatActivity() {
 //            networkStatusIndicator = binding.networkStatusIndicator
 //            reconnectProgressBar = binding.reconnectProgressBar
 //            attemptingToConnectTextView = binding.attemptingToConnectTextView
-//            aidTextView = binding.aidTextView
+            aidTextView = binding.aidTextView
 //            closestBusStopToPubDeviceTextView = binding.closestBusStopToPubDeviceTextView
 //            busDirectionTitleTextView = binding.busDirectionTitleTextView
 //            busTelemetryTitleTextView = binding.busTelemetryTitleTextView
@@ -1158,30 +996,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Updates the other data text view with the current other data telemetry.
-     */
-    private fun updateTextViews() {
-//            bearingTextView.text = "Current Bearing: $bearing degrees"
-        latitudeTextView.text = "Latitude: $latitude"
-        longitudeTextView.text = "Longitude: $longitude"
-//            directionTextView.text = "Direction: $direction"
-//            speedTextView.text = "Speed: $speed"
-//            busNameTextView.text = "Bus Name: $busname"
-//            showDepartureTimeTextView.text = "Show Departure Time: $showDepartureTime"
-//            departureTimeTextView.text = "Departure Time: $departureTime"
-//            etaToNextBStopTextView.text = "etaToNextBStop: $etaToNextBStop"
-//            aidTextView.text = "AID: $aid"
-//            closestBusStopToPubDeviceTextView.text = "closestBusStopToPubDevice: $closestBusStopToPubDevice"
-//            busDirectionTitleTextView.text = "$busDirectionTitle"
-//            busTelemetryTitleTextView.text = "$busTelemetryTitle"
-//            upcomingRoadTitleTextView.text = "$bupcomingRoadTitle"
-//            upcomingRoadTextView.text = "Upcoming Road: $upcomingRoadText"
-//            currentRoadTextView.text = "Current Road: $currentRoadName"
-    }
-
-    /**
      * Retrieves default configuration values for the activity, such as latitude, longitude, bearing, and more.
      */
+    @SuppressLint("LongLogTag")
     private fun getDefaultConfigValue() {
 //        busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
 //        Toast.makeText(this, "arrBusDataOnline1: ${arrBusData}", Toast.LENGTH_SHORT).show()
@@ -1212,158 +1029,34 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Clears any existing bus data from the map and other UI elements.
-     */
-    private fun clearBusData() {
-        binding.map.layerManager.layers.clear() // Clear all layers
-        binding.map.invalidate()
-        markerBus.clear()
-    }
+//    /**
+//     * Clears any existing bus data from the map and other UI elements.
+//     */
+//    private fun clearBusData() {
+//        binding.map.layerManager.layers.clear() // Clear all layers
+//        binding.map.invalidate()
+//        markerBus.clear()
+//    }
 
-    /**
-     * Retrieves the access token for the current device's Android ID from the configuration list.
-     */
-    @SuppressLint("HardwareIds")
-    private fun getAccessToken() {
-        val listConfig = config
-        Log.d("MainActivity getAccessToken config", config.toString())
-        for (configItem in listConfig.orEmpty()) {
-            if (configItem.aid == aid) {
-                token = configItem.accessToken
-                break
-            }
-        }
-    }
-
-    /**
-     * Requests admin messages periodically.
-     */
-    private fun requestAdminMessage() {
-        val jsonObject = JSONObject()
-        jsonObject.put("sharedKeys","message,busRoute,busStop,config,busRouteData")
-        val jsonStringSharedKeys = jsonObject.toString()
-        val handler = Handler(Looper.getMainLooper())
-        mqttManager.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
-//        mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
-        handler.post(object : Runnable {
-            override fun run() {
-                mqttManager.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
-//                mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
-                handler.postDelayed(this, REQUEST_PERIODIC_TIME)
-            }
-        })
-    }
-
-    /**
-     * Subscribes to shared data from the server.
-     * Validates configuration, AID matching, and updates the route, stops, and durationBetweenStops.
-     */
-    private fun subscribeSharedData() {
-        mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
-            runOnUiThread {
-                try {
-                    // Parse incoming message
-                    val gson = Gson()
-                    val data = gson.fromJson(message, Bus::class.java)
-
-                    // Update configuration
-                    config = data.shared?.config?.busConfig
-                    arrBusData = config.orEmpty()
-
-                    Log.d("MainActivity subscribeSharedData", "Config: $config")
-
-                    if (config.isNullOrEmpty()) {
-                        clearBusData()
-                        return@runOnUiThread
-                    }
-
-                    // Check if AID matches any entry in config
-                    val matchingAid = config!!.any { it.aid == aid }
-                    if (!matchingAid) {
-                        Toast.makeText(this, "AID does not match.", Toast.LENGTH_SHORT).show()
-                        clearBusData()
-                        return@runOnUiThread
-                    }
-
-                    // Retrieve `busRouteData` from ThingsBoard
-                    busRouteData = data.shared?.busRouteData1 ?: emptyList()
-                    Log.d("MainActivity subscribeSharedData", "busRouteData: $busRouteData")
-
-                    // **Rewrite cache when online**
-                    if (NetworkStatusHelper.isNetworkAvailable(this@MainActivity)) {
-                        // Save data **only after all values are updated**
-                        if (config!!.isNotEmpty() && route.isNotEmpty() && stops.isNotEmpty()) {
-                            saveBusDataToCache()
-                        }
-                    }
-
-                    // Extract `route`, `stops`, and `durationBetweenStops` from `busRouteData`
-                    val extractedData = processBusRouteData(busRouteData)
-                    route = extractedData.first
-                    stops = extractedData.second
-                    durationBetweenStops = extractedData.third
-
-                    Log.d("MainActivity subscribeSharedData", "Extracted Route: $route")
-                    Log.d("MainActivity subscribeSharedData", "Extracted Stops: $stops")
-                    Log.d("MainActivity subscribeSharedData", "Extracted Duration Between Stops: $durationBetweenStops")
-
-                    if (route.isNotEmpty()) {
-                        // Convert route to BusStopInfo and update ProximityManager
-                        val busStopInfoList = convertRouteToBusStopInfo(route)
-                        BusStopProximityManager.setBusStopList(busStopInfoList)
-
-                        // Generate polyline and markers on first-time initialization
-                        if (firstTime) {
-                            firstTime = false
-                        }
-                    } else {
-                        Log.d("MainActivity subscribeSharedData", "No route data available.")
-                        clearBusData()
-                    }
-                } catch (e: Exception) {
-                    Log.e("MainActivity subscribeSharedData", "Error processing shared data: ${e.message}", e)
-                    Toast.makeText(this, "Error processing shared data.", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
-    /**
-     * Processes `busRouteData` and extracts `route`, `stops`, and `durationBetweenStops`.
-     *
-     * @param busRouteData List of RouteData received from ThingsBoard.
-     * @return Triple containing:
-     *   - List<BusRoute>: All coordinates forming the route.
-     *   - List<BusStop>: All stops along the route.
-     *   - List<Double>: Durations between stops.
-     */
-    private fun processBusRouteData(busRouteData: List<RouteData>): Triple<List<BusRoute>, List<BusStop>, List<Double>> {
-        val newRoute = mutableListOf<BusRoute>()
-        val newStops = mutableListOf<BusStop>()
-        val newDurations = mutableListOf<Double>()
-
-        for (routeData in busRouteData) {
-            // Add starting point as the first stop
-            newStops.add(BusStop(latitude = routeData.startingPoint.latitude, longitude = routeData.startingPoint.longitude))
-
-            for (nextPoint in routeData.nextPoints) {
-                // Add stops
-                newStops.add(BusStop(latitude = nextPoint.latitude, longitude = nextPoint.longitude))
-
-                // Add route coordinates
-                for (coord in nextPoint.routeCoordinates) {
-                    newRoute.add(BusRoute(latitude = coord[1], longitude = coord[0]))
-                }
-
-                // Extract duration
-                val durationValue = nextPoint.duration.split(" ")[0].toDoubleOrNull() ?: 0.0
-                newDurations.add(durationValue)
-            }
-        }
-
-        return Triple(newRoute, newStops, newDurations)
-    }
+    /** Fetches the configuration data and initializes the config variable. */
+//    private fun fetchConfig(callback: (Boolean) -> Unit) {
+//        Log.d("MainActivity fetchConfig", "Fetching config...")
+//
+//        mqttManagerConfig.fetchSharedAttributes(tokenConfigData) { listConfig ->
+//            runOnUiThread {
+//                if (listConfig.isNotEmpty()) {
+//                    config = listConfig
+//                    Log.d("MainActivity fetchConfig", "✅ Config received: $config")
+//                    subscribeSharedData()
+//                    callback(true)
+//                } else {
+//                    Log.e("MainActivity fetchConfig", "❌ Failed to initialize config. Running in offline mode.")
+////                    Toast.makeText(this@MainActivity, "Running in offline mode. No bus information available.", Toast.LENGTH_SHORT).show()
+//                    callback(false)
+//                }
+//            }
+//        }
+//    }
 
     /**
      * Helper function to convert stops to busStopInfo
@@ -1385,23 +1078,23 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * function to convert route to the required BusStopInfo format
-     */
-    private fun convertRouteToBusStopInfo(route: List<BusRoute>): List<BusStopInfo> {
-        val result = route.mapIndexed { index, busStop ->
-            BusStopInfo(
-                latitude = busStop.latitude ?: 0.0,
-                longitude = busStop.longitude ?: 0.0,
-                busStopName = when (index) {
-                    0 -> "S/E"
-                    else -> index.toString()
-                }
-            )
-        }
-        Log.d("convertRouteToBusStopInfo", "Converted route to BusStopInfo: $result")
-        return result
-    }
+//    /**
+//     * function to convert route to the required BusStopInfo format
+//     */
+//    private fun convertRouteToBusStopInfo(route: List<BusRoute>): List<BusStopInfo> {
+//        val result = route.mapIndexed { index, busStop ->
+//            BusStopInfo(
+//                latitude = busStop.latitude ?: 0.0,
+//                longitude = busStop.longitude ?: 0.0,
+//                busStopName = when (index) {
+//                    0 -> "S/E"
+//                    else -> index.toString()
+//                }
+//            )
+//        }
+//        Log.d("convertRouteToBusStopInfo", "Converted route to BusStopInfo: $result")
+//        return result
+//    }
 
     /**
      * Generates polylines and markers for the bus route and stops.
@@ -1454,25 +1147,7 @@ class MainActivity : AppCompatActivity() {
 //        binding.map.invalidate()
 //    }
 
-    /** Fetches the configuration data and initializes the config variable. */
-    private fun fetchConfig(callback: (Boolean) -> Unit) {
-        Log.d("MainActivity fetchConfig", "Fetching config...")
 
-        mqttManagerConfig.fetchSharedAttributes(tokenConfigData) { listConfig ->
-            runOnUiThread {
-                if (listConfig.isNotEmpty()) {
-                    config = listConfig
-                    Log.d("MainActivity fetchConfig", "✅ Config received: $config")
-                    subscribeSharedData()
-                    callback(true)
-                } else {
-                    Log.e("MainActivity fetchConfig", "❌ Failed to initialize config. Running in offline mode.")
-//                    Toast.makeText(this@MainActivity, "Running in offline mode. No bus information available.", Toast.LENGTH_SHORT).show()
-                    callback(false)
-                }
-            }
-        }
-    }
 
     /**
      * Loads the offline map from assets and configures the map.
@@ -1588,39 +1263,6 @@ class MainActivity : AppCompatActivity() {
         return file
     }
 
-    /** Connects to the MQTT broker and subscribes to the required topics. */
-    private fun connectAndSubscribe() {
-        mqttManager.connect { isConnected ->
-            if (isConnected) {
-                Log.d("MainActivity connectAndSubscribe", "✅ Connected to MQTT broker successfully.")
-                subscribeSharedData()
-//                Log.d("MainActivity connectAndSubscribe config", config.toString())
-//                Log.d("MainActivity connectAndSubscribe busRoute", route.toString())
-//                Log.d("MainActivity connectAndSubscribe busStop", stops.toString())
-            } else {
-                Log.e("MainActivity connectAndSubscribe", "❌ Failed to connect to MQTT broker. Running in offline mode.")
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity, "Running in offline mode. No connection to server.", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
-    /** Generates route markers and polylines for the bus route on the map. */
-    private fun generateRouteMarkers(busRoute: List<BusRoute>) {
-//        val routes = busRoute.map { GeoPoint(it.latitude!!, it.longitude!!) }
-//        val polyline = org.osmdroid.views.overlay.Polyline()
-//        polyline.setPoints(routes)
-//
-//        val marker = Marker(binding.map)
-//        marker.position = GeoPoint(latitude, longitude)
-//        marker.rotation = bearing
-//
-//        binding.map.overlays.add(polyline)
-//        binding.map.overlays.add(marker)
-//        binding.map.invalidate()
-    }
-
     /** Starts a periodic task to update the current date and time in the UI. */
     @SuppressLint("SimpleDateFormat")
     private fun startDateTimeUpdater() {
@@ -1643,7 +1285,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Cleans up resources on activity destruction. */
     override fun onDestroy() {
-        mqttManager.disconnect()
+//        mqttManager.disconnect()
         stopDateTimeUpdater()
         super.onDestroy()
 
