@@ -44,8 +44,8 @@ class RegisterActivity : AppCompatActivity() {
 
         // Initialize mqttManager
         mqttManager = MqttManager(
-            serverUri = MainActivity.SERVER_URI,
-            clientId = MainActivity.CLIENT_ID,
+            serverUri = MapActivity.SERVER_URI,
+            clientId = MapActivity.CLIENT_ID,
             username = ""
         )
 

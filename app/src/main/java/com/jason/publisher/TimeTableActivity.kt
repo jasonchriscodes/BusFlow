@@ -13,7 +13,6 @@ import android.util.Log
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.res.ResourcesCompat
 import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivityTimetableBinding
 import com.jason.publisher.model.Bus
@@ -23,11 +22,8 @@ import com.jason.publisher.model.BusRoute
 import com.jason.publisher.model.BusStop
 import com.jason.publisher.model.RouteData
 import com.jason.publisher.services.MqttManager
-import com.jason.publisher.utils.BusStopProximityManager
 import com.jason.publisher.utils.NetworkStatusHelper
 import org.json.JSONObject
-import org.mapsforge.core.model.LatLong
-import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.osmdroid.config.Configuration
 import java.io.File
 
@@ -145,7 +141,7 @@ class TimeTableActivity : AppCompatActivity() {
 
         // Set up the "Start Route" button
         binding.startRouteButton.setOnClickListener {
-            val intent = Intent(this, MainActivity::class.java).apply {
+            val intent = Intent(this, MapActivity::class.java).apply {
                 putExtra("AID", aid)
                 putExtra("CONFIG", ArrayList(config))
                 putExtra("JSON_STRING", jsonString)

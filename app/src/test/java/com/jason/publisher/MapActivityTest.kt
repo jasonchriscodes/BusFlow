@@ -19,7 +19,7 @@ import org.mockito.kotlin.whenever
 /**
  * Unit tests for the MainActivity class.
  */
-class MainActivityTest {
+class MapActivityTest {
 
     /**
      * Sets up the test environment before each test.

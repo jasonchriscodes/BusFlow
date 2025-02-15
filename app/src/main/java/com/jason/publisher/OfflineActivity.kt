@@ -5,7 +5,6 @@ import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.content.IntentFilter
 import android.graphics.Color
-import android.graphics.Rect
 import android.net.ConnectivityManager
 import android.os.Build
 import android.os.Bundle
@@ -28,7 +27,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.res.ResourcesCompat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.gson.Gson
-import com.jason.publisher.Helper.createBusStopSymbol
 import com.jason.publisher.databinding.ActivityOfflineBinding
 import com.jason.publisher.model.AttributesData
 import com.jason.publisher.model.Bus
@@ -59,7 +57,6 @@ import org.osmdroid.views.overlay.Polyline
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
-import java.io.IOException
 import java.lang.Math.atan2
 import java.lang.Math.cos
 import java.lang.Math.sin
@@ -887,7 +884,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
                 }
 
                 val jsonString = jsonObject.toString()
-                mqttManager.publish(MainActivity.PUB_POS_TOPIC, jsonString, 1)
+                mqttManager.publish(MapActivity.PUB_POS_TOPIC, jsonString, 1)
                 notificationManager.showNotification(
                     channelId = "channel1",
                     notificationId = 1,
@@ -962,7 +959,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         val jsonObject = JSONObject()
         jsonObject.put("routeDirection", routeDirection)
         val jsonString = jsonObject.toString()
-        mqttManager.publish(MainActivity.PUB_POS_TOPIC, jsonString, 1)
+        mqttManager.publish(MapActivity.PUB_POS_TOPIC, jsonString, 1)
     }
 
     /**
@@ -972,7 +969,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         val jsonObject = JSONObject()
         jsonObject.put("showDepartureTime", showDepartureTime)
         val jsonString = jsonObject.toString()
-        mqttManager.publish(MainActivity.PUB_POS_TOPIC, jsonString, 1)
+        mqttManager.publish(MapActivity.PUB_POS_TOPIC, jsonString, 1)
     }
 
     /**
@@ -982,7 +979,7 @@ class OfflineActivity : AppCompatActivity(), NetworkReceiver.NetworkListener {
         val jsonObject = JSONObject()
         jsonObject.put("departureTime", departureTime)
         val jsonString = jsonObject.toString()
-        mqttManager.publish(MainActivity.PUB_POS_TOPIC, jsonString, 1)
+        mqttManager.publish(MapActivity.PUB_POS_TOPIC, jsonString, 1)
     }
 
     /**

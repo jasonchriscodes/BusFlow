@@ -13,11 +13,9 @@ import androidx.appcompat.app.AppCompatActivity
 import com.jason.publisher.services.MqttManager
 import okhttp3.Call
 import okhttp3.Callback
-import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.json.JSONArray
@@ -54,8 +52,8 @@ class LoginActivity : AppCompatActivity() {
 
         // Initialize mqttManager before using it
         mqttManager = MqttManager(
-            serverUri = MainActivity.SERVER_URI,
-            clientId = MainActivity.CLIENT_ID,
+            serverUri = MapActivity.SERVER_URI,
+            clientId = MapActivity.CLIENT_ID,
             username = tokenConfigData
         )
 
@@ -183,7 +181,7 @@ class LoginActivity : AppCompatActivity() {
                             Toast.makeText(this@LoginActivity, "AID not found in the company's configuration.", Toast.LENGTH_LONG).show()
                         } else {
                             Log.d("checkLoginCredentials", "Login successful! Redirecting to MainActivity...")
-                            val intent = Intent(this@LoginActivity, MainActivity::class.java)
+                            val intent = Intent(this@LoginActivity, MapActivity::class.java)
                             intent.putExtra("AID", aid)
                             startActivity(intent)
                             finish()
@@ -406,7 +404,7 @@ class LoginActivity : AppCompatActivity() {
 
                 // After successful update, start MainActivity and pass the AID
                 runOnUiThread {
-                    val intent = Intent(this, MainActivity::class.java)
+                    val intent = Intent(this, MapActivity::class.java)
                     intent.putExtra("AID", aid) // Passing the AID to MainActivity
                     startActivity(intent)
                     finish()

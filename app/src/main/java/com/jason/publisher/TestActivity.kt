@@ -28,7 +28,7 @@ class TestActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Initialize MQTT client
-        mqttManager = MqttClient(MainActivity.SERVER_URI, MainActivity.CLIENT_ID,
+        mqttManager = MqttClient(MapActivity.SERVER_URI, MapActivity.CLIENT_ID,
             org.eclipse.paho.client.mqttv3.persist.MemoryPersistence()
         )
 
@@ -58,7 +58,7 @@ class TestActivity : AppCompatActivity() {
             mqttMessage.qos = 1
             mqttMessage.isRetained = false
 
-            mqttManager.publish(MainActivity.PUB_POS_TOPIC, mqttMessage)
+            mqttManager.publish(MapActivity.PUB_POS_TOPIC, mqttMessage)
         }
     }
 }

@@ -2,19 +2,14 @@ package com.jason.publisher
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.google.gson.Gson
-import com.jason.publisher.databinding.ActivityMainBinding
-import com.jason.publisher.model.Bus
+import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.model.BusRoute
-import com.jason.publisher.services.MqttManager
-import org.osmdroid.config.Configuration
 import org.osmdroid.views.MapController
 import java.text.SimpleDateFormat
 import java.util.*
@@ -29,7 +24,6 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
-import com.jason.publisher.model.BusDataCache
 import com.jason.publisher.model.BusItem
 import com.jason.publisher.model.BusStop
 import com.jason.publisher.model.BusStopInfo
@@ -52,9 +46,9 @@ import java.lang.Math.cos
 import java.lang.Math.sin
 import java.lang.Math.sqrt
 
-class MainActivity : AppCompatActivity() {
+class MapActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityMainBinding
+    private lateinit var binding: ActivityMapBinding
     private lateinit var locationManager: LocationManager
     private lateinit var mapController: MapController
     private lateinit var connectionStatusTextView: TextView
@@ -117,7 +111,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AndroidGraphicFactory.createInstance(application)
-        binding = ActivityMainBinding.inflate(layoutInflater)
+        binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         // Initialize managers before using them
@@ -260,7 +254,7 @@ class MainActivity : AppCompatActivity() {
                     }, (travelTimeSeconds * 1000).toLong()) // Wait until movement completes
                 } else {
                     isSimulating = false
-                    Toast.makeText(this@MainActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MapActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -626,7 +620,7 @@ class MainActivity : AppCompatActivity() {
         isSimulating = false
 
         // Restart MainActivity
-        val intent = Intent(this, MainActivity::class.java)
+        val intent = Intent(this, MapActivity::class.java)
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(intent)
         finish() // Close current instance
