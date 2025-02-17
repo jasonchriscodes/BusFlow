@@ -57,6 +57,9 @@
             android:name=".MapActivity"
             android:exported="false"
             android:screenOrientation="landscape" />
+        <activity android:name=".TestMapActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"/>
 
         <service android:name="org.eclipse.paho.android.service.MqttService" />
 

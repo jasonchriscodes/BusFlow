@@ -8,7 +8,7 @@ import android.os.Looper
 import android.util.Log
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.jason.publisher.databinding.ActivityMapBinding
+import com.jason.publisher.databinding.ActivityTestmapBinding
 import com.jason.publisher.model.BusRoute
 import org.osmdroid.views.MapController
 import java.text.SimpleDateFormat
@@ -21,6 +21,8 @@ import android.location.Location
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import android.view.View
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
@@ -46,9 +48,9 @@ import java.lang.Math.cos
 import java.lang.Math.sin
 import java.lang.Math.sqrt
 
-class MapActivity : AppCompatActivity() {
+class TestMapActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityMapBinding
+    private lateinit var binding: ActivityTestmapBinding
     private lateinit var locationManager: LocationManager
     private lateinit var mapController: MapController
     private lateinit var dateTimeHandler: Handler
@@ -83,6 +85,10 @@ class MapActivity : AppCompatActivity() {
     private lateinit var bearingTextView: TextView
     private lateinit var speedTextView: TextView
     private lateinit var upcomingBusStopTextView: TextView
+    private lateinit var scheduleStatusIcon: ImageView
+    private lateinit var scheduleStatusText: TextView
+    private lateinit var timingPointTextView: TextView
+    private lateinit var tripEndTimeTextView: TextView
 
     private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
     private var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
@@ -107,10 +113,11 @@ class MapActivity : AppCompatActivity() {
         private const val SOUND_FILE_NAME = "notif.wav"
     }
 
+    @SuppressLint("LongLogTag")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AndroidGraphicFactory.createInstance(application)
-        binding = ActivityMapBinding.inflate(layoutInflater)
+        binding = ActivityTestmapBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         // Initialize managers before using them
@@ -136,7 +143,7 @@ class MapActivity : AppCompatActivity() {
         // Initialize UI components
         initializeUIComponents()
 
-        aidTextView.text = "AID: $aid"
+//        aidTextView.text = "AID: $aid"
 
         // Set up network status UI
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
@@ -171,8 +178,8 @@ class MapActivity : AppCompatActivity() {
                 Log.d("MainActivity onCreate Longitude", longitude.toString())
 
                 // Update UI components with the current location
-                latitudeTextView.text = "Latitude: $latitude"
-                longitudeTextView.text = "Longitude: $longitude"
+//                latitudeTextView.text = "Latitude: $latitude"
+//                longitudeTextView.text = "Longitude: $longitude"
             }
         })
 
@@ -199,7 +206,7 @@ class MapActivity : AppCompatActivity() {
         if (matchingBus != null) {
             busname = matchingBus.bus
             runOnUiThread {
-                binding.busNameTextView.text = "Bus Name: $busname"
+//                binding.busNameTextView.text = "Bus Name: $busname"
             }
             Log.d("MainActivity", "✅ Bus name updated: $busname for AID: $aid")
         } else {
@@ -253,7 +260,7 @@ class MapActivity : AppCompatActivity() {
                     }, (travelTimeSeconds * 1000).toLong()) // Wait until movement completes
                 } else {
                     isSimulating = false
-                    Toast.makeText(this@MapActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@TestMapActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -276,7 +283,11 @@ class MapActivity : AppCompatActivity() {
      * Logs actual timestamp, expected arrival time, and schedule status.
      * Resets actual time when a stop is passed.
      */
+    @SuppressLint("LongLogTag")
     private fun checkScheduleStatus() {
+        val statusIcon = findViewById<ImageView>(R.id.scheduleStatusIcon)
+        val statusText = findViewById<TextView>(R.id.scheduleStatusText)
+
         if (!isSimulating || durationBetweenStops.isEmpty() || stops.isEmpty()) return
 
         Log.d("=========== 🚀 SCHEDULE CHECK START ===========", "Checking schedule status...")
@@ -317,26 +328,26 @@ class MapActivity : AppCompatActivity() {
             return String.format("%02d min %02d sec", minutes, remainingSeconds)
         }
 
-        Log.d(
-            "MainActivity checkScheduleStatus",
-            """
-        🕒 Actual Time: ${formatTime(actualTimeSeconds)}
-        ⏳ Expected Time: ${formatTime(expectedTimeSeconds)}
-        ⏲️ Duration Between Stops: ${durationBetweenStops[adjustedIndex]} min
-        Duration Between Stops list: $durationBetweenStops
-        Upcoming Bus Stop: ${upcomingBusStopTextView.text}
-        ⏲️ Threshold: ±${threshold} sec (${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)})
-        """.trimIndent()
-        )
+//        Log.d(
+//            "MainActivity checkScheduleStatus",
+//            """
+//        🕒 Actual Time: ${formatTime(actualTimeSeconds)}
+//        ⏳ Expected Time: ${formatTime(expectedTimeSeconds)}
+//        ⏲️ Duration Between Stops: ${durationBetweenStops[adjustedIndex]} min
+//        Duration Between Stops list: $durationBetweenStops
+//        Upcoming Bus Stop: ${upcomingBusStopTextView.text}
+//        ⏲️ Threshold: ±${threshold} sec (${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)})
+//        """.trimIndent()
+//        )
 
-        val statusTextView = findViewById<TextView>(R.id.scheduleStatusValueTextView)
-        val expectedTimeTextView = findViewById<TextView>(R.id.expectedTimeValueTextView)
-        val actualTimeTextView = findViewById<TextView>(R.id.actualTimeValueTextView)
-        val thresholdRangeTextView = findViewById<TextView>(R.id.thresholdRangeValueTextView)
+//        val statusTextView = findViewById<TextView>(R.id.scheduleStatusValueTextView)
+//        val expectedTimeTextView = findViewById<TextView>(R.id.expectedTimeValueTextView)
+//        val actualTimeTextView = findViewById<TextView>(R.id.actualTimeValueTextView)
+//        val thresholdRangeTextView = findViewById<TextView>(R.id.thresholdRangeValueTextView)
 
-        expectedTimeTextView.text = formatTime(expectedTimeSeconds)
-        actualTimeTextView.text = formatTime(actualTimeSeconds)
-        thresholdRangeTextView.text = "${threshold} sec: ${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)}"
+//        expectedTimeTextView.text = formatTime(expectedTimeSeconds)
+//        actualTimeTextView.text = formatTime(actualTimeSeconds)
+//        thresholdRangeTextView.text = "${threshold} sec: ${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)}"
 
         // Check if the bus has passed the stop
         val distanceToStop = calculateDistance(latitude, longitude, stopLat, stopLon)
@@ -352,19 +363,19 @@ class MapActivity : AppCompatActivity() {
         // Check if the bus is ahead, behind, or on time
         when {
             actualTimeSeconds < lowerThresholdSeconds -> {
-                Log.w("MainActivity checkScheduleStatus", "🚀 Ahead by ${lowerThresholdSeconds - actualTimeSeconds} sec")
-                statusTextView.text = "🚀 Ahead by ${lowerThresholdSeconds - actualTimeSeconds} sec"
-                statusTextView.setTextColor(Color.RED)
+                statusIcon.setImageResource(R.drawable.ic_schedule_ahead)
+                statusText.text = "Ahead"
+                statusIcon.visibility = View.VISIBLE
             }
             actualTimeSeconds > upperThresholdSeconds -> {
-                Log.w("MainActivity checkScheduleStatus", "🐢 Behind by ${actualTimeSeconds - upperThresholdSeconds} sec")
-                statusTextView.text = "🐢 Behind by ${actualTimeSeconds - upperThresholdSeconds} sec"
-                statusTextView.setTextColor(Color.RED)
+                statusIcon.setImageResource(R.drawable.ic_schedule_behind)
+                statusText.text = "Behind"
+                statusIcon.visibility = View.VISIBLE
             }
             else -> {
-                Log.i("MainActivity checkScheduleStatus", "✅ On Time")
-                statusTextView.text = "✅ On Time"
-                statusTextView.setTextColor(Color.GREEN)
+                statusIcon.setImageResource(R.drawable.ic_schedule_on_time)
+                statusText.text = "On Time"
+                statusIcon.visibility = View.VISIBLE
             }
         }
     }
@@ -438,10 +449,10 @@ class MapActivity : AppCompatActivity() {
                     }
 
                     // Update UI
-                    latitudeTextView.text = "Latitude: $newLat"
-                    longitudeTextView.text = "Longitude: $newLon"
-                    bearingTextView.text = "Bearing: $bearing°"
-                    speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
+//                    latitudeTextView.text = "Latitude: $newLat"
+//                    longitudeTextView.text = "Longitude: $newLon"
+//                    bearingTextView.text = "Bearing: $bearing°"
+//                    speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
 
                     // Move the bus marker
                     updateBusMarkerPosition(newLat, newLon, bearing)
@@ -468,6 +479,7 @@ class MapActivity : AppCompatActivity() {
     private val passedStops = mutableListOf<BusStop>() // Track stops that have been passed
     private var currentStopIndex = 0 // Keep track of the current stop in order
 
+    @SuppressLint("LongLogTag")
     private fun checkPassedStops(currentLat: Double, currentLon: Double) {
         if (stops.isEmpty()) {
             Log.d("MainActivity checkPassedStops", "❌ No bus stops available.")
@@ -537,6 +549,7 @@ class MapActivity : AppCompatActivity() {
     }
 
     /** Finds the nearest upcoming bus stop */
+    @SuppressLint("LongLogTag")
     private fun getUpcomingBusStopName(lat: Double, lon: Double): String {
         try {
             Log.d("MainActivity getUpcomingBusStopName", "JSON String: $jsonString")
@@ -619,7 +632,7 @@ class MapActivity : AppCompatActivity() {
         isSimulating = false
 
         // Restart MainActivity
-        val intent = Intent(this, MapActivity::class.java)
+        val intent = Intent(this, TestMapActivity::class.java)
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(intent)
         finish() // Close current instance
@@ -628,6 +641,7 @@ class MapActivity : AppCompatActivity() {
     /**
      * Draws a polyline on the Mapsforge map using the busRoute data.
      */
+    @SuppressLint("LongLogTag")
     private fun drawPolyline() {
         Log.d("MainActivity drawPolyline", "Drawing polyline with route: $route")
 
@@ -674,7 +688,7 @@ class MapActivity : AppCompatActivity() {
      *
      * @return The AID (Android ID) as a String.
      */
-    @SuppressLint("HardwareIds")
+    @SuppressLint("HardwareIds", "LongLogTag")
     private fun getOrCreateAid(): String {
         // Ensure we have the correct storage permission
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -768,9 +782,9 @@ class MapActivity : AppCompatActivity() {
                 lastLongitude = currentLongitude
 
                 // Update UI
-                latitudeTextView.text = "Latitude:\n$latitude"
-                longitudeTextView.text = "Longitude:\n$longitude"
-                bearingTextView.text = "Bearing: $bearing°"
+//                latitudeTextView.text = "Latitude:\n$latitude"
+//                longitudeTextView.text = "Longitude:\n$longitude"
+//                bearingTextView.text = "Bearing: $bearing°"
 
                 // Update the bus marker position
                 updateBusMarkerPosition(latitude, longitude, bearing)
@@ -962,11 +976,20 @@ class MapActivity : AppCompatActivity() {
      * Initialize UI components and assign them to the corresponding views.
      */
     private fun initializeUIComponents() {
+        timingPointTextView = binding.timingPointTextView
+        tripEndTimeTextView = binding.tripEndTimeTextView
+        // Hardcoded values for testing
+        val timingPoint = "Timing point to bus stop 3 at 12:45"
+        val tripEndTime = "Trip end time: 13:30"
+
+        // Set text views with hardcoded values
+        timingPointTextView.text = timingPoint
+        tripEndTimeTextView.text = tripEndTime
 //            bearingTextView = binding.bearingTextView
-        latitudeTextView = binding.latitudeTextView
-        longitudeTextView = binding.longitudeTextView
-        bearingTextView = binding.bearingTextView
-        speedTextView = binding.speedTextView
+//        latitudeTextView = binding.latitudeTextView
+//        longitudeTextView = binding.longitudeTextView
+//        bearingTextView = binding.bearingTextView
+//        speedTextView = binding.speedTextView
         upcomingBusStopTextView = binding.upcomingBusStopTextView
 //            directionTextView = binding.directionTextView
 //            speedTextView = binding.speedTextView
@@ -977,7 +1000,7 @@ class MapActivity : AppCompatActivity() {
 //            networkStatusIndicator = binding.networkStatusIndicator
 //            reconnectProgressBar = binding.reconnectProgressBar
 //            attemptingToConnectTextView = binding.attemptingToConnectTextView
-            aidTextView = binding.aidTextView
+//            aidTextView = binding.aidTextView
 //            closestBusStopToPubDeviceTextView = binding.closestBusStopToPubDeviceTextView
 //            busDirectionTitleTextView = binding.busDirectionTitleTextView
 //            busTelemetryTitleTextView = binding.busTelemetryTitleTextView
@@ -1054,6 +1077,7 @@ class MapActivity : AppCompatActivity() {
     /**
      * Helper function to convert stops to busStopInfo
      */
+    @SuppressLint("LongLogTag")
     private fun updateBusStopProximityManager() {
         if (stops.isNotEmpty()) {
             busStopInfo = stops.map { stop ->
@@ -1146,6 +1170,7 @@ class MapActivity : AppCompatActivity() {
      * Loads the offline map from assets and configures the map.
      * Prevents adding duplicate layers.
      */
+    @SuppressLint("LongLogTag")
     private fun openMapFromAssets() {
         binding.map.mapScaleBar.isVisible = true
         binding.map.setBuiltInZoomControls(true)

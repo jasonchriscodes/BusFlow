@@ -152,6 +152,20 @@ class TimeTableActivity : AppCompatActivity() {
             }
             startActivity(intent)
         }
+
+        // Set up the "Start Route" button
+        binding.testStartRouteButton.setOnClickListener {
+            val intent = Intent(this, TestMapActivity::class.java).apply {
+                putExtra("AID", aid)
+                putExtra("CONFIG", ArrayList(config))
+                putExtra("JSON_STRING", jsonString)
+                putExtra("ROUTE", ArrayList(route)) // Send list as ArrayList
+                putExtra("STOPS", ArrayList(stops)) // Send list as ArrayList
+                putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops)) // Send list as ArrayList
+                putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+            }
+            startActivity(intent)
+        }
     }
 
     /**

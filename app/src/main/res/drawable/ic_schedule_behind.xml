@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Darker Yellow Circle Background -->
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#CCAA00"/> <!-- Darker Yellow Color -->
+            <size android:width="64dp" android:height="64dp"/> <!-- Circle Size -->
+        </shape>
+    </item>
+
+    <!-- Larger White Left-Pointing Arrow Positioned More to the Left -->
+    <item
+        android:gravity="center_vertical"
+        android:right="12dp"> <!-- Move Arrow More to the Left -->
+        <vector
+            xmlns:android="http://schemas.android.com/apk/res/android"
+            android:width="48dp"
+            android:height="48dp"
+            android:viewportWidth="24"
+            android:viewportHeight="24">
+            <path
+                android:fillColor="#FFFFFF"
+                android:strokeWidth="2"
+                android:pathData="M16,4L8,12l8,8v-5h8v-6h-8V4z"/> <!-- Left Arrow -->
+        </vector>
+    </item>
+
+</layer-list>
