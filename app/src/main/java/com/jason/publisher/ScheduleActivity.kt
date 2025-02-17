@@ -14,7 +14,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.gson.Gson
-import com.jason.publisher.databinding.ActivityTimetableBinding
+import com.jason.publisher.databinding.ActivityScheduleBinding
 import com.jason.publisher.model.Bus
 import com.jason.publisher.model.BusDataCache
 import com.jason.publisher.model.BusItem
@@ -26,10 +26,13 @@ import com.jason.publisher.utils.NetworkStatusHelper
 import org.json.JSONObject
 import org.osmdroid.config.Configuration
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-class TimeTableActivity : AppCompatActivity() {
+class ScheduleActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityTimetableBinding
+    private lateinit var binding: ActivityScheduleBinding
     private lateinit var mqttManagerConfig: MqttManager
     private lateinit var mqttManager: MqttManager
     private lateinit var connectionStatusTextView: TextView
@@ -49,6 +52,9 @@ class TimeTableActivity : AppCompatActivity() {
     private var durationBetweenStops: List<Double> = emptyList()
     private var arrBusData: List<BusItem> = emptyList()
 
+    private lateinit var dateTimeHandler: Handler
+    private lateinit var dateTimeRunnable: Runnable
+
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
         const val CLIENT_ID = "jasonAndroidClientId"
@@ -65,7 +71,7 @@ class TimeTableActivity : AppCompatActivity() {
     @SuppressLint("LongLogTag")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityTimetableBinding.inflate(layoutInflater)
+        binding = ActivityScheduleBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         // Check and request permission
@@ -89,6 +95,9 @@ class TimeTableActivity : AppCompatActivity() {
 
         // Connect and subscribe to MQTT
         connectAndSubscribe()
+
+        // Start updating the date/time
+        startDateTimeUpdater()
 
         // Check internet connection
         if (!NetworkStatusHelper.isNetworkAvailable(this)) {
@@ -166,6 +175,20 @@ class TimeTableActivity : AppCompatActivity() {
             }
             startActivity(intent)
         }
+    }
+
+    /** Starts a periodic task to update the current date and time in the UI. */
+    private fun startDateTimeUpdater() {
+        dateTimeHandler = Handler(Looper.getMainLooper())
+        dateTimeRunnable = object : Runnable {
+            override fun run() {
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                val currentDateTime = dateFormat.format(Date())
+                findViewById<TextView>(R.id.currentDateTimeTextView).text = currentDateTime
+                dateTimeHandler.postDelayed(this, 1000) // Update every second
+            }
+        }
+        dateTimeHandler.post(dateTimeRunnable)
     }
 
     /**
@@ -328,7 +351,7 @@ class TimeTableActivity : AppCompatActivity() {
             } else {
                 Log.e("MainActivity connectAndSubscribe", "❌ Failed to connect to MQTT broker. Running in offline mode.")
                 runOnUiThread {
-                    Toast.makeText(this@TimeTableActivity, "Running in offline mode. No connection to server.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@ScheduleActivity, "Running in offline mode. No connection to server.", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -371,7 +394,7 @@ class TimeTableActivity : AppCompatActivity() {
                     Log.d("MainActivity subscribeSharedData", "busRouteData: $busRouteData")
 
                     // **Rewrite cache when online**
-                    if (NetworkStatusHelper.isNetworkAvailable(this@TimeTableActivity)) {
+                    if (NetworkStatusHelper.isNetworkAvailable(this@ScheduleActivity)) {
                         // Save data **only after all values are updated**
                         if (config!!.isNotEmpty() && route.isNotEmpty() && stops.isNotEmpty()) {
                             saveBusDataToCache()
@@ -486,6 +509,7 @@ class TimeTableActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         NetworkStatusHelper.unregisterReceiver(this)
+        dateTimeHandler.removeCallbacks(dateTimeRunnable)
     }
 
     /** Fetches the Android ID (AID) of the device. */
