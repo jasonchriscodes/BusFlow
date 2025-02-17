@@ -4,10 +4,10 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MapActivity"
-    >
+    android:background="@color/colorPrimary"
+    tools:context=".TestMapActivity">
 
-    <!-- Large Map -->
+<!-- Large Map -->
     <org.mapsforge.map.android.view.MapView
         android:id="@+id/map"
         android:layout_width="0dp"
@@ -18,7 +18,7 @@
         app:layout_constraintEnd_toStartOf="@+id/rightColumnContainer"
         android:contentDescription="Live map displaying bus routes and stops" />
 
-    <!-- Right Column containing Telemetry Data -->
+    <!-- Right Column: Data Display -->
     <LinearLayout
         android:id="@+id/rightColumnContainer"
         android:layout_width="0dp"
@@ -28,34 +28,34 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toEndOf="@+id/map"
-        android:padding="8dp"
-        android:background="@android:color/white">
+        android:padding="12dp"
+        android:background="@color/colorPrimaryDark">
 
-        <!-- Current Date and Time Section -->
+        <!-- Current Date and Time -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:padding="8dp"
-            android:background="@drawable/border"
-            android:layout_marginBottom="16dp">
+            android:padding="12dp"
+            android:background="@drawable/white_border"
+            android:layout_marginBottom="8dp">
 
             <TextView
-                android:id="@+id/currentDataAndTimeTextView"
+                android:id="@+id/currentDateAndTimeTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Date and Time: "
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:textColor="@android:color/black" />
+                android:textSize="16sp"
+                android:textColor="@color/white"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/currentDateAndTime"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="2025-01-23 14:00:00"
-                android:textSize="18sp"
-                android:textColor="@android:color/black" />
+                android:textSize="16sp"
+                android:textColor="@color/white"/>
         </LinearLayout>
 
         <!-- Timing Point and Trip End Time Section -->
@@ -65,17 +65,17 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:padding="8dp"
-            android:background="@drawable/border"
+            android:background="@drawable/white_border"
             android:layout_marginBottom="16dp">
 
             <TextView
                 android:id="@+id/timingPointTitleTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Timing Point:"
-                android:textSize="18sp"
+                android:text="Timing Point: "
+                android:textSize="16sp"
                 android:textStyle="bold"
-                android:textColor="@android:color/black"
+                android:textColor="@android:color/white"
                 android:gravity="start" />
 
             <TextView
@@ -83,8 +83,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Bus stop 0 at 00:00"
-                android:textSize="18sp"
-                android:textColor="@android:color/black"
+                android:textSize="16sp"
+                android:textColor="@android:color/white"
                 android:gravity="start" />
         </LinearLayout>
 
@@ -94,17 +94,17 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:padding="8dp"
-            android:background="@drawable/border"
+            android:background="@drawable/white_border"
             android:layout_marginBottom="16dp">
 
             <TextView
                 android:id="@+id/tripEndTimeTitleTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Trip End Time:"
-                android:textSize="18sp"
+                android:text="Trip End Time: "
+                android:textSize="16sp"
                 android:textStyle="bold"
-                android:textColor="@android:color/black"
+                android:textColor="@android:color/white"
                 android:gravity="start" />
 
             <TextView
@@ -112,131 +112,36 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="00:00"
-                android:textSize="18sp"
-                android:textColor="@android:color/black"
+                android:textSize="16sp"
+                android:textColor="@android:color/white"
                 android:gravity="start" />
         </LinearLayout>
 
-        <!--        &lt;!&ndash; Bus Tablet Data Section (3 Columns per Row) &ndash;&gt;-->
-<!--        <LinearLayout-->
-<!--            android:id="@+id/busTabletDataContainer"-->
-<!--            android:layout_width="match_parent"-->
-<!--            android:layout_height="wrap_content"-->
-<!--            android:orientation="vertical"-->
-<!--            android:padding="8dp"-->
-<!--            android:background="@drawable/border"-->
-<!--            android:layout_marginBottom="16dp">-->
-
-<!--            <TextView-->
-<!--                android:id="@+id/busTabletTitleTextView"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:text="Bus Tablet Data"-->
-<!--                android:textSize="18sp"-->
-<!--                android:textStyle="bold"-->
-<!--                android:textColor="@android:color/black"-->
-<!--                android:layout_marginBottom="8dp" />-->
-
-<!--            &lt;!&ndash; Row 1: AID, Bus Name (More Space), Speed (Shifted Right) &ndash;&gt;-->
-<!--            <LinearLayout-->
-<!--                android:layout_width="match_parent"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:orientation="horizontal"-->
-<!--                android:weightSum="3.75">-->
-
-<!--                <TextView-->
-<!--                    android:id="@+id/aidTextView"-->
-<!--                    android:layout_width="0dp"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:layout_weight="1.5"-->
-<!--                    android:text="AID: Unknown"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/black" />-->
-
-<!--                <TextView-->
-<!--                    android:id="@+id/busNameTextView"-->
-<!--                    android:layout_width="0dp"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:layout_weight="1.5"-->
-<!--                    android:text="Bus: Unknown"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/black" />-->
-
-<!--                <TextView-->
-<!--                    android:id="@+id/speedTextView"-->
-<!--                    android:layout_width="0dp"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:layout_weight="0.75"-->
-<!--                    android:text="Speed: 0.0 km/h"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/black"-->
-<!--                    android:gravity="end"/>-->
-<!--            </LinearLayout>-->
-
-<!--            &lt;!&ndash; Row 2: Latitude, Longitude (More Space), Bearing (Shifted Right) &ndash;&gt;-->
-<!--            <LinearLayout-->
-<!--                android:layout_width="match_parent"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:orientation="horizontal"-->
-<!--                android:weightSum="3.75">-->
-
-<!--                <TextView-->
-<!--                    android:id="@+id/latitudeTextView"-->
-<!--                    android:layout_width="0dp"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:layout_weight="1.5"-->
-<!--                    android:text="Latitude:\n0.0"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/black" />-->
-
-<!--                <TextView-->
-<!--                    android:id="@+id/longitudeTextView"-->
-<!--                    android:layout_width="0dp"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:layout_weight="1.5"-->
-<!--                    android:text="Longitude:\n0.0"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/black" />-->
-
-<!--                <TextView-->
-<!--                    android:id="@+id/bearingTextView"-->
-<!--                    android:layout_width="0dp"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:layout_weight="0.75"-->
-<!--                    android:text="Bearing: 0°"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/black"-->
-<!--                    android:gravity="end"/>-->
-<!--            </LinearLayout>-->
-<!--        </LinearLayout>-->
-
-        <!-- Upcoming Bus Stop Section -->
+        <!-- Upcoming Bus Stop -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:padding="8dp"
-            android:background="@drawable/border"
-            android:layout_marginBottom="16dp">
+            android:padding="12dp"
+            android:background="@drawable/white_border"
+            android:layout_marginBottom="8dp">
 
             <TextView
                 android:id="@+id/upcomingRoadTitleTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Upcoming Bus Stop:"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:textColor="@android:color/black"
-                android:gravity="start" />
+                android:text="Upcoming Bus Stop: "
+                android:textSize="16sp"
+                android:textColor="@color/white"
+                android:textStyle="bold"/>
 
             <TextView
                 android:id="@+id/upcomingBusStopTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Unknown"
-                android:textSize="18sp"
-                android:textColor="@android:color/black"
-                android:gravity="start" />
+                android:textSize="16sp"
+                android:textColor="@color/white"/>
         </LinearLayout>
 
         <!-- Schedule Status Section -->
@@ -246,7 +151,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="8dp"
-            android:background="@drawable/border"
+            android:background="@drawable/white_border"
             android:layout_marginBottom="16dp"
             android:gravity="center_horizontal">
 
@@ -264,90 +169,10 @@
                 android:layout_height="wrap_content"
                 android:text="Unknown"
                 android:textSize="16sp"
-                android:textColor="@android:color/black"
+                android:textColor="@android:color/white"
                 android:gravity="center"
                 android:layout_marginTop="4dp"/>
         </LinearLayout>
-
-        <!--            &lt;!&ndash; Expected & Actual Time Display &ndash;&gt;-->
-<!--            <LinearLayout-->
-<!--                android:layout_width="match_parent"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:orientation="horizontal"-->
-<!--                android:paddingTop="4dp">-->
-
-<!--                <TextView-->
-<!--                    android:id="@+id/expectedTimeLabel"-->
-<!--                    android:layout_width="wrap_content"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:text="Expected Time:"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/black"-->
-<!--                    android:gravity="start" />-->
-
-<!--                <TextView-->
-<!--                    android:id="@+id/expectedTimeValueTextView"-->
-<!--                    android:layout_width="0dp"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:layout_weight="1"-->
-<!--                    android:text="Unknown"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/black"-->
-<!--                    android:gravity="end" />-->
-<!--            </LinearLayout>-->
-
-<!--            &lt;!&ndash; Threshold Range Display &ndash;&gt;-->
-<!--            <LinearLayout-->
-<!--                android:layout_width="match_parent"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:orientation="horizontal"-->
-<!--                android:paddingTop="4dp">-->
-
-<!--                <TextView-->
-<!--                    android:id="@+id/thresholdRangeLabel"-->
-<!--                    android:layout_width="wrap_content"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:text="Threshold Range:"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/black"-->
-<!--                    android:gravity="start" />-->
-
-<!--                <TextView-->
-<!--                    android:id="@+id/thresholdRangeValueTextView"-->
-<!--                    android:layout_width="0dp"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:layout_weight="1"-->
-<!--                    android:text="Unknown"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/black"-->
-<!--                    android:gravity="end" />-->
-<!--            </LinearLayout>-->
-
-<!--            <LinearLayout-->
-<!--                android:layout_width="match_parent"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:orientation="horizontal"-->
-<!--                android:paddingTop="4dp">-->
-
-<!--                <TextView-->
-<!--                    android:id="@+id/actualTimeLabel"-->
-<!--                    android:layout_width="wrap_content"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:text="Actual Time:"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/black"-->
-<!--                    android:gravity="start" />-->
-
-<!--                <TextView-->
-<!--                    android:id="@+id/actualTimeValueTextView"-->
-<!--                    android:layout_width="0dp"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:layout_weight="1"-->
-<!--                    android:text="Unknown"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/black"-->
-<!--                    android:gravity="end" />-->
-<!--            </LinearLayout>-->
 
         <!-- Simulation Buttons -->
         <LinearLayout
@@ -362,24 +187,29 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Start Simulation"
-                android:padding="8dp"
-                android:backgroundTint="@color/colorPrimary"
-                android:textColor="@android:color/white" />
+                android:text="Simulation"
+                android:padding="10dp"
+                android:backgroundTint="@color/purple_400"
+                android:textColor="@color/white"
+                android:drawableLeft="@drawable/ic_play"
+                android:textAllCaps="false"
+                android:layout_marginEnd="4dp"/>
 
             <Button
                 android:id="@+id/stopSimulationButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Stop Simulation"
-                android:padding="8dp"
-                android:backgroundTint="@color/colorAccent"
-                android:textColor="@android:color/white"/>
+                android:text="Simulation"
+                android:padding="10dp"
+                android:backgroundTint="@color/purple_400"
+                android:textColor="@color/white"
+                android:drawableLeft="@drawable/ic_stop"
+                android:textAllCaps="false"/>
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Network status elements -->
+    <!-- Network Status Indicator -->
     <View
         android:id="@+id/networkStatusIndicator"
         android:layout_width="24dp"
@@ -396,12 +226,11 @@
         android:layout_marginEnd="8dp"
         android:text="Connected"
         android:textSize="16sp"
-        android:textColor="@android:color/black"
+        android:textColor="@color/whatsapp_green"
         app:layout_constraintEnd_toStartOf="@id/networkStatusIndicator"
-        app:layout_constraintTop_toTopOf="@id/networkStatusIndicator"
-        app:layout_constraintBottom_toBottomOf="@id/networkStatusIndicator" />
+        app:layout_constraintTop_toTopOf="@id/networkStatusIndicator"/>
 
-    <!-- Version TextView (Bottom-Right) -->
+    <!-- App Version -->
     <TextView
         android:id="@+id/versionTextView"
         android:layout_width="wrap_content"
@@ -410,7 +239,7 @@
         android:layout_marginBottom="16dp"
         android:text="Version 1.0.1"
         android:textSize="14sp"
-        android:textColor="@android:color/black"
+        android:textColor="@color/lightGrey"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>

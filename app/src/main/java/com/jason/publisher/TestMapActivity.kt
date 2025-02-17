@@ -986,8 +986,8 @@ class TestMapActivity : AppCompatActivity() {
         timingPointTextView = binding.timingPointTextView
         tripEndTimeTextView = binding.tripEndTimeTextView
         // Hardcoded values for testing
-        val timingPoint = "Timing point to bus stop 3 at 12:45"
-        val tripEndTime = "Trip end time: 13:30"
+        val timingPoint = "Bus stop 3 at 12:45"
+        val tripEndTime = "13:30"
 
         // Set text views with hardcoded values
         timingPointTextView.text = timingPoint
