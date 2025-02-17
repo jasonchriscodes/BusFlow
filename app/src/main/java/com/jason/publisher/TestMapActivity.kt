@@ -16,9 +16,7 @@ import java.util.*
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Matrix
 import android.location.Location
 import android.os.Build
 import android.os.Environment
@@ -156,9 +154,9 @@ class TestMapActivity : AppCompatActivity() {
 //        fetchConfig { success ->
 //            if (success) {
 //                getAccessToken()
-                Log.d("MainActivity onCreate Token", token)
+        Log.d("MainActivity onCreate Token", token)
 //                mqttManager = MqttManager(serverUri = TimeTableActivity.SERVER_URI, clientId = TimeTableActivity.CLIENT_ID, username = token)
-                getDefaultConfigValue()
+        getDefaultConfigValue()
 //                requestAdminMessage()
 //                connectAndSubscribe()
 //                Log.d("MainActivity oncreate fetchConfig config", config.toString())
@@ -423,7 +421,7 @@ class TestMapActivity : AppCompatActivity() {
     }
 
     /** Interpolates movement between two points with dynamic bearing and speed updates */
-        private fun simulateMovement(startLat: Double, startLon: Double, endLat: Double, endLon: Double, steps: Int) {
+    private fun simulateMovement(startLat: Double, startLon: Double, endLat: Double, endLon: Double, steps: Int) {
         val latStep = (endLat - startLat) / steps
         val lonStep = (endLon - startLon) / steps
 
@@ -765,7 +763,7 @@ class TestMapActivity : AppCompatActivity() {
                 val currentLatitude = location.latitude
                 val currentLongitude = location.longitude
 
-                // Calculate bearing
+                // Calculate bearing and update variables
                 if (lastLatitude != 0.0 && lastLongitude != 0.0) {
                     bearing = calculateBearing(
                         lastLatitude,
@@ -783,10 +781,12 @@ class TestMapActivity : AppCompatActivity() {
                 lastLatitude = currentLatitude
                 lastLongitude = currentLongitude
 
-                // ✅ Rotate the map **opposite to the bearing**
-                binding.map.rotation = -bearing
+                // Update UI
+//                latitudeTextView.text = "Latitude:\n$latitude"
+//                longitudeTextView.text = "Longitude:\n$longitude"
+//                bearingTextView.text = "Bearing: $bearing°"
 
-                // ✅ Update the bus marker so it rotates based on bearing
+                // Update the bus marker position
                 updateBusMarkerPosition(latitude, longitude, bearing)
             }
         })
@@ -796,7 +796,7 @@ class TestMapActivity : AppCompatActivity() {
     private fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float) {
         val newPosition = LatLong(lat, lon)
 
-        // Convert Drawable to Bitmap and rotate it based on the bearing
+        // Convert Drawable to Bitmap and rotate it
         val rotatedBitmap = rotateDrawable(bearing)
 
         // Remove old marker if it exists
@@ -804,18 +804,22 @@ class TestMapActivity : AppCompatActivity() {
             binding.map.layerManager.layers.remove(it)
         }
 
-        // Create a new **rotated** marker at the updated position
+        // Create a new rotated marker at the updated position
         busMarker = org.mapsforge.map.layer.overlay.Marker(
             newPosition, rotatedBitmap, 0, 0
         )
         binding.map.layerManager.layers.add(busMarker)
 
-        // ✅ Rotate the map **opposite to the bus's bearing** to keep the direction upward
-        binding.map.rotation = -bearing
+        // Apply map rotation
+        binding.map.setRotation(-bearing) // Negative to align with compass movement
 
-        // Keep the map centered on the bus
+        // Scale the map to prevent cropping
+        binding.map.scaleX = 1.5f  // Adjust scaling factor
+        binding.map.scaleY = 1.5f
+
+        // Keep the map centered on the bus location
         binding.map.setCenter(newPosition)
-        binding.map.invalidate()
+        binding.map.invalidate() // Force redraw
     }
 
     /**
@@ -858,32 +862,36 @@ class TestMapActivity : AppCompatActivity() {
      * @return Rotated Bitmap.
      */
     private fun rotateDrawable(angle: Float): org.mapsforge.core.graphics.Bitmap {
-        val markerDrawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol2, null)
+        val markerDrawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)
 
         if (markerDrawable == null) {
-            Log.e("rotateDrawable", "❌ Drawable is null!")
+            Log.e("rotateDrawable", "Drawable is null!")
+            // Use an alternative way to create a blank Bitmap
             val emptyBitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
             return AndroidBitmap(emptyBitmap)
         }
 
-        val androidBitmap = Bitmap.createBitmap(
+        // Convert Drawable to Android Bitmap
+        val androidBitmap = android.graphics.Bitmap.createBitmap(
             markerDrawable.intrinsicWidth,
             markerDrawable.intrinsicHeight,
-            Bitmap.Config.ARGB_8888
+            android.graphics.Bitmap.Config.ARGB_8888
         )
 
-        val canvas = Canvas(androidBitmap)
+        val canvas = android.graphics.Canvas(androidBitmap)
         markerDrawable.setBounds(0, 0, canvas.width, canvas.height)
-        markerDrawable.draw(canvas)
+        markerDrawable.draw(canvas) // Draw the drawable onto the canvas
 
-        val matrix = Matrix()
-        matrix.postRotate(angle) // Rotate the marker based on the bearing
+        // Apply rotation
+        val matrix = android.graphics.Matrix()
+        matrix.postRotate(angle)
 
-        val rotatedBitmap = Bitmap.createBitmap(
+        val rotatedAndroidBitmap = android.graphics.Bitmap.createBitmap(
             androidBitmap, 0, 0, androidBitmap.width, androidBitmap.height, matrix, true
         )
 
-        return AndroidBitmap(rotatedBitmap)
+        // Wrap rotated Android Bitmap inside an AndroidBitmap
+        return AndroidBitmap(rotatedAndroidBitmap)
     }
 
     /**
@@ -1163,6 +1171,8 @@ class TestMapActivity : AppCompatActivity() {
 //        binding.map.invalidate()
 //    }
 
+
+
     /**
      * Loads the offline map from assets and configures the map.
      * Prevents adding duplicate layers.
@@ -1203,7 +1213,7 @@ class TestMapActivity : AppCompatActivity() {
         binding.map.setCenter(LatLong(latitude, longitude)) // Set the default location to center the bus marker
 //        binding.map.setCenter(LatLong(-36.855647, 174.765249)) // Airedale
 //        binding.map.setCenter(LatLong(-36.8485, 174.7633)) // Auckland, NZ
-        binding.map.setZoomLevel(19) // Set default zoom level
+        binding.map.setZoomLevel(17) // Set default zoom level
 //        binding.map.setZoomLevel(11) // Set default zoom level
 
         // **Initialize the bus marker**
