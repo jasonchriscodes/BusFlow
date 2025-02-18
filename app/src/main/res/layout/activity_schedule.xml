@@ -61,34 +61,223 @@
         app:layout_constraintEnd_toStartOf="@id/networkStatusIndicator"
         app:layout_constraintTop_toTopOf="@id/networkStatusIndicator"/>
 
-    <!-- Start and Test Buttons (Centered Below Title) -->
-    <Button
-        android:id="@+id/startRouteButton"
-        android:layout_width="wrap_content"
+    <!-- Table Layout for Schedule -->
+    <TableLayout
+        android:id="@+id/scheduleTable"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Start Route"
-        android:textSize="18sp"
-        android:padding="16dp"
-        android:backgroundTint="@color/purple_400"
-        android:textColor="@android:color/white"
+        android:layout_marginTop="24dp"
+        android:padding="2dp"
+        android:background="@color/white"
         app:layout_constraintTop_toBottomOf="@id/titleTextView"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="24dp"/>
+        app:layout_constraintEnd_toEndOf="parent">
 
-    <Button
-        android:id="@+id/testStartRouteButton"
+        <!-- Table Header -->
+        <TableRow>
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.5"
+                android:text="Route No."
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Bus Stop &amp; Timepoint"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.4"
+                android:text="Start Time"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.4"
+                android:text="End Time"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+        </TableRow>
+
+        <!-- Data Rows -->
+        <TableRow>
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.5"
+                android:text="route_1"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Stop 2 - 8:05, Stop 4 - 8:15"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.4"
+                android:text="08:00"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.4"
+                android:text="08:35"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+        </TableRow>
+
+        <TableRow>
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.5"
+                android:text="route_2"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Stop 3 - 9:45, Stop S/E - 10:00"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.4"
+                android:text="09:30"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.4"
+                android:text="10:00"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+        </TableRow>
+        <TableRow>
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.5"
+                android:text="route_3"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Stop 1- 10:25, Stop 4 - 10:35"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.4"
+                android:text="09:30"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.4"
+                android:text="10:00"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                android:padding="8dp"
+                android:background="@drawable/table_cell_border"/>
+        </TableRow>
+    </TableLayout>
+
+    <!-- Start and Test Buttons (At Bottom Center, Side by Side) -->
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Test Route"
-        android:textSize="18sp"
-        android:padding="16dp"
-        android:backgroundTint="@color/purple_400"
-        android:textColor="@android:color/white"
-        app:layout_constraintTop_toBottomOf="@id/startRouteButton"
+        android:orientation="horizontal"
+        android:layout_marginBottom="24dp"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="12dp"/>
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <Button
+            android:id="@+id/startRouteButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Start Route"
+            android:textSize="18sp"
+            android:padding="16dp"
+            android:backgroundTint="@color/purple_400"
+            android:textColor="@android:color/white"
+            android:layout_marginEnd="16dp"/>
+
+        <Button
+            android:id="@+id/testStartRouteButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Test Route"
+            android:textSize="18sp"
+            android:padding="16dp"
+            android:backgroundTint="@color/purple_400"
+            android:textColor="@android:color/white"/>
+    </LinearLayout>
 
     <!-- App Version -->
     <TextView
