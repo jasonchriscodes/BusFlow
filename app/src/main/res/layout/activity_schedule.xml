@@ -122,15 +122,16 @@
 
         <!-- Data Rows -->
         <TableRow>
+
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="0.5"
-                android:text="route_1"
-                android:textSize="14sp"
-                android:textColor="@color/white"
+                android:background="@drawable/table_cell_border"
                 android:padding="8dp"
-                android:background="@drawable/table_cell_border"/>
+                android:text="route_1"
+                android:textColor="@color/white"
+                android:textSize="14sp" />
 
             <TextView
                 android:layout_width="0dp"

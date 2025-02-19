@@ -23,6 +23,7 @@ import com.jason.publisher.model.BusItem
 import com.jason.publisher.model.BusRoute
 import com.jason.publisher.model.BusStop
 import com.jason.publisher.model.RouteData
+import com.jason.publisher.model.ScheduleItem
 import com.jason.publisher.services.MqttManager
 import com.jason.publisher.utils.NetworkStatusHelper
 import org.json.JSONObject
@@ -59,6 +60,7 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var multiColorTimelineView: MultiColorTimelineView
     private lateinit var workTable: TableLayout
     private val timelineRange = Pair("08:00", "11:10")
+    private lateinit var scheduleTable: TableLayout
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -72,6 +74,14 @@ class ScheduleActivity : AppCompatActivity() {
         private const val MSG_KEY = "messageKey"
         private const val SOUND_FILE_NAME = "notif.wav"
     }
+
+    private val dummyScheduleData = listOf(
+        ScheduleItem("Route 1", "Stop 2 - 08:05, Stop 4 - 08:15", "08:00", "08:35"),
+        ScheduleItem("Route 2", "Stop 3 - 09:45, Stop S/E - 10:00", "09:30", "10:00"),
+        ScheduleItem("Route 3", "Stop 1 - 10:25, Stop 4 - 10:35", "10:20", "11:10"),
+        ScheduleItem("Route 4", "Stop 2 - 11:45, Stop 3 - 12:00, Stop 4 - 12:10", "12:30", "12:10", ),
+        ScheduleItem("Route 5", "Stop 1 - 12:40, Stop 4 - 12:50", "12:30", "13:00")
+    )
 
     @SuppressLint("LongLogTag")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -101,6 +111,11 @@ class ScheduleActivity : AppCompatActivity() {
 
         // Start updating the date/time
         startDateTimeUpdater()
+
+        scheduleTable = findViewById(R.id.scheduleTable)
+
+        // Populate only the first 3 schedule items
+        updateScheduleTable(dummyScheduleData.take(3))
 
         // Initialize Views
         workTable = findViewById(R.id.scheduleTable) // Ensure this matches your XML
@@ -191,8 +206,47 @@ class ScheduleActivity : AppCompatActivity() {
                 putExtra("STOPS", ArrayList(stops)) // Send list as ArrayList
                 putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops)) // Send list as ArrayList
                 putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+                putExtra("SCHEDULE_DATA", ArrayList(dummyScheduleData))
             }
             startActivity(intent)
+        }
+    }
+
+    /**
+     * Modify the table dynamically
+     */
+    private fun updateScheduleTable(scheduleItems: List<ScheduleItem>) {
+        scheduleTable.removeViews(1, scheduleTable.childCount - 1) // Clear previous rows (except header)
+
+        for (item in scheduleItems) {
+            val row = TableRow(this)
+
+            val routeTextView = createTableCell(item.routeNo, 0.5f) // Consistent weight
+            val stopTextView = createTableCell(item.busStopTimepoint, 1f)
+            val startTimeTextView = createTableCell(item.startTime, 0.4f)
+            val endTimeTextView = createTableCell(item.endTime, 0.4f)
+
+            row.addView(routeTextView)
+            row.addView(stopTextView)
+            row.addView(startTimeTextView)
+            row.addView(endTimeTextView)
+
+            scheduleTable.addView(row)
+        }
+    }
+
+    /**
+     * helper function to create table cell
+     */
+    private fun createTableCell(text: String, weight: Float): TextView {
+        val params = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, weight) // Ensure uniform weight
+        return TextView(this).apply {
+            this.text = text
+            textSize = 14f
+            setPadding(8, 8, 8, 8)
+            setTextColor(resources.getColor(R.color.white, null))
+            setBackgroundResource(R.drawable.table_cell_border)
+            layoutParams = params
         }
     }
 

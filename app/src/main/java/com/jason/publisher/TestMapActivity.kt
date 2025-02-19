@@ -30,6 +30,7 @@ import com.jason.publisher.model.BusItem
 import com.jason.publisher.model.BusStop
 import com.jason.publisher.model.BusStopInfo
 import com.jason.publisher.model.RouteData
+import com.jason.publisher.model.ScheduleItem
 import com.jason.publisher.services.LocationManager
 import com.jason.publisher.utils.BusStopProximityManager
 import com.jason.publisher.utils.NetworkStatusHelper
@@ -99,6 +100,7 @@ class TestMapActivity : AppCompatActivity() {
     private var currentRouteIndex = 0
     private var isSimulating = false
     private var simulationStartTime: Long = 0L
+    private lateinit var scheduleList: List<ScheduleItem>
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -131,6 +133,7 @@ class TestMapActivity : AppCompatActivity() {
         stops = intent.getSerializableExtra("STOPS") as? List<BusStop> ?: emptyList()
         durationBetweenStops = intent.getSerializableExtra("DURATION_BETWEEN_BUS_STOP") as? List<Double> ?: emptyList()
         busRouteData = intent.getSerializableExtra("BUS_ROUTE_DATA") as? List<RouteData> ?: emptyList()
+        scheduleList = intent.getSerializableExtra("SCHEDULE_DATA") as? List<ScheduleItem> ?: emptyList()
 
         Log.d("MainActivity onCreate retrieve", "Received aid: $aid")
         Log.d("MainActivity onCreate retrieve", "Received config: ${config.toString()}")
@@ -139,6 +142,7 @@ class TestMapActivity : AppCompatActivity() {
         Log.d("MainActivity onCreate retrieve", "Received stops: ${stops.toString()}")
         Log.d("MainActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
         Log.d("MainActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
+        Log.d("MainActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
 
         // Initialize UI components
         initializeUIComponents()
