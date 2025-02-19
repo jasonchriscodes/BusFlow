@@ -14,7 +14,7 @@ import com.jason.publisher.R
 
 object NetworkStatusHelper {
 
-    private var networkReceiver: NetworkReceiver? = null
+    var networkReceiver: NetworkReceiver? = null
 
     /** Initializes and sets up network status views */
     fun setupNetworkStatus(activity: Activity, connectionStatusTextView: TextView, networkStatusIndicator: View) {

@@ -202,6 +202,12 @@ class TestMapActivity : AppCompatActivity() {
         binding.stopSimulationButton.setOnClickListener {
             stopSimulation()
         }
+        binding.backButton.setOnClickListener {
+            val intent = Intent(this, ScheduleActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+            startActivity(intent)
+            finish()
+        }
     }
 
     /**

@@ -19,34 +19,37 @@
         android:contentDescription="Live map displaying bus routes and stops" />
 
     <!-- Right Column: Data Display -->
+
+    <!-- Network Status Indicator -->
     <LinearLayout
         android:id="@+id/rightColumnContainer"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:background="@color/colorPrimaryDark"
         android:orientation="vertical"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toEndOf="@+id/map"
         android:padding="12dp"
-        android:background="@color/colorPrimaryDark">
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/map"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.0">
 
         <!-- Current Date and Time -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="12dp"
+            android:layout_marginBottom="8dp"
             android:background="@drawable/white_border"
-            android:layout_marginBottom="8dp">
+            android:orientation="horizontal"
+            android:padding="12dp">
 
             <TextView
                 android:id="@+id/currentDateAndTimeTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Date and Time: "
-                android:textSize="16sp"
                 android:textColor="@color/white"
+                android:textSize="16sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -54,8 +57,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="2025-01-23 14:00:00"
-                android:textSize="16sp"
-                android:textColor="@color/white"/>
+                android:textColor="@color/white"
+                android:textSize="16sp" />
         </LinearLayout>
 
         <!-- Timing Point and Trip End Time Section -->
@@ -63,85 +66,85 @@
             android:id="@+id/timingPointContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="8dp"
+            android:layout_marginBottom="16dp"
             android:background="@drawable/white_border"
-            android:layout_marginBottom="16dp">
+            android:orientation="horizontal"
+            android:padding="8dp">
 
             <TextView
                 android:id="@+id/timingPointTitleTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:gravity="start"
                 android:text="Timing Point: "
-                android:textSize="16sp"
-                android:textStyle="bold"
                 android:textColor="@android:color/white"
-                android:gravity="start" />
+                android:textSize="16sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/timingPointTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:gravity="start"
                 android:text="Bus stop 0 at 00:00"
-                android:textSize="16sp"
                 android:textColor="@android:color/white"
-                android:gravity="start" />
+                android:textSize="16sp" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/tripEndTimeContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="8dp"
+            android:layout_marginBottom="16dp"
             android:background="@drawable/white_border"
-            android:layout_marginBottom="16dp">
+            android:orientation="horizontal"
+            android:padding="8dp">
 
             <TextView
                 android:id="@+id/tripEndTimeTitleTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:gravity="start"
                 android:text="Trip End Time: "
-                android:textSize="16sp"
-                android:textStyle="bold"
                 android:textColor="@android:color/white"
-                android:gravity="start" />
+                android:textSize="16sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/tripEndTimeTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:gravity="start"
                 android:text="00:00"
-                android:textSize="16sp"
                 android:textColor="@android:color/white"
-                android:gravity="start" />
+                android:textSize="16sp" />
         </LinearLayout>
 
         <!-- Upcoming Bus Stop -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="12dp"
+            android:layout_marginBottom="8dp"
             android:background="@drawable/white_border"
-            android:layout_marginBottom="8dp">
+            android:orientation="horizontal"
+            android:padding="12dp">
 
             <TextView
                 android:id="@+id/upcomingRoadTitleTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Upcoming Bus Stop: "
-                android:textSize="16sp"
                 android:textColor="@color/white"
-                android:textStyle="bold"/>
+                android:textSize="16sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/upcomingBusStopTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Unknown"
-                android:textSize="16sp"
-                android:textColor="@color/white"/>
+                android:textColor="@color/white"
+                android:textSize="16sp" />
         </LinearLayout>
 
         <!-- Schedule Status Section -->
@@ -149,67 +152,79 @@
             android:id="@+id/scheduleStatusContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="8dp"
-            android:background="@drawable/white_border"
             android:layout_marginBottom="16dp"
-            android:gravity="center_horizontal">
+            android:background="@drawable/white_border"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="8dp">
 
             <!-- Schedule Status (Ahead, Behind, or On Time) -->
             <ImageView
                 android:id="@+id/scheduleStatusIcon"
                 android:layout_width="128dp"
                 android:layout_height="128dp"
-                android:visibility="gone"
-                android:contentDescription="Schedule Status Icon" />
+                android:contentDescription="Schedule Status Icon"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/scheduleStatusText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Unknown"
-                android:textSize="16sp"
-                android:textColor="@android:color/white"
+                android:layout_marginTop="4dp"
                 android:gravity="center"
-                android:layout_marginTop="4dp"/>
+                android:text="Unknown"
+                android:textColor="@android:color/white"
+                android:textSize="16sp" />
         </LinearLayout>
 
         <!-- Simulation Buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
+            android:layout_marginTop="8dp"
             android:gravity="center"
-            android:layout_marginTop="8dp">
+            android:orientation="horizontal">
 
             <Button
                 android:id="@+id/startSimulationButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginEnd="4dp"
                 android:layout_weight="1"
-                android:text="Simulation"
-                android:padding="10dp"
                 android:backgroundTint="@color/purple_400"
-                android:textColor="@color/white"
                 android:drawableLeft="@drawable/ic_play"
+                android:padding="10dp"
+                android:text="Simulation"
                 android:textAllCaps="false"
-                android:layout_marginEnd="4dp"/>
+                android:textColor="@color/white" />
 
             <Button
                 android:id="@+id/stopSimulationButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Simulation"
-                android:padding="10dp"
                 android:backgroundTint="@color/purple_400"
-                android:textColor="@color/white"
                 android:drawableLeft="@drawable/ic_stop"
-                android:textAllCaps="false"/>
+                android:padding="10dp"
+                android:text="Simulation"
+                android:textAllCaps="false"
+                android:textColor="@color/white" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Network Status Indicator -->
+    <Button
+        android:id="@+id/backButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:backgroundTint="@color/red"
+        android:padding="10dp"
+        android:text="Back"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+
     <View
         android:id="@+id/networkStatusIndicator"
         android:layout_width="24dp"

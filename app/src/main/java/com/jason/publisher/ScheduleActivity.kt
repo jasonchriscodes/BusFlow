@@ -52,6 +52,7 @@ class ScheduleActivity : AppCompatActivity() {
     private var route: List<BusRoute> = emptyList()
     private var stops: List<BusStop> = emptyList()
     private var busRouteData: List<RouteData> = emptyList()
+    private var scheduleData: List<ScheduleItem> = emptyList()
     private var durationBetweenStops: List<Double> = emptyList()
     private var arrBusData: List<BusItem> = emptyList()
 
@@ -138,6 +139,7 @@ class ScheduleActivity : AppCompatActivity() {
             // **Offline Mode: Load cached data**
             Toast.makeText(this, "You are disconnected from the internet. Loading data from tablet cache.", Toast.LENGTH_LONG).show()
             loadBusDataFromCache()
+            loadScheduleDataFromCache()
 
             Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached config: $config")
             Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busRoute: $route")
@@ -206,22 +208,24 @@ class ScheduleActivity : AppCompatActivity() {
                 putExtra("STOPS", ArrayList(stops)) // Send list as ArrayList
                 putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops)) // Send list as ArrayList
                 putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
-                putExtra("SCHEDULE_DATA", ArrayList(dummyScheduleData))
+                putExtra("SCHEDULE_DATA", ArrayList(scheduleData))
             }
             startActivity(intent)
         }
     }
 
     /**
-     * Modify the table dynamically
+     * Modify the table dynamically to show only the first three schedule items.
      */
     private fun updateScheduleTable(scheduleItems: List<ScheduleItem>) {
         scheduleTable.removeViews(1, scheduleTable.childCount - 1) // Clear previous rows (except header)
 
-        for (item in scheduleItems) {
+        val limitedSchedule = scheduleItems.take(3) // Show only the first 3 schedule items
+
+        for (item in limitedSchedule) {
             val row = TableRow(this)
 
-            val routeTextView = createTableCell(item.routeNo, 0.5f) // Consistent weight
+            val routeTextView = createTableCell(item.routeNo, 0.5f)
             val stopTextView = createTableCell(item.busStopTimepoint, 1f)
             val startTimeTextView = createTableCell(item.startTime, 0.4f)
             val endTimeTextView = createTableCell(item.endTime, 0.4f)
@@ -399,6 +403,31 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /**
+     * Loads schedule data from the cache file if it exists and extracts schedule-related data.
+     */
+    private fun loadScheduleDataFromCache() {
+        val cacheFile = File(getHiddenFolder(), "scheduleDataCache.txt")
+
+        if (cacheFile.exists()) {
+            try {
+                val jsonContent = cacheFile.readText()
+                val cachedSchedule = Gson().fromJson(jsonContent, Array<ScheduleItem>::class.java).toList()
+                scheduleData = cachedSchedule
+
+                Log.d("ScheduleActivity loadScheduleDataFromCache", "✅ Loaded cached schedule data: $scheduleData")
+
+                // Use the loaded schedule data
+                updateScheduleTable(scheduleData.take(3))
+
+            } catch (e: Exception) {
+                Log.e("ScheduleActivity loadScheduleDataFromCache", "❌ Error reading schedule data cache: ${e.message}")
+            }
+        } else {
+            Log.e("ScheduleActivity loadScheduleDataFromCache", "❌ No cached schedule data found.")
+        }
+    }
+
+    /**
      * Processes `busRouteData` and extracts `route`, `stops`, and `durationBetweenStops`.
      *
      * @param busRouteData List of RouteData received from ThingsBoard.
@@ -511,6 +540,7 @@ class ScheduleActivity : AppCompatActivity() {
                         // Save data **only after all values are updated**
                         if (config!!.isNotEmpty() && route.isNotEmpty() && stops.isNotEmpty()) {
                             saveBusDataToCache()
+                            saveScheduleDataToCache()
                         }
                     }
 
@@ -584,6 +614,27 @@ class ScheduleActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Saves the latest schedule data to the cache file.
+     */
+    private fun saveScheduleDataToCache() {
+        if (!NetworkStatusHelper.isNetworkAvailable(this)) {
+            Log.d("ScheduleActivity saveScheduleDataToCache", "❌ No internet connection. Skipping cache update.")
+            return
+        }
+
+        val cacheFile = File(getHiddenFolder(), "scheduleDataCache.txt")
+
+        try {
+            val jsonString = Gson().toJson(dummyScheduleData) // Convert data to JSON
+            cacheFile.writeText(jsonString) // Overwrite cache file
+
+            Log.d("ScheduleActivity saveScheduleDataToCache", "✅ Schedule data cache updated successfully.")
+            Toast.makeText(this, "Schedule data cache updated successfully.", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Log.e("ScheduleActivity saveScheduleDataToCache", "❌ Error saving schedule data cache: ${e.message}")
+        }
+    }
 
     /**
      * All Files Access Permission (MANAGE_EXTERNAL_STORAGE).
