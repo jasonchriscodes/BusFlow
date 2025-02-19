@@ -101,6 +101,7 @@ class TestMapActivity : AppCompatActivity() {
     private var isSimulating = false
     private var simulationStartTime: Long = 0L
     private lateinit var scheduleList: List<ScheduleItem>
+    private val redBusStops = mutableSetOf<String>()
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -143,6 +144,8 @@ class TestMapActivity : AppCompatActivity() {
         Log.d("MainActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
         Log.d("MainActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
         Log.d("MainActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
+
+        extractRedBusStops()
 
         // Initialize UI components
         initializeUIComponents()
@@ -199,6 +202,28 @@ class TestMapActivity : AppCompatActivity() {
         binding.stopSimulationButton.setOnClickListener {
             stopSimulation()
         }
+    }
+
+    /**
+     * extract first schedule item of bus stop to be marked red
+     */
+    private fun extractRedBusStops() {
+        redBusStops.clear()
+        if (scheduleList.isNotEmpty()) {
+            val firstSchedule = scheduleList.first()
+            val stops = firstSchedule.busStopTimepoint.split(", ").map {
+                when (it.split(" - ")[0]) {
+                    "Stop 1" -> "1"
+                    "Stop 2" -> "2"
+                    "Stop 3" -> "3"
+                    "Stop 4" -> "4"
+                    "Stop S/E" -> "S/E"
+                    else -> it.split(" - ")[0] // Default case
+                }
+            }
+            redBusStops.addAll(stops)
+        }
+        Log.d("TestMapActivity extractRedBusStops", "Updated Red bus stops: $redBusStops")
     }
 
     /** Updates bus name if AID matches a config entry */
@@ -1256,26 +1281,29 @@ class TestMapActivity : AppCompatActivity() {
      * Adds bus stops to the map using OverlayItem instead of Marker.
      */
     private fun addBusStopMarkers(busStops: List<BusStop>) {
-        busStops.forEachIndexed { index, stop ->
-            val busStopNumber = index + 1
+        val totalStops = busStops.size
 
-            // Create a custom bitmap for the marker
-            val busStopSymbol = Helper.createBusStopSymbol(applicationContext, busStopNumber, busStops.size)
+        busStops.forEachIndexed { index, stop ->
+            val stopName = when (index) {
+                0, totalStops - 1 -> "S/E" // First and last stop as S/E
+                else -> index.toString() // Numbered stops
+            }
+
+            val isRed = redBusStops.contains(stopName) // Check if it should be red
+            Log.d("TestMapActivity addBusStopMarkers", "Checking stop: $stopName, isRed: $isRed")
+
+            val busStopSymbol = Helper.createBusStopSymbol(applicationContext, index, totalStops, isRed)
             val markerBitmap = AndroidGraphicFactory.convertToBitmap(busStopSymbol)
 
-            // Create a Mapsforge Marker
             val marker = org.mapsforge.map.layer.overlay.Marker(
-                LatLong(stop.latitude!!, stop.longitude!!), // LatLong position
-                markerBitmap, // Marker icon
-                0, // Horizontal offset
-                0 // Vertical offset
+                LatLong(stop.latitude!!, stop.longitude!!),
+                markerBitmap,
+                0,
+                0
             )
 
-            // Add marker to Mapsforge Layer Manager
             binding.map.layerManager.layers.add(marker)
         }
-
-        // Refresh the map after adding all markers
         binding.map.invalidate()
     }
 

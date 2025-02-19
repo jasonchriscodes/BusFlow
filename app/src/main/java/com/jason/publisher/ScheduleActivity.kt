@@ -76,7 +76,7 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     private val dummyScheduleData = listOf(
-        ScheduleItem("Route 1", "Stop 2 - 08:05, Stop 4 - 08:15", "08:00", "08:35"),
+        ScheduleItem("Route 1", "Stop 2 - 08:05, Stop S/E - 08:35", "08:00", "08:35"),
         ScheduleItem("Route 2", "Stop 3 - 09:45, Stop S/E - 10:00", "09:30", "10:00"),
         ScheduleItem("Route 3", "Stop 1 - 10:25, Stop 4 - 10:35", "10:20", "11:10"),
         ScheduleItem("Route 4", "Stop 2 - 11:45, Stop 3 - 12:00, Stop 4 - 12:10", "12:30", "12:10", ),

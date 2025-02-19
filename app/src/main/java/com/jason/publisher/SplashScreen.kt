@@ -291,8 +291,8 @@ class SplashScreen : AppCompatActivity() {
         }
 
         offlineModeButton.setOnClickListener {
-            val intent = Intent(this, OfflineActivity::class.java)
-            startActivity(intent)
+//            val intent = Intent(this, OfflineActivity::class.java)
+//            startActivity(intent)
             optionDialog?.dismiss()  // Dismiss the dialog before transitioning
         }
 

@@ -28,6 +28,7 @@ import com.jason.publisher.model.BusItem
 import com.jason.publisher.model.BusStop
 import com.jason.publisher.model.BusStopInfo
 import com.jason.publisher.model.RouteData
+import com.jason.publisher.model.ScheduleItem
 import com.jason.publisher.services.LocationManager
 import com.jason.publisher.utils.BusStopProximityManager
 import com.jason.publisher.utils.NetworkStatusHelper
@@ -93,6 +94,8 @@ class MapActivity : AppCompatActivity() {
     private var currentRouteIndex = 0
     private var isSimulating = false
     private var simulationStartTime: Long = 0L
+    private lateinit var scheduleList: List<ScheduleItem>
+    private val redBusStops = mutableSetOf<String>()
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -124,6 +127,7 @@ class MapActivity : AppCompatActivity() {
         stops = intent.getSerializableExtra("STOPS") as? List<BusStop> ?: emptyList()
         durationBetweenStops = intent.getSerializableExtra("DURATION_BETWEEN_BUS_STOP") as? List<Double> ?: emptyList()
         busRouteData = intent.getSerializableExtra("BUS_ROUTE_DATA") as? List<RouteData> ?: emptyList()
+        scheduleList = intent.getSerializableExtra("SCHEDULE_DATA") as? List<ScheduleItem> ?: emptyList()
 
         Log.d("MainActivity onCreate retrieve", "Received aid: $aid")
         Log.d("MainActivity onCreate retrieve", "Received config: ${config.toString()}")
@@ -132,6 +136,7 @@ class MapActivity : AppCompatActivity() {
         Log.d("MainActivity onCreate retrieve", "Received stops: ${stops.toString()}")
         Log.d("MainActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
         Log.d("MainActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
+        Log.d("MainActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
 
         // Initialize UI components
         initializeUIComponents()
@@ -1222,24 +1227,22 @@ class MapActivity : AppCompatActivity() {
     private fun addBusStopMarkers(busStops: List<BusStop>) {
         busStops.forEachIndexed { index, stop ->
             val busStopNumber = index + 1
+            val stopName = if (busStopNumber == 1) "S/E" else "Stop $busStopNumber"
 
-            // Create a custom bitmap for the marker
-            val busStopSymbol = Helper.createBusStopSymbol(applicationContext, busStopNumber, busStops.size)
+            val isRed = redBusStops.contains(stopName) // Check if the stop should be red
+            val busStopSymbol = Helper.createBusStopSymbol(applicationContext, busStopNumber, busStops.size, isRed)
+
             val markerBitmap = AndroidGraphicFactory.convertToBitmap(busStopSymbol)
 
-            // Create a Mapsforge Marker
             val marker = org.mapsforge.map.layer.overlay.Marker(
-                LatLong(stop.latitude!!, stop.longitude!!), // LatLong position
-                markerBitmap, // Marker icon
-                0, // Horizontal offset
-                0 // Vertical offset
+                LatLong(stop.latitude!!, stop.longitude!!),
+                markerBitmap,
+                0,
+                0
             )
 
-            // Add marker to Mapsforge Layer Manager
             binding.map.layerManager.layers.add(marker)
         }
-
-        // Refresh the map after adding all markers
         binding.map.invalidate()
     }
 

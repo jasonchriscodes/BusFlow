@@ -109,14 +109,12 @@ object Helper {
      * @param maxBusStopNumber The maximum bus stop number.
      * @return A drawable with the bus stop symbol and number.
      */
-    fun createBusStopSymbol(context: Context, busStopNumber: Int, maxBusStopNumber: Int): Drawable {
-        // Determine the adjusted bus stop number
-        val adjustedNumber = when (busStopNumber) {
-            1 -> "S/E"
-            else -> (busStopNumber - 1).toString()
+    fun createBusStopSymbol(context: Context, busStopIndex: Int, totalStops: Int, isRed: Boolean): Drawable {
+        val adjustedNumber = when (busStopIndex) {
+            0, totalStops - 1 -> "S/E" // First and last stop are S/E
+            else -> busStopIndex.toString() // Numbered stops
         }
 
-        // create a custom drawable with the bus stop number
         val drawable = ContextCompat.getDrawable(context, R.drawable.ic_bus_stop) as BitmapDrawable
         val bitmap = Bitmap.createBitmap(
             drawable.intrinsicWidth,
@@ -127,19 +125,18 @@ object Helper {
         drawable.setBounds(0, 0, canvas.width, canvas.height)
         drawable.draw(canvas)
 
-        // add the adjusted bus stop number to the right of the symbol
-        val textSize = 30f // adjust the text size as needed
+        val textSize = 30f
         val paint = Paint().apply {
-            color = Color.CYAN // set text color
-            isFakeBoldText = true // enable bold text
-            typeface = Typeface.DEFAULT_BOLD // set bold typeface
+            color = if (isRed) Color.RED else Color.CYAN  // Use red for scheduled stops
+            isFakeBoldText = true
+            typeface = Typeface.DEFAULT_BOLD
             this.textSize = textSize
         }
-        val text = adjustedNumber
-        val x = (canvas.width - paint.measureText(text)) / 2 // adjust the horizontal position to center the text
-        val y = canvas.height - 10f // adjust the vertical position to position the text below the symbol
 
-        canvas.drawText(text, x, y, paint)
+        val x = (canvas.width - paint.measureText(adjustedNumber)) / 2
+        val y = canvas.height - 10f
+
+        canvas.drawText(adjustedNumber, x, y, paint)
 
         return BitmapDrawable(context.resources, bitmap)
     }
