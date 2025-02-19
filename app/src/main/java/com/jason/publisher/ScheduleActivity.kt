@@ -10,6 +10,8 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.widget.TableLayout
+import android.widget.TableRow
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -54,6 +56,9 @@ class ScheduleActivity : AppCompatActivity() {
 
     private lateinit var dateTimeHandler: Handler
     private lateinit var dateTimeRunnable: Runnable
+    private lateinit var multiColorTimelineView: MultiColorTimelineView
+    private lateinit var workTable: TableLayout
+    private val timelineRange = Pair("08:00", "11:10")
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -81,14 +86,12 @@ class ScheduleActivity : AppCompatActivity() {
         aid = getAndroidId()
         Log.d("TimeTableActivity", "Fetched AID: $aid")
 
-        // Initialize mqttManager before using it
+        // Initialize MQTT managers
         mqttManagerConfig = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = tokenConfigData)
+        mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID)
 
         // Set up network status UI
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
-
-        // Initialize MQTT manager
-        mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID)
 
         // Load configuration
         Configuration.getInstance().load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
@@ -98,6 +101,22 @@ class ScheduleActivity : AppCompatActivity() {
 
         // Start updating the date/time
         startDateTimeUpdater()
+
+        // Initialize Views
+        workTable = findViewById(R.id.scheduleTable) // Ensure this matches your XML
+        multiColorTimelineView = findViewById(R.id.multiColorTimelineView)
+
+        // Debugging to check if views are properly initialized
+        Log.d("ScheduleActivity onCreate", "workTable initialized: ${::workTable.isInitialized}")
+        Log.d("ScheduleActivity onCreate", "multiColorTimelineView initialized: ${::multiColorTimelineView.isInitialized}")
+
+        // Ensure updateTimeline() function exists before calling
+        if (::workTable.isInitialized && ::multiColorTimelineView.isInitialized) {
+            multiColorTimelineView.setTimelineRange(timelineRange.first, timelineRange.second)
+            updateTimeline() // Call function to update the timeline dynamically
+        } else {
+            Log.e("ScheduleActivity onCreate", "❌ WorkTable or MultiColorTimelineView is not initialized!")
+        }
 
         // Check internet connection
         if (!NetworkStatusHelper.isNetworkAvailable(this)) {
@@ -175,6 +194,46 @@ class ScheduleActivity : AppCompatActivity() {
             }
             startActivity(intent)
         }
+    }
+
+    /**
+     * Extracts work intervals from the schedule table and updates the timeline view.
+     */
+    private fun updateTimeline() {
+        if (!::workTable.isInitialized || !::multiColorTimelineView.isInitialized) {
+            Log.e("ScheduleActivity updateTimeline", "❌ updateTimeline() called before workTable or multiColorTimelineView is initialized!")
+            return
+        }
+
+        val workIntervals = extractWorkIntervals()
+        Log.d("ScheduleActivity updateTimeline MultiColorTimelineView", "✅ Work intervals extracted: $workIntervals")
+
+        // Use timelineRange (single variable)
+        multiColorTimelineView.setTimeIntervals(workIntervals, timelineRange.first, timelineRange.second)
+    }
+
+    /**
+     * Extracts work intervals from the table.
+     * Reads each row's text, splits it into start and end times, and adds to the list.
+     */
+    private fun extractWorkIntervals(): List<Pair<String, String>> {
+        val workIntervals = mutableListOf<Pair<String, String>>()
+
+        for (i in 1 until workTable.childCount) { // Skip header row
+            val row = workTable.getChildAt(i) as? TableRow
+            val startTimeView = row?.getChildAt(2) as? TextView // Adjust index if needed
+            val endTimeView = row?.getChildAt(3) as? TextView // Adjust index if needed
+
+            if (startTimeView != null && endTimeView != null) {
+                val startTime = startTimeView.text.toString().trim()
+                val endTime = endTimeView.text.toString().trim()
+                if (startTime.isNotEmpty() && endTime.isNotEmpty()) {
+                    workIntervals.add(Pair(startTime, endTime))
+                }
+            }
+        }
+        Log.d("ScheduleActivity extractWorkIntervals", "✅ Extracted Work Intervals: $workIntervals")
+        return workIntervals
     }
 
     /** Starts a periodic task to update the current date and time in the UI. */
