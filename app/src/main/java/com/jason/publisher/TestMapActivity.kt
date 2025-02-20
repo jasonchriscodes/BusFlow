@@ -103,6 +103,11 @@ class TestMapActivity : AppCompatActivity() {
     private lateinit var scheduleList: List<ScheduleItem>
     private val redBusStops = mutableSetOf<String>()
 
+    private lateinit var actualTimeHandler: Handler
+    private lateinit var actualTimeRunnable: Runnable
+    private lateinit var actualTimeTextView: TextView
+    private var simulatedStartTime: Calendar = Calendar.getInstance()
+
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
         const val CLIENT_ID = "jasonAndroidClientId"
@@ -256,9 +261,12 @@ class TestMapActivity : AppCompatActivity() {
         }
 
         isSimulating = true
-        simulationStartTime = System.currentTimeMillis() // Initialize simulation time
+        simulationStartTime = System.currentTimeMillis() // Track simulation time
         simulationHandler = Handler(Looper.getMainLooper())
         currentRouteIndex = 0
+
+        // Start the actual time from the schedule's start time
+        startActualTimeUpdater()
 
         simulationRunnable = object : Runnable {
             override fun run() {
@@ -266,29 +274,24 @@ class TestMapActivity : AppCompatActivity() {
                     val start = route[currentRouteIndex]
                     val end = route[currentRouteIndex + 1]
 
-                    if (start.latitude == null || start.longitude == null ||
-                        end.latitude == null || end.longitude == null) return
-
                     val startLat = start.latitude!!
                     val startLon = start.longitude!!
                     val endLat = end.latitude!!
                     val endLon = end.longitude!!
 
-                    // Calculate distance and estimated travel time at 30 km/h (8.33 m/s)
                     val distanceMeters = calculateDistance(startLat, startLon, endLat, endLon)
                     val travelTimeSeconds = distanceMeters / 8.33  // Time needed at 30 km/h
                     val steps = (travelTimeSeconds * 10).toInt() // Update every 100ms
 
-                    // Interpolate and update position gradually
                     simulateMovement(startLat, startLon, endLat, endLon, steps)
 
-                    // Move to next point after completion
                     simulationHandler.postDelayed({
                         currentRouteIndex++
                         simulationHandler.post(this)
-                    }, (travelTimeSeconds * 1000).toLong()) // Wait until movement completes
+                    }, (travelTimeSeconds * 1000).toLong())
                 } else {
                     isSimulating = false
+                    stopActualTimeUpdater()
                     Toast.makeText(this@TestMapActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -296,16 +299,42 @@ class TestMapActivity : AppCompatActivity() {
 
         simulationHandler.post(simulationRunnable)
 
-        // ✅ Run schedule check every 1 second during simulation
-        simulationHandler.postDelayed(object : Runnable {
-            override fun run() {
-                if (!isSimulating) return
-                checkScheduleStatus() // Check schedule
-                simulationHandler.postDelayed(this, 1000) // Repeat every 1 sec
-            }
-        }, 1000)
-
         Toast.makeText(this, "Simulation started", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Starts actual time from schedule
+     */
+    private fun startActualTimeUpdater() {
+        if (scheduleList.isNotEmpty()) {
+            val startTimeStr = scheduleList.first().startTime  // Example: "08:00"
+
+            // Convert startTime to Calendar format
+            val timeParts = startTimeStr.split(":")
+            if (timeParts.size == 2) {
+                simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+                simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
+                simulatedStartTime.set(Calendar.SECOND, 0)
+            }
+        }
+
+        actualTimeHandler = Handler(Looper.getMainLooper())
+        actualTimeRunnable = object : Runnable {
+            override fun run() {
+                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                actualTimeTextView.text = timeFormat.format(simulatedStartTime.time)
+
+                simulatedStartTime.add(Calendar.SECOND, 1) // Increment 1 second
+
+                actualTimeHandler.postDelayed(this, 1000)
+            }
+        }
+        actualTimeHandler.post(actualTimeRunnable)
+    }
+
+    /** Stops actual time */
+    private fun stopActualTimeUpdater() {
+        actualTimeHandler.removeCallbacks(actualTimeRunnable)
     }
 
     /**
@@ -1043,6 +1072,7 @@ class TestMapActivity : AppCompatActivity() {
             timingPointTextView.text = stopsInfo
             tripEndTimeTextView.text = scheduleItem.endTime
         }
+        actualTimeTextView = binding.actualTimeValueTextView
 //            bearingTextView = binding.bearingTextView
 //        latitudeTextView = binding.latitudeTextView
 //        longitudeTextView = binding.longitudeTextView
