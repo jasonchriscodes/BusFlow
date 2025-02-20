@@ -88,7 +88,7 @@ class TestMapActivity : AppCompatActivity() {
     private lateinit var upcomingBusStopTextView: TextView
     private lateinit var scheduleStatusIcon: ImageView
     private lateinit var scheduleStatusText: TextView
-    private lateinit var timingPointTextView: TextView
+    private lateinit var timingPointandStopsTextView: TextView
     private lateinit var tripEndTimeTextView: TextView
 
     private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
@@ -106,6 +106,8 @@ class TestMapActivity : AppCompatActivity() {
     private lateinit var actualTimeHandler: Handler
     private lateinit var actualTimeRunnable: Runnable
     private lateinit var actualTimeTextView: TextView
+    private lateinit var timingPointValueTextView: TextView
+    private lateinit var ApiTimeValueTextView: TextView
     private var simulatedStartTime: Calendar = Calendar.getInstance()
 
     companion object {
@@ -265,6 +267,8 @@ class TestMapActivity : AppCompatActivity() {
         simulationHandler = Handler(Looper.getMainLooper())
         currentRouteIndex = 0
 
+        initializeTimingPoint()
+
         // Start the actual time from the schedule's start time
         startActualTimeUpdater()
 
@@ -337,122 +341,122 @@ class TestMapActivity : AppCompatActivity() {
         actualTimeHandler.removeCallbacks(actualTimeRunnable)
     }
 
-    /**
-     * Logs actual timestamp, expected arrival time, and schedule status.
-     * Resets actual time when a stop is passed.
-     */
-    @SuppressLint("LongLogTag")
-    private fun checkScheduleStatus() {
-//        val statusIcon = findViewById<ImageView>(R.id.scheduleStatusIcon)
-//        val statusText = findViewById<TextView>(R.id.scheduleStatusText)
-
-        if (!isSimulating || durationBetweenStops.isEmpty() || stops.isEmpty()) return
-
-        Log.d("=========== 🚀 SCHEDULE CHECK START ===========", "Checking schedule status...")
-
-        // Adjust index to prevent out-of-bounds access
-        val adjustedIndex = currentStopIndex - 1
-
-        // Ensure the adjusted index is within valid bounds
-        if (adjustedIndex < 0 || adjustedIndex >= stops.size || adjustedIndex >= durationBetweenStops.size) {
-            Log.e(
-                "MainActivity checkScheduleStatus",
-                "❌ Index out of bounds!"
-            )
-//            resetSchedule() // 🔄 Reset schedule
-            return
-        }
-
-        val nextStop = stops[adjustedIndex]
-        val stopLat = nextStop.latitude ?: return
-        val stopLon = nextStop.longitude ?: return
-
-        // Set expected time to the corresponding value in durationBetweenStops
-        val expectedTimeSeconds = (durationBetweenStops[adjustedIndex] * 60).toInt()
-
-        // Get actual elapsed time
-        val elapsedTimeMillis = System.currentTimeMillis() - simulationStartTime
-        val actualTimeSeconds = (elapsedTimeMillis / 1000).toInt()
-
-        // Define threshold range (± threshold seconds)
-        val threshold = 25
-        val lowerThresholdSeconds = expectedTimeSeconds - threshold
-        val upperThresholdSeconds = expectedTimeSeconds + threshold
-
-        // Convert seconds to mm:ss format
-        fun formatTime(seconds: Int): String {
-            val minutes = seconds / 60
-            val remainingSeconds = seconds % 60
-            return String.format("%02d min %02d sec", minutes, remainingSeconds)
-        }
-
-        Log.d(
-            "MainActivity checkScheduleStatus",
-            """
-        🕒 Actual Time: ${formatTime(actualTimeSeconds)}
-        ⏳ Expected Time: ${formatTime(expectedTimeSeconds)}
-        ⏲️ Duration Between Stops: ${durationBetweenStops[adjustedIndex]} min
-        Duration Between Stops list: $durationBetweenStops
-        Upcoming Bus Stop: ${upcomingBusStopTextView.text}
-        ⏲️ Threshold: ±${threshold} sec (${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)})
-        """.trimIndent()
-        )
-
-        val statusTextView = findViewById<TextView>(R.id.scheduleStatusValueTextView)
-        val expectedTimeTextView = findViewById<TextView>(R.id.expectedTimeValueTextView)
-        val actualTimeTextView = findViewById<TextView>(R.id.actualTimeValueTextView)
-        val thresholdRangeTextView = findViewById<TextView>(R.id.thresholdRangeValueTextView)
-
-        expectedTimeTextView.text = formatTime(expectedTimeSeconds)
-        actualTimeTextView.text = formatTime(actualTimeSeconds)
-        thresholdRangeTextView.text = "${threshold} sec: ${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)}"
-
-        // Check if the bus has passed the stop
-        val distanceToStop = calculateDistance(latitude, longitude, stopLat, stopLon)
-        val stopPassThreshold = 25.0  // Pass threshold (meters)
-
-        if (distanceToStop <= stopPassThreshold) {
-            Log.d("MainActivity checkScheduleStatus ✅ Stop Passed", "Resetting actual time for the next stop.")
-            resetActualTime() // ✅ Reset actual time to 0 sec
-            currentStopIndex++ // ✅ Move to next stop
-            return  // ✅ Skip remaining checks to avoid errors
-        }
-
-        // Check if the bus is ahead, behind, or on time
+//    /**
+//     * Logs actual timestamp, expected arrival time, and schedule status.
+//     * Resets actual time when a stop is passed.
+//     */
+//    @SuppressLint("LongLogTag")
+//    private fun checkScheduleStatus() {
+////        val statusIcon = findViewById<ImageView>(R.id.scheduleStatusIcon)
+////        val statusText = findViewById<TextView>(R.id.scheduleStatusText)
+//
+//        if (!isSimulating || durationBetweenStops.isEmpty() || stops.isEmpty()) return
+//
+//        Log.d("=========== 🚀 SCHEDULE CHECK START ===========", "Checking schedule status...")
+//
+//        // Adjust index to prevent out-of-bounds access
+//        val adjustedIndex = currentStopIndex - 1
+//
+//        // Ensure the adjusted index is within valid bounds
+//        if (adjustedIndex < 0 || adjustedIndex >= stops.size || adjustedIndex >= durationBetweenStops.size) {
+//            Log.e(
+//                "MainActivity checkScheduleStatus",
+//                "❌ Index out of bounds!"
+//            )
+////            resetSchedule() // 🔄 Reset schedule
+//            return
+//        }
+//
+//        val nextStop = stops[adjustedIndex]
+//        val stopLat = nextStop.latitude ?: return
+//        val stopLon = nextStop.longitude ?: return
+//
+//        // Set expected time to the corresponding value in durationBetweenStops
+//        val expectedTimeSeconds = (durationBetweenStops[adjustedIndex] * 60).toInt()
+//
+//        // Get actual elapsed time
+//        val elapsedTimeMillis = System.currentTimeMillis() - simulationStartTime
+//        val actualTimeSeconds = (elapsedTimeMillis / 1000).toInt()
+//
+//        // Define threshold range (± threshold seconds)
+//        val threshold = 25
+//        val lowerThresholdSeconds = expectedTimeSeconds - threshold
+//        val upperThresholdSeconds = expectedTimeSeconds + threshold
+//
+//        // Convert seconds to mm:ss format
+//        fun formatTime(seconds: Int): String {
+//            val minutes = seconds / 60
+//            val remainingSeconds = seconds % 60
+//            return String.format("%02d min %02d sec", minutes, remainingSeconds)
+//        }
+//
+//        Log.d(
+//            "MainActivity checkScheduleStatus",
+//            """
+//        🕒 Actual Time: ${formatTime(actualTimeSeconds)}
+//        ⏳ Expected Time: ${formatTime(expectedTimeSeconds)}
+//        ⏲️ Duration Between Stops: ${durationBetweenStops[adjustedIndex]} min
+//        Duration Between Stops list: $durationBetweenStops
+//        Upcoming Bus Stop: ${upcomingBusStopTextView.text}
+//        ⏲️ Threshold: ±${threshold} sec (${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)})
+//        """.trimIndent()
+//        )
+//
+//        val statusTextView = findViewById<TextView>(R.id.scheduleStatusValueTextView)
+//        val expectedTimeTextView = findViewById<TextView>(R.id.expectedTimeValueTextView)
+//        val actualTimeTextView = findViewById<TextView>(R.id.actualTimeValueTextView)
+//        val thresholdRangeTextView = findViewById<TextView>(R.id.thresholdRangeValueTextView)
+//
+//        expectedTimeTextView.text = formatTime(expectedTimeSeconds)
+//        actualTimeTextView.text = formatTime(actualTimeSeconds)
+//        thresholdRangeTextView.text = "${threshold} sec: ${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)}"
+//
+//        // Check if the bus has passed the stop
+//        val distanceToStop = calculateDistance(latitude, longitude, stopLat, stopLon)
+//        val stopPassThreshold = 25.0  // Pass threshold (meters)
+//
+//        if (distanceToStop <= stopPassThreshold) {
+//            Log.d("MainActivity checkScheduleStatus ✅ Stop Passed", "Resetting actual time for the next stop.")
+//            resetActualTime() // ✅ Reset actual time to 0 sec
+//            currentStopIndex++ // ✅ Move to next stop
+//            return  // ✅ Skip remaining checks to avoid errors
+//        }
+//
+//        // Check if the bus is ahead, behind, or on time
+////        when {
+////            actualTimeSeconds < lowerThresholdSeconds -> {
+////                statusIcon.setImageResource(R.drawable.ic_schedule_ahead)
+////                statusText.text = "Ahead"
+////                statusIcon.visibility = View.VISIBLE
+////            }
+////            actualTimeSeconds > upperThresholdSeconds -> {
+////                statusIcon.setImageResource(R.drawable.ic_schedule_behind)
+////                statusText.text = "Behind"
+////                statusIcon.visibility = View.VISIBLE
+////            }
+////            else -> {
+////                statusIcon.setImageResource(R.drawable.ic_schedule_on_time)
+////                statusText.text = "On Time"
+////                statusIcon.visibility = View.VISIBLE
+////            }
 //        when {
 //            actualTimeSeconds < lowerThresholdSeconds -> {
-//                statusIcon.setImageResource(R.drawable.ic_schedule_ahead)
-//                statusText.text = "Ahead"
-//                statusIcon.visibility = View.VISIBLE
+//                Log.w("MainActivity checkScheduleStatus", "🚀 Ahead by ${lowerThresholdSeconds - actualTimeSeconds} sec")
+//                statusTextView.text = "🚀 Ahead by ${lowerThresholdSeconds - actualTimeSeconds} sec"
+//                statusTextView.setTextColor(Color.RED)
 //            }
 //            actualTimeSeconds > upperThresholdSeconds -> {
-//                statusIcon.setImageResource(R.drawable.ic_schedule_behind)
-//                statusText.text = "Behind"
-//                statusIcon.visibility = View.VISIBLE
+//                Log.w("MainActivity checkScheduleStatus", "🐢 Behind by ${actualTimeSeconds - upperThresholdSeconds} sec")
+//                statusTextView.text = "🐢 Behind by ${actualTimeSeconds - upperThresholdSeconds} sec"
+//                statusTextView.setTextColor(Color.RED)
 //            }
 //            else -> {
-//                statusIcon.setImageResource(R.drawable.ic_schedule_on_time)
-//                statusText.text = "On Time"
-//                statusIcon.visibility = View.VISIBLE
+//                Log.i("MainActivity checkScheduleStatus", "✅ On Time")
+//                statusTextView.text = "✅ On Time"
+//                statusTextView.setTextColor(Color.GREEN)
 //            }
-        when {
-            actualTimeSeconds < lowerThresholdSeconds -> {
-                Log.w("MainActivity checkScheduleStatus", "🚀 Ahead by ${lowerThresholdSeconds - actualTimeSeconds} sec")
-                statusTextView.text = "🚀 Ahead by ${lowerThresholdSeconds - actualTimeSeconds} sec"
-                statusTextView.setTextColor(Color.RED)
-            }
-            actualTimeSeconds > upperThresholdSeconds -> {
-                Log.w("MainActivity checkScheduleStatus", "🐢 Behind by ${actualTimeSeconds - upperThresholdSeconds} sec")
-                statusTextView.text = "🐢 Behind by ${actualTimeSeconds - upperThresholdSeconds} sec"
-                statusTextView.setTextColor(Color.RED)
-            }
-            else -> {
-                Log.i("MainActivity checkScheduleStatus", "✅ On Time")
-                statusTextView.text = "✅ On Time"
-                statusTextView.setTextColor(Color.GREEN)
-            }
-        }
-    }
+//        }
+//    }
 
 //    /**
 //     * Resets the schedule when an index out of bounds error occurs.
@@ -511,6 +515,9 @@ class TestMapActivity : AppCompatActivity() {
                     // Check if the bus has passed any stops
                     checkPassedStops(newLat, newLon)
 
+                    // ✅ Check if the timing point needs to update
+                    updateTimingPointBasedOnLocation(newLat, newLon)
+
                     // Calculate speed dynamically (meters per second)
                     if (step > 0) {
                         val distance = calculateDistance(lastLatitude, lastLongitude, newLat, newLon)
@@ -541,6 +548,74 @@ class TestMapActivity : AppCompatActivity() {
             }
         }
         stepHandler.post(stepRunnable)
+    }
+
+    /** Updates timing point based on current bus location */
+    private fun updateTimingPointBasedOnLocation(currentLat: Double, currentLon: Double) {
+        if (scheduleList.isEmpty()) return
+
+        val firstSchedule = scheduleList.first()
+        val stopList = firstSchedule.busStops
+
+        if (stopList.isEmpty()) {
+            timingPointValueTextView.text = firstSchedule.endTime
+            return
+        }
+
+        // Ensure the first timing point is set
+        if (upcomingStop == "Unknown") {
+            upcomingStop = stopList.first().time
+            runOnUiThread {
+                timingPointValueTextView.text = upcomingStop
+            }
+            Log.d("TestMapActivity", "🔹 Initial timing point set to: $upcomingStop")
+        }
+
+        // Check which timing point to display
+        for ((index, stop) in stopList.withIndex()) {
+            val stopLat = stop.latitude
+            val stopLon = stop.longitude
+            val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
+
+            val stopPassThreshold = 25.0 // Within 25 meters
+
+            if (distance <= stopPassThreshold) {
+                Log.d(
+                    "TestMapActivity updateTimingPointBasedOnLocation",
+                    "✅ Passed stop ${stop.name} at ${stop.time} (Distance: ${"%.2f".format(distance)}m)"
+                )
+
+                val nextTimingPoint = if (index + 1 < stopList.size) {
+                    stopList[index + 1].time
+                } else {
+                    firstSchedule.endTime // Last stop reached
+                }
+
+                runOnUiThread {
+                    timingPointValueTextView.text = nextTimingPoint
+                }
+
+                upcomingStop = nextTimingPoint
+                Log.d("TestMapActivity updateTimingPointBasedOnLocation", "🔹 Next timing point: $nextTimingPoint")
+                return
+            }
+        }
+    }
+
+    /**
+     * initialize first timing point
+     */
+    private fun initializeTimingPoint() {
+        if (scheduleList.isNotEmpty()) {
+            val firstSchedule = scheduleList.first()
+            val firstTimingPoint = firstSchedule.busStops.firstOrNull()?.time ?: "Unknown"
+
+            timingPointValueTextView.text = firstTimingPoint
+            upcomingStop = firstTimingPoint // Set the upcoming stop initially
+            Log.d("TestMapActivity", "Initial Timing Point: $firstTimingPoint")
+        } else {
+            timingPointValueTextView.text = "No Schedule Available"
+        }
     }
 
     /**
@@ -1059,7 +1134,7 @@ class TestMapActivity : AppCompatActivity() {
      * Initialize UI components and assign them to the corresponding views.
      */
     private fun initializeUIComponents() {
-        timingPointTextView = binding.timingPointTextView
+        timingPointandStopsTextView = binding.timingPointandStopsTextView
         tripEndTimeTextView = binding.tripEndTimeTextView
         // Hardcoded values for testing
         if (scheduleList.isNotEmpty()) {
@@ -1069,10 +1144,12 @@ class TestMapActivity : AppCompatActivity() {
             val stopsInfo = scheduleItem.busStops.joinToString(", ") { "${it.name} - ${it.time}" }
 
             // Set text views with extracted stop info
-            timingPointTextView.text = stopsInfo
+            timingPointandStopsTextView.text = stopsInfo
             tripEndTimeTextView.text = scheduleItem.endTime
         }
         actualTimeTextView = binding.actualTimeValueTextView
+        timingPointValueTextView = binding.timingPointValueTextView
+        ApiTimeValueTextView = binding.ApiTimeValueTextView
 //            bearingTextView = binding.bearingTextView
 //        latitudeTextView = binding.latitudeTextView
 //        longitudeTextView = binding.longitudeTextView

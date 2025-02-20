@@ -70,17 +70,17 @@
             android:padding="8dp">
 
             <TextView
-                android:id="@+id/timingPointTitleTextView"
+                android:id="@+id/timingPointandStopsTitleTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="start"
-                android:text="Timing Point: "
+                android:text="Timing Point and Stops: "
                 android:textColor="@android:color/white"
                 android:textSize="16sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/timingPointTextView"
+                android:id="@+id/timingPointandStopsTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="start"
@@ -201,7 +201,7 @@
                     android:gravity="end" />
             </LinearLayout>
 
-            <!-- Expected & Actual Time Display -->
+            <!--Next Timing Point-->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -209,16 +209,69 @@
                 android:paddingTop="4dp">
 
                 <TextView
-                    android:id="@+id/expectedTimeLabel"
+                    android:id="@+id/timingPointLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Expected Time:"
+                    android:text="Next Timing Point:"
                     android:textSize="16sp"
                     android:textColor="@android:color/white"
                     android:gravity="start" />
 
                 <TextView
-                    android:id="@+id/expectedTimeValueTextView"
+                    android:id="@+id/timingPointValueTextView"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Unknown"
+                    android:textSize="16sp"
+                    android:textColor="@android:color/white"
+                    android:gravity="end" />
+            </LinearLayout>
+
+            <!-- Api & Actual Time Display -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
+
+                <TextView
+                    android:id="@+id/apiTimeLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Api Time:"
+                    android:textSize="16sp"
+                    android:textColor="@android:color/white"
+                    android:gravity="start" />
+
+                <TextView
+                    android:id="@+id/ApiTimeValueTextView"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Unknown"
+                    android:textSize="16sp"
+                    android:textColor="@android:color/white"
+                    android:gravity="end" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
+
+                <TextView
+                    android:id="@+id/actualTimeLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Actual Time:"
+                    android:textSize="16sp"
+                    android:textColor="@android:color/white"
+                    android:gravity="start" />
+
+                <TextView
+                    android:id="@+id/actualTimeValueTextView"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -246,32 +299,6 @@
 
                 <TextView
                     android:id="@+id/thresholdRangeValueTextView"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Unknown"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/white"
-                    android:gravity="end" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingTop="4dp">
-
-                <TextView
-                    android:id="@+id/actualTimeLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Actual Time:"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/white"
-                    android:gravity="start" />
-
-                <TextView
-                    android:id="@+id/actualTimeValueTextView"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
