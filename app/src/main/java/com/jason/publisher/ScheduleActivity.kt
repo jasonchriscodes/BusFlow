@@ -468,6 +468,7 @@ class ScheduleActivity : AppCompatActivity() {
                 val cachedSchedule = Gson().fromJson(jsonContent, Array<ScheduleItem>::class.java).toList()
                 scheduleData = cachedSchedule
 
+
                 Log.d("ScheduleActivity loadScheduleDataFromCache", "✅ Loaded cached schedule data: $scheduleData")
 
                 // Use the loaded schedule data

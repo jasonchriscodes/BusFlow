@@ -146,7 +146,6 @@
         </LinearLayout>
 
         <!-- Schedule Status Section -->
-
         <LinearLayout
             android:id="@+id/scheduleStatusContainer"
             android:layout_width="match_parent"
@@ -158,22 +157,49 @@
             android:padding="8dp">
 
             <!-- Schedule Status (Ahead, Behind, or On Time) -->
-            <ImageView
-                android:id="@+id/scheduleStatusIcon"
-                android:layout_width="128dp"
-                android:layout_height="128dp"
-                android:contentDescription="Schedule Status Icon"
-                android:visibility="gone" />
+<!--            <ImageView-->
+<!--                android:id="@+id/scheduleStatusIcon"-->
+<!--                android:layout_width="128dp"-->
+<!--                android:layout_height="128dp"-->
+<!--                android:contentDescription="Schedule Status Icon"-->
+<!--                android:visibility="gone" />-->
 
-            <TextView
-                android:id="@+id/scheduleStatusText"
-                android:layout_width="wrap_content"
+<!--            <TextView-->
+<!--                android:id="@+id/scheduleStatusText"-->
+<!--                android:layout_width="wrap_content"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:layout_marginTop="4dp"-->
+<!--                android:gravity="center"-->
+<!--                android:text="Unknown"-->
+<!--                android:textColor="@android:color/white"-->
+<!--                android:textSize="16sp" />-->
+
+            <!-- Schedule Status (Ahead, Behind, or On Time) -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:gravity="center"
-                android:text="Unknown"
-                android:textColor="@android:color/white"
-                android:textSize="16sp" />
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/scheduleStatusTextView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Schedule Status:"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@android:color/white"
+                    android:gravity="start" />
+
+                <TextView
+                    android:id="@+id/scheduleStatusValueTextView"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Unknown"
+                    android:textSize="18sp"
+                    android:textColor="@android:color/white"
+                    android:gravity="end" />
+            </LinearLayout>
 
             <!-- Expected & Actual Time Display -->
             <LinearLayout

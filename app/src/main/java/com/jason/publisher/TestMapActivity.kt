@@ -217,9 +217,11 @@ class TestMapActivity : AppCompatActivity() {
         redBusStops.clear()
         if (scheduleList.isNotEmpty()) {
             val firstSchedule = scheduleList.first()
+            Log.d("TestMapActivity extractRedBusStops firstSchedule", "$firstSchedule")
 
             val stops = firstSchedule.busStops.map { it.name }
             redBusStops.addAll(stops)
+            Log.d("TestMapActivity extractRedBusStops stops", "$stops")
         }
         Log.d("TestMapActivity extractRedBusStops", "Updated Red bus stops: $redBusStops")
     }
@@ -312,8 +314,8 @@ class TestMapActivity : AppCompatActivity() {
      */
     @SuppressLint("LongLogTag")
     private fun checkScheduleStatus() {
-        val statusIcon = findViewById<ImageView>(R.id.scheduleStatusIcon)
-        val statusText = findViewById<TextView>(R.id.scheduleStatusText)
+//        val statusIcon = findViewById<ImageView>(R.id.scheduleStatusIcon)
+//        val statusText = findViewById<TextView>(R.id.scheduleStatusText)
 
         if (!isSimulating || durationBetweenStops.isEmpty() || stops.isEmpty()) return
 
@@ -355,26 +357,26 @@ class TestMapActivity : AppCompatActivity() {
             return String.format("%02d min %02d sec", minutes, remainingSeconds)
         }
 
-//        Log.d(
-//            "MainActivity checkScheduleStatus",
-//            """
-//        🕒 Actual Time: ${formatTime(actualTimeSeconds)}
-//        ⏳ Expected Time: ${formatTime(expectedTimeSeconds)}
-//        ⏲️ Duration Between Stops: ${durationBetweenStops[adjustedIndex]} min
-//        Duration Between Stops list: $durationBetweenStops
-//        Upcoming Bus Stop: ${upcomingBusStopTextView.text}
-//        ⏲️ Threshold: ±${threshold} sec (${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)})
-//        """.trimIndent()
-//        )
+        Log.d(
+            "MainActivity checkScheduleStatus",
+            """
+        🕒 Actual Time: ${formatTime(actualTimeSeconds)}
+        ⏳ Expected Time: ${formatTime(expectedTimeSeconds)}
+        ⏲️ Duration Between Stops: ${durationBetweenStops[adjustedIndex]} min
+        Duration Between Stops list: $durationBetweenStops
+        Upcoming Bus Stop: ${upcomingBusStopTextView.text}
+        ⏲️ Threshold: ±${threshold} sec (${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)})
+        """.trimIndent()
+        )
 
-//        val statusTextView = findViewById<TextView>(R.id.scheduleStatusValueTextView)
-//        val expectedTimeTextView = findViewById<TextView>(R.id.expectedTimeValueTextView)
-//        val actualTimeTextView = findViewById<TextView>(R.id.actualTimeValueTextView)
-//        val thresholdRangeTextView = findViewById<TextView>(R.id.thresholdRangeValueTextView)
+        val statusTextView = findViewById<TextView>(R.id.scheduleStatusValueTextView)
+        val expectedTimeTextView = findViewById<TextView>(R.id.expectedTimeValueTextView)
+        val actualTimeTextView = findViewById<TextView>(R.id.actualTimeValueTextView)
+        val thresholdRangeTextView = findViewById<TextView>(R.id.thresholdRangeValueTextView)
 
-//        expectedTimeTextView.text = formatTime(expectedTimeSeconds)
-//        actualTimeTextView.text = formatTime(actualTimeSeconds)
-//        thresholdRangeTextView.text = "${threshold} sec: ${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)}"
+        expectedTimeTextView.text = formatTime(expectedTimeSeconds)
+        actualTimeTextView.text = formatTime(actualTimeSeconds)
+        thresholdRangeTextView.text = "${threshold} sec: ${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)}"
 
         // Check if the bus has passed the stop
         val distanceToStop = calculateDistance(latitude, longitude, stopLat, stopLon)
@@ -388,21 +390,37 @@ class TestMapActivity : AppCompatActivity() {
         }
 
         // Check if the bus is ahead, behind, or on time
+//        when {
+//            actualTimeSeconds < lowerThresholdSeconds -> {
+//                statusIcon.setImageResource(R.drawable.ic_schedule_ahead)
+//                statusText.text = "Ahead"
+//                statusIcon.visibility = View.VISIBLE
+//            }
+//            actualTimeSeconds > upperThresholdSeconds -> {
+//                statusIcon.setImageResource(R.drawable.ic_schedule_behind)
+//                statusText.text = "Behind"
+//                statusIcon.visibility = View.VISIBLE
+//            }
+//            else -> {
+//                statusIcon.setImageResource(R.drawable.ic_schedule_on_time)
+//                statusText.text = "On Time"
+//                statusIcon.visibility = View.VISIBLE
+//            }
         when {
             actualTimeSeconds < lowerThresholdSeconds -> {
-                statusIcon.setImageResource(R.drawable.ic_schedule_ahead)
-                statusText.text = "Ahead"
-                statusIcon.visibility = View.VISIBLE
+                Log.w("MainActivity checkScheduleStatus", "🚀 Ahead by ${lowerThresholdSeconds - actualTimeSeconds} sec")
+                statusTextView.text = "🚀 Ahead by ${lowerThresholdSeconds - actualTimeSeconds} sec"
+                statusTextView.setTextColor(Color.RED)
             }
             actualTimeSeconds > upperThresholdSeconds -> {
-                statusIcon.setImageResource(R.drawable.ic_schedule_behind)
-                statusText.text = "Behind"
-                statusIcon.visibility = View.VISIBLE
+                Log.w("MainActivity checkScheduleStatus", "🐢 Behind by ${actualTimeSeconds - upperThresholdSeconds} sec")
+                statusTextView.text = "🐢 Behind by ${actualTimeSeconds - upperThresholdSeconds} sec"
+                statusTextView.setTextColor(Color.RED)
             }
             else -> {
-                statusIcon.setImageResource(R.drawable.ic_schedule_on_time)
-                statusText.text = "On Time"
-                statusIcon.visibility = View.VISIBLE
+                Log.i("MainActivity checkScheduleStatus", "✅ On Time")
+                statusTextView.text = "✅ On Time"
+                statusTextView.setTextColor(Color.GREEN)
             }
         }
     }
@@ -1293,8 +1311,9 @@ class TestMapActivity : AppCompatActivity() {
                 else -> index.toString() // Numbered stops
             }
 
-            val isRed = redBusStops.contains(stopName) // Check if it should be red
-            Log.d("TestMapActivity addBusStopMarkers", "Checking stop: $stopName, isRed: $isRed")
+            val formattedStopName = stopName.replace("Stop ", "").trim()
+            val isRed = redBusStops.any { it.replace("Stop ", "").trim().equals(formattedStopName, ignoreCase = true) }
+            Log.d("TestMapActivity addBusStopMarkers", "Checking stop: $stopName, isRed: $isRed (stored stops: $redBusStops)")
 
             val busStopSymbol = Helper.createBusStopSymbol(applicationContext, index, totalStops, isRed)
             val markerBitmap = AndroidGraphicFactory.convertToBitmap(busStopSymbol)
