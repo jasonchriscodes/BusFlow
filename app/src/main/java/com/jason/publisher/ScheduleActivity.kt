@@ -21,6 +21,7 @@ import com.jason.publisher.model.Bus
 import com.jason.publisher.model.BusDataCache
 import com.jason.publisher.model.BusItem
 import com.jason.publisher.model.BusRoute
+import com.jason.publisher.model.BusScheduleInfo
 import com.jason.publisher.model.BusStop
 import com.jason.publisher.model.RouteData
 import com.jason.publisher.model.ScheduleItem
@@ -77,11 +78,52 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     private val dummyScheduleData = listOf(
-        ScheduleItem("Route 1", "Stop 2 - 08:05, Stop S/E - 08:35", "08:00", "08:35"),
-        ScheduleItem("Route 2", "Stop 3 - 09:45, Stop S/E - 10:00", "09:30", "10:00"),
-        ScheduleItem("Route 3", "Stop 1 - 10:25, Stop 4 - 10:35", "10:20", "11:10"),
-        ScheduleItem("Route 4", "Stop 2 - 11:45, Stop 3 - 12:00, Stop 4 - 12:10", "12:30", "12:10", ),
-        ScheduleItem("Route 5", "Stop 1 - 12:40, Stop 4 - 12:50", "12:30", "13:00")
+        ScheduleItem(
+            "Route 1",
+            "08:00",
+            "08:35",
+            listOf(
+                BusScheduleInfo("Stop 2", "08:05", -36.854209, 174.767755, "25-29 Symonds Street"),
+                BusScheduleInfo("Stop S/E", "08:35", -36.854685, 174.764528, "39 Airedale Street")
+            )
+        ),
+        ScheduleItem(
+            "Route 2",
+            "09:30",
+            "10:00",
+            listOf(
+                BusScheduleInfo("Stop 3", "09:45", -36.855281, 174.767117, "52 Symonds Street"),
+                BusScheduleInfo("Stop S/E", "10:00", -36.854685, 174.764528, "39 Airedale Street")
+            )
+        ),
+        ScheduleItem(
+            "Route 3",
+            "10:20",
+            "11:10",
+            listOf(
+                BusScheduleInfo("Stop 1", "10:25", -36.853677, 174.766063, "27 St Paul Street"),
+                BusScheduleInfo("Stop 4", "10:35", -36.856047, 174.765309, "89 Airedale Street")
+            )
+        ),
+        ScheduleItem(
+            "Route 4",
+            "12:30",
+            "12:10",
+            listOf(
+                BusScheduleInfo("Stop 2", "11:45", -36.854209, 174.767755, "25-29 Symonds Street"),
+                BusScheduleInfo("Stop 3", "12:00", -36.855281, 174.767117, "52 Symonds Street"),
+                BusScheduleInfo("Stop 4", "12:10", -36.856047, 174.765309, "89 Airedale Street")
+            )
+        ),
+        ScheduleItem(
+            "Route 5",
+            "12:30",
+            "13:00",
+            listOf(
+                BusScheduleInfo("Stop 1", "12:40", -36.853677, 174.766063, "27 St Paul Street"),
+                BusScheduleInfo("Stop 4", "12:50", -36.856047, 174.765309, "89 Airedale Street")
+            )
+        )
     )
 
     @SuppressLint("LongLogTag")
@@ -237,7 +279,8 @@ class ScheduleActivity : AppCompatActivity() {
             val row = TableRow(this)
 
             val routeTextView = createTableCell(item.routeNo, 0.5f)
-            val stopTextView = createTableCell(item.busStopTimepoint, 1f)
+            val stopsInfo = item.busStops.joinToString(", ") { "${it.name} - ${it.time}" } // ✅ Extract stops dynamically
+            val stopTextView = createTableCell(stopsInfo, 1f)
             val startTimeTextView = createTableCell(item.startTime, 0.4f)
             val endTimeTextView = createTableCell(item.endTime, 0.4f)
 
@@ -339,7 +382,7 @@ class ScheduleActivity : AppCompatActivity() {
      */
     private fun requestAdminMessage() {
         val jsonObject = JSONObject()
-        jsonObject.put("sharedKeys","message,busRoute,busStop,config,busRouteData")
+        jsonObject.put("sharedKeys","message,busRoute,busStop,config,busRouteData,scheduleData")
         val jsonStringSharedKeys = jsonObject.toString()
         val handler = Handler(Looper.getMainLooper())
         mqttManager.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
@@ -546,6 +589,10 @@ class ScheduleActivity : AppCompatActivity() {
                     busRouteData = data.shared?.busRouteData1 ?: emptyList()
                     Log.d("MainActivity subscribeSharedData", "busRouteData: $busRouteData")
 
+                    // Retrieve `scheduleData` from ThingsBoard
+                    scheduleData = data.shared?.scheduleData1 ?: emptyList()
+                    Log.d("MainActivity subscribeSharedData", "scheduleData: $scheduleData")
+
                     // **Rewrite cache when online**
                     if (NetworkStatusHelper.isNetworkAvailable(this@ScheduleActivity)) {
                         // Save data **only after all values are updated**
@@ -589,7 +636,7 @@ class ScheduleActivity : AppCompatActivity() {
     /**
      * Saves the latest bus data to the cache file.
      */
-    private var isCacheUpdated = false // Flag to ensure cache is updated only once
+    private var isBusCacheUpdated = false // Flag to ensure cache is updated only once
     @SuppressLint("LongLogTag")
     private fun saveBusDataToCache() {
         if (!NetworkStatusHelper.isNetworkAvailable(this)) {
@@ -597,7 +644,7 @@ class ScheduleActivity : AppCompatActivity() {
             return
         }
         // ✅ Check if cache has already been updated
-        if (isCacheUpdated) {
+        if (isBusCacheUpdated) {
             Log.d("MainActivity saveBusDataToCache", "🚫 Skipping cache update (already updated).")
             return
         }
@@ -619,7 +666,7 @@ class ScheduleActivity : AppCompatActivity() {
             Log.d("MainActivity saveBusDataToCache", "✅ Bus data cache updated successfully in busDataCache.txt.")
             Toast.makeText(this, "Bus data cache updated successfully in busDataCache.txt.", Toast.LENGTH_SHORT).show()
             // ✅ Set flag to true after successful update
-            isCacheUpdated = true
+            isBusCacheUpdated = true
         } catch (e: Exception) {
             Log.e("MainActivity saveBusDataToCache", "❌ Error saving bus data cache: ${e.message}")
         }
@@ -628,20 +675,30 @@ class ScheduleActivity : AppCompatActivity() {
     /**
      * Saves the latest schedule data to the cache file.
      */
+    private var isScheduleCacheUpdated = false // Flag to ensure cache is updated only once
     private fun saveScheduleDataToCache() {
         if (!NetworkStatusHelper.isNetworkAvailable(this)) {
             Log.d("ScheduleActivity saveScheduleDataToCache", "❌ No internet connection. Skipping cache update.")
             return
         }
 
+        // ✅ Check if cache has already been updated
+        if (isScheduleCacheUpdated) {
+            Log.d("MainActivity saveBusDataToCache", "🚫 Skipping cache update (already updated).")
+            return
+        }
+
         val cacheFile = File(getHiddenFolder(), "scheduleDataCache.txt")
-
+        Log.d("ScheduleActivity saveScheduleDataToCache before", "scheduleDataCache.txt content: ${cacheFile.readText()}")
+        Log.d("ScheduleActivity saveScheduleDataToCache", "Saving scheduleData: $scheduleData")
         try {
-            val jsonString = Gson().toJson(dummyScheduleData) // Convert data to JSON
-            cacheFile.writeText(jsonString) // Overwrite cache file
-
+            val jsonStringScheduleData = Gson().toJson(scheduleData) // Convert to JSON using the new structure
+            cacheFile.writeText(jsonStringScheduleData) // Save the data
+            Log.d("ScheduleActivity saveScheduleDataToCache jsonStringScheduleData", "scheduleDataCache.txt content: ${jsonStringScheduleData}")
+            Log.d("ScheduleActivity saveScheduleDataToCache after", "scheduleDataCache.txt content: ${cacheFile.readText()}")
             Log.d("ScheduleActivity saveScheduleDataToCache", "✅ Schedule data cache updated successfully.")
             Toast.makeText(this, "Schedule data cache updated successfully.", Toast.LENGTH_SHORT).show()
+            isScheduleCacheUpdated = true
         } catch (e: Exception) {
             Log.e("ScheduleActivity saveScheduleDataToCache", "❌ Error saving schedule data cache: ${e.message}")
         }

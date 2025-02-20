@@ -217,16 +217,8 @@ class TestMapActivity : AppCompatActivity() {
         redBusStops.clear()
         if (scheduleList.isNotEmpty()) {
             val firstSchedule = scheduleList.first()
-            val stops = firstSchedule.busStopTimepoint.split(", ").map {
-                when (it.split(" - ")[0]) {
-                    "Stop 1" -> "1"
-                    "Stop 2" -> "2"
-                    "Stop 3" -> "3"
-                    "Stop 4" -> "4"
-                    "Stop S/E" -> "S/E"
-                    else -> it.split(" - ")[0] // Default case
-                }
-            }
+
+            val stops = firstSchedule.busStops.map { it.name }
             redBusStops.addAll(stops)
         }
         Log.d("TestMapActivity extractRedBusStops", "Updated Red bus stops: $redBusStops")
@@ -1023,12 +1015,16 @@ class TestMapActivity : AppCompatActivity() {
         timingPointTextView = binding.timingPointTextView
         tripEndTimeTextView = binding.tripEndTimeTextView
         // Hardcoded values for testing
-        val timingPoint = "Bus stop 3 at 12:45"
-        val tripEndTime = "13:30"
+        if (scheduleList.isNotEmpty()) {
+            val scheduleItem = scheduleList.first()
 
-        // Set text views with hardcoded values
-        timingPointTextView.text = timingPoint
-        tripEndTimeTextView.text = tripEndTime
+            // Extract stop names and times dynamically
+            val stopsInfo = scheduleItem.busStops.joinToString(", ") { "${it.name} - ${it.time}" }
+
+            // Set text views with extracted stop info
+            timingPointTextView.text = stopsInfo
+            tripEndTimeTextView.text = scheduleItem.endTime
+        }
 //            bearingTextView = binding.bearingTextView
 //        latitudeTextView = binding.latitudeTextView
 //        longitudeTextView = binding.longitudeTextView

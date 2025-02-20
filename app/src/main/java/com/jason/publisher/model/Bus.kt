@@ -70,7 +70,10 @@ data class Shared(
     val bearingCustomer: List<BusBearingCustomer>? = null,
 
     @field:SerializedName("busRouteData")
-    val busRouteData1: List<RouteData>? = null
+    val busRouteData1: List<RouteData>? = null,
+
+    @field:SerializedName("scheduleData")
+    val scheduleData1: List<ScheduleItem>? = null
 ) : Parcelable
 
 /**
