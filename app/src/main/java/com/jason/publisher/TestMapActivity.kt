@@ -55,7 +55,7 @@ class TestMapActivity : AppCompatActivity() {
     private lateinit var locationManager: LocationManager
     private lateinit var mapController: MapController
     private lateinit var dateTimeHandler: Handler
-    private lateinit var dateTimeRunnable: Runnable
+//    private lateinit var dateTimeRunnable: Runnable
 
     private var latitude = 0.0
     private var longitude = 0.0
@@ -134,7 +134,7 @@ class TestMapActivity : AppCompatActivity() {
         stops = intent.getSerializableExtra("STOPS") as? List<BusStop> ?: emptyList()
         durationBetweenStops = intent.getSerializableExtra("DURATION_BETWEEN_BUS_STOP") as? List<Double> ?: emptyList()
         busRouteData = intent.getSerializableExtra("BUS_ROUTE_DATA") as? List<RouteData> ?: emptyList()
-        scheduleList = intent.getSerializableExtra("SCHEDULE_DATA") as? List<ScheduleItem> ?: emptyList()
+        scheduleList = intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? List<ScheduleItem> ?: emptyList()
 
         Log.d("MainActivity onCreate retrieve", "Received aid: $aid")
         Log.d("MainActivity onCreate retrieve", "Received config: ${config.toString()}")
@@ -156,7 +156,7 @@ class TestMapActivity : AppCompatActivity() {
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
 
         // Initialize the date/time updater
-        startDateTimeUpdater()
+//        startDateTimeUpdater()
 
 //        fetchConfig { success ->
 //            if (success) {
@@ -542,6 +542,7 @@ class TestMapActivity : AppCompatActivity() {
 
             runOnUiThread {
                 upcomingBusStopTextView.text = "$stopAddress"
+                upcomingStop = stopAddress
             }
 
             passedStops.add(nextStop)
@@ -579,6 +580,7 @@ class TestMapActivity : AppCompatActivity() {
 
             runOnUiThread {
                 upcomingBusStopTextView.text = "$upcomingStopName"
+                upcomingStop = upcomingStopName
             }
         }
     }
@@ -1327,29 +1329,29 @@ class TestMapActivity : AppCompatActivity() {
     }
 
     /** Starts a periodic task to update the current date and time in the UI. */
-    @SuppressLint("SimpleDateFormat")
-    private fun startDateTimeUpdater() {
-        dateTimeHandler = Handler(Looper.getMainLooper())
-        dateTimeRunnable = object : Runnable {
-            override fun run() {
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-                val currentDateTime = dateFormat.format(Date())
-                binding.currentDateAndTime.text = currentDateTime
-                dateTimeHandler.postDelayed(this, 1000) // Update every second
-            }
-        }
-        dateTimeHandler.post(dateTimeRunnable)
-    }
+//    @SuppressLint("SimpleDateFormat")
+//    private fun startDateTimeUpdater() {
+//        dateTimeHandler = Handler(Looper.getMainLooper())
+//        dateTimeRunnable = object : Runnable {
+//            override fun run() {
+//                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+//                val currentDateTime = dateFormat.format(Date())
+//                binding.currentDateAndTime.text = currentDateTime
+//                dateTimeHandler.postDelayed(this, 1000) // Update every second
+//            }
+//        }
+//        dateTimeHandler.post(dateTimeRunnable)
+//    }
 
     /** Stops the date/time updater when the activity is destroyed. */
-    private fun stopDateTimeUpdater() {
-        dateTimeHandler.removeCallbacks(dateTimeRunnable)
-    }
+//    private fun stopDateTimeUpdater() {
+//        dateTimeHandler.removeCallbacks(dateTimeRunnable)
+//    }
 
     /** Cleans up resources on activity destruction. */
     override fun onDestroy() {
 //        mqttManager.disconnect()
-        stopDateTimeUpdater()
+//        stopDateTimeUpdater()
         super.onDestroy()
 
         // Remove polyline from Mapsforge map

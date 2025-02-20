@@ -19,8 +19,6 @@
         android:contentDescription="Live map displaying bus routes and stops" />
 
     <!-- Right Column: Data Display -->
-
-    <!-- Network Status Indicator -->
     <LinearLayout
         android:id="@+id/rightColumnContainer"
         android:layout_width="0dp"
@@ -35,31 +33,31 @@
         app:layout_constraintVertical_bias="0.0">
 
         <!-- Current Date and Time -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:background="@drawable/white_border"
-            android:orientation="horizontal"
-            android:padding="12dp">
+<!--        <LinearLayout-->
+<!--            android:layout_width="match_parent"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:layout_marginBottom="8dp"-->
+<!--            android:background="@drawable/white_border"-->
+<!--            android:orientation="horizontal"-->
+<!--            android:padding="12dp">-->
 
-            <TextView
-                android:id="@+id/currentDateAndTimeTextView"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Date and Time: "
-                android:textColor="@color/white"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+<!--            <TextView-->
+<!--                android:id="@+id/currentDateAndTimeTextView"-->
+<!--                android:layout_width="wrap_content"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:text="Date and Time: "-->
+<!--                android:textColor="@color/white"-->
+<!--                android:textSize="16sp"-->
+<!--                android:textStyle="bold" />-->
 
-            <TextView
-                android:id="@+id/currentDateAndTime"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="2025-01-23 14:00:00"
-                android:textColor="@color/white"
-                android:textSize="16sp" />
-        </LinearLayout>
+<!--            <TextView-->
+<!--                android:id="@+id/currentDateAndTime"-->
+<!--                android:layout_width="wrap_content"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:text="2025-01-23 14:00:00"-->
+<!--                android:textColor="@color/white"-->
+<!--                android:textSize="16sp" />-->
+<!--        </LinearLayout>-->
 
         <!-- Timing Point and Trip End Time Section -->
         <LinearLayout
@@ -148,6 +146,7 @@
         </LinearLayout>
 
         <!-- Schedule Status Section -->
+
         <LinearLayout
             android:id="@+id/scheduleStatusContainer"
             android:layout_width="match_parent"
@@ -175,9 +174,88 @@
                 android:text="Unknown"
                 android:textColor="@android:color/white"
                 android:textSize="16sp" />
+
+            <!-- Expected & Actual Time Display -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
+
+                <TextView
+                    android:id="@+id/expectedTimeLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Expected Time:"
+                    android:textSize="16sp"
+                    android:textColor="@android:color/white"
+                    android:gravity="start" />
+
+                <TextView
+                    android:id="@+id/expectedTimeValueTextView"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Unknown"
+                    android:textSize="16sp"
+                    android:textColor="@android:color/white"
+                    android:gravity="end" />
+            </LinearLayout>
+
+            <!-- Threshold Range Display -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
+
+                <TextView
+                    android:id="@+id/thresholdRangeLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Threshold Range:"
+                    android:textSize="16sp"
+                    android:textColor="@android:color/white"
+                    android:gravity="start" />
+
+                <TextView
+                    android:id="@+id/thresholdRangeValueTextView"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Unknown"
+                    android:textSize="16sp"
+                    android:textColor="@android:color/white"
+                    android:gravity="end" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
+
+                <TextView
+                    android:id="@+id/actualTimeLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Actual Time:"
+                    android:textSize="16sp"
+                    android:textColor="@android:color/white"
+                    android:gravity="start" />
+
+                <TextView
+                    android:id="@+id/actualTimeValueTextView"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Unknown"
+                    android:textSize="16sp"
+                    android:textColor="@android:color/white"
+                    android:gravity="end" />
+            </LinearLayout>
         </LinearLayout>
 
-        <!-- Simulation Buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

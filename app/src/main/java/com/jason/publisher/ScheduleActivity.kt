@@ -200,17 +200,28 @@ class ScheduleActivity : AppCompatActivity() {
 
         // Set up the "Start Route" button
         binding.testStartRouteButton.setOnClickListener {
-            val intent = Intent(this, TestMapActivity::class.java).apply {
-                putExtra("AID", aid)
-                putExtra("CONFIG", ArrayList(config))
-                putExtra("JSON_STRING", jsonString)
-                putExtra("ROUTE", ArrayList(route)) // Send list as ArrayList
-                putExtra("STOPS", ArrayList(stops)) // Send list as ArrayList
-                putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops)) // Send list as ArrayList
-                putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
-                putExtra("SCHEDULE_DATA", ArrayList(scheduleData))
+            if (scheduleData.isNotEmpty()) {
+                val firstScheduleItem = scheduleData.first() // Store first schedule item
+                Log.d("ScheduleActivity testStartRouteButton firstScheduleItem", firstScheduleItem.toString())
+                Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
+//                scheduleData = scheduleData.drop(1) // Remove the first item
+                Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
+                rewriteOfflineScheduleData()
+
+                val intent = Intent(this, TestMapActivity::class.java).apply {
+                    putExtra("AID", aid)
+                    putExtra("CONFIG", ArrayList(config))
+                    putExtra("JSON_STRING", jsonString)
+                    putExtra("ROUTE", ArrayList(route))
+                    putExtra("STOPS", ArrayList(stops))
+                    putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
+                    putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+                    putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+                }
+                startActivity(intent)
+            } else {
+                Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
             }
-            startActivity(intent)
         }
     }
 
@@ -633,6 +644,25 @@ class ScheduleActivity : AppCompatActivity() {
             Toast.makeText(this, "Schedule data cache updated successfully.", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Log.e("ScheduleActivity saveScheduleDataToCache", "❌ Error saving schedule data cache: ${e.message}")
+        }
+    }
+
+    /**
+     * Saves the latest schedule data to the cache file.
+     */
+    private fun rewriteOfflineScheduleData() {
+        if (!NetworkStatusHelper.isNetworkAvailable(this)) {
+            Log.d("ScheduleActivity saveScheduleDataToCache", "❌ No internet connection. rewrite data.")
+            val cacheFile = File(getHiddenFolder(), "scheduleDataCache.txt")
+
+            try {
+                val jsonString = Gson().toJson(scheduleData) // Convert updated data to JSON
+                cacheFile.writeText(jsonString) // Overwrite cache file
+                Log.d("ScheduleActivity saveScheduleDataToCache", "✅ Schedule data cache updated successfully.")
+                Toast.makeText(this, "Schedule data updated.", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Log.e("ScheduleActivity saveScheduleDataToCache", "❌ Error saving schedule data cache: ${e.message}")
+            }
         }
     }
 
