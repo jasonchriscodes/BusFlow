@@ -586,9 +586,9 @@ class TestMapActivity : AppCompatActivity() {
                 )
 
                 val nextTimingPoint = if (index + 1 < stopList.size) {
-                    stopList[index + 1].time
+                    stopList[index + 1].time + ":00"
                 } else {
-                    firstSchedule.endTime // Last stop reached
+                    firstSchedule.endTime + ":00" // Last stop reached
                 }
 
                 runOnUiThread {
