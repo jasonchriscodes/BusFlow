@@ -29,6 +29,7 @@ import androidx.core.content.res.ResourcesCompat
 import com.jason.publisher.model.BusItem
 import com.jason.publisher.model.BusStop
 import com.jason.publisher.model.BusStopInfo
+import com.jason.publisher.model.BusStopWithTimingPoint
 import com.jason.publisher.model.RouteData
 import com.jason.publisher.model.ScheduleItem
 import com.jason.publisher.services.LocationManager
@@ -109,6 +110,9 @@ class TestMapActivity : AppCompatActivity() {
     private lateinit var timingPointValueTextView: TextView
     private lateinit var ApiTimeValueTextView: TextView
     private var simulatedStartTime: Calendar = Calendar.getInstance()
+
+    private var apiTimeLocked = false
+    private var lockedApiTime: String? = null
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -550,6 +554,207 @@ class TestMapActivity : AppCompatActivity() {
         stepHandler.post(stepRunnable)
     }
 
+    /**
+     * Updates the API Time TextView based on the schedule start time and the cumulative durations
+     * from the BusStopWithTimingPoint list.
+     *
+     * If the API time has already been locked (final value computed), it simply reuses that value.
+     * Otherwise, it computes the update as follows:
+     * - Finds the target index in the timing list based on the upcomingStop address.
+     * - Uses calculateDurationForUpdate() to determine the total duration.
+     *   • If that returns null, then the upcoming stop isn’t scheduled – no update.
+     *   • If non-null, it updates the API time.
+     * - If the upcoming stop equals the last scheduled bus stop, then we lock the API time.
+     */
+    private fun updateApiTime() {
+        // If locked, simply reuse the locked value.
+        if (apiTimeLocked && lockedApiTime != null) {
+            runOnUiThread { ApiTimeValueTextView.text = lockedApiTime }
+            Log.d("updateApiTime", "API time locked, using last computed value: $lockedApiTime")
+            return
+        }
+
+        if (busRouteData.isEmpty() || scheduleList.isEmpty()) return
+
+        val firstSchedule = scheduleList.first()
+        val startTimeParts = firstSchedule.startTime.split(":")
+        if (startTimeParts.size != 2) return
+
+        val startCalendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, startTimeParts[0].toInt())
+            set(Calendar.MINUTE, startTimeParts[1].toInt())
+            set(Calendar.SECOND, 0)
+        }
+
+        // Build timing list.
+        val timingList = BusStopWithTimingPoint.fromRouteData(busRouteData.first())
+        Log.d("updateApiTime", "Timing list: $timingList")
+
+        val upcomingAddress = upcomingStop
+        Log.d("updateApiTime", "Upcoming stop address: $upcomingAddress")
+
+        // Find the target index.
+        val targetIndex = timingList.indexOfFirst {
+            it.address?.equals(upcomingAddress, ignoreCase = true) == true
+        }
+        if (targetIndex == -1) {
+            Log.e("updateApiTime", "Upcoming stop address not found in timing list.")
+            return
+        }
+        Log.d("updateApiTime", "Found target index: $targetIndex")
+
+        // Compute the total duration.
+        val totalDurationMinutes = calculateDurationForUpdate(timingList, scheduleList, targetIndex)
+        if (totalDurationMinutes == null) {
+            Log.d("updateApiTime", "Upcoming bus stop not scheduled. Skipping API update.")
+            // If we already computed a final value before, do not override.
+            return
+        }
+        Log.d("updateApiTime", "Total duration in minutes: $totalDurationMinutes")
+
+        // Add the duration (in seconds) to the start time.
+        val additionalSeconds = (totalDurationMinutes * 60).toInt()
+        startCalendar.add(Calendar.SECOND, additionalSeconds)
+
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        val updatedApiTime = timeFormat.format(startCalendar.time)
+
+        runOnUiThread {
+            ApiTimeValueTextView.text = updatedApiTime
+        }
+        Log.d("updateApiTime", "API Time updated to: $updatedApiTime")
+
+        // If the upcoming stop is the final scheduled stop, lock the API time.
+        val lastScheduledAddress = getLastScheduledAddress(timingList, scheduleList)
+        if (lastScheduledAddress != null &&
+            upcomingAddress.equals(lastScheduledAddress, ignoreCase = true)) {
+            apiTimeLocked = true
+            lockedApiTime = updatedApiTime
+            Log.d("updateApiTime", "Final scheduled bus stop reached. API time locked.")
+        }
+    }
+
+    /**
+     * Returns a sorted list of indices in [timingList] whose addresses appear in the schedule.
+     */
+    private fun getScheduledIndices(
+        timingList: List<BusStopWithTimingPoint>,
+        scheduleList: List<ScheduleItem>
+    ): List<Int> {
+        if (scheduleList.isEmpty() || timingList.isEmpty()) return emptyList()
+        val scheduledAddresses = scheduleList.first().busStops.map { it.address?.toLowerCase() }
+        return timingList.withIndex()
+            .filter { it.value.address?.toLowerCase() in scheduledAddresses }
+            .map { it.index }
+            .sorted()
+    }
+
+    /**
+     * Returns the address of the final scheduled bus stop from [timingList].
+     */
+    private fun getLastScheduledAddress(
+        timingList: List<BusStopWithTimingPoint>,
+        scheduleList: List<ScheduleItem>
+    ): String? {
+        val scheduledIndices = getScheduledIndices(timingList, scheduleList)
+        return if (scheduledIndices.isNotEmpty()) timingList[scheduledIndices.last()].address else null
+    }
+
+    /**
+     * Calculates the total duration (in minutes) for the update.
+     *
+     * If targetIndex is 0, returns the duration at index 0.
+     * If the upcoming stop (at targetIndex) is scheduled:
+     *   • If it is not the last scheduled stop, sum durations from index 0 up to (but not including) the next scheduled stop.
+     *   • If it is the last scheduled stop, sum the entire timing list.
+     * Otherwise (unscheduled and not index 0) returns null.
+     */
+    private fun calculateDurationForUpdate(
+        timingList: List<BusStopWithTimingPoint>,
+        scheduleList: List<ScheduleItem>,
+        targetIndex: Int
+    ): Double? {
+        val scheduledIndices = getScheduledIndices(timingList, scheduleList)
+        // Always update if targetIndex == 0 (even if unscheduled)
+        if (targetIndex == 0) {
+            return timingList.subList(0, 1).sumOf { it.duration }
+        }
+        // If targetIndex is scheduled...
+        if (targetIndex in scheduledIndices) {
+            val pos = scheduledIndices.indexOf(targetIndex)
+            return if (pos < scheduledIndices.size - 1) {
+                val nextScheduledIndex = scheduledIndices[pos + 1]
+                timingList.subList(0, nextScheduledIndex).sumOf { it.duration }
+            } else {
+                // Last scheduled stop: sum entire list.
+                timingList.sumOf { it.duration }
+            }
+        }
+        // Not scheduled → return null so that update is skipped.
+        return null
+    }
+
+    /**
+     * Checks whether the given bus stop address appears in the scheduleList.
+     */
+    private fun isBusStopInScheduleList(address: String?, scheduleList: List<ScheduleItem>): Boolean {
+        if (address == null || scheduleList.isEmpty()) return false
+        val busStops = scheduleList.first().busStops
+        return busStops.any { it.address.equals(address, ignoreCase = true) }
+    }
+
+    /**
+     * From the timingList, returns the smallest index greater than [currentIndex]
+     * whose bus stop address is found in the scheduleList.
+     * Returns null if none exists.
+     */
+    private fun nextBusStopIndexInScheduleList(
+        timingList: List<BusStopWithTimingPoint>,
+        scheduleList: List<ScheduleItem>,
+        currentIndex: Int
+    ): Int? {
+        if (scheduleList.isEmpty()) return null
+        val busStops = scheduleList.first().busStops.map { it.address }
+        // Get all indices in timingList that are scheduled (i.e. address in busStops)
+        val scheduledIndices = timingList.withIndex()
+            .filter { entry ->
+                entry.value.address?.let { addr ->
+                    busStops.any { it.equals(addr, ignoreCase = true) }
+                } ?: false
+            }
+            .map { it.index }
+        // Find the first scheduled index greater than currentIndex
+        return scheduledIndices.firstOrNull { it > currentIndex }
+    }
+
+    /**
+     * Calculates the total duration to be used in API time update.
+     * If the bus stop at [currentIndex] is in the schedule list,
+     * then the total duration is the sum of durations from index 0 up to and including
+     * the next scheduled bus stop (if one exists). Otherwise, it simply sums up
+     * durations from index 0 to [currentIndex].
+     */
+    private fun calculateDurationBetweenBusStopWithTimingPoint(
+        timingList: List<BusStopWithTimingPoint>,
+        scheduleList: List<ScheduleItem>,
+        currentIndex: Int
+    ): Double {
+        return if (isBusStopInScheduleList(timingList[currentIndex].address, scheduleList)) {
+            // Find the next scheduled bus stop index in timingList
+            val nextScheduledIndex = nextBusStopIndexInScheduleList(timingList, scheduleList, currentIndex)
+            if (nextScheduledIndex != null) {
+                // Sum durations from index 0 to nextScheduledIndex (inclusive)
+                timingList.subList(0, nextScheduledIndex + 1).sumOf { it.duration }
+            } else {
+                // Fallback: sum durations from index 0 to currentIndex if no next scheduled stop found
+                timingList.subList(0, currentIndex + 1).sumOf { it.duration }
+            }
+        } else {
+            // Not a scheduled bus stop; sum durations normally from index 0 to currentIndex
+            timingList.subList(0, currentIndex + 1).sumOf { it.duration }
+        }
+    }
+
     /** Updates timing point based on current bus location */
     private fun updateTimingPointBasedOnLocation(currentLat: Double, currentLon: Double) {
         if (scheduleList.isEmpty()) return
@@ -608,7 +813,7 @@ class TestMapActivity : AppCompatActivity() {
     private fun initializeTimingPoint() {
         if (scheduleList.isNotEmpty()) {
             val firstSchedule = scheduleList.first()
-            val firstTimingPoint = firstSchedule.busStops.firstOrNull()?.time ?: "Unknown"
+            val firstTimingPoint = firstSchedule.busStops.firstOrNull()?.time + ":00" ?: "Unknown"
 
             timingPointValueTextView.text = firstTimingPoint
             upcomingStop = firstTimingPoint // Set the upcoming stop initially
@@ -643,9 +848,9 @@ class TestMapActivity : AppCompatActivity() {
         val nextStop = stops[currentStopIndex]
         val stopLat = nextStop.latitude ?: return
         val stopLon = nextStop.longitude ?: return
-        val stopAddress = nextStop.address ?: "No more upcoming bus stop"
+        val stopAddress = nextStop.address ?: getUpcomingBusStopName(stopLat, stopLon)
+        upcomingStop = stopAddress
         val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
-
         val stopPassThreshold = 25.0
 
         if (distance <= stopPassThreshold) {
@@ -662,8 +867,13 @@ class TestMapActivity : AppCompatActivity() {
             passedStops.add(nextStop)
             currentStopIndex++
 
-            // **🔹 Reset actual time when a stop is passed**
-            resetActualTime()
+            // Build timing list and update API time only if the stop exists in it
+            val timingList = BusStopWithTimingPoint.fromRouteData(busRouteData.first())
+            if (timingList.any { it.address?.equals(stopAddress, ignoreCase = true) == true }) {
+                updateApiTime()
+            } else {
+                Log.d("MainActivity checkPassedStops", "BusStopWithTimingPoint not available for $stopAddress. Skipping API time update.")
+            }
 
             if (currentStopIndex < stops.size) {
                 val upcomingStop = stops[currentStopIndex]
