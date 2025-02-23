@@ -115,6 +115,7 @@ class TestMapActivity : AppCompatActivity() {
 
     private var apiTimeLocked = false
     private var lockedApiTime: String? = null
+    private var simulationSpeedFactor: Int = 1
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -221,6 +222,13 @@ class TestMapActivity : AppCompatActivity() {
             startActivity(intent)
             finish()
         }
+        binding.speedUpButton.setOnClickListener {
+            speedUp()
+        }
+
+        binding.slowDownButton.setOnClickListener {
+            slowDown()
+        }
     }
 
     /**
@@ -290,7 +298,13 @@ class TestMapActivity : AppCompatActivity() {
                     val endLon = end.longitude!!
 
                     val distanceMeters = calculateDistance(startLat, startLon, endLat, endLon)
-                    val travelTimeSeconds = distanceMeters / 8.33  // Time needed at 30 km/h
+                    // If simulationSpeedFactor is 0, bus is stopped; simply re-post without movement.
+                    if (simulationSpeedFactor <= 0) {
+                        simulationHandler.postDelayed(this, 1000)
+                        return
+                    }
+                    // Adjust travel time: base travel time divided by the speed factor.
+                    val travelTimeSeconds = (distanceMeters / 8.33) / simulationSpeedFactor
                     val steps = (travelTimeSeconds * 10).toInt() // Update every 100ms
 
                     simulateMovement(startLat, startLon, endLat, endLon, steps)
@@ -313,13 +327,30 @@ class TestMapActivity : AppCompatActivity() {
     }
 
     /**
+     * increase speed factor
+     */
+    private fun speedUp() {
+        simulationSpeedFactor++ // Increase by 1 second per tick
+        Log.d("SpeedControl", "Speed Up: simulationSpeedFactor is now $simulationSpeedFactor")
+    }
+
+    /**
+     * decrease speed factor
+     */
+    private fun slowDown() {
+        // Ensure never go below 0.
+        if (simulationSpeedFactor > 0) {
+            simulationSpeedFactor--
+        }
+        Log.d("SpeedControl", "Slow Down: simulationSpeedFactor is now $simulationSpeedFactor")
+    }
+
+    /**
      * Starts actual time from schedule
      */
     private fun startActualTimeUpdater() {
         if (scheduleList.isNotEmpty()) {
-            val startTimeStr = scheduleList.first().startTime  // Example: "08:00"
-
-            // Convert startTime to Calendar format
+            val startTimeStr = scheduleList.first().startTime  // e.g. "08:00"
             val timeParts = startTimeStr.split(":")
             if (timeParts.size == 2) {
                 simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
@@ -334,7 +365,8 @@ class TestMapActivity : AppCompatActivity() {
                 val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                 actualTimeTextView.text = timeFormat.format(simulatedStartTime.time)
 
-                simulatedStartTime.add(Calendar.SECOND, 1) // Increment 1 second
+                // Always advance time by 1 second per tick (simulate real clock)
+                simulatedStartTime.add(Calendar.SECOND, 1)
 
                 // Update schedule status based on the new simulated time
                 checkScheduleStatus()
@@ -471,25 +503,23 @@ class TestMapActivity : AppCompatActivity() {
                     // Check if the bus has passed any stops
                     checkPassedStops(newLat, newLon)
 
-                    // ✅ Check if the timing point needs to update
+                    // Update timing point if needed
                     updateTimingPointBasedOnLocation(newLat, newLon)
 
                     // Calculate speed dynamically (meters per second)
                     if (step > 0) {
                         val distance = calculateDistance(lastLatitude, lastLongitude, newLat, newLon)
                         speed = (distance / 0.1).toFloat() // 0.1 seconds per step (100ms)
+                        // Update speed text view
+                        runOnUiThread {
+                            speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
+                        }
                     }
 
-                    // Update bearing dynamically at each step
+                    // Update bearing dynamically
                     if (step > 0) {
                         bearing = calculateBearing(lastLatitude, lastLongitude, newLat, newLon)
                     }
-
-                    // Update UI
-//                    latitudeTextView.text = "Latitude: $newLat"
-//                    longitudeTextView.text = "Longitude: $newLon"
-//                    bearingTextView.text = "Bearing: $bearing°"
-//                    speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
 
                     // Move the bus marker
                     updateBusMarkerPosition(newLat, newLon, bearing)
@@ -499,7 +529,7 @@ class TestMapActivity : AppCompatActivity() {
                     lastLongitude = newLon
 
                     step++
-                    stepHandler.postDelayed(this, 100) // Update every 100ms
+                    stepHandler.postDelayed(this, 100)
                 }
             }
         }
@@ -1318,7 +1348,7 @@ class TestMapActivity : AppCompatActivity() {
 //        latitudeTextView = binding.latitudeTextView
 //        longitudeTextView = binding.longitudeTextView
 //        bearingTextView = binding.bearingTextView
-//        speedTextView = binding.speedTextView
+        speedTextView = binding.speedTextView
         upcomingBusStopTextView = binding.upcomingBusStopTextView
 //            directionTextView = binding.directionTextView
 //            speedTextView = binding.speedTextView
