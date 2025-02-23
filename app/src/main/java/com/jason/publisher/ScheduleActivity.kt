@@ -259,6 +259,7 @@ class ScheduleActivity : AppCompatActivity() {
                     putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
                     putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
                     putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+                    putExtra("FULL_SCHEDULE_DATA", ArrayList(listOf(scheduleData)))
                 }
                 startActivity(intent)
             } else {

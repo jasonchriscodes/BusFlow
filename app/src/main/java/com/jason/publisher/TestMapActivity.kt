@@ -15,6 +15,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.location.Location
@@ -102,6 +103,7 @@ class TestMapActivity : AppCompatActivity() {
     private var isSimulating = false
     private var simulationStartTime: Long = 0L
     private lateinit var scheduleList: List<ScheduleItem>
+    private lateinit var scheduleData: List<ScheduleItem>
     private val redBusStops = mutableSetOf<String>()
 
     private lateinit var actualTimeHandler: Handler
@@ -149,6 +151,7 @@ class TestMapActivity : AppCompatActivity() {
         durationBetweenStops = intent.getSerializableExtra("DURATION_BETWEEN_BUS_STOP") as? List<Double> ?: emptyList()
         busRouteData = intent.getSerializableExtra("BUS_ROUTE_DATA") as? List<RouteData> ?: emptyList()
         scheduleList = intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? List<ScheduleItem> ?: emptyList()
+        scheduleData = intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? List<ScheduleItem> ?: emptyList()
 
         Log.d("MainActivity onCreate retrieve", "Received aid: $aid")
         Log.d("MainActivity onCreate retrieve", "Received config: ${config.toString()}")
@@ -158,6 +161,7 @@ class TestMapActivity : AppCompatActivity() {
         Log.d("MainActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
         Log.d("MainActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
         Log.d("MainActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
+        Log.d("MainActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
 
         extractRedBusStops()
 
@@ -317,13 +321,69 @@ class TestMapActivity : AppCompatActivity() {
                     isSimulating = false
                     stopActualTimeUpdater()
                     Toast.makeText(this@TestMapActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
+                    showSummaryDialog() // Show the summary dialog after simulation completes.
                 }
             }
         }
-
         simulationHandler.post(simulationRunnable)
-
         Toast.makeText(this, "Simulation started", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Add this helper function to convert a time string (e.g. "08:11") to minutes since midnight.
+     */
+    private fun convertTimeToMinutes(time: String): Int {
+        val parts = time.split(":").map { it.toInt() }
+        return parts[0] * 60 + parts[1]
+    }
+
+    /**
+     * Call this function when the simulation finishes.
+     */
+    private fun showSummaryDialog() {
+        // Flatten scheduleData into a List<ScheduleItem>
+        val flatSchedule = (scheduleData as? List<Any> ?: emptyList()).flatMap { element ->
+            when (element) {
+                is ScheduleItem -> listOf(element)
+                is List<*> -> element.filterIsInstance<ScheduleItem>()
+                else -> emptyList()
+            }
+        }
+        val messageText = if (flatSchedule.size < 2) {
+            "Congratulations, your trip is complete! Enjoy your rest."
+        } else {
+            val nextTrip = flatSchedule[1]
+            val nextStartMinutes = convertTimeToMinutes(nextTrip.startTime)
+            val currentMinutes = simulatedStartTime.get(Calendar.HOUR_OF_DAY) * 60 +
+                    simulatedStartTime.get(Calendar.MINUTE)
+            val restTotalMinutes = if (nextStartMinutes > currentMinutes) nextStartMinutes - currentMinutes else 0
+            val restHours = restTotalMinutes / 60
+            val restMinutes = restTotalMinutes % 60
+            "Congratulations, your trip is complete! You have $restHours hour(s) and $restMinutes minute(s) rest before your next trip, which starts at ${nextTrip.startTime}:00."
+        }
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Trip Completed")
+            .setMessage(messageText)
+            .setPositiveButton("Start New Trip") { dialog, _ ->
+                dialog.dismiss()
+                startActivity(Intent(this, ScheduleActivity::class.java))
+            }
+            .create()
+        dialog.show()
+
+        // Customize the dialog's background and text colors
+        dialog.window?.setBackgroundDrawableResource(R.color.colorMain)
+        dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.setTextColor(
+            resources.getColor(R.color.white, null)
+        )
+        dialog.findViewById<TextView>(android.R.id.message)?.setTextColor(
+            resources.getColor(R.color.white, null)
+        )
+        // Style the positive button similar to your simulation button
+        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)?.apply {
+            setBackgroundTintList(ColorStateList.valueOf(resources.getColor(R.color.purple_400, null)))
+            setTextColor(resources.getColor(R.color.white, null))
+        }
     }
 
     /**
