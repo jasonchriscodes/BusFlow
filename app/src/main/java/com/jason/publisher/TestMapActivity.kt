@@ -967,18 +967,54 @@ class TestMapActivity : AppCompatActivity() {
         return R * c // Distance in meters
     }
 
-    /** Stops the simulation and resets MainActivity */
+    /** Stops the simulation and resets the state. */
     private fun stopSimulation() {
+        resetSimulationState()
+        Toast.makeText(this, "Simulation stopped and state reset", Toast.LENGTH_SHORT).show()
+    }
+
+    /** Stops the simulation and resets the state. */
+    private fun resetSimulationState() {
+        // Stop any pending simulation callbacks.
         if (::simulationHandler.isInitialized) {
             simulationHandler.removeCallbacks(simulationRunnable)
         }
         isSimulating = false
 
-        // Restart MainActivity
-        val intent = Intent(this, TestMapActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(intent)
-        finish() // Close current instance
+        // Reset simulation variables.
+        currentRouteIndex = 0
+        simulationSpeedFactor = 1
+        simulationStartTime = System.currentTimeMillis()
+
+        // Reset the simulated clock to the schedule's start time (if available)
+        if (scheduleList.isNotEmpty()) {
+            val startTimeStr = scheduleList.first().startTime  // e.g. "08:00"
+            val timeParts = startTimeStr.split(":")
+            if (timeParts.size == 2) {
+                simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+                simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
+                simulatedStartTime.set(Calendar.SECOND, 0)
+            }
+        }
+
+        // Reset any other state you maintain.
+        upcomingStop = if (scheduleList.isNotEmpty() && scheduleList.first().busStops.isNotEmpty())
+            scheduleList.first().busStops.first().time + ":00" else "Unknown"
+        timingPointValueTextView.text = upcomingStop
+
+        // If you keep track of passed stops, clear them.
+        passedStops.clear()
+        currentStopIndex = 0
+
+        // (Optional) If you want to re-draw the polyline, remove it and then call drawPolyline() again.
+        routePolyline?.let {
+            binding.map.layerManager.layers.remove(it)
+            binding.map.invalidate()
+        }
+        // If needed, you can re-add the polyline:
+        if (route.isNotEmpty()) {
+            drawPolyline()
+        }
     }
 
     /**
