@@ -313,15 +313,30 @@ class ScheduleActivity : AppCompatActivity() {
      */
     private fun updateTimeline() {
         if (!::workTable.isInitialized || !::multiColorTimelineView.isInitialized) {
-            Log.e("ScheduleActivity updateTimeline", "❌ updateTimeline() called before workTable or multiColorTimelineView is initialized!")
+            Log.e("ScheduleActivity updateTimeline", "WorkTable or MultiColorTimelineView is not initialized!")
             return
         }
 
         val workIntervals = extractWorkIntervals()
-        Log.d("ScheduleActivity updateTimeline MultiColorTimelineView", "✅ Work intervals extracted: $workIntervals")
+        Log.d("ScheduleActivity updateTimeline", "Work intervals extracted: $workIntervals")
+        if (workIntervals.isNotEmpty()) {
+            // Compute the minimum start time and maximum end time from the extracted intervals.
+            val minStartMinutes = workIntervals.minOf { convertToMinutes(it.first) }
+            val maxEndMinutes = workIntervals.maxOf { convertToMinutes(it.second) }
+            // Convert minutes back to HH:mm format.
+            val minStartTime = String.format("%02d:%02d", minStartMinutes / 60, minStartMinutes % 60)
+            val maxEndTime = String.format("%02d:%02d", maxEndMinutes / 60, maxEndMinutes % 60)
 
-        // Use timelineRange (single variable)
-        multiColorTimelineView.setTimeIntervals(workIntervals, timelineRange.first, timelineRange.second)
+            // Update the timeline view's range and work intervals.
+            multiColorTimelineView.setTimelineRange(minStartTime, maxEndTime)
+            multiColorTimelineView.setTimeIntervals(workIntervals, minStartTime, maxEndTime)
+        }
+    }
+
+    // Helper function to convert a time string "HH:mm" to minutes since midnight.
+    private fun convertToMinutes(time: String): Int {
+        val parts = time.split(":").map { it.toInt() }
+        return parts[0] * 60 + parts[1]
     }
 
     /**
@@ -473,6 +488,7 @@ class ScheduleActivity : AppCompatActivity() {
 
                 // Use the loaded schedule data
                 updateScheduleTable(scheduleData.take(3))
+                updateTimeline()
 
             } catch (e: Exception) {
                 Log.e("ScheduleActivity loadScheduleDataFromCache", "❌ Error reading schedule data cache: ${e.message}")
