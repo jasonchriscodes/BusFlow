@@ -350,7 +350,7 @@ class TestMapActivity : AppCompatActivity() {
             }
         }
         val messageText = if (flatSchedule.size < 2) {
-            "Congratulations, your trip is complete! Enjoy your rest."
+            "You have completed last run of the day."
         } else {
             val nextTrip = flatSchedule[1]
             val nextStartMinutes = convertTimeToMinutes(nextTrip.startTime)
@@ -359,12 +359,15 @@ class TestMapActivity : AppCompatActivity() {
             val restTotalMinutes = if (nextStartMinutes > currentMinutes) nextStartMinutes - currentMinutes else 0
             val restHours = restTotalMinutes / 60
             val restMinutes = restTotalMinutes % 60
-            "Congratulations, your trip is complete! You have $restHours hour(s) and $restMinutes minute(s) rest before your next trip, which starts at ${nextTrip.startTime}:00."
+            "Trip complete! You have $restHours hour(s) and $restMinutes minute(s) rest before your next trip, which starts at ${nextTrip.startTime}:00."
         }
+        // late notification: You are $restMinutes minute(s) for your next trip. Please notify operations of late departure.
+        // break (lunch break):  You are $restMinutes minute(s) for your break time.
+        // end of shift: You have completed last run of the day.
         val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("Trip Completed")
             .setMessage(messageText)
-            .setPositiveButton("Start New Trip") { dialog, _ ->
+            .setPositiveButton("View Next Trip") { dialog, _ ->
                 dialog.dismiss()
                 startActivity(Intent(this, ScheduleActivity::class.java))
             }
@@ -495,7 +498,7 @@ class TestMapActivity : AppCompatActivity() {
             val deltaSec = ((scheduledTime.time - predictedArrival.time) / 1000).toInt()
 
             // 7. Define a tolerance value (in seconds).
-            val tolerance = 60
+            val tolerance = 0
 
             // 8. Determine the schedule status text based on deltaSec.
             val statusText = when {

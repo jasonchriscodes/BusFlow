@@ -78,11 +78,11 @@ class MapActivity : AppCompatActivity() {
     private var firstTime = true
     private var upcomingStop: String = "Unknown"
 
-    private lateinit var aidTextView: TextView
-    private lateinit var latitudeTextView: TextView
-    private lateinit var longitudeTextView: TextView
-    private lateinit var bearingTextView: TextView
-    private lateinit var speedTextView: TextView
+//    private lateinit var aidTextView: TextView
+//    private lateinit var latitudeTextView: TextView
+//    private lateinit var longitudeTextView: TextView
+//    private lateinit var bearingTextView: TextView
+//    private lateinit var speedTextView: TextView
     private lateinit var upcomingBusStopTextView: TextView
 
     private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
@@ -141,7 +141,7 @@ class MapActivity : AppCompatActivity() {
         // Initialize UI components
         initializeUIComponents()
 
-        aidTextView.text = "AID: $aid"
+//        aidTextView.text = "AID: $aid"
 
         // Set up network status UI
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
@@ -176,8 +176,8 @@ class MapActivity : AppCompatActivity() {
                 Log.d("MainActivity onCreate Longitude", longitude.toString())
 
                 // Update UI components with the current location
-                latitudeTextView.text = "Latitude: $latitude"
-                longitudeTextView.text = "Longitude: $longitude"
+//                latitudeTextView.text = "Latitude: $latitude"
+//                longitudeTextView.text = "Longitude: $longitude"
             }
         })
 
@@ -187,12 +187,12 @@ class MapActivity : AppCompatActivity() {
         // Start tracking the location and updating the marker
 //        startLocationUpdate()
 
-        binding.startSimulationButton.setOnClickListener {
-            startSimulation()
-        }
-        binding.stopSimulationButton.setOnClickListener {
-            stopSimulation()
-        }
+//        binding.startSimulationButton.setOnClickListener {
+//            startSimulation()
+//        }
+//        binding.stopSimulationButton.setOnClickListener {
+//            stopSimulation()
+//        }
     }
 
     /** Updates bus name if AID matches a config entry */
@@ -204,7 +204,7 @@ class MapActivity : AppCompatActivity() {
         if (matchingBus != null) {
             busname = matchingBus.bus
             runOnUiThread {
-                binding.busNameTextView.text = "Bus Name: $busname"
+                binding.busNameTextView.text = "$busname"
             }
             Log.d("MainActivity", "✅ Bus name updated: $busname for AID: $aid")
         } else {
@@ -335,11 +335,11 @@ class MapActivity : AppCompatActivity() {
         )
 
         val statusTextView = findViewById<TextView>(R.id.scheduleStatusValueTextView)
-        val expectedTimeTextView = findViewById<TextView>(R.id.expectedTimeValueTextView)
+//        val expectedTimeTextView = findViewById<TextView>(R.id.expectedTimeValueTextView)
         val actualTimeTextView = findViewById<TextView>(R.id.actualTimeValueTextView)
         val thresholdRangeTextView = findViewById<TextView>(R.id.thresholdRangeValueTextView)
 
-        expectedTimeTextView.text = formatTime(expectedTimeSeconds)
+//        expectedTimeTextView.text = formatTime(expectedTimeSeconds)
         actualTimeTextView.text = formatTime(actualTimeSeconds)
         thresholdRangeTextView.text = "${threshold} sec: ${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)}"
 
@@ -443,10 +443,10 @@ class MapActivity : AppCompatActivity() {
                     }
 
                     // Update UI
-                    latitudeTextView.text = "Latitude: $newLat"
-                    longitudeTextView.text = "Longitude: $newLon"
-                    bearingTextView.text = "Bearing: $bearing°"
-                    speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
+//                    latitudeTextView.text = "Latitude: $newLat"
+//                    longitudeTextView.text = "Longitude: $newLon"
+//                    bearingTextView.text = "Bearing: $bearing°"
+//                    speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
 
                     // Move the bus marker
                     updateBusMarkerPosition(newLat, newLon, bearing)
@@ -773,9 +773,9 @@ class MapActivity : AppCompatActivity() {
                 lastLongitude = currentLongitude
 
                 // Update UI
-                latitudeTextView.text = "Latitude:\n$latitude"
-                longitudeTextView.text = "Longitude:\n$longitude"
-                bearingTextView.text = "Bearing: $bearing°"
+//                latitudeTextView.text = "Latitude:\n$latitude"
+//                longitudeTextView.text = "Longitude:\n$longitude"
+//                bearingTextView.text = "Bearing: $bearing°"
 
                 // Update the bus marker position
                 updateBusMarkerPosition(latitude, longitude, bearing)
@@ -968,10 +968,10 @@ class MapActivity : AppCompatActivity() {
      */
     private fun initializeUIComponents() {
 //            bearingTextView = binding.bearingTextView
-        latitudeTextView = binding.latitudeTextView
-        longitudeTextView = binding.longitudeTextView
-        bearingTextView = binding.bearingTextView
-        speedTextView = binding.speedTextView
+//        latitudeTextView = binding.latitudeTextView
+//        longitudeTextView = binding.longitudeTextView
+//        bearingTextView = binding.bearingTextView
+//        speedTextView = binding.speedTextView
         upcomingBusStopTextView = binding.upcomingBusStopTextView
 //            directionTextView = binding.directionTextView
 //            speedTextView = binding.speedTextView
@@ -982,7 +982,7 @@ class MapActivity : AppCompatActivity() {
 //            networkStatusIndicator = binding.networkStatusIndicator
 //            reconnectProgressBar = binding.reconnectProgressBar
 //            attemptingToConnectTextView = binding.attemptingToConnectTextView
-            aidTextView = binding.aidTextView
+//            aidTextView = binding.aidTextView
 //            closestBusStopToPubDeviceTextView = binding.closestBusStopToPubDeviceTextView
 //            busDirectionTitleTextView = binding.busDirectionTitleTextView
 //            busTelemetryTitleTextView = binding.busTelemetryTitleTextView
@@ -1267,7 +1267,7 @@ class MapActivity : AppCompatActivity() {
             override fun run() {
                 val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                 val currentDateTime = dateFormat.format(Date())
-                binding.currentDateAndTime.text = currentDateTime
+                binding.currentTimeTextView.text = currentDateTime
                 dateTimeHandler.postDelayed(this, 1000) // Update every second
             }
         }

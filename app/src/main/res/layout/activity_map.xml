@@ -1,358 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MapActivity"
-    >
+    android:background="@color/colorPrimary">
 
-    <!-- Large Map -->
-    <org.mapsforge.map.android.view.MapView
-        android:id="@+id/map"
+    <!-- Top Bar: All three views in one horizontal container -->
+    <LinearLayout
+        android:id="@+id/topBar"
         android:layout_width="0dp"
-        android:layout_height="0dp"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:orientation="horizontal"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@+id/rightColumnContainer"
-        android:contentDescription="Live map displaying bus routes and stops" />
+        app:layout_constraintEnd_toEndOf="parent">
 
-    <!-- Right Column containing Telemetry Data -->
-    <LinearLayout
-        android:id="@+id/rightColumnContainer"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:orientation="vertical"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toEndOf="@+id/map"
-        android:padding="8dp"
-        android:background="@android:color/white">
+        <!-- Back Button styled as a rectangle box with consistent styling -->
+<!--        <androidx.appcompat.widget.AppCompatButton-->
+<!--            android:id="@id/backButton"-->
+<!--            android:layout_width="0dp"-->
+<!--            android:layout_height="48dp"-->
+<!--            android:layout_weight="1"-->
+<!--            android:layout_margin="4dp"-->
+<!--            android:text="Back"-->
+<!--            android:background="@drawable/button_rounded_background"-->
+<!--            android:backgroundTint="@null"-->
+<!--            android:stateListAnimator="@null"-->
+<!--            android:textColor="@color/white"-->
+<!--            android:padding="8dp" />-->
 
-        <!-- Current Date and Time Section -->
-        <LinearLayout
-            android:layout_width="match_parent"
+        <!-- Current Time Container styled as a rectangle box -->
+        <FrameLayout
+            android:id="@+id/backButtonContainer"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="8dp"
-            android:background="@drawable/border"
-            android:layout_marginBottom="16dp">
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="4dp">
 
-            <TextView
-                android:id="@+id/currentDataAndTimeTextView"
+            <android.widget.Button
+                android:id="@+id/backButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Date and Time: "
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:textColor="@android:color/black" />
+                android:background="@drawable/button_rounded_background"
+                android:padding="8dp"
+                android:text="             Back to Schedule Table" />
+
+            <android.widget.Button
+                android:id="@+id/backButtonArrow"
+                android:layout_width="50dp"
+                android:layout_height="48dp"
+                android:layout_gravity="start|center_vertical"
+                android:background="@drawable/backbut"
+                android:padding="8dp" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/currentTimeContainer"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_margin="4dp"
+            android:gravity="center"
+            android:background="@drawable/button_rounded_background"
+            android:padding="8dp">
 
             <TextView
-                android:id="@+id/currentDateAndTime"
+                android:id="@+id/currentTimeTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="2025-01-23 14:00:00"
-                android:textSize="18sp"
-                android:textColor="@android:color/black" />
+                android:gravity="center"
+                android:text="08:00:00 am"
+                android:textColor="@color/white"
+                android:textSize="18sp" />
         </LinearLayout>
 
-        <!-- Bus Tablet Data Section (3 Columns per Row) -->
+        <!-- Network Status Container styled as a rectangle box -->
         <LinearLayout
-            android:id="@+id/busTabletDataContainer"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="8dp"
-            android:background="@drawable/border"
-            android:layout_marginBottom="16dp">
-
-            <TextView
-                android:id="@+id/busTabletTitleTextView"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Bus Tablet Data"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:textColor="@android:color/black"
-                android:layout_marginBottom="8dp" />
-
-            <!-- Row 1: AID, Bus Name (More Space), Speed (Shifted Right) -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:weightSum="3.75">
-
-                <TextView
-                    android:id="@+id/aidTextView"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1.5"
-                    android:text="AID: Unknown"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/black" />
-
-                <TextView
-                    android:id="@+id/busNameTextView"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1.5"
-                    android:text="Bus: Unknown"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/black" />
-
-                <TextView
-                    android:id="@+id/speedTextView"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="0.75"
-                    android:text="Speed: 0.0 km/h"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/black"
-                    android:gravity="end"/>
-            </LinearLayout>
-
-            <!-- Row 2: Latitude, Longitude (More Space), Bearing (Shifted Right) -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:weightSum="3.75">
-
-                <TextView
-                    android:id="@+id/latitudeTextView"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1.5"
-                    android:text="Latitude:\n0.0"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/black" />
-
-                <TextView
-                    android:id="@+id/longitudeTextView"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1.5"
-                    android:text="Longitude:\n0.0"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/black" />
-
-                <TextView
-                    android:id="@+id/bearingTextView"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="0.75"
-                    android:text="Bearing: 0°"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/black"
-                    android:gravity="end"/>
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- Upcoming Bus Stop Section -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="8dp"
-            android:background="@drawable/border"
-            android:layout_marginBottom="16dp">
-
-            <TextView
-                android:id="@+id/upcomingRoadTitleTextView"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Upcoming Bus Stop:"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:textColor="@android:color/black"
-                android:gravity="start" />
-
-            <TextView
-                android:id="@+id/upcomingBusStopTextView"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Unknown"
-                android:textSize="18sp"
-                android:textColor="@android:color/black"
-                android:gravity="end" />
-        </LinearLayout>
-
-        <!-- Schedule Status Section -->
-        <LinearLayout
-            android:id="@+id/scheduleStatusContainer"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="8dp"
-            android:background="@drawable/border"
-            android:layout_marginBottom="16dp">
-
-            <!-- Schedule Status (Ahead, Behind, or On Time) -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/scheduleStatusTextView"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Schedule Status:"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:textColor="@android:color/black"
-                    android:gravity="start" />
-
-                <TextView
-                    android:id="@+id/scheduleStatusValueTextView"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Unknown"
-                    android:textSize="18sp"
-                    android:textColor="@android:color/black"
-                    android:gravity="end" />
-            </LinearLayout>
-
-            <!-- Expected & Actual Time Display -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingTop="4dp">
-
-                <TextView
-                    android:id="@+id/expectedTimeLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Expected Time:"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/black"
-                    android:gravity="start" />
-
-                <TextView
-                    android:id="@+id/expectedTimeValueTextView"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Unknown"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/black"
-                    android:gravity="end" />
-            </LinearLayout>
-
-            <!-- Threshold Range Display -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingTop="4dp">
-
-                <TextView
-                    android:id="@+id/thresholdRangeLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Threshold Range:"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/black"
-                    android:gravity="start" />
-
-                <TextView
-                    android:id="@+id/thresholdRangeValueTextView"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Unknown"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/black"
-                    android:gravity="end" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingTop="4dp">
-
-                <TextView
-                    android:id="@+id/actualTimeLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Actual Time:"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/black"
-                    android:gravity="start" />
-
-                <TextView
-                    android:id="@+id/actualTimeValueTextView"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Unknown"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/black"
-                    android:gravity="end" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- Simulation Buttons -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:id="@+id/networkStatusContainer"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_margin="4dp"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginTop="8dp">
-
-            <Button
-                android:id="@+id/startSimulationButton"
-                android:layout_width="0dp"
+            android:background="@drawable/button_rounded_background"
+            android:padding="8dp">
+            <View
+                android:id="@+id/networkStatusIndicator"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/circle_shape_green" />
+            <TextView
+                android:id="@+id/connectionStatusTextView"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Start Simulation"
-                android:padding="8dp"
-                android:backgroundTint="@color/colorPrimary"
-                android:textColor="@android:color/white" />
-
-            <Button
-                android:id="@+id/stopSimulationButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Stop Simulation"
-                android:padding="8dp"
-                android:backgroundTint="@color/colorAccent"
-                android:textColor="@android:color/white"/>
+                android:text="Connected"
+                android:textSize="16sp"
+                android:textColor="@color/whatsapp_green" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Network status elements -->
-    <View
-        android:id="@+id/networkStatusIndicator"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
-        android:layout_margin="16dp"
-        android:background="@drawable/circle_shape_green"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+    <!-- Bottom Section: 2x2 Grid -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/bottomContainer"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:padding="8dp"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
-    <TextView
-        android:id="@+id/connectionStatusTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="8dp"
-        android:text="Connected"
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        app:layout_constraintEnd_toStartOf="@id/networkStatusIndicator"
-        app:layout_constraintTop_toTopOf="@id/networkStatusIndicator"
-        app:layout_constraintBottom_toBottomOf="@id/networkStatusIndicator" />
+        <!-- Vertical Guideline at 50% -->
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guidelineVertical"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:layout_constraintGuide_percent="0.5"
+            android:orientation="vertical" />
 
-    <!-- Version TextView (Bottom-Right) -->
+        <!-- Horizontal Guideline at 50% -->
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guidelineHorizontal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:layout_constraintGuide_percent="0.5"
+            android:orientation="horizontal" />
+
+        <!-- Top Left Quadrant: MapView -->
+        <org.mapsforge.map.android.view.MapView
+            android:id="@+id/map"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/guidelineVertical"
+            app:layout_constraintBottom_toTopOf="@id/guidelineHorizontal"
+            android:contentDescription="Live map"
+            android:layout_margin="4dp"/>
+
+        <!-- Schedule Status Container with ic_schedule_ahead added -->
+        <LinearLayout
+            android:id="@+id/scheduleStatusContainer"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:gravity="center"
+            android:layout_margin="4dp"
+            android:background="@drawable/white_border"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toEndOf="@id/guidelineVertical"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/guidelineHorizontal">
+
+            <TextView
+                android:id="@+id/scheduleStatusLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Ahead by 2 minutes"
+                android:textColor="@color/white"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/scheduleAheadIcon"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:src="@drawable/ic_schedule_ahead"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+
+        <!-- Finish Time Container -->
+        <LinearLayout
+            android:id="@+id/finishTimeContainer"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:gravity="center"
+            android:layout_margin="4dp"
+            android:background="@drawable/white_border"
+            app:layout_constraintTop_toBottomOf="@id/guidelineHorizontal"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/guidelineVertical"
+            app:layout_constraintBottom_toBottomOf="parent">
+            <TextView
+                android:id="@+id/finishTimeLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Finish Time:"
+                android:textColor="@color/white"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/finishTimeValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00:00"
+                android:textColor="@color/white"
+                android:textSize="20sp" />
+        </LinearLayout>
+
+        <!-- Upcoming Stop Container -->
+        <LinearLayout
+            android:id="@+id/upcomingStopContainer"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:gravity="center"
+            android:layout_margin="4dp"
+            android:background="@drawable/white_border"
+            app:layout_constraintTop_toBottomOf="@id/guidelineHorizontal"
+            app:layout_constraintStart_toEndOf="@id/guidelineVertical"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent">
+            <TextView
+                android:id="@+id/upcomingStopLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Upcoming Stop:"
+                android:textColor="@color/white"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/upcomingBusStopTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Unknown"
+                android:textColor="@color/white"
+                android:textSize="20sp" />
+        </LinearLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Version Text at Bottom Right -->
     <TextView
         android:id="@+id/versionTextView"
         android:layout_width="wrap_content"
@@ -361,7 +247,21 @@
         android:layout_marginBottom="16dp"
         android:text="Version 1.0.1"
         android:textSize="14sp"
-        android:textColor="@android:color/black"
+        android:textColor="@color/lightGrey"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Bus Name Text at Bottom Left -->
+    <TextView
+        android:id="@+id/busNameTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="16dp"
+        android:text=""
+        android:textSize="16sp"
+        android:textColor="@color/lightGrey"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>
