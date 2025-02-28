@@ -33,32 +33,41 @@
             android:padding="8dp" />
         -->
 
-        <!-- Current Time Container removed as per instructions -->
-
-        <!-- Back Button Container -->
-        <FrameLayout
-            android:id="@+id/backButtonContainer"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginTop="4dp">
-
-            <android.widget.Button
-                android:id="@+id/backButton"
+            android:layout_weight="1" ><!-- Back Button Container -->
+            <FrameLayout
+                android:id="@+id/backButtonContainer"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="@drawable/button_rounded_background"
-                android:padding="8dp"
-                android:text="             Back to Schedule Table" />
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="4dp">
 
-            <android.widget.Button
-                android:id="@+id/backButtonArrow"
-                android:layout_width="50dp"
-                android:layout_height="48dp"
-                android:layout_gravity="start|center_vertical"
-                android:background="@drawable/backbut"
-                android:padding="8dp" />
-        </FrameLayout>
+                <android.widget.Button
+                    android:id="@+id/backButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/button_rounded_background"
+                    android:padding="8dp"
+                    android:textColor="@color/white"
+                    android:text="             Back to Schedule Table" />
+
+                <android.widget.Button
+                    android:id="@+id/backButtonArrow"
+                    android:layout_width="50dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="start|center_vertical"
+                    android:background="@drawable/backbut"
+                    android:padding="8dp" />
+            </FrameLayout></LinearLayout>
+
+
+        <!-- Blank Space (Center) -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" ></LinearLayout>
 
         <!-- Network Status Container styled as a rectangle box -->
         <LinearLayout
@@ -81,7 +90,7 @@
                 android:id="@+id/connectionStatusTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Connected"
+                android:text="Online"
                 android:textSize="16sp"
                 android:textColor="@color/whatsapp_green" />
         </LinearLayout>

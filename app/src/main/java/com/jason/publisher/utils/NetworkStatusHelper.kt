@@ -21,17 +21,17 @@ object NetworkStatusHelper {
         networkReceiver = NetworkReceiver(object : NetworkReceiver.NetworkListener {
             override fun onNetworkAvailable() {
                 activity.runOnUiThread {
-                    connectionStatusTextView.text = "Connected"
-                    connectionStatusTextView.setTextColor(ContextCompat.getColor(activity, android.R.color.holo_green_dark))
+                    connectionStatusTextView.text = "Online"
+                    connectionStatusTextView.setTextColor(ContextCompat.getColor(activity, android.R.color.white))
                     networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_green)
                 }
             }
 
             override fun onNetworkUnavailable() {
                 activity.runOnUiThread {
-                    connectionStatusTextView.text = "Disconnected"
-                    connectionStatusTextView.setTextColor(ContextCompat.getColor(activity, android.R.color.holo_red_dark))
-                    networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_red)
+                    connectionStatusTextView.text = "Offline"
+                    connectionStatusTextView.setTextColor(ContextCompat.getColor(activity, android.R.color.white))
+                    networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_grey)
                 }
             }
         })
