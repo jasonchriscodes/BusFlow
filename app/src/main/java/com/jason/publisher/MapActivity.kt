@@ -1259,15 +1259,15 @@ class MapActivity : AppCompatActivity() {
         return file
     }
 
-    /** Starts a periodic task to update the current date and time in the UI. */
+    /** Starts a periodic task to update the current time in the UI. */
     @SuppressLint("SimpleDateFormat")
     private fun startDateTimeUpdater() {
         dateTimeHandler = Handler(Looper.getMainLooper())
         dateTimeRunnable = object : Runnable {
             override fun run() {
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-                val currentDateTime = dateFormat.format(Date())
-                binding.currentTimeTextView.text = currentDateTime
+                val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault()) // Only display time
+                val currentTime = dateFormat.format(Date())
+                binding.currentTimeTextView.text = currentTime
                 dateTimeHandler.postDelayed(this, 1000) // Update every second
             }
         }

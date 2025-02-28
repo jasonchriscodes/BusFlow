@@ -18,20 +18,24 @@
         app:layout_constraintEnd_toEndOf="parent">
 
         <!-- Back Button styled as a rectangle box with consistent styling -->
-<!--        <androidx.appcompat.widget.AppCompatButton-->
-<!--            android:id="@id/backButton"-->
-<!--            android:layout_width="0dp"-->
-<!--            android:layout_height="48dp"-->
-<!--            android:layout_weight="1"-->
-<!--            android:layout_margin="4dp"-->
-<!--            android:text="Back"-->
-<!--            android:background="@drawable/button_rounded_background"-->
-<!--            android:backgroundTint="@null"-->
-<!--            android:stateListAnimator="@null"-->
-<!--            android:textColor="@color/white"-->
-<!--            android:padding="8dp" />-->
+        <!--
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@id/backButton"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_margin="4dp"
+            android:text="Back"
+            android:background="@drawable/button_rounded_background"
+            android:backgroundTint="@null"
+            android:stateListAnimator="@null"
+            android:textColor="@color/white"
+            android:padding="8dp" />
+        -->
 
-        <!-- Current Time Container styled as a rectangle box -->
+        <!-- Current Time Container removed as per instructions -->
+
+        <!-- Back Button Container -->
         <FrameLayout
             android:id="@+id/backButtonContainer"
             android:layout_width="wrap_content"
@@ -55,26 +59,6 @@
                 android:background="@drawable/backbut"
                 android:padding="8dp" />
         </FrameLayout>
-
-        <LinearLayout
-            android:id="@+id/currentTimeContainer"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:layout_margin="4dp"
-            android:gravity="center"
-            android:background="@drawable/button_rounded_background"
-            android:padding="8dp">
-
-            <TextView
-                android:id="@+id/currentTimeTextView"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center"
-                android:text="08:00:00 am"
-                android:textColor="@color/white"
-                android:textSize="18sp" />
-        </LinearLayout>
 
         <!-- Network Status Container styled as a rectangle box -->
         <LinearLayout
@@ -209,7 +193,7 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Finish Time Container -->
+        <!-- New Combined Current Time and Finish Time Container -->
         <LinearLayout
             android:id="@+id/finishTimeContainer"
             android:layout_width="0dp"
@@ -223,21 +207,54 @@
             app:layout_constraintStart_toEndOf="@id/guidelineVertical"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintBottom_toBottomOf="parent">
-            <TextView
-                android:id="@+id/finishTimeLabel"
-                android:layout_width="wrap_content"
+
+            <!-- Current Time Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Finish Time:"
-                android:textColor="@color/white"
-                android:textSize="22sp"
-                android:textStyle="bold" />
-            <TextView
-                android:id="@+id/finishTimeValue"
-                android:layout_width="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center">
+                <TextView
+                    android:id="@+id/currentTimeLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Current Time:"
+                    android:textColor="@color/white"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/currentTimeTextView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="08:00:00 am"
+                    android:textColor="@color/white"
+                    android:textSize="20sp" />
+            </LinearLayout>
+
+            <!-- Finish Time Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="00:00:00"
-                android:textColor="@color/white"
-                android:textSize="20sp" />
+                android:orientation="horizontal"
+                android:gravity="center">
+                <TextView
+                    android:id="@+id/finishTimeLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Finish Time:"
+                    android:textColor="@color/white"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/finishTimeValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="00:00:00"
+                    android:textColor="@color/white"
+                    android:textSize="20sp" />
+            </LinearLayout>
         </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
