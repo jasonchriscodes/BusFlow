@@ -5,7 +5,8 @@ data class ScheduleItem(
     val routeNo: String,
     val startTime: String,
     val endTime: String,
-    val busStops: List<BusScheduleInfo> // Updated class name
+    val dutyName: String,
+    val busStops: List<BusScheduleInfo>
 ) : Serializable
 
 data class BusScheduleInfo( // Renamed from BusStopInfo

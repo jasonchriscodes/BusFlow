@@ -77,54 +77,54 @@ class ScheduleActivity : AppCompatActivity() {
         private const val SOUND_FILE_NAME = "notif.wav"
     }
 
-    private val dummyScheduleData = listOf(
-        ScheduleItem(
-            "Route 1",
-            "08:00",
-            "08:35",
-            listOf(
-                BusScheduleInfo("Stop 2", "08:05", -36.854209, 174.767755, "25-29 Symonds Street"),
-                BusScheduleInfo("Stop S/E", "08:35", -36.854685, 174.764528, "39 Airedale Street")
-            )
-        ),
-        ScheduleItem(
-            "Route 2",
-            "09:30",
-            "10:00",
-            listOf(
-                BusScheduleInfo("Stop 3", "09:45", -36.855281, 174.767117, "52 Symonds Street"),
-                BusScheduleInfo("Stop S/E", "10:00", -36.854685, 174.764528, "39 Airedale Street")
-            )
-        ),
-        ScheduleItem(
-            "Route 3",
-            "10:20",
-            "11:10",
-            listOf(
-                BusScheduleInfo("Stop 1", "10:25", -36.853677, 174.766063, "27 St Paul Street"),
-                BusScheduleInfo("Stop 4", "10:35", -36.856047, 174.765309, "89 Airedale Street")
-            )
-        ),
-        ScheduleItem(
-            "Route 4",
-            "12:30",
-            "12:10",
-            listOf(
-                BusScheduleInfo("Stop 2", "11:45", -36.854209, 174.767755, "25-29 Symonds Street"),
-                BusScheduleInfo("Stop 3", "12:00", -36.855281, 174.767117, "52 Symonds Street"),
-                BusScheduleInfo("Stop 4", "12:10", -36.856047, 174.765309, "89 Airedale Street")
-            )
-        ),
-        ScheduleItem(
-            "Route 5",
-            "12:30",
-            "13:00",
-            listOf(
-                BusScheduleInfo("Stop 1", "12:40", -36.853677, 174.766063, "27 St Paul Street"),
-                BusScheduleInfo("Stop 4", "12:50", -36.856047, 174.765309, "89 Airedale Street")
-            )
-        )
-    )
+//    private val dummyScheduleData = listOf(
+//        ScheduleItem(
+//            "Route 1",
+//            "08:00",
+//            "08:35",
+//            listOf(
+//                BusScheduleInfo("Stop 2", "08:05", -36.854209, 174.767755, "25-29 Symonds Street"),
+//                BusScheduleInfo("Stop S/E", "08:35", -36.854685, 174.764528, "39 Airedale Street")
+//            )
+//        ),
+//        ScheduleItem(
+//            "Route 2",
+//            "09:30",
+//            "10:00",
+//            listOf(
+//                BusScheduleInfo("Stop 3", "09:45", -36.855281, 174.767117, "52 Symonds Street"),
+//                BusScheduleInfo("Stop S/E", "10:00", -36.854685, 174.764528, "39 Airedale Street")
+//            )
+//        ),
+//        ScheduleItem(
+//            "Route 3",
+//            "10:20",
+//            "11:10",
+//            listOf(
+//                BusScheduleInfo("Stop 1", "10:25", -36.853677, 174.766063, "27 St Paul Street"),
+//                BusScheduleInfo("Stop 4", "10:35", -36.856047, 174.765309, "89 Airedale Street")
+//            )
+//        ),
+//        ScheduleItem(
+//            "Route 4",
+//            "12:30",
+//            "12:10",
+//            listOf(
+//                BusScheduleInfo("Stop 2", "11:45", -36.854209, 174.767755, "25-29 Symonds Street"),
+//                BusScheduleInfo("Stop 3", "12:00", -36.855281, 174.767117, "52 Symonds Street"),
+//                BusScheduleInfo("Stop 4", "12:10", -36.856047, 174.765309, "89 Airedale Street")
+//            )
+//        ),
+//        ScheduleItem(
+//            "Route 5",
+//            "12:30",
+//            "13:00",
+//            listOf(
+//                BusScheduleInfo("Stop 1", "12:40", -36.853677, 174.766063, "27 St Paul Street"),
+//                BusScheduleInfo("Stop 4", "12:50", -36.856047, 174.765309, "89 Airedale Street")
+//            )
+//        )
+//    )
 
     @SuppressLint("LongLogTag")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -157,8 +157,8 @@ class ScheduleActivity : AppCompatActivity() {
 
         scheduleTable = findViewById(R.id.scheduleTable)
 
-        // Populate only the first 3 schedule items
-        updateScheduleTable(dummyScheduleData.take(3))
+//        // Populate only the first 3 schedule items
+//        updateScheduleTable(dummyScheduleData.take(3))
 
         // Initialize Views
         workTable = findViewById(R.id.scheduleTable) // Ensure this matches your XML
@@ -320,17 +320,20 @@ class ScheduleActivity : AppCompatActivity() {
 
         val workIntervals = extractWorkIntervals()
         Log.d("ScheduleActivity updateTimeline", "Work intervals extracted: $workIntervals")
+
         if (workIntervals.isNotEmpty()) {
-            // Compute the minimum start time and maximum end time from the extracted intervals.
             val minStartMinutes = workIntervals.minOf { convertToMinutes(it.first) }
             val maxEndMinutes = workIntervals.maxOf { convertToMinutes(it.second) }
-            // Convert minutes back to HH:mm format.
             val minStartTime = String.format("%02d:%02d", minStartMinutes / 60, minStartMinutes % 60)
             val maxEndTime = String.format("%02d:%02d", maxEndMinutes / 60, maxEndMinutes % 60)
 
-            // Update the timeline view's range and work intervals.
             multiColorTimelineView.setTimelineRange(minStartTime, maxEndTime)
-            multiColorTimelineView.setTimeIntervals(workIntervals, minStartTime, maxEndTime)
+
+            // Extract dutyName correctly
+            val dutyName = scheduleData.firstOrNull()?.dutyName ?: "Work"
+
+            // Pass dutyName to MultiColorTimelineView
+            multiColorTimelineView.setTimeIntervals(workIntervals, minStartTime, maxEndTime, dutyName)
         }
     }
 

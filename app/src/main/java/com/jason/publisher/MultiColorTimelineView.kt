@@ -69,11 +69,13 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
 
     private var timeIntervals: List<Pair<String, String>> = emptyList() // Work intervals
     private var totalDuration = 0 // Total duration of the timeline in minutes
+    private var dutyName: String = "Work" // Default to "Work"
 
     /** Sets the work intervals and total timeline range */
-    fun setTimeIntervals(workIntervals: List<Pair<String, String>>, totalDayStart: String, totalDayEnd: String) {
+    fun setTimeIntervals(workIntervals: List<Pair<String, String>>, totalDayStart: String, totalDayEnd: String, dutyName: String) {
         this.timeIntervals = workIntervals
         this.totalDuration = getMinutesDifference(totalDayStart, totalDayEnd)
+        this.dutyName = dutyName // Store dutyName
         invalidate() // Refresh the view
     }
 
@@ -95,17 +97,17 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
 
             // Draw rest period before this work session
             if (startMinute > lastEndMinute) {
-                drawSegment(canvas, lastEndMinute, startMinute, totalStartMinute, totalEndMinute, totalWidth, restPaint, "Rest")
+                drawSegment(canvas, lastEndMinute, startMinute, totalStartMinute, totalEndMinute, totalWidth, restPaint, "Break")
             }
 
-            // Draw work session
-            drawSegment(canvas, startMinute, endMinute, totalStartMinute, totalEndMinute, totalWidth, workPaint, "Work")
+            // Draw work session with duty name
+            drawSegment(canvas, startMinute, endMinute, totalStartMinute, totalEndMinute, totalWidth, workPaint, dutyName)
             lastEndMinute = endMinute
         }
 
         // Draw final rest segment after the last work period
         if (lastEndMinute < totalEndMinute) {
-            drawSegment(canvas, lastEndMinute, totalEndMinute, totalStartMinute, totalEndMinute, totalWidth, restPaint, "Rest")
+            drawSegment(canvas, lastEndMinute, totalEndMinute, totalStartMinute, totalEndMinute, totalWidth, restPaint, "Break")
         }
 
         // Draw time labels at intervals along the timeline
