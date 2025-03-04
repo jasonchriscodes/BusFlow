@@ -628,7 +628,11 @@ class TestMapActivity : AppCompatActivity() {
                     // Calculate speed dynamically (meters per second)
                     if (step > 0) {
                         val distance = calculateDistance(lastLatitude, lastLongitude, newLat, newLon)
-                        speed = (distance / 0.1).toFloat() // 0.1 seconds per step (100ms)
+                        if (distance < 100) { // Prevents unrealistic jumps
+                            speed = (distance / 0.1).toFloat() // 0.1 sec per step (100ms)
+                        } else {
+                            speed = 8.33f // Reset speed to normal when an anomaly is detected
+                        }
                         // Update speed text view
                         runOnUiThread {
                             speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
