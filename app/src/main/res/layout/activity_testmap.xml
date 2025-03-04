@@ -16,7 +16,27 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/rightColumnContainer"
-        android:contentDescription="Live map displaying bus routes and stops" />
+        android:contentDescription="Live map displaying bus routes and stops">
+    </org.mapsforge.map.android.view.MapView>
+
+    <LinearLayout
+        android:id="@+id/arriveButtonContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="16dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <Button
+            android:id="@+id/arriveButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Arrived" />
+    </LinearLayout>
 
     <!-- Right Column: Data Display -->
     <LinearLayout
@@ -405,6 +425,7 @@
                 android:textColor="@color/white" />
         </LinearLayout>
 
+        <!-- Arrive Buttons -->
     </LinearLayout>
 
     <android.widget.Button

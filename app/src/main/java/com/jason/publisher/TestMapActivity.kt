@@ -24,7 +24,9 @@ import android.os.Environment
 import android.provider.Settings
 import android.view.View
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.jason.publisher.model.BusItem
@@ -118,6 +120,7 @@ class TestMapActivity : AppCompatActivity() {
     private var apiTimeLocked = false
     private var lockedApiTime: String? = null
     private var simulationSpeedFactor: Int = 1
+    private lateinit var arriveButtonContainer: LinearLayout
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -233,11 +236,62 @@ class TestMapActivity : AppCompatActivity() {
         binding.slowDownButton.setOnClickListener {
             slowDown()
         }
+
+        binding.arriveButton.setOnClickListener {
+            confirmArrival()
+        }
+    }
+
+    /**
+     * mark a bus stop as "arrived" and prevent duplicate arrivals.
+     */
+    private fun confirmArrival() {
+        if (upcomingStop.isNotEmpty()) {
+            Toast.makeText(this, "Arrived at $upcomingStop", Toast.LENGTH_SHORT).show()
+            Log.d("TestMapActivity", "✅ Arrived at bus stop: $upcomingStop")
+
+            // Move to the next stop
+            moveToNextStop()
+        } else {
+            Toast.makeText(this, "No upcoming stop detected!", Toast.LENGTH_SHORT).show()
+            Log.e("TestMapActivity", "❌ Arrival attempted with no upcoming stop set.")
+        }
+    }
+
+    /**
+     * Moves to the next scheduled bus timing stop in the route.
+     */
+    private fun moveToNextStop() {
+        if (scheduleList.isEmpty()) {
+            Log.e("moveToNextStop", "❌ No schedule data available.")
+            Toast.makeText(this, "No schedule available", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Find the index of the current upcoming stop
+        val currentIndex = scheduleList.first().busStops.indexOfFirst { it.time == upcomingStop }
+
+        if (currentIndex == -1 || currentIndex >= scheduleList.first().busStops.size - 1) {
+            Log.d("moveToNextStop", "✅ Reached the final stop, no further stops available.")
+            Toast.makeText(this, "You have reached the final stop.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Move to the next stop
+        val nextStop = scheduleList.first().busStops[currentIndex + 1]
+        upcomingStop = nextStop.time
+        runOnUiThread {
+            upcomingBusStopTextView.text = "Next Stop: ${nextStop.name} at ${nextStop.time}"
+            timingPointValueTextView.text = nextStop.time
+        }
+
+        Log.d("moveToNextStop", "🔹 Moving to next stop: ${nextStop.name} at ${nextStop.time}")
     }
 
     /**
      * extract first schedule item of bus stop to be marked red
      */
+    @SuppressLint("LongLogTag")
     private fun extractRedBusStops() {
         redBusStops.clear()
         if (scheduleList.isNotEmpty()) {
@@ -291,6 +345,7 @@ class TestMapActivity : AppCompatActivity() {
         startActualTimeUpdater()
 
         simulationRunnable = object : Runnable {
+            @RequiresApi(Build.VERSION_CODES.M)
             override fun run() {
                 if (currentRouteIndex < route.size - 1) {
                     val start = route[currentRouteIndex]
@@ -340,6 +395,7 @@ class TestMapActivity : AppCompatActivity() {
     /**
      * Call this function when the simulation finishes.
      */
+    @RequiresApi(Build.VERSION_CODES.M)
     private fun showSummaryDialog() {
         // Flatten scheduleData into a List<ScheduleItem>
         val flatSchedule = (scheduleData as? List<Any> ?: emptyList()).flatMap { element ->
@@ -801,6 +857,7 @@ class TestMapActivity : AppCompatActivity() {
     }
 
     /** Updates timing point based on current bus location */
+    @SuppressLint("LongLogTag")
     private fun updateTimingPointBasedOnLocation(currentLat: Double, currentLon: Double) {
         if (scheduleList.isEmpty()) return
 
@@ -896,7 +953,8 @@ class TestMapActivity : AppCompatActivity() {
         val stopAddress = nextStop.address ?: getUpcomingBusStopName(stopLat, stopLon)
         upcomingStop = stopAddress
         val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
-        val stopPassThreshold = 25.0
+        val stopPassThreshold = 25.0 // Normal detection range
+        val failSafeThreshold = 100.0 // Fail-safe trigger range
 
         if (distance <= stopPassThreshold) {
             Log.d(
@@ -934,8 +992,14 @@ class TestMapActivity : AppCompatActivity() {
                 runOnUiThread {
                     upcomingBusStopTextView.text = "$upcomingStopName"
                 }
-            } else {
-                Log.d("MainActivity checkPassedStops", "✅ All stops have been passed.")
+            } else if (distance > stopPassThreshold && distance <= failSafeThreshold) {
+                Log.w("MainActivity checkPassedStops", "⚠️ Warning: No bus stop detected within expected range!")
+                runOnUiThread {
+                    Toast.makeText(this@TestMapActivity, "⚠️ Warning: No bus stop detected!", Toast.LENGTH_LONG).show()
+                }
+            } else if (distance > failSafeThreshold) {
+                Log.e("MainActivity checkPassedStops", "❌ Missed stop! Triggering fail-safe...")
+                triggerMissedStopAlert()
             }
         } else {
             val upcomingStopName = getUpcomingBusStopName(stopLat, stopLon)
@@ -951,6 +1015,25 @@ class TestMapActivity : AppCompatActivity() {
                 upcomingBusStopTextView.text = "$upcomingStopName"
                 upcomingStop = upcomingStopName
             }
+        }
+    }
+
+    /**
+     * This function is triggered when the bus misses a stop.
+     */
+    private fun triggerMissedStopAlert() {
+        runOnUiThread {
+            // Show the button when a stop is missed
+            arriveButtonContainer.visibility = View.VISIBLE
+
+            val alertDialog = androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Missed Stop Alert!")
+                .setMessage("You may have missed a bus stop. Please verify your location and route.")
+                .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+                .setCancelable(false)
+                .create()
+
+            alertDialog.show()
         }
     }
 
@@ -1449,6 +1532,7 @@ class TestMapActivity : AppCompatActivity() {
 //        bearingTextView = binding.bearingTextView
         speedTextView = binding.speedTextView
         upcomingBusStopTextView = binding.upcomingBusStopTextView
+        arriveButtonContainer = findViewById(R.id.arriveButtonContainer)
 //            directionTextView = binding.directionTextView
 //            speedTextView = binding.speedTextView
 //            busNameTextView = binding.busNameTextView
@@ -1702,6 +1786,7 @@ class TestMapActivity : AppCompatActivity() {
     /**
      * Adds bus stops to the map using OverlayItem instead of Marker.
      */
+    @SuppressLint("LongLogTag")
     private fun addBusStopMarkers(busStops: List<BusStop>) {
         val totalStops = busStops.size
 
