@@ -14,6 +14,7 @@ import android.widget.TableLayout
 import android.widget.TableRow
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivityScheduleBinding
@@ -126,6 +127,7 @@ class ScheduleActivity : AppCompatActivity() {
 //        )
 //    )
 
+    @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -197,6 +199,9 @@ class ScheduleActivity : AppCompatActivity() {
             Log.d("MainActivity onCreate NetworkStatusHelper offline", "Updated busRoute: $route")
             Log.d("MainActivity onCreate  NetworkStatusHelperoffline", "Updated busStop: $stops")
             Log.d("MainActivity onCreate  NetworkStatusHelperoffline", "Updated durationBetweenStops: $durationBetweenStops")
+
+            // Auto start route if the first schedule time has passed 1.5 minutes
+            startPeriodicScheduleCheck()
         } else {
             // **Online Mode: Fetch data from ThingsBoard**
             Toast.makeText(this, "Online mode: Receiving data from Thingsboard.", Toast.LENGTH_LONG).show()
@@ -269,8 +274,58 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /**
+     * Function to continuously check whether the first schedule's start time has passed by 1.5 minutes and automatically start the route when the condition is met
+     */
+    private val scheduleCheckHandler = Handler(Looper.getMainLooper())
+    private lateinit var scheduleCheckRunnable: Runnable
+
+    @SuppressLint("SimpleDateFormat", "LongLogTag")
+    private fun startPeriodicScheduleCheck() {
+        scheduleCheckRunnable = object : Runnable {
+            override fun run() {
+                if (scheduleData.isNotEmpty()) {
+                    val firstSchedule = scheduleData.first()
+                    val startTimeStr = firstSchedule.startTime
+                    val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                    val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                    val fullStartTimeStr = "$todayDate $startTimeStr"
+
+                    try {
+                        val startTime = dateFormat.parse(fullStartTimeStr) ?: return
+                        val currentTime = Date()
+                        val diffInMillis = currentTime.time - startTime.time
+                        val diffInMinutes = diffInMillis / (1000 * 60)
+
+                        Log.d("ScheduleActivity startPeriodicScheduleCheck",
+                            "Current Time: ${dateFormat.format(currentTime)}, " +
+                                    "Start Time: ${dateFormat.format(startTime)}, " +
+                                    "Diff in minutes: $diffInMinutes")
+
+                        if (diffInMinutes >= 1.5) {
+                            Log.d("ScheduleActivity startPeriodicScheduleCheck", "🚀 Auto-starting route as the first schedule has passed 1.5 minutes.")
+                            runOnUiThread {
+                                binding.startRouteButton.performClick()
+                            }
+                            // Stop further checking after starting
+                            scheduleCheckHandler.removeCallbacks(scheduleCheckRunnable)
+                            return
+                        }
+                    } catch (e: Exception) {
+                        Log.e("ScheduleActivity startPeriodicScheduleCheck", "Error parsing start time: ${e.message}")
+                    }
+                }
+                // Re-run check every 1 second
+                scheduleCheckHandler.postDelayed(this, 1000)
+            }
+        }
+        // Start periodic checking
+        scheduleCheckHandler.post(scheduleCheckRunnable)
+    }
+
+    /**
      * Modify the table dynamically to show only the first three schedule items.
      */
+    @RequiresApi(Build.VERSION_CODES.M)
     private fun updateScheduleTable(scheduleItems: List<ScheduleItem>) {
         scheduleTable.removeViews(1, scheduleTable.childCount - 1) // Clear previous rows (except header)
 
@@ -297,6 +352,7 @@ class ScheduleActivity : AppCompatActivity() {
     /**
      * helper function to create table cell
      */
+    @RequiresApi(Build.VERSION_CODES.M)
     private fun createTableCell(text: String, weight: Float): TextView {
         val params = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, weight) // Ensure uniform weight
         return TextView(this).apply {
@@ -312,6 +368,7 @@ class ScheduleActivity : AppCompatActivity() {
     /**
      * Extracts work intervals from the schedule table and updates the timeline view.
      */
+    @SuppressLint("LongLogTag")
     private fun updateTimeline() {
         if (!::workTable.isInitialized || !::multiColorTimelineView.isInitialized) {
             Log.e("ScheduleActivity updateTimeline", "WorkTable or MultiColorTimelineView is not initialized!")
@@ -347,6 +404,7 @@ class ScheduleActivity : AppCompatActivity() {
      * Extracts work intervals from the table.
      * Reads each row's text, splits it into start and end times, and adds to the list.
      */
+    @SuppressLint("LongLogTag")
     private fun extractWorkIntervals(): List<Pair<String, String>> {
         val workIntervals = mutableListOf<Pair<String, String>>()
 
@@ -478,6 +536,8 @@ class ScheduleActivity : AppCompatActivity() {
     /**
      * Loads schedule data from the cache file if it exists and extracts schedule-related data.
      */
+    @RequiresApi(Build.VERSION_CODES.M)
+    @SuppressLint("LongLogTag")
     private fun loadScheduleDataFromCache() {
         val cacheFile = File(getHiddenFolder(), "scheduleDataCache.txt")
 
@@ -697,6 +757,7 @@ class ScheduleActivity : AppCompatActivity() {
      * Saves the latest schedule data to the cache file.
      */
     private var isScheduleCacheUpdated = false // Flag to ensure cache is updated only once
+    @SuppressLint("LongLogTag")
     private fun saveScheduleDataToCache() {
         if (!NetworkStatusHelper.isNetworkAvailable(this)) {
             Log.d("ScheduleActivity saveScheduleDataToCache", "❌ No internet connection. Skipping cache update.")
@@ -728,6 +789,7 @@ class ScheduleActivity : AppCompatActivity() {
     /**
      * Saves the latest schedule data to the cache file.
      */
+    @SuppressLint("LongLogTag")
     private fun rewriteOfflineScheduleData() {
         if (!NetworkStatusHelper.isNetworkAvailable(this)) {
             Log.d("ScheduleActivity saveScheduleDataToCache", "❌ No internet connection. rewrite data.")
