@@ -53,7 +53,7 @@ import java.lang.Math.cos
 import java.lang.Math.sin
 import java.lang.Math.sqrt
 
-class TestMapActivity : AppCompatActivity() {
+class TestTestMapActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityTestmapBinding
     private lateinit var locationManager: LocationManager
@@ -156,15 +156,15 @@ class TestMapActivity : AppCompatActivity() {
         scheduleList = intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? List<ScheduleItem> ?: emptyList()
         scheduleData = intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? List<ScheduleItem> ?: emptyList()
 
-        Log.d("MainActivity onCreate retrieve", "Received aid: $aid")
-        Log.d("MainActivity onCreate retrieve", "Received config: ${config.toString()}")
-        Log.d("MainActivity onCreate retrieve", "Received jsonString: $jsonString")
-        Log.d("MainActivity onCreate retrieve", "Received route: ${route.toString()}")
-        Log.d("MainActivity onCreate retrieve", "Received stops: ${stops.toString()}")
-        Log.d("MainActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
-        Log.d("MainActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
-        Log.d("MainActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
-        Log.d("MainActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
+        Log.d("TestMapActivity onCreate retrieve", "Received aid: $aid")
+        Log.d("TestMapActivity onCreate retrieve", "Received config: ${config.toString()}")
+        Log.d("TestMapActivity onCreate retrieve", "Received jsonString: $jsonString")
+        Log.d("TestMapActivity onCreate retrieve", "Received route: ${route.toString()}")
+        Log.d("TestMapActivity onCreate retrieve", "Received stops: ${stops.toString()}")
+        Log.d("TestMapActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
+        Log.d("TestMapActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
+        Log.d("TestMapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
+        Log.d("TestMapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
 
         extractRedBusStops()
 
@@ -182,16 +182,16 @@ class TestMapActivity : AppCompatActivity() {
 //        fetchConfig { success ->
 //            if (success) {
 //                getAccessToken()
-        Log.d("MainActivity onCreate Token", token)
+        Log.d("TestMapActivity onCreate Token", token)
 //                mqttManager = MqttManager(serverUri = TimeTableActivity.SERVER_URI, clientId = TimeTableActivity.CLIENT_ID, username = token)
         getDefaultConfigValue()
 //                requestAdminMessage()
 //                connectAndSubscribe()
-//                Log.d("MainActivity oncreate fetchConfig config", config.toString())
-//                Log.d("MainActivity oncreate fetchConfig busRoute", route.toString())
-//                Log.d("MainActivity oncreate fetchConfig busStop", stops.toString())
+//                Log.d("TestMapActivity oncreate fetchConfig config", config.toString())
+//                Log.d("TestMapActivity oncreate fetchConfig busRoute", route.toString())
+//                Log.d("TestMapActivity oncreate fetchConfig busStop", stops.toString())
 //            } else {
-//                Log.e("MainActivity onCreate", "Failed to fetch config, running in offline mode.")
+//                Log.e("TestMapActivity onCreate", "Failed to fetch config, running in offline mode.")
 //            }
 //        }
 
@@ -202,8 +202,8 @@ class TestMapActivity : AppCompatActivity() {
             override fun onLocationUpdate(location: Location) {
                 latitude = location.latitude
                 longitude = location.longitude
-                Log.d("MainActivity onCreate Latitude", latitude.toString())
-                Log.d("MainActivity onCreate Longitude", longitude.toString())
+                Log.d("TestMapActivity onCreate Latitude", latitude.toString())
+                Log.d("TestMapActivity onCreate Longitude", longitude.toString())
 
                 // Update UI components with the current location
 //                latitudeTextView.text = "Latitude: $latitude"
@@ -245,25 +245,27 @@ class TestMapActivity : AppCompatActivity() {
     /**
      * mark a bus stop as "arrived" and prevent duplicate arrivals.
      */
+    @SuppressLint("LongLogTag")
     private fun confirmArrival() {
         if (upcomingStop.isNotEmpty()) {
             Toast.makeText(this, "Arrived at $upcomingStop", Toast.LENGTH_SHORT).show()
-            Log.d("TestMapActivity", "✅ Arrived at bus stop: $upcomingStop")
+            Log.d("TestMapActivity confirmArrival", "✅ Arrived at bus stop: $upcomingStop")
 
             // Move to the next stop
             moveToNextStop()
         } else {
             Toast.makeText(this, "No upcoming stop detected!", Toast.LENGTH_SHORT).show()
-            Log.e("TestMapActivity", "❌ Arrival attempted with no upcoming stop set.")
+            Log.e("TestMapActivity confirmArrival", "❌ Arrival attempted with no upcoming stop set.")
         }
     }
 
     /**
      * Moves to the next scheduled bus timing stop in the route.
      */
+    @SuppressLint("LongLogTag")
     private fun moveToNextStop() {
         if (scheduleList.isEmpty()) {
-            Log.e("moveToNextStop", "❌ No schedule data available.")
+            Log.e("TestMapActivity moveToNextStop", "❌ No schedule data available.")
             Toast.makeText(this, "No schedule available", Toast.LENGTH_SHORT).show()
             return
         }
@@ -272,7 +274,7 @@ class TestMapActivity : AppCompatActivity() {
         val currentIndex = scheduleList.first().busStops.indexOfFirst { it.time == upcomingStop }
 
         if (currentIndex == -1 || currentIndex >= scheduleList.first().busStops.size - 1) {
-            Log.d("moveToNextStop", "✅ Reached the final stop, no further stops available.")
+            Log.d("TestMapActivity moveToNextStop", "✅ Reached the final stop, no further stops available.")
             Toast.makeText(this, "You have reached the final stop.", Toast.LENGTH_SHORT).show()
             return
         }
@@ -285,7 +287,7 @@ class TestMapActivity : AppCompatActivity() {
             timingPointValueTextView.text = nextStop.time
         }
 
-        Log.d("moveToNextStop", "🔹 Moving to next stop: ${nextStop.name} at ${nextStop.time}")
+        Log.d("TestMapActivity moveToNextStop", "🔹 Moving to next stop: ${nextStop.name} at ${nextStop.time}")
     }
 
     /**
@@ -306,6 +308,7 @@ class TestMapActivity : AppCompatActivity() {
     }
 
     /** Updates bus name if AID matches a config entry */
+    @SuppressLint("LongLogTag")
     private fun updateBusNameFromConfig() {
         if (config.isNullOrEmpty()) return // No config available
 
@@ -316,9 +319,9 @@ class TestMapActivity : AppCompatActivity() {
             runOnUiThread {
 //                binding.busNameTextView.text = "Bus Name: $busname"
             }
-            Log.d("MainActivity", "✅ Bus name updated: $busname for AID: $aid")
+            Log.d("TestMapActivity updateBusNameFromConfig", "✅ Bus name updated: $busname for AID: $aid")
         } else {
-            Log.e("MainActivity", "❌ No matching bus found for AID: $aid")
+            Log.e("TestMapActivity updateBusNameFromConfig", "❌ No matching bus found for AID: $aid")
         }
     }
 
@@ -375,7 +378,7 @@ class TestMapActivity : AppCompatActivity() {
                 } else {
                     isSimulating = false
                     stopActualTimeUpdater()
-                    Toast.makeText(this@TestMapActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@TestTestMapActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
                     showSummaryDialog() // Show the summary dialog after simulation completes.
                 }
             }
@@ -448,20 +451,22 @@ class TestMapActivity : AppCompatActivity() {
     /**
      * increase speed factor
      */
+    @SuppressLint("LongLogTag")
     private fun speedUp() {
         simulationSpeedFactor++ // Increase by 1 second per tick
-        Log.d("SpeedControl", "Speed Up: simulationSpeedFactor is now $simulationSpeedFactor")
+        Log.d("TestMapActivity SpeedControl", "Speed Up: simulationSpeedFactor is now $simulationSpeedFactor")
     }
 
     /**
      * decrease speed factor
      */
+    @SuppressLint("LongLogTag")
     private fun slowDown() {
         // Ensure never go below 0.
         if (simulationSpeedFactor > 0) {
             simulationSpeedFactor--
         }
-        Log.d("SpeedControl", "Slow Down: simulationSpeedFactor is now $simulationSpeedFactor")
+        Log.d("TestMapActivity SpeedControl", "Slow Down: simulationSpeedFactor is now $simulationSpeedFactor")
     }
 
     /**
@@ -524,6 +529,7 @@ class TestMapActivity : AppCompatActivity() {
      * - Actual Time (current simulated time)
      * - Threshold Range (the tolerance in seconds)
      */
+    @SuppressLint("LongLogTag")
     private fun checkScheduleStatus() {
         if (scheduleList.isEmpty()) return
 
@@ -575,15 +581,15 @@ class TestMapActivity : AppCompatActivity() {
             }
 
             // Log all the desired values.
-            Log.d("checkScheduleStatus", "Schedule Status: $statusText")
+            Log.d("TestMapActivity checkScheduleStatus", "Schedule Status: $statusText")
             Log.d("checkScheduleStatus", "Next Timing Point: ${timingPointValueTextView.text}")
-            Log.d("checkScheduleStatus", "API Time: $apiTimeStr")
-            Log.d("checkScheduleStatus", "Actual Time: $actualTimeStr")
-            Log.d("checkScheduleStatus", "Threshold Range: $tolerance sec")
+            Log.d("TestMapActivity checkScheduleStatus", "API Time: $apiTimeStr")
+            Log.d("TestMapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
+            Log.d("TestMapActivity checkScheduleStatus", "Threshold Range: $tolerance sec")
 
-            Log.d("checkScheduleStatus", "Scheduled: $scheduledTimeStr, Predicted: ${timeFormat.format(predictedArrival)}, Delta: $deltaSec sec, Status: $statusText")
+            Log.d("TestMapActivity checkScheduleStatus", "Scheduled: $scheduledTimeStr, Predicted: ${timeFormat.format(predictedArrival)}, Delta: $deltaSec sec, Status: $statusText")
         } catch (e: Exception) {
-            Log.e("checkScheduleStatus", "Error parsing times: ${e.localizedMessage}")
+            Log.e("TestMapActivity checkScheduleStatus", "Error parsing times: ${e.localizedMessage}")
         }
     }
 
@@ -602,7 +608,7 @@ class TestMapActivity : AppCompatActivity() {
     /** 🔹 Reset actual time when the bus reaches a stop or upcoming stop changes */
     private fun resetActualTime() {
         simulationStartTime = System.currentTimeMillis()
-        Log.d("MainActivity", "✅ Actual time reset to current time.")
+        Log.d("TestMapActivity", "✅ Actual time reset to current time.")
     }
 
     /** Interpolates movement between two points with dynamic bearing and speed updates */
@@ -671,11 +677,12 @@ class TestMapActivity : AppCompatActivity() {
      *   • If non-null, it updates the API time.
      * - If the upcoming stop equals the last scheduled bus stop, then we lock the API time.
      */
+    @SuppressLint("LongLogTag")
     private fun updateApiTime() {
         // If locked, simply reuse the locked value.
         if (apiTimeLocked && lockedApiTime != null) {
             runOnUiThread { ApiTimeValueTextView.text = lockedApiTime }
-            Log.d("updateApiTime", "API time locked, using last computed value: $lockedApiTime")
+            Log.d("TestMapActivity updateApiTime", "API time locked, using last computed value: $lockedApiTime")
             return
         }
 
@@ -693,29 +700,29 @@ class TestMapActivity : AppCompatActivity() {
 
         // Build timing list.
         val timingList = BusStopWithTimingPoint.fromRouteData(busRouteData.first())
-        Log.d("updateApiTime", "Timing list: $timingList")
+        Log.d("TestMapActivity updateApiTime", "Timing list: $timingList")
 
         val upcomingAddress = upcomingStop
-        Log.d("updateApiTime", "Upcoming stop address: $upcomingAddress")
+        Log.d("TestMapActivity updateApiTime", "Upcoming stop address: $upcomingAddress")
 
         // Find the target index.
         val targetIndex = timingList.indexOfFirst {
             it.address?.equals(upcomingAddress, ignoreCase = true) == true
         }
         if (targetIndex == -1) {
-            Log.e("updateApiTime", "Upcoming stop address not found in timing list.")
+            Log.e("TestMapActivity updateApiTime", "Upcoming stop address not found in timing list.")
             return
         }
-        Log.d("updateApiTime", "Found target index: $targetIndex")
+        Log.d("TestMapActivity updateApiTime", "Found target index: $targetIndex")
 
         // Compute the total duration.
         val totalDurationMinutes = calculateDurationForUpdate(timingList, scheduleList, targetIndex)
         if (totalDurationMinutes == null) {
-            Log.d("updateApiTime", "Upcoming bus stop not scheduled. Skipping API update.")
+            Log.d("TestMapActivity updateApiTime", "Upcoming bus stop not scheduled. Skipping API update.")
             // If we already computed a final value before, do not override.
             return
         }
-        Log.d("updateApiTime", "Total duration in minutes: $totalDurationMinutes")
+        Log.d("TestMapActivity updateApiTime", "Total duration in minutes: $totalDurationMinutes")
 
         // Add the duration (in seconds) to the start time.
         val additionalSeconds = (totalDurationMinutes * 60).toInt()
@@ -727,7 +734,7 @@ class TestMapActivity : AppCompatActivity() {
         runOnUiThread {
             ApiTimeValueTextView.text = updatedApiTime
         }
-        Log.d("updateApiTime", "API Time updated to: $updatedApiTime")
+        Log.d("TestMapActivity updateApiTime", "API Time updated to: $updatedApiTime")
 
         // If the upcoming stop is the final scheduled stop, lock the API time.
         val lastScheduledAddress = getLastScheduledAddress(timingList, scheduleList)
@@ -735,7 +742,7 @@ class TestMapActivity : AppCompatActivity() {
             upcomingAddress.equals(lastScheduledAddress, ignoreCase = true)) {
             apiTimeLocked = true
             lockedApiTime = updatedApiTime
-            Log.d("updateApiTime", "Final scheduled bus stop reached. API time locked.")
+            Log.d("TestMapActivity updateApiTime", "Final scheduled bus stop reached. API time locked.")
         }
     }
 
@@ -942,12 +949,12 @@ class TestMapActivity : AppCompatActivity() {
     @SuppressLint("LongLogTag")
     private fun checkPassedStops(currentLat: Double, currentLon: Double) {
         if (stops.isEmpty()) {
-            Log.d("MainActivity checkPassedStops", "❌ No bus stops available.")
+            Log.d("TestMapActivity checkPassedStops", "❌ No bus stops available.")
             return
         }
 
         if (currentStopIndex >= stops.size) {
-            Log.d("MainActivity checkPassedStops", "✅ All stops have been passed.")
+            Log.d("TestMapActivity checkPassedStops", "✅ All stops have been passed.")
             return
         }
 
@@ -962,7 +969,7 @@ class TestMapActivity : AppCompatActivity() {
 
         if (distance <= stopPassThreshold) {
             Log.d(
-                "MainActivity checkPassedStops",
+                "TestMapActivity checkPassedStops",
                 "✅ Nearest stop passed: $stopLat, $stopLon (Distance: ${"%.2f".format(distance)} meters) at $stopAddress"
             )
 
@@ -979,7 +986,7 @@ class TestMapActivity : AppCompatActivity() {
             if (timingList.any { it.address?.equals(stopAddress, ignoreCase = true) == true }) {
                 updateApiTime()
             } else {
-                Log.d("MainActivity checkPassedStops", "BusStopWithTimingPoint not available for $stopAddress. Skipping API time update.")
+                Log.d("TestMapActivity checkPassedStops", "BusStopWithTimingPoint not available for $stopAddress. Skipping API time update.")
             }
 
             if (currentStopIndex < stops.size) {
@@ -987,7 +994,7 @@ class TestMapActivity : AppCompatActivity() {
                 val upcomingStopName = getUpcomingBusStopName(upcomingStop.latitude ?: 0.0, upcomingStop.longitude ?: 0.0)
 
                 Log.d(
-                    "MainActivity checkPassedStops",
+                    "TestMapActivity checkPassedStops",
                     "🛑 No stop passed. Nearest stop: ${upcomingStop.latitude}, ${upcomingStop.longitude} is ${
                         "%.2f".format(distance)
                     } meters away at $upcomingStopName."
@@ -997,19 +1004,19 @@ class TestMapActivity : AppCompatActivity() {
                     upcomingBusStopTextView.text = "$upcomingStopName"
                 }
             } else if (distance > stopPassThreshold && distance <= failSafeThreshold) {
-                Log.w("MainActivity checkPassedStops", "⚠️ Warning: No bus stop detected within expected range!")
+                Log.w("TestMapActivity checkPassedStops", "⚠️ Warning: No bus stop detected within expected range!")
                 runOnUiThread {
-                    Toast.makeText(this@TestMapActivity, "⚠️ Warning: No bus stop detected!", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@TestTestMapActivity, "⚠️ Warning: No bus stop detected!", Toast.LENGTH_LONG).show()
                 }
             } else if (distance > failSafeThreshold) {
-                Log.e("MainActivity checkPassedStops", "❌ Missed stop! Triggering fail-safe...")
+                Log.e("TestMapActivity checkPassedStops", "❌ Missed stop! Triggering fail-safe...")
                 triggerMissedStopAlert()
             }
         } else {
             val upcomingStopName = getUpcomingBusStopName(stopLat, stopLon)
 
             Log.d(
-                "MainActivity checkPassedStops",
+                "TestMapActivity checkPassedStops",
                 "🛑 No stop passed. Nearest stop: ${nextStop.latitude}, ${nextStop.longitude} is ${
                     "%.2f".format(distance)
                 } meters away at $upcomingStopName."
@@ -1045,13 +1052,13 @@ class TestMapActivity : AppCompatActivity() {
     @SuppressLint("LongLogTag")
     private fun getUpcomingBusStopName(lat: Double, lon: Double): String {
         try {
-            Log.d("MainActivity getUpcomingBusStopName", "JSON String: $jsonString")
+            Log.d("TestMapActivity getUpcomingBusStopName", "JSON String: $jsonString")
 
             // Convert jsonString into a JSONArray
             val jsonArray = JSONArray(jsonString)
 
             if (jsonArray.length() == 0) {
-                Log.e("MainActivity getUpcomingBusStopName", "JSON array is empty")
+                Log.e("TestMapActivity getUpcomingBusStopName", "JSON array is empty")
                 return "No Upcoming Stop"
             }
 
@@ -1060,14 +1067,14 @@ class TestMapActivity : AppCompatActivity() {
 
             // Ensure the key exists
             if (!jsonObject.has("next_points")) {
-                Log.e("MainActivity getUpcomingBusStopName", "Missing 'next_points' key")
+                Log.e("TestMapActivity getUpcomingBusStopName", "Missing 'next_points' key")
                 return "No Upcoming Stop"
             }
 
             val routeArray = jsonObject.getJSONArray("next_points")
 
             if (routeArray.length() == 0) {
-                Log.e("MainActivity getUpcomingBusStopName", "next_points array is empty")
+                Log.e("TestMapActivity getUpcomingBusStopName", "next_points array is empty")
                 return "No Upcoming Stop"
             }
 
@@ -1078,7 +1085,7 @@ class TestMapActivity : AppCompatActivity() {
                 val stop = routeArray.getJSONObject(i)
 
                 if (!stop.has("latitude") || !stop.has("longitude") || !stop.has("address")) {
-                    Log.e("MainActivity getUpcomingBusStopName", "Missing stop fields at index $i")
+                    Log.e("TestMapActivity getUpcomingBusStopName", "Missing stop fields at index $i")
                     continue
                 }
 
@@ -1096,8 +1103,8 @@ class TestMapActivity : AppCompatActivity() {
 
             return nearestStop ?: "Unknown Stop"
         } catch (e: Exception) {
-            Log.e("MainActivity getUpcomingBusStopName", "Error: ${e.localizedMessage}", e)
-            return "MainActivity getUpcomingBusStopName Error Retrieving Stop"
+            Log.e("TestMapActivity getUpcomingBusStopName", "Error: ${e.localizedMessage}", e)
+            return "TestMapActivity getUpcomingBusStopName Error Retrieving Stop"
         }
     }
 
@@ -1172,7 +1179,7 @@ class TestMapActivity : AppCompatActivity() {
      */
     @SuppressLint("LongLogTag")
     private fun drawPolyline() {
-        Log.d("MainActivity drawPolyline", "Drawing polyline with route: $route")
+        Log.d("TestMapActivity drawPolyline", "Drawing polyline with route: $route")
 
         if (route.isNotEmpty()) {
             val routePoints = route.map { LatLong(it.latitude!!, it.longitude!!) }
@@ -1205,9 +1212,9 @@ class TestMapActivity : AppCompatActivity() {
             // **Force map redraw**
             binding.map.invalidate()
 
-            Log.d("MainActivity drawPolyline", "✅ Polyline drawn with ${routePoints.size} points.")
+            Log.d("TestMapActivity drawPolyline", "✅ Polyline drawn with ${routePoints.size} points.")
         } else {
-            Log.e("MainActivity drawPolyline", "❌ No route data available for polyline.")
+            Log.e("TestMapActivity drawPolyline", "❌ No route data available for polyline.")
         }
     }
 
@@ -1222,13 +1229,13 @@ class TestMapActivity : AppCompatActivity() {
         // Ensure we have the correct storage permission
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
-                Log.e("MainActivity getOrCreateAid", "Storage permission not granted.")
+                Log.e("TestMapActivity getOrCreateAid", "Storage permission not granted.")
                 return "Permission Denied"
             }
         } else {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
-                Log.e("MainActivity getOrCreateAid", "Storage permission not granted.")
+                Log.e("TestMapActivity getOrCreateAid", "Storage permission not granted.")
                 return "Permission Denied"
             }
         }
@@ -1240,13 +1247,13 @@ class TestMapActivity : AppCompatActivity() {
         if (!hiddenFolder.exists()) {
             val success = hiddenFolder.mkdirs()
             if (!success) {
-                Log.e("MainActivity getOrCreateAid", "Failed to create directory: ${hiddenFolder.absolutePath}")
+                Log.e("TestMapActivity getOrCreateAid", "Failed to create directory: ${hiddenFolder.absolutePath}")
                 return "Failed to create directory"
             }
         }
 
         val aidFile = File(hiddenFolder, "busDataCache.json")
-        Log.d("MainActivity getOrCreateAid", "Attempting to create: ${aidFile.absolutePath}")
+        Log.d("TestMapActivity getOrCreateAid", "Attempting to create: ${aidFile.absolutePath}")
 
         if (!aidFile.exists()) {
             val newAid = generateNewAid()
@@ -1257,7 +1264,7 @@ class TestMapActivity : AppCompatActivity() {
                 aidFile.writeText(jsonObject.toString())
                 Toast.makeText(this, "AID saved successfully in busDataCache.json", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Log.e("MainActivity getOrCreateAid", "Error writing to file: ${e.message}")
+                Log.e("TestMapActivity getOrCreateAid", "Error writing to file: ${e.message}")
                 return "Error writing file"
             }
             return newAid
@@ -1267,7 +1274,7 @@ class TestMapActivity : AppCompatActivity() {
             val jsonContent = JSONObject(aidFile.readText())
             jsonContent.getString("aid").trim()
         } catch (e: Exception) {
-            Log.e("MainActivity getOrCreateAid", "Error reading JSON file: ${e.message}")
+            Log.e("TestMapActivity getOrCreateAid", "Error reading JSON file: ${e.message}")
             "Error reading file"
         }
     }
@@ -1284,39 +1291,47 @@ class TestMapActivity : AppCompatActivity() {
 
     /**
      * Starts location updates, calculates bearing and direction, and identifies the nearest route coordinate.
-     * If a nearest coordinate is found, it checks the current road name and finds the upcoming road if it changes.
+     * Calls checkScheduleStatus() to keep the schedule status updated in real-time.
      */
     private fun startLocationUpdate() {
+        // Reset actual time to current system time
+//        actualTime = Calendar.getInstance()
+
+        // Start incrementing actual time dynamically
+        startActualTimeUpdater()
+
+        // Ensure API time remains from the list
+        updateApiTime()
+
         locationManager.startLocationUpdates(object : LocationListener {
             override fun onLocationUpdate(location: Location) {
-                val currentLatitude = location.latitude
-                val currentLongitude = location.longitude
+                latitude = location.latitude
+                longitude = location.longitude
 
-                // Calculate bearing and update variables
                 if (lastLatitude != 0.0 && lastLongitude != 0.0) {
-                    bearing = calculateBearing(
-                        lastLatitude,
-                        lastLongitude,
-                        currentLatitude,
-                        currentLongitude
-                    )
+                    bearing = calculateBearing(lastLatitude, lastLongitude, latitude, longitude)
                     direction = Helper.bearingToDirection(bearing)
                 }
 
-                // Update global variables
-                latitude = currentLatitude
-                longitude = currentLongitude
-                speed = (location.speed * 3.6).toFloat()
-                lastLatitude = currentLatitude
-                lastLongitude = currentLongitude
+                speed = if (location.speed != 0.0F) {
+                    (location.speed * 3.6).toFloat()
+                } else {
+                    val distance = calculateDistance(lastLatitude, lastLongitude, latitude, longitude)
+                    if (distance > 0) (distance / 5).toFloat() else 0.0F
+                }
 
-                // Update UI
-//                latitudeTextView.text = "Latitude:\n$latitude"
-//                longitudeTextView.text = "Longitude:\n$longitude"
-//                bearingTextView.text = "Bearing: $bearing°"
+                lastLatitude = latitude
+                lastLongitude = longitude
 
-                // Update the bus marker position
+                runOnUiThread {
+                    speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
+                }
+
                 updateBusMarkerPosition(latitude, longitude, bearing)
+
+                checkPassedStops(latitude, longitude)
+                updateTimingPointBasedOnLocation(latitude, longitude)
+                checkScheduleStatus()
             }
         })
     }
@@ -1564,13 +1579,13 @@ class TestMapActivity : AppCompatActivity() {
     private fun getDefaultConfigValue() {
 //        busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
 //        Toast.makeText(this, "arrBusDataOnline1: ${arrBusData}", Toast.LENGTH_SHORT).show()
-        Log.d("MainActivity getDefaultConfigValue busConfig", arrBusData.toString())
-        Log.d("MainActivity getDefaultConfigValue arrBusDataOnline1", arrBusData.toString())
-        Log.d("MainActivity getDefaultConfigValue config", config.toString())
+        Log.d("TestMapActivity getDefaultConfigValue busConfig", arrBusData.toString())
+        Log.d("TestMapActivity getDefaultConfigValue arrBusDataOnline1", arrBusData.toString())
+        Log.d("TestMapActivity getDefaultConfigValue config", config.toString())
         arrBusData = config!!
         arrBusData = arrBusData.filter { it.aid != aid }
 //        Toast.makeText(this, "getDefaultConfigValue arrBusDataOnline2: ${arrBusData}", Toast.LENGTH_SHORT).show()
-        Log.d("MainActivity getDefaultConfigValue arrBusDataOnline2", arrBusData.toString())
+        Log.d("TestMapActivity getDefaultConfigValue arrBusDataOnline2", arrBusData.toString())
         for (bus in arrBusData) {
             val busPosition = LatLong(latitude, longitude)
             val markerDrawable = AndroidGraphicFactory.convertToBitmap(
@@ -1587,7 +1602,7 @@ class TestMapActivity : AppCompatActivity() {
             binding.map.layerManager.layers.add(marker)
             // Store it in markerBus HashMap
             markerBus[bus.accessToken] = marker
-            Log.d("MainActivity getDefaultConfigValue MarkerDrawable", "Bus symbol drawable applied")
+            Log.d("TestMapActivity getDefaultConfigValue MarkerDrawable", "Bus symbol drawable applied")
         }
     }
 
@@ -1602,18 +1617,18 @@ class TestMapActivity : AppCompatActivity() {
 
     /** Fetches the configuration data and initializes the config variable. */
 //    private fun fetchConfig(callback: (Boolean) -> Unit) {
-//        Log.d("MainActivity fetchConfig", "Fetching config...")
+//        Log.d("TestMapActivity fetchConfig", "Fetching config...")
 //
 //        mqttManagerConfig.fetchSharedAttributes(tokenConfigData) { listConfig ->
 //            runOnUiThread {
 //                if (listConfig.isNotEmpty()) {
 //                    config = listConfig
-//                    Log.d("MainActivity fetchConfig", "✅ Config received: $config")
+//                    Log.d("TestMapActivity fetchConfig", "✅ Config received: $config")
 //                    subscribeSharedData()
 //                    callback(true)
 //                } else {
-//                    Log.e("MainActivity fetchConfig", "❌ Failed to initialize config. Running in offline mode.")
-////                    Toast.makeText(this@MainActivity, "Running in offline mode. No bus information available.", Toast.LENGTH_SHORT).show()
+//                    Log.e("TestMapActivity fetchConfig", "❌ Failed to initialize config. Running in offline mode.")
+////                    Toast.makeText(this@TestMapActivity, "Running in offline mode. No bus information available.", Toast.LENGTH_SHORT).show()
 //                    callback(false)
 //                }
 //            }
@@ -1634,10 +1649,10 @@ class TestMapActivity : AppCompatActivity() {
                 )
             }
             BusStopProximityManager.setBusStopList(busStopInfo)
-            Log.d("MainActivity updateBusStopProximityManager", "BusStopProximityManager updated with ${busStopInfo.size} stops.")
-            Log.d("MainActivity updateBusStopProximityManager", "busStopInfo ${busStopInfo.toString()}")
+            Log.d("TestMapActivity updateBusStopProximityManager", "BusStopProximityManager updated with ${busStopInfo.size} stops.")
+            Log.d("TestMapActivity updateBusStopProximityManager", "busStopInfo ${busStopInfo.toString()}")
         } else {
-            Log.d("MainActivity updateBusStopProximityManager", "No stops available to update BusStopProximityManager.")
+            Log.d("TestMapActivity updateBusStopProximityManager", "No stops available to update BusStopProximityManager.")
         }
     }
 
@@ -1744,9 +1759,9 @@ class TestMapActivity : AppCompatActivity() {
         // **Check if layer already exists before adding**
         if (!binding.map.layerManager.layers.contains(renderLayer)) {
             binding.map.layerManager.layers.add(renderLayer)
-            Log.d("MainActivity openMapFromAssets", "✅ Offline map added successfully.")
+            Log.d("TestMapActivity openMapFromAssets", "✅ Offline map added successfully.")
         } else {
-            Log.d("MainActivity openMapFromAssets", "⚠️ Offline map layer already exists. Skipping duplicate addition.")
+            Log.d("TestMapActivity openMapFromAssets", "⚠️ Offline map layer already exists. Skipping duplicate addition.")
         }
 
         binding.map.setCenter(LatLong(latitude, longitude)) // Set the default location to center the bus marker
@@ -1760,7 +1775,7 @@ class TestMapActivity : AppCompatActivity() {
 
         // **Ensure the map is fully loaded before drawing the polyline**
         binding.map.post {
-            Log.d("MainActivity", "Map is fully initialized. Drawing polyline now.")
+            Log.d("TestMapActivity", "Map is fully initialized. Drawing polyline now.")
             drawPolyline()  // Draw polyline only after map is loaded
             addBusStopMarkers(stops)
         }
@@ -1863,6 +1878,6 @@ class TestMapActivity : AppCompatActivity() {
             binding.map.layerManager.layers.remove(it)
             binding.map.invalidate()
         }
-        Log.d("MainActivity", "🗑️ Removed polyline on destroy.")
+        Log.d("TestMapActivity", "🗑️ Removed polyline on destroy.")
     }
 }
