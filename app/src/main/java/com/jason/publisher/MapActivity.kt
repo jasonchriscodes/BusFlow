@@ -53,6 +53,8 @@ import java.lang.Math.cos
 import java.lang.Math.sin
 import java.lang.Math.sqrt
 import java.text.ParseException
+import com.google.android.gms.location.*
+import com.google.android.gms.tasks.Task
 
 class MapActivity : AppCompatActivity() {
 
@@ -959,6 +961,10 @@ class MapActivity : AppCompatActivity() {
      */
     private val passedStops = mutableListOf<BusStop>() // Track stops that have been passed
     private var currentStopIndex = 0 // Keep track of the current stop in order
+    private var hasPassedFirstStopAgain = false
+    private val isCircularRoute: Boolean
+        get() = stops.isNotEmpty() && stops.first().address == stops.last().address
+
 
     @SuppressLint("LongLogTag")
     private fun checkPassedStops(currentLat: Double, currentLon: Double) {
@@ -982,18 +988,58 @@ class MapActivity : AppCompatActivity() {
         val failSafeThreshold = 100.0 // Fail-safe trigger range
 
         if (distance <= stopPassThreshold) {
-            Log.d(
-                "MapActivity checkPassedStops",
-                "✅ Nearest stop passed: $stopLat, $stopLon (Distance: ${"%.2f".format(distance)} meters) at $stopAddress"
-            )
 
             runOnUiThread {
                 upcomingBusStopTextView.text = "$stopAddress"
                 upcomingStop = stopAddress
+                Log.d(
+                    "MapActivity checkPassedStops",
+                    "✅ Nearest stop passed: $stopLat, $stopLon (Distance: ${"%.2f".format(distance)} meters) at $stopAddress"
+                )
+                Toast.makeText(
+                    this@MapActivity,
+                    "✅At ${latitude} ${longitude} nearest stop passed: $stopLat, $stopLon (Distance: ${"%.2f".format(distance)} meters) at $stopAddress",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
+            // Track the first stop being passed a second time in circular routes
+            if (isCircularRoute && nextStop == stops.first()) {
+                if (hasPassedFirstStopAgain) {
+                    // Trip ends after second pass of the first stop
+                    upcomingStop = "End of Route"
+                    runOnUiThread {
+                        upcomingBusStopTextView.text = "End of Route"
+                        Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+                    }
+                    showSummaryDialog()
+                    return
+                } else {
+                    hasPassedFirstStopAgain = true
+                    Log.d("MapActivity", "🔄 Passed first stop a second time, preparing to end the trip.")
+                }
             }
 
             passedStops.add(nextStop)
             currentStopIndex++
+
+            // Automatically detect if this was the final stop
+            if (currentStopIndex >= stops.size) {
+                upcomingStop = "End of Route"
+                runOnUiThread {
+                    upcomingBusStopTextView.text = "End of Route"
+                    Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+                }
+
+                // ✅ Trigger trip completion dialog
+                showSummaryDialog()
+            } else {
+                val upcomingStop = stops[currentStopIndex]
+                val upcomingStopName = getUpcomingBusStopName(upcomingStop.latitude ?: 0.0, upcomingStop.longitude ?: 0.0)
+                runOnUiThread {
+                    upcomingBusStopTextView.text = "$upcomingStopName"
+                }
+            }
 
             // Build timing list and update API time only if the stop exists in it
             val timingList = BusStopWithTimingPoint.fromRouteData(busRouteData.first())
@@ -1007,12 +1053,12 @@ class MapActivity : AppCompatActivity() {
                 val upcomingStop = stops[currentStopIndex]
                 val upcomingStopName = getUpcomingBusStopName(upcomingStop.latitude ?: 0.0, upcomingStop.longitude ?: 0.0)
 
-                Log.d(
-                    "MapActivity checkPassedStops",
-                    "🛑 No stop passed. Nearest stop: ${upcomingStop.latitude}, ${upcomingStop.longitude} is ${
-                        "%.2f".format(distance)
-                    } meters away at $upcomingStopName."
-                )
+//                Log.d(
+//                    "MapActivity checkPassedStops",
+//                    "🛑 No stop passed. Nearest stop: ${upcomingStop.latitude}, ${upcomingStop.longitude} is ${
+//                        "%.2f".format(distance)
+//                    } meters away at $upcomingStopName."
+//                )
 
                 runOnUiThread {
                     upcomingBusStopTextView.text = "$upcomingStopName"
@@ -1029,16 +1075,22 @@ class MapActivity : AppCompatActivity() {
         } else {
             val upcomingStopName = getUpcomingBusStopName(stopLat, stopLon)
 
-            Log.d(
-                "MapActivity checkPassedStops",
-                "🛑 No stop passed. Nearest stop: ${nextStop.latitude}, ${nextStop.longitude} is ${
-                    "%.2f".format(distance)
-                } meters away at $upcomingStopName."
-            )
-
             runOnUiThread {
                 upcomingBusStopTextView.text = "$upcomingStopName"
                 upcomingStop = upcomingStopName
+                Log.d(
+                    "MapActivity checkPassedStops",
+                    "🛑 No stop passed. Nearest stop: ${nextStop.latitude}, ${nextStop.longitude} is ${
+                        "%.2f".format(distance)
+                    } meters away at $upcomingStopName."
+                )
+                Toast.makeText(
+                    this@MapActivity,
+                    "🛑At ${latitude} ${longitude} no stop passed. Nearest stop is ${
+                        "%.2f".format(distance)
+                    } meters away at $upcomingStopName.",
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
@@ -1307,50 +1359,52 @@ class MapActivity : AppCompatActivity() {
      * Starts live location updates using the device's GPS instead of simulation.
      * Updates latitude, longitude, bearing, speed, and UI elements accordingly.
      */
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var locationRequest: LocationRequest
+    private lateinit var locationCallback: LocationCallback
+
     @SuppressLint("MissingPermission", "LongLogTag")
     private fun startLocationUpdate() {
-        if (!::locationManager.isInitialized) {
-            Log.e("MapActivity startLocationUpdate", "❌ LocationManager is not initialized!")
-            return
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
+        locationRequest = LocationRequest.create().apply {
+            interval = 1000 // 1 second updates
+            fastestInterval = 500 // Fastest update in 500ms
+            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
 
-        locationManager.startLocationUpdates(object : LocationListener {
-            override fun onLocationUpdate(location: Location) {
-                latitude = location.latitude
-                longitude = location.longitude
-                speed = location.speed * 3.6f // Convert from m/s to km/h
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult) {
+                locationResult.lastLocation?.let { location ->
+                    latitude = location.latitude
+                    longitude = location.longitude
+                    speed = location.speed * 3.6f // Convert m/s to km/h
+                    bearing = location.bearing
 
-                if (lastLatitude != 0.0 && lastLongitude != 0.0) {
-                    // Calculate bearing only if there is a previous location
-                    bearing = calculateBearing(lastLatitude, lastLongitude, latitude, longitude)
-                }
+                    runOnUiThread {
+                        speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
 
-                // Log location updates
-                Log.d("MapActivity startLocationUpdate", "📍 Location: ($latitude, $longitude)")
-                Log.d("MapActivity startLocationUpdate", "➡️ Bearing: $bearing°  🏎️ Speed: ${"%.2f".format(speed)} km/h")
+                        updateBusMarkerPosition(latitude, longitude, bearing)
+                        checkPassedStops(latitude, longitude)
+                        updateTimingPointBasedOnLocation(latitude, longitude)
+                        checkScheduleStatus()
+                        updateApiTime()
 
-                // Move bus marker on the map
-                updateBusMarkerPosition(latitude, longitude, bearing)
+                        binding.map.invalidate() // Refresh map view
+                    }
 
-                // Check if the bus has passed any stops
-                checkPassedStops(latitude, longitude)
+                    if (firstTime) {
+                        firstTime = false
+                        startActualTimeUpdater()
+                    }
 
-                // Update upcoming timing point
-                updateTimingPointBasedOnLocation(latitude, longitude)
-
-                // Check and update schedule status
-                checkScheduleStatus()
-
-                // ✅ Call `updateApiTime()` after passing a stop to recalculate the schedule.
-                updateApiTime()
-
-                // ✅ Start actual time updater only once at the first location update.
-                if (firstTime) {
-                    firstTime = false
-                    startActualTimeUpdater()
+                    lastLatitude = latitude
+                    lastLongitude = longitude
                 }
             }
-        })
+        }
+
+        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
 
         Toast.makeText(this, "Live location updates started", Toast.LENGTH_SHORT).show()
     }

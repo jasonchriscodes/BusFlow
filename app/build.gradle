@@ -124,4 +124,6 @@ dependencies {
     implementation 'org.mapsforge:sqlite-android:0.18.0:natives-arm64-v8a'
     implementation 'org.mapsforge:sqlite-android:0.18.0:natives-x86'
     implementation 'org.mapsforge:sqlite-android:0.18.0:natives-x86_64'
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
+
 }
