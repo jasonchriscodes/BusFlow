@@ -1,10 +1,11 @@
-<?xml version="1.0" encoding="utf-8"?>
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/colorPrimary">
+    android:background="@color/colorPrimary"
+    tools:context=".MapActivity">
 
     <!-- Top Bar: All three views in one horizontal container -->
     <LinearLayout
@@ -99,6 +100,7 @@
         android:layout_margin="4dp"
         android:orientation="horizontal"
         android:gravity="center"
+        android:visibility="gone"
         android:background="@drawable/button_rounded_background"
         android:backgroundTint="@color/purple_500"
         android:padding="8dp">
@@ -173,7 +175,7 @@
             app:layout_constraintBottom_toTopOf="@id/guidelineHorizontal">
 
             <TextView
-                android:id="@+id/scheduleStatusLabel"
+                android:id="@+id/scheduleStatusValueTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Ahead by 2 minutes"
@@ -270,15 +272,15 @@
                 android:orientation="horizontal"
                 android:gravity="center">
                 <TextView
-                    android:id="@+id/finishTimeLabel"
+                    android:id="@+id/tripEndTimeTitleTextView"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Finish Time:"
+                    android:text="Trip End Time:"
                     android:textColor="@color/white"
                     android:textSize="22sp"
                     android:textStyle="bold" />
                 <TextView
-                    android:id="@+id/finishTimeValue"
+                    android:id="@+id/tripEndTimeTextView"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"

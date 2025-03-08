@@ -201,7 +201,7 @@ class ScheduleActivity : AppCompatActivity() {
             Log.d("MainActivity onCreate  NetworkStatusHelperoffline", "Updated durationBetweenStops: $durationBetweenStops")
 
             // Auto start route if the first schedule time has passed 1.5 minutes
-            startPeriodicScheduleCheck()
+//            startPeriodicScheduleCheck()
         } else {
             // **Online Mode: Fetch data from ThingsBoard**
             Toast.makeText(this, "Online mode: Receiving data from Thingsboard.", Toast.LENGTH_LONG).show()
@@ -233,16 +233,29 @@ class ScheduleActivity : AppCompatActivity() {
 
         // Set up the "Start Route" button
         binding.startRouteButton.setOnClickListener {
-            val intent = Intent(this, MapActivity::class.java).apply {
-                putExtra("AID", aid)
-                putExtra("CONFIG", ArrayList(config))
-                putExtra("JSON_STRING", jsonString)
-                putExtra("ROUTE", ArrayList(route)) // Send list as ArrayList
-                putExtra("STOPS", ArrayList(stops)) // Send list as ArrayList
-                putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops)) // Send list as ArrayList
-                putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+            if (scheduleData.isNotEmpty()) {
+                val firstScheduleItem = scheduleData.first() // Store first schedule item
+                Log.d("ScheduleActivity testStartRouteButton firstScheduleItem", firstScheduleItem.toString())
+                Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
+//                scheduleData = scheduleData.drop(1) // Remove the first item
+                Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
+                rewriteOfflineScheduleData()
+
+                val intent = Intent(this, MapActivity::class.java).apply {
+                    putExtra("AID", aid)
+                    putExtra("CONFIG", ArrayList(config))
+                    putExtra("JSON_STRING", jsonString)
+                    putExtra("ROUTE", ArrayList(route))
+                    putExtra("STOPS", ArrayList(stops))
+                    putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
+                    putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+                    putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+                    putExtra("FULL_SCHEDULE_DATA", ArrayList(listOf(scheduleData)))
+                }
+                startActivity(intent)
+            } else {
+                Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
             }
-            startActivity(intent)
         }
 
         // Set up the "Start Route" button
@@ -255,7 +268,7 @@ class ScheduleActivity : AppCompatActivity() {
                 Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
                 rewriteOfflineScheduleData()
 
-                val intent = Intent(this, TestMapActivity::class.java).apply {
+                val intent = Intent(this, MapActivity::class.java).apply {
                     putExtra("AID", aid)
                     putExtra("CONFIG", ArrayList(config))
                     putExtra("JSON_STRING", jsonString)

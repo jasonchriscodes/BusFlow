@@ -8,25 +8,31 @@ import android.os.Looper
 import android.util.Log
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.jason.publisher.databinding.ActivityMapBinding
+import com.jason.publisher.databinding.ActivityTestmapBinding
 import com.jason.publisher.model.BusRoute
 import org.osmdroid.views.MapController
 import java.text.SimpleDateFormat
 import java.util.*
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.location.Location
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import android.view.View
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.jason.publisher.model.BusItem
 import com.jason.publisher.model.BusStop
 import com.jason.publisher.model.BusStopInfo
+import com.jason.publisher.model.BusStopWithTimingPoint
 import com.jason.publisher.model.RouteData
 import com.jason.publisher.model.ScheduleItem
 import com.jason.publisher.services.LocationManager
@@ -46,14 +52,15 @@ import java.lang.Math.atan2
 import java.lang.Math.cos
 import java.lang.Math.sin
 import java.lang.Math.sqrt
+import java.text.ParseException
 
 class MapActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityMapBinding
+    private lateinit var binding: ActivityTestmapBinding
     private lateinit var locationManager: LocationManager
     private lateinit var mapController: MapController
     private lateinit var dateTimeHandler: Handler
-    private lateinit var dateTimeRunnable: Runnable
+//    private lateinit var dateTimeRunnable: Runnable
 
     private var latitude = 0.0
     private var longitude = 0.0
@@ -78,12 +85,16 @@ class MapActivity : AppCompatActivity() {
     private var firstTime = true
     private var upcomingStop: String = "Unknown"
 
-//    private lateinit var aidTextView: TextView
-//    private lateinit var latitudeTextView: TextView
-//    private lateinit var longitudeTextView: TextView
-//    private lateinit var bearingTextView: TextView
-//    private lateinit var speedTextView: TextView
+    private lateinit var aidTextView: TextView
+    private lateinit var latitudeTextView: TextView
+    private lateinit var longitudeTextView: TextView
+    private lateinit var bearingTextView: TextView
+    private lateinit var speedTextView: TextView
     private lateinit var upcomingBusStopTextView: TextView
+    private lateinit var scheduleStatusIcon: ImageView
+    private lateinit var scheduleStatusText: TextView
+    private lateinit var timingPointandStopsTextView: TextView
+    private lateinit var tripEndTimeTextView: TextView
 
     private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
     private var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
@@ -95,7 +106,22 @@ class MapActivity : AppCompatActivity() {
     private var isSimulating = false
     private var simulationStartTime: Long = 0L
     private lateinit var scheduleList: List<ScheduleItem>
+    private lateinit var scheduleData: List<ScheduleItem>
     private val redBusStops = mutableSetOf<String>()
+
+    private lateinit var actualTimeHandler: Handler
+    private lateinit var actualTimeRunnable: Runnable
+    private lateinit var actualTimeTextView: TextView
+    private lateinit var timingPointValueTextView: TextView
+    private lateinit var ApiTimeValueTextView: TextView
+    private lateinit var scheduleStatusValueTextView: TextView
+    private lateinit var thresholdRangeValueTextView: TextView
+    private var simulatedStartTime: Calendar = Calendar.getInstance()
+
+    private var apiTimeLocked = false
+    private var lockedApiTime: String? = null
+    private var simulationSpeedFactor: Int = 1
+    private lateinit var arriveButtonContainer: LinearLayout
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -110,10 +136,11 @@ class MapActivity : AppCompatActivity() {
         private const val SOUND_FILE_NAME = "notif.wav"
     }
 
+    @SuppressLint("LongLogTag")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AndroidGraphicFactory.createInstance(application)
-        binding = ActivityMapBinding.inflate(layoutInflater)
+        binding = ActivityTestmapBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         // Initialize managers before using them
@@ -127,19 +154,30 @@ class MapActivity : AppCompatActivity() {
         stops = intent.getSerializableExtra("STOPS") as? List<BusStop> ?: emptyList()
         durationBetweenStops = intent.getSerializableExtra("DURATION_BETWEEN_BUS_STOP") as? List<Double> ?: emptyList()
         busRouteData = intent.getSerializableExtra("BUS_ROUTE_DATA") as? List<RouteData> ?: emptyList()
-        scheduleList = intent.getSerializableExtra("SCHEDULE_DATA") as? List<ScheduleItem> ?: emptyList()
+        scheduleList = intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? List<ScheduleItem> ?: emptyList()
+        scheduleData = intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? List<ScheduleItem> ?: emptyList()
 
-        Log.d("MainActivity onCreate retrieve", "Received aid: $aid")
-        Log.d("MainActivity onCreate retrieve", "Received config: ${config.toString()}")
-        Log.d("MainActivity onCreate retrieve", "Received jsonString: $jsonString")
-        Log.d("MainActivity onCreate retrieve", "Received route: ${route.toString()}")
-        Log.d("MainActivity onCreate retrieve", "Received stops: ${stops.toString()}")
-        Log.d("MainActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
-        Log.d("MainActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
-        Log.d("MainActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
+        Log.d("MapActivity onCreate retrieve", "Received aid: $aid")
+        Log.d("MapActivity onCreate retrieve", "Received config: ${config.toString()}")
+        Log.d("MapActivity onCreate retrieve", "Received jsonString: $jsonString")
+        Log.d("MapActivity onCreate retrieve", "Received route: ${route.toString()}")
+        Log.d("MapActivity onCreate retrieve", "Received stops: ${stops.toString()}")
+        Log.d("MapActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
+        Log.d("MapActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
+        Log.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
+        Log.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
+
+        extractRedBusStops()
 
         // Initialize UI components
         initializeUIComponents()
+
+        updateApiTime() // Ensure API time is updated at the start
+
+        initializeTimingPoint()
+
+        // ✅ Ensure locationManager is initialized
+        locationManager = LocationManager(this)
 
 //        aidTextView.text = "AID: $aid"
 
@@ -147,21 +185,21 @@ class MapActivity : AppCompatActivity() {
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
 
         // Initialize the date/time updater
-        startDateTimeUpdater()
+//        startDateTimeUpdater()
 
 //        fetchConfig { success ->
 //            if (success) {
 //                getAccessToken()
-                Log.d("MainActivity onCreate Token", token)
+        Log.d("MapActivity onCreate Token", token)
 //                mqttManager = MqttManager(serverUri = TimeTableActivity.SERVER_URI, clientId = TimeTableActivity.CLIENT_ID, username = token)
-                getDefaultConfigValue()
+        getDefaultConfigValue()
 //                requestAdminMessage()
 //                connectAndSubscribe()
-//                Log.d("MainActivity oncreate fetchConfig config", config.toString())
-//                Log.d("MainActivity oncreate fetchConfig busRoute", route.toString())
-//                Log.d("MainActivity oncreate fetchConfig busStop", stops.toString())
+//                Log.d("MapActivity oncreate fetchConfig config", config.toString())
+//                Log.d("MapActivity oncreate fetchConfig busRoute", route.toString())
+//                Log.d("MapActivity oncreate fetchConfig busStop", stops.toString())
 //            } else {
-//                Log.e("MainActivity onCreate", "Failed to fetch config, running in offline mode.")
+//                Log.e("MapActivity onCreate", "Failed to fetch config, running in offline mode.")
 //            }
 //        }
 
@@ -172,8 +210,8 @@ class MapActivity : AppCompatActivity() {
             override fun onLocationUpdate(location: Location) {
                 latitude = location.latitude
                 longitude = location.longitude
-                Log.d("MainActivity onCreate Latitude", latitude.toString())
-                Log.d("MainActivity onCreate Longitude", longitude.toString())
+                Log.d("MapActivity onCreate Latitude", latitude.toString())
+                Log.d("MapActivity onCreate Longitude", longitude.toString())
 
                 // Update UI components with the current location
 //                latitudeTextView.text = "Latitude: $latitude"
@@ -185,17 +223,100 @@ class MapActivity : AppCompatActivity() {
         openMapFromAssets()
 
         // Start tracking the location and updating the marker
-//        startLocationUpdate()
+        startLocationUpdate()
 
-//        binding.startSimulationButton.setOnClickListener {
+        binding.startSimulationButton.setOnClickListener {
 //            startSimulation()
-//        }
-//        binding.stopSimulationButton.setOnClickListener {
-//            stopSimulation()
-//        }
+        }
+        binding.stopSimulationButton.setOnClickListener {
+            stopSimulation()
+        }
+        binding.backButton.setOnClickListener {
+            val intent = Intent(this, ScheduleActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+            startActivity(intent)
+            finish()
+        }
+        binding.speedUpButton.setOnClickListener {
+            speedUp()
+        }
+
+        binding.slowDownButton.setOnClickListener {
+            slowDown()
+        }
+
+        binding.arriveButton.setOnClickListener {
+            confirmArrival()
+        }
+    }
+
+    /**
+     * mark a bus stop as "arrived" and prevent duplicate arrivals.
+     */
+    @SuppressLint("LongLogTag")
+    private fun confirmArrival() {
+        if (upcomingStop.isNotEmpty()) {
+            Toast.makeText(this, "Arrived at $upcomingStop", Toast.LENGTH_SHORT).show()
+            Log.d("MapActivity confirmArrival", "✅ Arrived at bus stop: $upcomingStop")
+
+            // Move to the next stop
+            moveToNextStop()
+        } else {
+            Toast.makeText(this, "No upcoming stop detected!", Toast.LENGTH_SHORT).show()
+            Log.e("MapActivity confirmArrival", "❌ Arrival attempted with no upcoming stop set.")
+        }
+    }
+
+    /**
+     * Moves to the next scheduled bus timing stop in the route.
+     */
+    @SuppressLint("LongLogTag")
+    private fun moveToNextStop() {
+        if (scheduleList.isEmpty()) {
+            Log.e("MapActivity moveToNextStop", "❌ No schedule data available.")
+            Toast.makeText(this, "No schedule available", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Find the index of the current upcoming stop
+        val currentIndex = scheduleList.first().busStops.indexOfFirst { it.time == upcomingStop }
+
+        if (currentIndex == -1 || currentIndex >= scheduleList.first().busStops.size - 1) {
+            Log.d("MapActivity moveToNextStop", "✅ Reached the final stop, no further stops available.")
+            Toast.makeText(this, "You have reached the final stop.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Move to the next stop
+        val nextStop = scheduleList.first().busStops[currentIndex + 1]
+        upcomingStop = nextStop.time
+        runOnUiThread {
+            upcomingBusStopTextView.text = "Next Stop: ${nextStop.name} at ${nextStop.time}"
+            timingPointValueTextView.text = nextStop.time
+        }
+
+        Log.d("MapActivity moveToNextStop", "🔹 Moving to next stop: ${nextStop.name} at ${nextStop.time}")
+    }
+
+    /**
+     * extract first schedule item of bus stop to be marked red
+     */
+    @SuppressLint("LongLogTag")
+    private fun extractRedBusStops() {
+        redBusStops.clear()
+        if (scheduleList.isNotEmpty()) {
+            val firstSchedule = scheduleList.first()
+            Log.d("MapActivity extractRedBusStops firstSchedule", "$firstSchedule")
+
+            val stops = firstSchedule.busStops.map { it.name }
+            redBusStops.addAll(stops)
+            Log.d("MapActivity extractRedBusStops stops", "$stops")
+        }
+        Log.d("MapActivity extractRedBusStops", "Updated Red bus stops: $redBusStops")
     }
 
     /** Updates bus name if AID matches a config entry */
+    @SuppressLint("LongLogTag")
     private fun updateBusNameFromConfig() {
         if (config.isNullOrEmpty()) return // No config available
 
@@ -204,263 +325,629 @@ class MapActivity : AppCompatActivity() {
         if (matchingBus != null) {
             busname = matchingBus.bus
             runOnUiThread {
-                binding.busNameTextView.text = "$busname"
+//                binding.busNameTextView.text = "Bus Name: $busname"
             }
-            Log.d("MainActivity", "✅ Bus name updated: $busname for AID: $aid")
+            Log.d("MapActivity updateBusNameFromConfig", "✅ Bus name updated: $busname for AID: $aid")
         } else {
-            Log.e("MainActivity", "❌ No matching bus found for AID: $aid")
+            Log.e("MapActivity updateBusNameFromConfig", "❌ No matching bus found for AID: $aid")
         }
     }
 
     /** Starts the simulation with realistic speed */
-    private fun startSimulation() {
-        if (route.isEmpty()) {
-            Toast.makeText(this, "No route data available", Toast.LENGTH_SHORT).show()
-            return
-        }
+//    private fun startSimulation() {
+//        if (route.isEmpty()) {
+//            Toast.makeText(this, "No route data available", Toast.LENGTH_SHORT).show()
+//            return
+//        }
+//
+//        if (isSimulating) {
+//            Toast.makeText(this, "Simulation already running", Toast.LENGTH_SHORT).show()
+//            return
+//        }
+//
+//        isSimulating = true
+//        simulationStartTime = System.currentTimeMillis() // Track simulation time
+//        simulationHandler = Handler(Looper.getMainLooper())
+//        currentRouteIndex = 0
+//
+//        initializeTimingPoint()
+//
+//        // Start the actual time from the schedule's start time
+//        startActualTimeUpdater()
+//
+//        simulationRunnable = object : Runnable {
+//            @RequiresApi(Build.VERSION_CODES.M)
+//            override fun run() {
+//                if (currentRouteIndex < route.size - 1) {
+//                    val start = route[currentRouteIndex]
+//                    val end = route[currentRouteIndex + 1]
+//
+//                    val startLat = start.latitude!!
+//                    val startLon = start.longitude!!
+//                    val endLat = end.latitude!!
+//                    val endLon = end.longitude!!
+//
+//                    val distanceMeters = calculateDistance(startLat, startLon, endLat, endLon)
+//                    // If simulationSpeedFactor is 0, bus is stopped; simply re-post without movement.
+//                    if (simulationSpeedFactor <= 0) {
+//                        simulationHandler.postDelayed(this, 1000)
+//                        return
+//                    }
+//                    // Adjust travel time: base travel time divided by the speed factor.
+//                    val travelTimeSeconds = (distanceMeters / 8.33) / simulationSpeedFactor
+//                    val steps = (travelTimeSeconds * 10).toInt() // Update every 100ms
+//
+//                    simulateMovement(startLat, startLon, endLat, endLon, steps)
+//
+//                    simulationHandler.postDelayed({
+//                        currentRouteIndex++
+//                        simulationHandler.post(this)
+//                    }, (travelTimeSeconds * 1000).toLong())
+//                } else {
+//                    isSimulating = false
+//                    stopActualTimeUpdater()
+//                    Toast.makeText(this@MapActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
+//                    showSummaryDialog() // Show the summary dialog after simulation completes.
+//                }
+//            }
+//        }
+//        simulationHandler.post(simulationRunnable)
+//        Toast.makeText(this, "Simulation started", Toast.LENGTH_SHORT).show()
+//    }
 
-        if (isSimulating) {
-            Toast.makeText(this, "Simulation already running", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        isSimulating = true
-        simulationStartTime = System.currentTimeMillis() // Initialize simulation time
-        simulationHandler = Handler(Looper.getMainLooper())
-        currentRouteIndex = 0
-
-        simulationRunnable = object : Runnable {
-            override fun run() {
-                if (currentRouteIndex < route.size - 1) {
-                    val start = route[currentRouteIndex]
-                    val end = route[currentRouteIndex + 1]
-
-                    if (start.latitude == null || start.longitude == null ||
-                        end.latitude == null || end.longitude == null) return
-
-                    val startLat = start.latitude!!
-                    val startLon = start.longitude!!
-                    val endLat = end.latitude!!
-                    val endLon = end.longitude!!
-
-                    // Calculate distance and estimated travel time at 30 km/h (8.33 m/s)
-                    val distanceMeters = calculateDistance(startLat, startLon, endLat, endLon)
-                    val travelTimeSeconds = distanceMeters / 8.33  // Time needed at 30 km/h
-                    val steps = (travelTimeSeconds * 10).toInt() // Update every 100ms
-
-                    // Interpolate and update position gradually
-                    simulateMovement(startLat, startLon, endLat, endLon, steps)
-
-                    // Move to next point after completion
-                    simulationHandler.postDelayed({
-                        currentRouteIndex++
-                        simulationHandler.post(this)
-                    }, (travelTimeSeconds * 1000).toLong()) // Wait until movement completes
-                } else {
-                    isSimulating = false
-                    Toast.makeText(this@MapActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-
-        simulationHandler.post(simulationRunnable)
-
-        // ✅ Run schedule check every 1 second during simulation
-        simulationHandler.postDelayed(object : Runnable {
-            override fun run() {
-                if (!isSimulating) return
-                checkScheduleStatus() // Check schedule
-                simulationHandler.postDelayed(this, 1000) // Repeat every 1 sec
-            }
-        }, 1000)
-
-        Toast.makeText(this, "Simulation started", Toast.LENGTH_SHORT).show()
+    /**
+     * Add this helper function to convert a time string (e.g. "08:11") to minutes since midnight.
+     */
+    private fun convertTimeToMinutes(time: String): Int {
+        val parts = time.split(":").map { it.toInt() }
+        return parts[0] * 60 + parts[1]
     }
 
     /**
-     * Logs actual timestamp, expected arrival time, and schedule status.
-     * Resets actual time when a stop is passed.
+     * Call this function when the simulation finishes.
      */
-    private fun checkScheduleStatus() {
-        if (!isSimulating || durationBetweenStops.isEmpty() || stops.isEmpty()) return
-
-        Log.d("=========== 🚀 SCHEDULE CHECK START ===========", "Checking schedule status...")
-
-        // Adjust index to prevent out-of-bounds access
-        val adjustedIndex = currentStopIndex - 1
-
-        // Ensure the adjusted index is within valid bounds
-        if (adjustedIndex < 0 || adjustedIndex >= stops.size || adjustedIndex >= durationBetweenStops.size) {
-            Log.e(
-                "MainActivity checkScheduleStatus",
-                "❌ Index out of bounds!"
-            )
-//            resetSchedule() // 🔄 Reset schedule
-            return
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun showSummaryDialog() {
+        // Flatten scheduleData into a List<ScheduleItem>
+        val flatSchedule = (scheduleData as? List<Any> ?: emptyList()).flatMap { element ->
+            when (element) {
+                is ScheduleItem -> listOf(element)
+                is List<*> -> element.filterIsInstance<ScheduleItem>()
+                else -> emptyList()
+            }
         }
-
-        val nextStop = stops[adjustedIndex]
-        val stopLat = nextStop.latitude ?: return
-        val stopLon = nextStop.longitude ?: return
-
-        // Set expected time to the corresponding value in durationBetweenStops
-        val expectedTimeSeconds = (durationBetweenStops[adjustedIndex] * 60).toInt()
-
-        // Get actual elapsed time
-        val elapsedTimeMillis = System.currentTimeMillis() - simulationStartTime
-        val actualTimeSeconds = (elapsedTimeMillis / 1000).toInt()
-
-        // Define threshold range (± threshold seconds)
-        val threshold = 25
-        val lowerThresholdSeconds = expectedTimeSeconds - threshold
-        val upperThresholdSeconds = expectedTimeSeconds + threshold
-
-        // Convert seconds to mm:ss format
-        fun formatTime(seconds: Int): String {
-            val minutes = seconds / 60
-            val remainingSeconds = seconds % 60
-            return String.format("%02d min %02d sec", minutes, remainingSeconds)
+        val messageText = if (flatSchedule.size < 2) {
+            "You have completed last run of the day."
+        } else {
+            val nextTrip = flatSchedule[1]
+            val nextStartMinutes = convertTimeToMinutes(nextTrip.startTime)
+            val currentMinutes = simulatedStartTime.get(Calendar.HOUR_OF_DAY) * 60 +
+                    simulatedStartTime.get(Calendar.MINUTE)
+            val restTotalMinutes = if (nextStartMinutes > currentMinutes) nextStartMinutes - currentMinutes else 0
+            val restHours = restTotalMinutes / 60
+            val restMinutes = restTotalMinutes % 60
+            "Trip complete! You have $restHours hour(s) and $restMinutes minute(s) rest before your next trip, which starts at ${nextTrip.startTime}:00."
         }
+        // late notification: You are $restMinutes minute(s) for your next trip. Please notify operations of late departure.
+        // break (lunch break):  You are $restMinutes minute(s) for your break time.
+        // end of shift: You have completed last run of the day.
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Trip Completed")
+            .setMessage(messageText)
+            .setPositiveButton("View Next Trip") { dialog, _ ->
+                dialog.dismiss()
+                startActivity(Intent(this, ScheduleActivity::class.java))
+            }
+            .create()
+        dialog.show()
 
-        Log.d(
-            "MainActivity checkScheduleStatus",
-            """
-        🕒 Actual Time: ${formatTime(actualTimeSeconds)}
-        ⏳ Expected Time: ${formatTime(expectedTimeSeconds)}
-        ⏲️ Duration Between Stops: ${durationBetweenStops[adjustedIndex]} min
-        Duration Between Stops list: $durationBetweenStops
-        Upcoming Bus Stop: ${upcomingBusStopTextView.text}
-        ⏲️ Threshold: ±${threshold} sec (${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)})
-        """.trimIndent()
+        // Customize the dialog's background and text colors
+        dialog.window?.setBackgroundDrawableResource(R.color.colorMain)
+        dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.setTextColor(
+            resources.getColor(R.color.white, null)
         )
-
-        val statusTextView = findViewById<TextView>(R.id.scheduleStatusValueTextView)
-//        val expectedTimeTextView = findViewById<TextView>(R.id.expectedTimeValueTextView)
-        val actualTimeTextView = findViewById<TextView>(R.id.actualTimeValueTextView)
-        val thresholdRangeTextView = findViewById<TextView>(R.id.thresholdRangeValueTextView)
-
-//        expectedTimeTextView.text = formatTime(expectedTimeSeconds)
-        actualTimeTextView.text = formatTime(actualTimeSeconds)
-        thresholdRangeTextView.text = "${threshold} sec: ${formatTime(lowerThresholdSeconds)} - ${formatTime(upperThresholdSeconds)}"
-
-        // Check if the bus has passed the stop
-        val distanceToStop = calculateDistance(latitude, longitude, stopLat, stopLon)
-        val stopPassThreshold = 25.0  // Pass threshold (meters)
-
-        if (distanceToStop <= stopPassThreshold) {
-            Log.d("MainActivity checkScheduleStatus ✅ Stop Passed", "Resetting actual time for the next stop.")
-            resetActualTime() // ✅ Reset actual time to 0 sec
-            currentStopIndex++ // ✅ Move to next stop
-            return  // ✅ Skip remaining checks to avoid errors
-        }
-
-        // Check if the bus is ahead, behind, or on time
-        when {
-            actualTimeSeconds < lowerThresholdSeconds -> {
-                Log.w("MainActivity checkScheduleStatus", "🚀 Ahead by ${lowerThresholdSeconds - actualTimeSeconds} sec")
-                statusTextView.text = "🚀 Ahead by ${lowerThresholdSeconds - actualTimeSeconds} sec"
-                statusTextView.setTextColor(Color.RED)
-            }
-            actualTimeSeconds > upperThresholdSeconds -> {
-                Log.w("MainActivity checkScheduleStatus", "🐢 Behind by ${actualTimeSeconds - upperThresholdSeconds} sec")
-                statusTextView.text = "🐢 Behind by ${actualTimeSeconds - upperThresholdSeconds} sec"
-                statusTextView.setTextColor(Color.RED)
-            }
-            else -> {
-                Log.i("MainActivity checkScheduleStatus", "✅ On Time")
-                statusTextView.text = "✅ On Time"
-                statusTextView.setTextColor(Color.GREEN)
-            }
+        dialog.findViewById<TextView>(android.R.id.message)?.setTextColor(
+            resources.getColor(R.color.white, null)
+        )
+        // Style the positive button similar to your simulation button
+        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)?.apply {
+            setBackgroundTintList(ColorStateList.valueOf(resources.getColor(R.color.purple_400, null)))
+            setTextColor(resources.getColor(R.color.white, null))
         }
     }
 
-//    /**
-//     * Resets the schedule when an index out of bounds error occurs.
-//     * - Resets `currentStopIndex` to 0.
-//     * - Resets `simulationStartTime`.
-//     * - Ensures `expectedTimeSeconds` is set to the first durationBetweenStops value.
-//     */
-//    private fun resetSchedule() {
-//        Log.d("MainActivity resetSchedule", "🔄 Resetting schedule and actual time.")
-//
-//        currentStopIndex = 0 // ✅ Reset stop index
-//        simulationStartTime = System.currentTimeMillis() // ✅ Reset actual time
-//
-//        // ✅ Ensure expected time is set to the first value from durationBetweenStops
-//        val expectedTimeSeconds = if (durationBetweenStops.isNotEmpty()) {
-//            (durationBetweenStops.first() * 60).toInt()
-//        } else {
-//            0 // Default to 0 if durationBetweenStops is empty
-//        }
-//
-//        findViewById<TextView>(R.id.expectedTimeValueTextView).text = formatTime(expectedTimeSeconds)
-//
-//        Log.d("MainActivity resetSchedule", "✅ Schedule reset complete. Expected time: ${formatTime(expectedTimeSeconds)}. Starting from Stop 0.")
-//    }
+    /**
+     * increase speed factor
+     */
+    @SuppressLint("LongLogTag")
+    private fun speedUp() {
+        simulationSpeedFactor++ // Increase by 1 second per tick
+        Log.d("MapActivity SpeedControl", "Speed Up: simulationSpeedFactor is now $simulationSpeedFactor")
+    }
+
+    /**
+     * decrease speed factor
+     */
+    @SuppressLint("LongLogTag")
+    private fun slowDown() {
+        // Ensure never go below 0.
+        if (simulationSpeedFactor > 0) {
+            simulationSpeedFactor--
+        }
+        Log.d("MapActivity SpeedControl", "Slow Down: simulationSpeedFactor is now $simulationSpeedFactor")
+    }
+
+    /**
+     * Starts actual time from schedule
+     */
+    private fun startActualTimeUpdater() {
+        if (scheduleList.isNotEmpty()) {
+            val startTimeStr = scheduleList.first().startTime  // e.g. "08:00"
+            val timeParts = startTimeStr.split(":")
+            if (timeParts.size == 2) {
+                simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+                simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
+                simulatedStartTime.set(Calendar.SECOND, 0)
+            }
+        }
+
+        actualTimeHandler = Handler(Looper.getMainLooper())
+        actualTimeRunnable = object : Runnable {
+            override fun run() {
+                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                actualTimeTextView.text = timeFormat.format(simulatedStartTime.time)
+
+                // Always advance time by 1 second per tick (simulate real clock)
+                simulatedStartTime.add(Calendar.SECOND, 1)
+
+                // Update schedule status based on the new simulated time
+                checkScheduleStatus()
+
+                actualTimeHandler.postDelayed(this, 1000)
+            }
+        }
+        actualTimeHandler.post(actualTimeRunnable)
+    }
+
+    /** Stops actual time */
+    private fun stopActualTimeUpdater() {
+        actualTimeHandler.removeCallbacks(actualTimeRunnable)
+    }
+
+    /**
+     * Checks and updates the bus schedule status by comparing the scheduled arrival time
+     * with the predicted arrival time.
+     *
+     * The predicted arrival is computed as:
+     *   predictedArrival = (apiTime - baseTime) + actualTime
+     *
+     * The difference (deltaSec) in seconds between the scheduled arrival and the predicted
+     * arrival is compared against a tolerance of 60 seconds.
+     * - If |deltaSec| ≤ 60, the status is set to "On Time".
+     * - If deltaSec > 60, the bus is considered to be "Ahead by" deltaSec seconds.
+     * - If deltaSec < -60, the bus is "Behind by" the absolute value of deltaSec seconds.
+     *
+     * Instead of displaying a time range, the threshold is now shown as a single value.
+     * For example, if the tolerance is 60 seconds, the thresholdRangeValueTextView will display "60 sec".
+     *
+     * This method logs all of the following values:
+     * - Schedule Status (statusText)
+     * - Next Timing Point (the text of timingPointValueTextView)
+     * - API Time (as shown in ApiTimeValueTextView)
+     * - Actual Time (current simulated time)
+     * - Threshold Range (the tolerance in seconds)
+     */
+    @SuppressLint("LongLogTag")
+    private fun checkScheduleStatus() {
+        if (scheduleList.isEmpty()) return
+
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+        try {
+            // 1. Retrieve the scheduled arrival (next timing point) from the UI.
+            val scheduledTimeStr = timingPointValueTextView.text.toString()
+            Log.d("MapActivity checkScheduleStatus", "scheduledTimeStr: ${scheduledTimeStr}")
+            val scheduledTime = timeFormat.parse(scheduledTimeStr)
+
+            // 2. Define the base time (schedule start) by appending ":00" for seconds.
+            val baseTimeStr = scheduleList.first().startTime + ":00"
+            Log.d("MapActivity checkScheduleStatus", "baseTimeStr: ${baseTimeStr}")
+            val baseTime = timeFormat.parse(baseTimeStr)
+
+            // 3. Retrieve the API time from its TextView.
+            val apiTimeStr = ApiTimeValueTextView.text.toString()
+            Log.d("MapActivity checkScheduleStatus", "apiTimeStr: ${apiTimeStr}")
+            val apiTime = timeFormat.parse(apiTimeStr)
+
+            // 4. Get the actual (simulated) time.
+            val actualTimeStr = timeFormat.format(simulatedStartTime.time)
+            Log.d("MapActivity checkScheduleStatus", "actualTimeStr: ${actualTimeStr}")
+            val actualTime = timeFormat.parse(actualTimeStr)
+
+            // 5. Compute the predicted arrival time.
+            val predictedArrivalMillis = (apiTime.time - baseTime.time) + actualTime.time
+            Log.d("MapActivity checkScheduleStatus", "predictedArrivalMillis: ${predictedArrivalMillis}")
+            val predictedArrival = Date(predictedArrivalMillis)
+
+            // 6. Calculate the difference (delta) in seconds.
+            val deltaSec = ((scheduledTime.time - predictedArrival.time) / 1000).toInt()
+            Log.d("MapActivity checkScheduleStatus", "deltaSec: ${deltaSec}")
+
+            // 7. Define a tolerance value (in seconds).
+            val tolerance = 0
+
+            // 8. Determine the schedule status text based on deltaSec.
+            val statusText = when {
+                Math.abs(deltaSec) <= tolerance -> "On Time (${Math.abs(deltaSec)} sec)"
+                deltaSec > tolerance -> "Ahead by $deltaSec sec"
+                else -> "Behind by ${-deltaSec} sec"
+            }
+            Log.d("MapActivity checkScheduleStatus", "statusText: ${statusText}")
+
+            // 9. Update the UI: set the schedule status and display the tolerance as a single value.
+            runOnUiThread {
+                scheduleStatusValueTextView.text = statusText
+                thresholdRangeValueTextView.text = "$tolerance sec"  // Displaying a single threshold value
+                if (Math.abs(deltaSec) <= tolerance) {
+                    scheduleStatusValueTextView.setTextColor(Color.GREEN)
+                } else {
+                    scheduleStatusValueTextView.setTextColor(Color.RED)
+                }
+            }
+
+            // Log all the desired values.
+            Log.d("MapActivity checkScheduleStatus", "Schedule Status: $statusText")
+            Log.d("checkScheduleStatus", "Next Timing Point: ${timingPointValueTextView.text}")
+            Log.d("MapActivity checkScheduleStatus", "API Time: $apiTimeStr")
+            Log.d("MapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
+            Log.d("MapActivity checkScheduleStatus", "Threshold Range: $tolerance sec")
+
+            Log.d("MapActivity checkScheduleStatus", "Scheduled: $scheduledTimeStr, Predicted: ${timeFormat.format(predictedArrival)}, Delta: $deltaSec sec, Status: $statusText")
+        } catch (e: Exception) {
+            Log.e("MapActivity checkScheduleStatus", "Error parsing times: ${e.localizedMessage}")
+        }
+    }
 
     /**
      * Converts seconds to mm:ss format.
      */
-    private fun formatTime(seconds: Int): String {
-        val minutes = seconds / 60
-        val remainingSeconds = seconds % 60
-        return String.format("%02d min %02d sec", minutes, remainingSeconds)
+    private fun formatSecondsAsTime(seconds: Int): String {
+        val sign = if (seconds < 0) "-" else ""
+        val absSeconds = Math.abs(seconds)
+        val hours = absSeconds / 3600
+        val minutes = (absSeconds % 3600) / 60
+        val secs = absSeconds % 60
+        return String.format("%s%02d:%02d:%02d", sign, hours, minutes, secs)
     }
-
 
     /** 🔹 Reset actual time when the bus reaches a stop or upcoming stop changes */
     private fun resetActualTime() {
         simulationStartTime = System.currentTimeMillis()
-        Log.d("MainActivity", "✅ Actual time reset to current time.")
+        Log.d("MapActivity", "✅ Actual time reset to current time.")
     }
 
     /** Interpolates movement between two points with dynamic bearing and speed updates */
-        private fun simulateMovement(startLat: Double, startLon: Double, endLat: Double, endLon: Double, steps: Int) {
-        val latStep = (endLat - startLat) / steps
-        val lonStep = (endLon - startLon) / steps
+//    private fun simulateMovement(startLat: Double, startLon: Double, endLat: Double, endLon: Double, steps: Int) {
+//        val latStep = (endLat - startLat) / steps
+//        val lonStep = (endLon - startLon) / steps
+//
+//        var step = 0
+//        val stepHandler = Handler(Looper.getMainLooper())
+//
+//        val stepRunnable = object : Runnable {
+//            override fun run() {
+//                if (step < steps) {
+//                    val newLat = startLat + (latStep * step)
+//                    val newLon = startLon + (lonStep * step)
+//
+//                    // Check if the bus has passed any stops
+//                    checkPassedStops(newLat, newLon)
+//
+//                    // Update timing point if needed
+//                    updateTimingPointBasedOnLocation(newLat, newLon)
+//
+//                    // Calculate speed dynamically (meters per second)
+//                    if (step > 0) {
+//                        val distance = calculateDistance(lastLatitude, lastLongitude, newLat, newLon)
+//                        if (distance < 100) { // Prevents unrealistic jumps
+//                            speed = (distance / 0.1).toFloat() // 0.1 sec per step (100ms)
+//                        } else {
+//                            speed = 8.33f // Reset speed to normal when an anomaly is detected
+//                        }
+//                        // Update speed text view
+//                        runOnUiThread {
+//                            speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
+//                        }
+//                    }
+//
+//                    // Update bearing dynamically
+//                    if (step > 0) {
+//                        bearing = calculateBearing(lastLatitude, lastLongitude, newLat, newLon)
+//                    }
+//
+//                    // Move the bus marker
+//                    updateBusMarkerPosition(newLat, newLon, bearing)
+//
+//                    // Save last location
+//                    lastLatitude = newLat
+//                    lastLongitude = newLon
+//
+//                    step++
+//                    stepHandler.postDelayed(this, 100)
+//                }
+//            }
+//        }
+//        stepHandler.post(stepRunnable)
+//    }
 
-        var step = 0
-        val stepHandler = Handler(Looper.getMainLooper())
+    /**
+     * Updates the API Time TextView based on the schedule start time and the cumulative durations
+     * from the BusStopWithTimingPoint list.
+     *
+     * If the API time has already been locked (final value computed), it simply reuses that value.
+     * Otherwise, it computes the update as follows:
+     * - Finds the target index in the timing list based on the upcomingStop address.
+     * - Uses calculateDurationForUpdate() to determine the total duration.
+     *   • If that returns null, then the upcoming stop isn’t scheduled – no update.
+     *   • If non-null, it updates the API time.
+     * - If the upcoming stop equals the last scheduled bus stop, then we lock the API time.
+     */
+    private fun updateApiTime() {
+        // If locked, simply reuse the locked value.
+        if (apiTimeLocked && lockedApiTime != null) {
+            runOnUiThread { ApiTimeValueTextView.text = lockedApiTime }
+            Log.d("MapActivity updateApiTime", "API time locked, using last computed value: $lockedApiTime")
+            return
+        }
 
-        val stepRunnable = object : Runnable {
-            override fun run() {
-                if (step < steps) {
-                    val newLat = startLat + (latStep * step)
-                    val newLon = startLon + (lonStep * step)
+        if (busRouteData.isEmpty() || scheduleList.isEmpty()) return
 
-                    // Check if the bus has passed any stops
-                    checkPassedStops(newLat, newLon)
+        val firstSchedule = scheduleList.first()
+        val startTimeParts = firstSchedule.startTime.split(":")
+        if (startTimeParts.size != 2) return
 
-                    // Calculate speed dynamically (meters per second)
-                    if (step > 0) {
-                        val distance = calculateDistance(lastLatitude, lastLongitude, newLat, newLon)
-                        speed = (distance / 0.1).toFloat() // 0.1 seconds per step (100ms)
-                    }
+        val startCalendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, startTimeParts[0].toInt())
+            set(Calendar.MINUTE, startTimeParts[1].toInt())
+            set(Calendar.SECOND, 0)
+        }
 
-                    // Update bearing dynamically at each step
-                    if (step > 0) {
-                        bearing = calculateBearing(lastLatitude, lastLongitude, newLat, newLon)
-                    }
+        // Build timing list.
+        val timingList = BusStopWithTimingPoint.fromRouteData(busRouteData.first())
+        Log.d("MapActivity updateApiTime", "Timing list: $timingList")
 
-                    // Update UI
-//                    latitudeTextView.text = "Latitude: $newLat"
-//                    longitudeTextView.text = "Longitude: $newLon"
-//                    bearingTextView.text = "Bearing: $bearing°"
-//                    speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
+        val upcomingAddress = upcomingStop
+        Log.d("MapActivity updateApiTime", "Upcoming stop address: $upcomingAddress")
 
-                    // Move the bus marker
-                    updateBusMarkerPosition(newLat, newLon, bearing)
+        // Find the target index.
+        val targetIndex = timingList.indexOfFirst {
+            it.address?.equals(upcomingAddress, ignoreCase = true) == true
+        }
+        if (targetIndex == -1) {
+            Log.e("MapActivity updateApiTime", "Upcoming stop address not found in timing list.")
+            return
+        }
+        Log.d("MapActivity updateApiTime", "Found target index: $targetIndex")
 
-                    // Save last location
-                    lastLatitude = newLat
-                    lastLongitude = newLon
+        // Compute the total duration.
+        val totalDurationMinutes = calculateDurationForUpdate(timingList, scheduleList, targetIndex)
+        if (totalDurationMinutes == null) {
+            Log.d("MapActivity updateApiTime", "Upcoming bus stop not scheduled. Skipping API update.")
+            // If we already computed a final value before, do not override.
+            return
+        }
+        Log.d("MapActivity updateApiTime", "Total duration in minutes: $totalDurationMinutes")
 
-                    step++
-                    stepHandler.postDelayed(this, 100) // Update every 100ms
-                }
+        // Add the duration (in seconds) to the start time.
+        val additionalSeconds = (totalDurationMinutes * 60).toInt()
+        startCalendar.add(Calendar.SECOND, additionalSeconds)
+
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        val updatedApiTime = timeFormat.format(startCalendar.time)
+
+        runOnUiThread {
+            ApiTimeValueTextView.text = updatedApiTime
+        }
+        Log.d("MapActivity updateApiTime", "API Time updated to: $updatedApiTime")
+
+        // If the upcoming stop is the final scheduled stop, lock the API time.
+        val lastScheduledAddress = getLastScheduledAddress(timingList, scheduleList)
+        if (lastScheduledAddress != null &&
+            upcomingAddress.equals(lastScheduledAddress, ignoreCase = true)) {
+            apiTimeLocked = true
+            lockedApiTime = updatedApiTime
+            Log.d("MapActivity updateApiTime", "Final scheduled bus stop reached. API time locked.")
+        }
+    }
+
+    /**
+     * Returns a sorted list of indices in [timingList] whose addresses appear in the schedule.
+     */
+    private fun getScheduledIndices(
+        timingList: List<BusStopWithTimingPoint>,
+        scheduleList: List<ScheduleItem>
+    ): List<Int> {
+        if (scheduleList.isEmpty() || timingList.isEmpty()) return emptyList()
+        val scheduledAddresses = scheduleList.first().busStops.map { it.address?.toLowerCase() }
+        return timingList.withIndex()
+            .filter { it.value.address?.toLowerCase() in scheduledAddresses }
+            .map { it.index }
+            .sorted()
+    }
+
+    /**
+     * Returns the address of the final scheduled bus stop from [timingList].
+     */
+    private fun getLastScheduledAddress(
+        timingList: List<BusStopWithTimingPoint>,
+        scheduleList: List<ScheduleItem>
+    ): String? {
+        val scheduledIndices = getScheduledIndices(timingList, scheduleList)
+        return if (scheduledIndices.isNotEmpty()) timingList[scheduledIndices.last()].address else null
+    }
+
+    /**
+     * Calculates the total duration (in minutes) for the update.
+     *
+     * If targetIndex is 0, returns the duration at index 0.
+     * If the upcoming stop (at targetIndex) is scheduled:
+     *   • If it is not the last scheduled stop, sum durations from index 0 up to (but not including) the next scheduled stop.
+     *   • If it is the last scheduled stop, sum the entire timing list.
+     * Otherwise (unscheduled and not index 0) returns null.
+     */
+    private fun calculateDurationForUpdate(
+        timingList: List<BusStopWithTimingPoint>,
+        scheduleList: List<ScheduleItem>,
+        targetIndex: Int
+    ): Double? {
+        val scheduledIndices = getScheduledIndices(timingList, scheduleList)
+        // Always update if targetIndex == 0 (even if unscheduled)
+        if (targetIndex == 0) {
+            return timingList.subList(0, 1).sumOf { it.duration }
+        }
+        // If targetIndex is scheduled...
+        if (targetIndex in scheduledIndices) {
+            val pos = scheduledIndices.indexOf(targetIndex)
+            return if (pos < scheduledIndices.size - 1) {
+                val nextScheduledIndex = scheduledIndices[pos + 1]
+                timingList.subList(0, nextScheduledIndex).sumOf { it.duration }
+            } else {
+                // Last scheduled stop: sum entire list.
+                timingList.sumOf { it.duration }
             }
         }
-        stepHandler.post(stepRunnable)
+        // Not scheduled → return null so that update is skipped.
+        return null
+    }
+
+    /**
+     * Checks whether the given bus stop address appears in the scheduleList.
+     */
+    private fun isBusStopInScheduleList(address: String?, scheduleList: List<ScheduleItem>): Boolean {
+        if (address == null || scheduleList.isEmpty()) return false
+        val busStops = scheduleList.first().busStops
+        return busStops.any { it.address.equals(address, ignoreCase = true) }
+    }
+
+    /**
+     * From the timingList, returns the smallest index greater than [currentIndex]
+     * whose bus stop address is found in the scheduleList.
+     * Returns null if none exists.
+     */
+    private fun nextBusStopIndexInScheduleList(
+        timingList: List<BusStopWithTimingPoint>,
+        scheduleList: List<ScheduleItem>,
+        currentIndex: Int
+    ): Int? {
+        if (scheduleList.isEmpty()) return null
+        val busStops = scheduleList.first().busStops.map { it.address }
+        // Get all indices in timingList that are scheduled (i.e. address in busStops)
+        val scheduledIndices = timingList.withIndex()
+            .filter { entry ->
+                entry.value.address?.let { addr ->
+                    busStops.any { it.equals(addr, ignoreCase = true) }
+                } ?: false
+            }
+            .map { it.index }
+        // Find the first scheduled index greater than currentIndex
+        return scheduledIndices.firstOrNull { it > currentIndex }
+    }
+
+    /**
+     * Calculates the total duration to be used in API time update.
+     * If the bus stop at [currentIndex] is in the schedule list,
+     * then the total duration is the sum of durations from index 0 up to and including
+     * the next scheduled bus stop (if one exists). Otherwise, it simply sums up
+     * durations from index 0 to [currentIndex].
+     */
+    private fun calculateDurationBetweenBusStopWithTimingPoint(
+        timingList: List<BusStopWithTimingPoint>,
+        scheduleList: List<ScheduleItem>,
+        currentIndex: Int
+    ): Double {
+        return if (isBusStopInScheduleList(timingList[currentIndex].address, scheduleList)) {
+            // Find the next scheduled bus stop index in timingList
+            val nextScheduledIndex = nextBusStopIndexInScheduleList(timingList, scheduleList, currentIndex)
+            if (nextScheduledIndex != null) {
+                // Sum durations from index 0 to nextScheduledIndex (inclusive)
+                timingList.subList(0, nextScheduledIndex + 1).sumOf { it.duration }
+            } else {
+                // Fallback: sum durations from index 0 to currentIndex if no next scheduled stop found
+                timingList.subList(0, currentIndex + 1).sumOf { it.duration }
+            }
+        } else {
+            // Not a scheduled bus stop; sum durations normally from index 0 to currentIndex
+            timingList.subList(0, currentIndex + 1).sumOf { it.duration }
+        }
+    }
+
+    /** Updates timing point based on current bus location */
+    @SuppressLint("LongLogTag")
+    private fun updateTimingPointBasedOnLocation(currentLat: Double, currentLon: Double) {
+        if (scheduleList.isEmpty()) return
+
+        val firstSchedule = scheduleList.first()
+        val stopList = firstSchedule.busStops
+
+        if (stopList.isEmpty()) {
+            timingPointValueTextView.text = firstSchedule.endTime
+            return
+        }
+
+        // Ensure the first timing point is set
+        if (upcomingStop == "Unknown") {
+            upcomingStop = stopList.first().time
+            runOnUiThread {
+                timingPointValueTextView.text = upcomingStop
+            }
+            Log.d("MapActivity", "🔹 Initial timing point set to: $upcomingStop")
+        }
+
+        // Check which timing point to display
+        for ((index, stop) in stopList.withIndex()) {
+            val stopLat = stop.latitude
+            val stopLon = stop.longitude
+            val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
+
+            val stopPassThreshold = 25.0 // Within 25 meters
+
+            if (distance <= stopPassThreshold) {
+                Log.d(
+                    "MapActivity updateTimingPointBasedOnLocation",
+                    "✅ Passed stop ${stop.name} at ${stop.time} (Distance: ${"%.2f".format(distance)}m)"
+                )
+
+                val nextTimingPoint = if (index + 1 < stopList.size) {
+                    stopList[index + 1].time + ":00"
+                } else {
+                    firstSchedule.endTime + ":00" // Last stop reached
+                }
+
+                runOnUiThread {
+                    timingPointValueTextView.text = nextTimingPoint
+                }
+
+                upcomingStop = nextTimingPoint
+                Log.d("MapActivity updateTimingPointBasedOnLocation", "🔹 Next timing point: $nextTimingPoint")
+                return
+            }
+        }
+    }
+
+    /**
+     * initialize first timing point
+     */
+    private fun initializeTimingPoint() {
+        if (scheduleList.isNotEmpty()) {
+            val firstSchedule = scheduleList.first()
+            val firstTimingPoint = firstSchedule.busStops.firstOrNull()?.time + ":00" ?: "Unknown"
+
+            timingPointValueTextView.text = firstTimingPoint
+            upcomingStop = firstTimingPoint // Set the upcoming stop initially
+            Log.d("MapActivity initializeTimingPoint", "Initial Timing Point: $firstTimingPoint")
+        } else {
+            timingPointValueTextView.text = "No Schedule Available"
+        }
     }
 
     /**
@@ -473,47 +960,55 @@ class MapActivity : AppCompatActivity() {
     private val passedStops = mutableListOf<BusStop>() // Track stops that have been passed
     private var currentStopIndex = 0 // Keep track of the current stop in order
 
+    @SuppressLint("LongLogTag")
     private fun checkPassedStops(currentLat: Double, currentLon: Double) {
         if (stops.isEmpty()) {
-            Log.d("MainActivity checkPassedStops", "❌ No bus stops available.")
+            Log.d("MapActivity checkPassedStops", "❌ No bus stops available.")
             return
         }
 
         if (currentStopIndex >= stops.size) {
-            Log.d("MainActivity checkPassedStops", "✅ All stops have been passed.")
+            Log.d("MapActivity checkPassedStops", "✅ All stops have been passed.")
             return
         }
 
         val nextStop = stops[currentStopIndex]
         val stopLat = nextStop.latitude ?: return
         val stopLon = nextStop.longitude ?: return
-        val stopAddress = nextStop.address ?: "No more upcoming bus stop"
+        val stopAddress = nextStop.address ?: getUpcomingBusStopName(stopLat, stopLon)
+        upcomingStop = stopAddress
         val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
-
-        val stopPassThreshold = 25.0
+        val stopPassThreshold = 25.0 // Normal detection range
+        val failSafeThreshold = 100.0 // Fail-safe trigger range
 
         if (distance <= stopPassThreshold) {
             Log.d(
-                "MainActivity checkPassedStops",
+                "MapActivity checkPassedStops",
                 "✅ Nearest stop passed: $stopLat, $stopLon (Distance: ${"%.2f".format(distance)} meters) at $stopAddress"
             )
 
             runOnUiThread {
                 upcomingBusStopTextView.text = "$stopAddress"
+                upcomingStop = stopAddress
             }
 
             passedStops.add(nextStop)
             currentStopIndex++
 
-            // **🔹 Reset actual time when a stop is passed**
-            resetActualTime()
+            // Build timing list and update API time only if the stop exists in it
+            val timingList = BusStopWithTimingPoint.fromRouteData(busRouteData.first())
+            if (timingList.any { it.address?.equals(stopAddress, ignoreCase = true) == true }) {
+                updateApiTime()
+            } else {
+                Log.d("MapActivity checkPassedStops", "BusStopWithTimingPoint not available for $stopAddress. Skipping API time update.")
+            }
 
             if (currentStopIndex < stops.size) {
                 val upcomingStop = stops[currentStopIndex]
                 val upcomingStopName = getUpcomingBusStopName(upcomingStop.latitude ?: 0.0, upcomingStop.longitude ?: 0.0)
 
                 Log.d(
-                    "MainActivity checkPassedStops",
+                    "MapActivity checkPassedStops",
                     "🛑 No stop passed. Nearest stop: ${upcomingStop.latitude}, ${upcomingStop.longitude} is ${
                         "%.2f".format(distance)
                     } meters away at $upcomingStopName."
@@ -522,14 +1017,20 @@ class MapActivity : AppCompatActivity() {
                 runOnUiThread {
                     upcomingBusStopTextView.text = "$upcomingStopName"
                 }
-            } else {
-                Log.d("MainActivity checkPassedStops", "✅ All stops have been passed.")
+            } else if (distance > stopPassThreshold && distance <= failSafeThreshold) {
+                Log.w("MapActivity checkPassedStops", "⚠️ Warning: No bus stop detected within expected range!")
+                runOnUiThread {
+                    Toast.makeText(this@MapActivity, "⚠️ Warning: No bus stop detected!", Toast.LENGTH_LONG).show()
+                }
+            } else if (distance > failSafeThreshold) {
+                Log.e("MapActivity checkPassedStops", "❌ Missed stop! Triggering fail-safe...")
+                triggerMissedStopAlert()
             }
         } else {
             val upcomingStopName = getUpcomingBusStopName(stopLat, stopLon)
 
             Log.d(
-                "MainActivity checkPassedStops",
+                "MapActivity checkPassedStops",
                 "🛑 No stop passed. Nearest stop: ${nextStop.latitude}, ${nextStop.longitude} is ${
                     "%.2f".format(distance)
                 } meters away at $upcomingStopName."
@@ -537,20 +1038,41 @@ class MapActivity : AppCompatActivity() {
 
             runOnUiThread {
                 upcomingBusStopTextView.text = "$upcomingStopName"
+                upcomingStop = upcomingStopName
             }
         }
     }
 
+    /**
+     * This function is triggered when the bus misses a stop.
+     */
+    private fun triggerMissedStopAlert() {
+        runOnUiThread {
+            // Show the button when a stop is missed
+            arriveButtonContainer.visibility = View.VISIBLE
+
+            val alertDialog = androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Missed Stop Alert!")
+                .setMessage("You may have missed a bus stop. Please verify your location and route.")
+                .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+                .setCancelable(false)
+                .create()
+
+            alertDialog.show()
+        }
+    }
+
     /** Finds the nearest upcoming bus stop */
+    @SuppressLint("LongLogTag")
     private fun getUpcomingBusStopName(lat: Double, lon: Double): String {
         try {
-            Log.d("MainActivity getUpcomingBusStopName", "JSON String: $jsonString")
+            Log.d("MapActivity getUpcomingBusStopName", "JSON String: $jsonString")
 
             // Convert jsonString into a JSONArray
             val jsonArray = JSONArray(jsonString)
 
             if (jsonArray.length() == 0) {
-                Log.e("MainActivity getUpcomingBusStopName", "JSON array is empty")
+                Log.e("MapActivity getUpcomingBusStopName", "JSON array is empty")
                 return "No Upcoming Stop"
             }
 
@@ -559,14 +1081,14 @@ class MapActivity : AppCompatActivity() {
 
             // Ensure the key exists
             if (!jsonObject.has("next_points")) {
-                Log.e("MainActivity getUpcomingBusStopName", "Missing 'next_points' key")
+                Log.e("MapActivity getUpcomingBusStopName", "Missing 'next_points' key")
                 return "No Upcoming Stop"
             }
 
             val routeArray = jsonObject.getJSONArray("next_points")
 
             if (routeArray.length() == 0) {
-                Log.e("MainActivity getUpcomingBusStopName", "next_points array is empty")
+                Log.e("MapActivity getUpcomingBusStopName", "next_points array is empty")
                 return "No Upcoming Stop"
             }
 
@@ -577,7 +1099,7 @@ class MapActivity : AppCompatActivity() {
                 val stop = routeArray.getJSONObject(i)
 
                 if (!stop.has("latitude") || !stop.has("longitude") || !stop.has("address")) {
-                    Log.e("MainActivity getUpcomingBusStopName", "Missing stop fields at index $i")
+                    Log.e("MapActivity getUpcomingBusStopName", "Missing stop fields at index $i")
                     continue
                 }
 
@@ -595,8 +1117,8 @@ class MapActivity : AppCompatActivity() {
 
             return nearestStop ?: "Unknown Stop"
         } catch (e: Exception) {
-            Log.e("MainActivity getUpcomingBusStopName", "Error: ${e.localizedMessage}", e)
-            return "MainActivity getUpcomingBusStopName Error Retrieving Stop"
+            Log.e("MapActivity getUpcomingBusStopName", "Error: ${e.localizedMessage}", e)
+            return "MapActivity getUpcomingBusStopName Error Retrieving Stop"
         }
     }
 
@@ -616,25 +1138,62 @@ class MapActivity : AppCompatActivity() {
         return R * c // Distance in meters
     }
 
-    /** Stops the simulation and resets MainActivity */
+    /** Stops the simulation and resets the state. */
     private fun stopSimulation() {
+        resetSimulationState()
+        Toast.makeText(this, "Simulation stopped and state reset", Toast.LENGTH_SHORT).show()
+    }
+
+    /** Stops the simulation and resets the state. */
+    private fun resetSimulationState() {
+        // Stop any pending simulation callbacks.
         if (::simulationHandler.isInitialized) {
             simulationHandler.removeCallbacks(simulationRunnable)
         }
         isSimulating = false
 
-        // Restart MainActivity
-        val intent = Intent(this, MapActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(intent)
-        finish() // Close current instance
+        // Reset simulation variables.
+        currentRouteIndex = 0
+        simulationSpeedFactor = 1
+        simulationStartTime = System.currentTimeMillis()
+
+        // Reset the simulated clock to the schedule's start time (if available)
+        if (scheduleList.isNotEmpty()) {
+            val startTimeStr = scheduleList.first().startTime  // e.g. "08:00"
+            val timeParts = startTimeStr.split(":")
+            if (timeParts.size == 2) {
+                simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+                simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
+                simulatedStartTime.set(Calendar.SECOND, 0)
+            }
+        }
+
+        // Reset any other state you maintain.
+        upcomingStop = if (scheduleList.isNotEmpty() && scheduleList.first().busStops.isNotEmpty())
+            scheduleList.first().busStops.first().time + ":00" else "Unknown"
+        timingPointValueTextView.text = upcomingStop
+
+        // If you keep track of passed stops, clear them.
+        passedStops.clear()
+        currentStopIndex = 0
+
+        // (Optional) If you want to re-draw the polyline, remove it and then call drawPolyline() again.
+        routePolyline?.let {
+            binding.map.layerManager.layers.remove(it)
+            binding.map.invalidate()
+        }
+        // If needed, you can re-add the polyline:
+        if (route.isNotEmpty()) {
+            drawPolyline()
+        }
     }
 
     /**
      * Draws a polyline on the Mapsforge map using the busRoute data.
      */
+    @SuppressLint("LongLogTag")
     private fun drawPolyline() {
-        Log.d("MainActivity drawPolyline", "Drawing polyline with route: $route")
+        Log.d("MapActivity drawPolyline", "Drawing polyline with route: $route")
 
         if (route.isNotEmpty()) {
             val routePoints = route.map { LatLong(it.latitude!!, it.longitude!!) }
@@ -667,9 +1226,9 @@ class MapActivity : AppCompatActivity() {
             // **Force map redraw**
             binding.map.invalidate()
 
-            Log.d("MainActivity drawPolyline", "✅ Polyline drawn with ${routePoints.size} points.")
+            Log.d("MapActivity drawPolyline", "✅ Polyline drawn with ${routePoints.size} points.")
         } else {
-            Log.e("MainActivity drawPolyline", "❌ No route data available for polyline.")
+            Log.e("MapActivity drawPolyline", "❌ No route data available for polyline.")
         }
     }
 
@@ -679,18 +1238,18 @@ class MapActivity : AppCompatActivity() {
      *
      * @return The AID (Android ID) as a String.
      */
-    @SuppressLint("HardwareIds")
+    @SuppressLint("HardwareIds", "LongLogTag")
     private fun getOrCreateAid(): String {
         // Ensure we have the correct storage permission
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
-                Log.e("MainActivity getOrCreateAid", "Storage permission not granted.")
+                Log.e("MapActivity getOrCreateAid", "Storage permission not granted.")
                 return "Permission Denied"
             }
         } else {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
-                Log.e("MainActivity getOrCreateAid", "Storage permission not granted.")
+                Log.e("MapActivity getOrCreateAid", "Storage permission not granted.")
                 return "Permission Denied"
             }
         }
@@ -702,13 +1261,13 @@ class MapActivity : AppCompatActivity() {
         if (!hiddenFolder.exists()) {
             val success = hiddenFolder.mkdirs()
             if (!success) {
-                Log.e("MainActivity getOrCreateAid", "Failed to create directory: ${hiddenFolder.absolutePath}")
+                Log.e("MapActivity getOrCreateAid", "Failed to create directory: ${hiddenFolder.absolutePath}")
                 return "Failed to create directory"
             }
         }
 
         val aidFile = File(hiddenFolder, "busDataCache.json")
-        Log.d("MainActivity getOrCreateAid", "Attempting to create: ${aidFile.absolutePath}")
+        Log.d("MapActivity getOrCreateAid", "Attempting to create: ${aidFile.absolutePath}")
 
         if (!aidFile.exists()) {
             val newAid = generateNewAid()
@@ -719,7 +1278,7 @@ class MapActivity : AppCompatActivity() {
                 aidFile.writeText(jsonObject.toString())
                 Toast.makeText(this, "AID saved successfully in busDataCache.json", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Log.e("MainActivity getOrCreateAid", "Error writing to file: ${e.message}")
+                Log.e("MapActivity getOrCreateAid", "Error writing to file: ${e.message}")
                 return "Error writing file"
             }
             return newAid
@@ -729,7 +1288,7 @@ class MapActivity : AppCompatActivity() {
             val jsonContent = JSONObject(aidFile.readText())
             jsonContent.getString("aid").trim()
         } catch (e: Exception) {
-            Log.e("MainActivity getOrCreateAid", "Error reading JSON file: ${e.message}")
+            Log.e("MapActivity getOrCreateAid", "Error reading JSON file: ${e.message}")
             "Error reading file"
         }
     }
@@ -745,42 +1304,72 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * Starts location updates, calculates bearing and direction, and identifies the nearest route coordinate.
-     * If a nearest coordinate is found, it checks the current road name and finds the upcoming road if it changes.
+     * Starts live location updates using the device's GPS instead of simulation.
+     * Updates latitude, longitude, bearing, speed, and UI elements accordingly.
      */
+    @SuppressLint("MissingPermission", "LongLogTag")
     private fun startLocationUpdate() {
+        if (!::locationManager.isInitialized) {
+            Log.e("MapActivity startLocationUpdate", "❌ LocationManager is not initialized!")
+            return
+        }
+
         locationManager.startLocationUpdates(object : LocationListener {
             override fun onLocationUpdate(location: Location) {
-                val currentLatitude = location.latitude
-                val currentLongitude = location.longitude
+                latitude = location.latitude
+                longitude = location.longitude
+                speed = location.speed * 3.6f // Convert from m/s to km/h
 
-                // Calculate bearing and update variables
                 if (lastLatitude != 0.0 && lastLongitude != 0.0) {
-                    bearing = calculateBearing(
-                        lastLatitude,
-                        lastLongitude,
-                        currentLatitude,
-                        currentLongitude
-                    )
-                    direction = Helper.bearingToDirection(bearing)
+                    // Calculate bearing only if there is a previous location
+                    bearing = calculateBearing(lastLatitude, lastLongitude, latitude, longitude)
                 }
 
-                // Update global variables
-                latitude = currentLatitude
-                longitude = currentLongitude
-                speed = (location.speed * 3.6).toFloat()
-                lastLatitude = currentLatitude
-                lastLongitude = currentLongitude
+                // Log location updates
+                Log.d("MapActivity startLocationUpdate", "📍 Location: ($latitude, $longitude)")
+                Log.d("MapActivity startLocationUpdate", "➡️ Bearing: $bearing°  🏎️ Speed: ${"%.2f".format(speed)} km/h")
 
-                // Update UI
-//                latitudeTextView.text = "Latitude:\n$latitude"
-//                longitudeTextView.text = "Longitude:\n$longitude"
-//                bearingTextView.text = "Bearing: $bearing°"
-
-                // Update the bus marker position
+                // Move bus marker on the map
                 updateBusMarkerPosition(latitude, longitude, bearing)
+
+                // Check if the bus has passed any stops
+                checkPassedStops(latitude, longitude)
+
+                // Update upcoming timing point
+                updateTimingPointBasedOnLocation(latitude, longitude)
+
+                // Check and update schedule status
+                checkScheduleStatus()
+
+                // ✅ Call `updateApiTime()` after passing a stop to recalculate the schedule.
+                updateApiTime()
+
+                // ✅ Start actual time updater only once at the first location update.
+                if (firstTime) {
+                    firstTime = false
+                    startActualTimeUpdater()
+                }
             }
         })
+
+        Toast.makeText(this, "Live location updates started", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * ✅ Function to validate time format (HH:mm:ss)
+     */
+    private fun isValidTime(time: String?): Boolean {
+        if (time.isNullOrEmpty() || time == "Unknown") {
+            Log.e("MapActivity isValidTime", "❌ Invalid time detected: '$time'")
+            return false
+        }
+        return try {
+            SimpleDateFormat("HH:mm:ss", Locale.getDefault()).parse(time)
+            true
+        } catch (e: Exception) {
+            Log.e("MapActivity isValidTime", "❌ Failed to parse time: '$time' - ${e.localizedMessage}")
+            false
+        }
     }
 
     /** Move the bus marker dynamically with updated bearing */
@@ -801,9 +1390,16 @@ class MapActivity : AppCompatActivity() {
         )
         binding.map.layerManager.layers.add(busMarker)
 
+        // Apply map rotation
+        binding.map.setRotation(-bearing) // Negative to align with compass movement
+
+        // Scale the map to prevent cropping
+        binding.map.scaleX = 1.5f  // Adjust scaling factor
+        binding.map.scaleY = 1.5f
+
         // Keep the map centered on the bus location
         binding.map.setCenter(newPosition)
-        binding.map.invalidate()
+        binding.map.invalidate() // Force redraw
     }
 
     /**
@@ -967,12 +1563,32 @@ class MapActivity : AppCompatActivity() {
      * Initialize UI components and assign them to the corresponding views.
      */
     private fun initializeUIComponents() {
+        speedTextView = binding.speedTextView
+        timingPointandStopsTextView = binding.timingPointandStopsTextView
+        tripEndTimeTextView = binding.tripEndTimeTextView
+        // Hardcoded values for testing
+        if (scheduleList.isNotEmpty()) {
+            val scheduleItem = scheduleList.first()
+
+            // Extract stop names and times dynamically
+            val stopsInfo = scheduleItem.busStops.joinToString(", ") { "${it.name} - ${it.time}" }
+
+            // Set text views with extracted stop info
+            timingPointandStopsTextView.text = stopsInfo
+            tripEndTimeTextView.text = scheduleItem.endTime
+        }
+        actualTimeTextView = binding.actualTimeValueTextView
+        timingPointValueTextView = binding.timingPointValueTextView
+        ApiTimeValueTextView = binding.ApiTimeValueTextView
+        scheduleStatusValueTextView = binding.scheduleStatusValueTextView
+        thresholdRangeValueTextView = binding.thresholdRangeValueTextView
 //            bearingTextView = binding.bearingTextView
 //        latitudeTextView = binding.latitudeTextView
 //        longitudeTextView = binding.longitudeTextView
 //        bearingTextView = binding.bearingTextView
-//        speedTextView = binding.speedTextView
+        speedTextView = binding.speedTextView
         upcomingBusStopTextView = binding.upcomingBusStopTextView
+        arriveButtonContainer = findViewById(R.id.arriveButtonContainer)
 //            directionTextView = binding.directionTextView
 //            speedTextView = binding.speedTextView
 //            busNameTextView = binding.busNameTextView
@@ -1000,13 +1616,13 @@ class MapActivity : AppCompatActivity() {
     private fun getDefaultConfigValue() {
 //        busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
 //        Toast.makeText(this, "arrBusDataOnline1: ${arrBusData}", Toast.LENGTH_SHORT).show()
-        Log.d("MainActivity getDefaultConfigValue busConfig", arrBusData.toString())
-        Log.d("MainActivity getDefaultConfigValue arrBusDataOnline1", arrBusData.toString())
-        Log.d("MainActivity getDefaultConfigValue config", config.toString())
+        Log.d("MapActivity getDefaultConfigValue busConfig", arrBusData.toString())
+        Log.d("MapActivity getDefaultConfigValue arrBusDataOnline1", arrBusData.toString())
+        Log.d("MapActivity getDefaultConfigValue config", config.toString())
         arrBusData = config!!
         arrBusData = arrBusData.filter { it.aid != aid }
 //        Toast.makeText(this, "getDefaultConfigValue arrBusDataOnline2: ${arrBusData}", Toast.LENGTH_SHORT).show()
-        Log.d("MainActivity getDefaultConfigValue arrBusDataOnline2", arrBusData.toString())
+        Log.d("MapActivity getDefaultConfigValue arrBusDataOnline2", arrBusData.toString())
         for (bus in arrBusData) {
             val busPosition = LatLong(latitude, longitude)
             val markerDrawable = AndroidGraphicFactory.convertToBitmap(
@@ -1023,7 +1639,7 @@ class MapActivity : AppCompatActivity() {
             binding.map.layerManager.layers.add(marker)
             // Store it in markerBus HashMap
             markerBus[bus.accessToken] = marker
-            Log.d("MainActivity getDefaultConfigValue MarkerDrawable", "Bus symbol drawable applied")
+            Log.d("MapActivity getDefaultConfigValue MarkerDrawable", "Bus symbol drawable applied")
         }
     }
 
@@ -1038,18 +1654,18 @@ class MapActivity : AppCompatActivity() {
 
     /** Fetches the configuration data and initializes the config variable. */
 //    private fun fetchConfig(callback: (Boolean) -> Unit) {
-//        Log.d("MainActivity fetchConfig", "Fetching config...")
+//        Log.d("MapActivity fetchConfig", "Fetching config...")
 //
 //        mqttManagerConfig.fetchSharedAttributes(tokenConfigData) { listConfig ->
 //            runOnUiThread {
 //                if (listConfig.isNotEmpty()) {
 //                    config = listConfig
-//                    Log.d("MainActivity fetchConfig", "✅ Config received: $config")
+//                    Log.d("MapActivity fetchConfig", "✅ Config received: $config")
 //                    subscribeSharedData()
 //                    callback(true)
 //                } else {
-//                    Log.e("MainActivity fetchConfig", "❌ Failed to initialize config. Running in offline mode.")
-////                    Toast.makeText(this@MainActivity, "Running in offline mode. No bus information available.", Toast.LENGTH_SHORT).show()
+//                    Log.e("MapActivity fetchConfig", "❌ Failed to initialize config. Running in offline mode.")
+////                    Toast.makeText(this@MapActivity, "Running in offline mode. No bus information available.", Toast.LENGTH_SHORT).show()
 //                    callback(false)
 //                }
 //            }
@@ -1059,6 +1675,7 @@ class MapActivity : AppCompatActivity() {
     /**
      * Helper function to convert stops to busStopInfo
      */
+    @SuppressLint("LongLogTag")
     private fun updateBusStopProximityManager() {
         if (stops.isNotEmpty()) {
             busStopInfo = stops.map { stop ->
@@ -1069,10 +1686,10 @@ class MapActivity : AppCompatActivity() {
                 )
             }
             BusStopProximityManager.setBusStopList(busStopInfo)
-            Log.d("MainActivity updateBusStopProximityManager", "BusStopProximityManager updated with ${busStopInfo.size} stops.")
-            Log.d("MainActivity updateBusStopProximityManager", "busStopInfo ${busStopInfo.toString()}")
+            Log.d("MapActivity updateBusStopProximityManager", "BusStopProximityManager updated with ${busStopInfo.size} stops.")
+            Log.d("MapActivity updateBusStopProximityManager", "busStopInfo ${busStopInfo.toString()}")
         } else {
-            Log.d("MainActivity updateBusStopProximityManager", "No stops available to update BusStopProximityManager.")
+            Log.d("MapActivity updateBusStopProximityManager", "No stops available to update BusStopProximityManager.")
         }
     }
 
@@ -1151,6 +1768,7 @@ class MapActivity : AppCompatActivity() {
      * Loads the offline map from assets and configures the map.
      * Prevents adding duplicate layers.
      */
+    @SuppressLint("LongLogTag")
     private fun openMapFromAssets() {
         binding.map.mapScaleBar.isVisible = true
         binding.map.setBuiltInZoomControls(true)
@@ -1178,9 +1796,9 @@ class MapActivity : AppCompatActivity() {
         // **Check if layer already exists before adding**
         if (!binding.map.layerManager.layers.contains(renderLayer)) {
             binding.map.layerManager.layers.add(renderLayer)
-            Log.d("MainActivity openMapFromAssets", "✅ Offline map added successfully.")
+            Log.d("MapActivity openMapFromAssets", "✅ Offline map added successfully.")
         } else {
-            Log.d("MainActivity openMapFromAssets", "⚠️ Offline map layer already exists. Skipping duplicate addition.")
+            Log.d("MapActivity openMapFromAssets", "⚠️ Offline map layer already exists. Skipping duplicate addition.")
         }
 
         binding.map.setCenter(LatLong(latitude, longitude)) // Set the default location to center the bus marker
@@ -1194,7 +1812,7 @@ class MapActivity : AppCompatActivity() {
 
         // **Ensure the map is fully loaded before drawing the polyline**
         binding.map.post {
-            Log.d("MainActivity", "Map is fully initialized. Drawing polyline now.")
+            Log.d("MapActivity", "Map is fully initialized. Drawing polyline now.")
             drawPolyline()  // Draw polyline only after map is loaded
             addBusStopMarkers(stops)
         }
@@ -1224,14 +1842,21 @@ class MapActivity : AppCompatActivity() {
     /**
      * Adds bus stops to the map using OverlayItem instead of Marker.
      */
+    @SuppressLint("LongLogTag")
     private fun addBusStopMarkers(busStops: List<BusStop>) {
+        val totalStops = busStops.size
+
         busStops.forEachIndexed { index, stop ->
-            val busStopNumber = index + 1
-            val stopName = if (busStopNumber == 1) "S/E" else "Stop $busStopNumber"
+            val stopName = when (index) {
+                0, totalStops - 1 -> "S/E" // First and last stop as S/E
+                else -> index.toString() // Numbered stops
+            }
 
-            val isRed = redBusStops.contains(stopName) // Check if the stop should be red
-            val busStopSymbol = Helper.createBusStopSymbol(applicationContext, busStopNumber, busStops.size, isRed)
+            val formattedStopName = stopName.replace("Stop ", "").trim()
+            val isRed = redBusStops.any { it.replace("Stop ", "").trim().equals(formattedStopName, ignoreCase = true) }
+            Log.d("MapActivity addBusStopMarkers", "Checking stop: $stopName, isRed: $isRed (stored stops: $redBusStops)")
 
+            val busStopSymbol = Helper.createBusStopSymbol(applicationContext, index, totalStops, isRed)
             val markerBitmap = AndroidGraphicFactory.convertToBitmap(busStopSymbol)
 
             val marker = org.mapsforge.map.layer.overlay.Marker(
@@ -1259,30 +1884,30 @@ class MapActivity : AppCompatActivity() {
         return file
     }
 
-    /** Starts a periodic task to update the current time in the UI. */
-    @SuppressLint("SimpleDateFormat")
-    private fun startDateTimeUpdater() {
-        dateTimeHandler = Handler(Looper.getMainLooper())
-        dateTimeRunnable = object : Runnable {
-            override fun run() {
-                val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault()) // Only display time
-                val currentTime = dateFormat.format(Date())
-                binding.currentTimeTextView.text = currentTime
-                dateTimeHandler.postDelayed(this, 1000) // Update every second
-            }
-        }
-        dateTimeHandler.post(dateTimeRunnable)
-    }
+    /** Starts a periodic task to update the current date and time in the UI. */
+//    @SuppressLint("SimpleDateFormat")
+//    private fun startDateTimeUpdater() {
+//        dateTimeHandler = Handler(Looper.getMainLooper())
+//        dateTimeRunnable = object : Runnable {
+//            override fun run() {
+//                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+//                val currentDateTime = dateFormat.format(Date())
+//                binding.currentDateAndTime.text = currentDateTime
+//                dateTimeHandler.postDelayed(this, 1000) // Update every second
+//            }
+//        }
+//        dateTimeHandler.post(dateTimeRunnable)
+//    }
 
     /** Stops the date/time updater when the activity is destroyed. */
-    private fun stopDateTimeUpdater() {
-        dateTimeHandler.removeCallbacks(dateTimeRunnable)
-    }
+//    private fun stopDateTimeUpdater() {
+//        dateTimeHandler.removeCallbacks(dateTimeRunnable)
+//    }
 
     /** Cleans up resources on activity destruction. */
     override fun onDestroy() {
 //        mqttManager.disconnect()
-        stopDateTimeUpdater()
+//        stopDateTimeUpdater()
         super.onDestroy()
 
         // Remove polyline from Mapsforge map
@@ -1290,6 +1915,6 @@ class MapActivity : AppCompatActivity() {
             binding.map.layerManager.layers.remove(it)
             binding.map.invalidate()
         }
-        Log.d("MainActivity", "🗑️ Removed polyline on destroy.")
+        Log.d("MapActivity", "🗑️ Removed polyline on destroy.")
     }
 }
