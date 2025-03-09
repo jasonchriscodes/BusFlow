@@ -257,16 +257,11 @@ class MapActivity : AppCompatActivity() {
      */
     @SuppressLint("LongLogTag")
     private fun confirmArrival() {
-        if (upcomingStop.isNotEmpty()) {
-            Toast.makeText(this, "Arrived at $upcomingStop", Toast.LENGTH_SHORT).show()
-            Log.d("MapActivity confirmArrival", "✅ Arrived at bus stop: $upcomingStop")
+        Toast.makeText(this, "Arrived at $upcomingStop", Toast.LENGTH_SHORT).show()
+        Log.d("MapActivity confirmArrival", "✅ Arrived at bus stop: $upcomingStop")
 
-            // Move to the next stop
-            moveToNextStop()
-        } else {
-            Toast.makeText(this, "No upcoming stop detected!", Toast.LENGTH_SHORT).show()
-            Log.e("MapActivity confirmArrival", "❌ Arrival attempted with no upcoming stop set.")
-        }
+        // Move to the next stop
+        moveToNextStop()
     }
 
     /**
@@ -985,7 +980,6 @@ class MapActivity : AppCompatActivity() {
         upcomingStop = stopAddress
         val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
         val stopPassThreshold = 25.0 // Normal detection range
-        val failSafeThreshold = 100.0 // Fail-safe trigger range
 
         if (distance <= stopPassThreshold) {
 
@@ -1020,8 +1014,37 @@ class MapActivity : AppCompatActivity() {
                 }
             }
 
+            // 🔹 Check if the bus is inside the detection area
+            if (isBusInDetectionArea(currentLat, currentLon, stopLat, stopLon)) {
+                runOnUiThread {
+                    upcomingBusStopTextView.text = "$stopAddress"
+                    upcomingStop = stopAddress
+                    Toast.makeText(
+                        this@MapActivity,
+                        "✅ Arrived at: $stopAddress",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+
+            // ✅ Add this block to track and update detection zones
+            if (!passedStops.contains(nextStop)) {
+                passedStops.add(nextStop)
+                drawDetectionZones(stops) // Redraw zones to reflect changes
+            }
+
             passedStops.add(nextStop)
             currentStopIndex++
+
+            // Ensure the next stop is updated correctly even if a stop is skipped
+            while (currentStopIndex < stops.size && calculateDistance(
+                    currentLat, currentLon,
+                    stops[currentStopIndex].latitude ?: 0.0,
+                    stops[currentStopIndex].longitude ?: 0.0
+                ) <= stopPassThreshold
+            ) {
+                passedStops.add(stops[currentStopIndex])
+                currentStopIndex++
+            }
 
             // Automatically detect if this was the final stop
             if (currentStopIndex >= stops.size) {
@@ -1033,6 +1056,7 @@ class MapActivity : AppCompatActivity() {
 
                 // ✅ Trigger trip completion dialog
                 showSummaryDialog()
+                }
             } else {
                 val upcomingStop = stops[currentStopIndex]
                 val upcomingStopName = getUpcomingBusStopName(upcomingStop.latitude ?: 0.0, upcomingStop.longitude ?: 0.0)
@@ -1063,14 +1087,11 @@ class MapActivity : AppCompatActivity() {
                 runOnUiThread {
                     upcomingBusStopTextView.text = "$upcomingStopName"
                 }
-            } else if (distance > stopPassThreshold && distance <= failSafeThreshold) {
+            } else if (distance > stopPassThreshold) {
                 Log.w("MapActivity checkPassedStops", "⚠️ Warning: No bus stop detected within expected range!")
                 runOnUiThread {
                     Toast.makeText(this@MapActivity, "⚠️ Warning: No bus stop detected!", Toast.LENGTH_LONG).show()
                 }
-            } else if (distance > failSafeThreshold) {
-                Log.e("MapActivity checkPassedStops", "❌ Missed stop! Triggering fail-safe...")
-                triggerMissedStopAlert()
             }
         } else {
             val upcomingStopName = getUpcomingBusStopName(stopLat, stopLon)
@@ -1096,23 +1117,43 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * This function is triggered when the bus misses a stop.
+     * Geofence Detection Method
      */
-    private fun triggerMissedStopAlert() {
-        runOnUiThread {
-            // Show the button when a stop is missed
-            arriveButtonContainer.visibility = View.VISIBLE
-
-            val alertDialog = androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Missed Stop Alert!")
-                .setMessage("You may have missed a bus stop. Please verify your location and route.")
-                .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
-                .setCancelable(false)
-                .create()
-
-            alertDialog.show()
+        private fun isBusInDetectionArea(currentLat: Double, currentLon: Double, stopLat: Double, stopLon: Double, radius: Double = 25.0): Boolean {
+            val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
+            return distance <= radius
         }
+
+    /**
+     * funtion to add circular markers to represent the detection area for each stop.
+     */
+    private fun drawDetectionZones(busStops: List<BusStop>, radiusMeters: Double = 25.0) {
+        busStops.forEach { stop ->
+            val isPassed = passedStops.any { it.latitude == stop.latitude && it.longitude == stop.longitude }
+
+            val fillColor = if (isPassed) Color.argb(100, 0, 255, 0) // Green if passed
+            else Color.argb(100, 255, 0, 0) // Red if not passed
+
+            val circleLayer = org.mapsforge.map.layer.overlay.Circle(
+                LatLong(stop.latitude!!, stop.longitude!!),
+                radiusMeters.toFloat(),
+                AndroidGraphicFactory.INSTANCE.createPaint().apply {
+                    color = fillColor
+                    setStyle(org.mapsforge.core.graphics.Style.FILL)
+                },
+                AndroidGraphicFactory.INSTANCE.createPaint().apply {
+                    color = if (isPassed) Color.GREEN else Color.RED
+                    strokeWidth = 2f
+                    setStyle(org.mapsforge.core.graphics.Style.STROKE)
+                }
+            )
+
+            binding.map.layerManager.layers.add(circleLayer)
+        }
+
+        binding.map.invalidate() // Refresh map view
     }
+
 
     /** Finds the nearest upcoming bus stop */
     @SuppressLint("LongLogTag")
@@ -1869,6 +1910,7 @@ class MapActivity : AppCompatActivity() {
             Log.d("MapActivity", "Map is fully initialized. Drawing polyline now.")
             drawPolyline()  // Draw polyline only after map is loaded
             addBusStopMarkers(stops)
+            drawDetectionZones(stops) // ✅ Add this for detection zones
         }
     }
 

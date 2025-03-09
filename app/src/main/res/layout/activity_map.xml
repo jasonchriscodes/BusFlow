@@ -100,7 +100,6 @@
         android:layout_margin="4dp"
         android:orientation="horizontal"
         android:gravity="center"
-        android:visibility="gone"
         android:background="@drawable/button_rounded_background"
         android:backgroundTint="@color/purple_500"
         android:padding="8dp">
