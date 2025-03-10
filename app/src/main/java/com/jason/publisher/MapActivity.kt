@@ -125,6 +125,8 @@ class MapActivity : AppCompatActivity() {
     private var lockedApiTime: String? = null
     private var simulationSpeedFactor: Int = 1
     private lateinit var arriveButtonContainer: LinearLayout
+    private var nextTimingPoint: String = "Unknown"
+
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -256,13 +258,47 @@ class MapActivity : AppCompatActivity() {
     /**
      * mark a bus stop as "arrived" and prevent duplicate arrivals.
      */
+    private var manualStopIndex = 0
+    private var isManualMode = false
+
     @SuppressLint("LongLogTag")
     private fun confirmArrival() {
-        Toast.makeText(this, "Arrived at $upcomingStop", Toast.LENGTH_SHORT).show()
-        Log.d("MapActivity confirmArrival", "✅ Arrived at bus stop: $upcomingStop")
+        if (stops.isEmpty()) {
+            Toast.makeText(this, "No bus stops available", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-        // Move to the next stop
-        moveToNextStop()
+        if (!isManualMode) {
+            isManualMode = true
+            Toast.makeText(this, "Manual mode activated", Toast.LENGTH_SHORT).show()
+        }
+
+        if (manualStopIndex >= stops.size) {
+            Toast.makeText(this, "You have reached the final stop.", Toast.LENGTH_SHORT).show()
+            isManualMode = false  // 🔹 Ensure manual mode is deactivated
+            startLocationUpdate() // 🔹 Resume GPS updates
+            return
+        }
+
+        val nextStop = stops[manualStopIndex]
+        latitude = nextStop.latitude ?: 0.0
+        longitude = nextStop.longitude ?: 0.0
+        upcomingStop = nextStop.address ?: "Unknown"
+
+        runOnUiThread {
+            upcomingBusStopTextView.text = "Next Stop: ${nextStop.address}"
+            Toast.makeText(this, "Arrived at ${nextStop.address}", Toast.LENGTH_SHORT).show()
+        }
+
+        updateBusMarkerPosition(latitude, longitude, bearing)
+        manualStopIndex++
+
+        // 🔹 Add Delay Before Resuming GPS Tracking
+        Handler(Looper.getMainLooper()).postDelayed({
+            isManualMode = false  // 🔹 Deactivate manual mode after delay
+            startLocationUpdate() // 🔹 Resume GPS updates
+            Toast.makeText(this, "Resuming GPS tracking...", Toast.LENGTH_SHORT).show()
+        }, 3000)  // 3-second delay
     }
 
     /**
@@ -270,30 +306,30 @@ class MapActivity : AppCompatActivity() {
      */
     @SuppressLint("LongLogTag")
     private fun moveToNextStop() {
-        if (scheduleList.isEmpty()) {
-            Log.e("MapActivity moveToNextStop", "❌ No schedule data available.")
-            Toast.makeText(this, "No schedule available", Toast.LENGTH_SHORT).show()
+        if (stops.isEmpty()) {
+            Log.e("MapActivity moveToNextStop", "❌ No stops available.")
             return
         }
 
-        // Find the index of the current upcoming stop
-        val currentIndex = scheduleList.first().busStops.indexOfFirst { it.time == upcomingStop }
-
-        if (currentIndex == -1 || currentIndex >= scheduleList.first().busStops.size - 1) {
-            Log.d("MapActivity moveToNextStop", "✅ Reached the final stop, no further stops available.")
+        if (manualStopIndex >= stops.size) {
+            Log.d("MapActivity moveToNextStop", "✅ Reached the final stop.")
             Toast.makeText(this, "You have reached the final stop.", Toast.LENGTH_SHORT).show()
             return
         }
 
         // Move to the next stop
-        val nextStop = scheduleList.first().busStops[currentIndex + 1]
-        upcomingStop = nextStop.time
+        val nextStop = stops[manualStopIndex]
+        latitude = nextStop.latitude ?: 0.0
+        longitude = nextStop.longitude ?: 0.0
+        upcomingStop = nextStop.address ?: "Unknown"
+
         runOnUiThread {
-            upcomingBusStopTextView.text = "Next Stop: ${nextStop.name} at ${nextStop.time}"
-            timingPointValueTextView.text = nextStop.time
+            upcomingBusStopTextView.text = "Next Stop: ${nextStop.address}"
+            timingPointValueTextView.text = nextTimingPoint
         }
 
-        Log.d("MapActivity moveToNextStop", "🔹 Moving to next stop: ${nextStop.name} at ${nextStop.time}")
+        updateBusMarkerPosition(latitude, longitude, bearing)
+        manualStopIndex++
     }
 
     /**
@@ -915,7 +951,7 @@ class MapActivity : AppCompatActivity() {
                     "✅ Passed stop ${stop.name} at ${stop.time} (Distance: ${"%.2f".format(distance)}m)"
                 )
 
-                val nextTimingPoint = if (index + 1 < stopList.size) {
+                nextTimingPoint = if (index + 1 < stopList.size) {
                     stopList[index + 1].time + ":00"
                 } else {
                     firstSchedule.endTime + ":00" // Last stop reached
@@ -971,6 +1007,10 @@ class MapActivity : AppCompatActivity() {
 
         if (currentStopIndex >= stops.size) {
             Log.d("MapActivity checkPassedStops", "✅ All stops have been passed.")
+            if (isManualMode) {
+                isManualMode = false
+                startLocationUpdate() // 🔹 Resume GPS updates
+            }
             return
         }
 
@@ -1418,10 +1458,12 @@ class MapActivity : AppCompatActivity() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 locationResult.lastLocation?.let { location ->
-                    latitude = location.latitude
-                    longitude = location.longitude
-                    speed = location.speed * 3.6f // Convert m/s to km/h
-                    bearing = location.bearing
+                    if (!isManualMode) {
+                        latitude = location.latitude
+                        longitude = location.longitude
+                        speed = location.speed * 3.6f // Convert m/s to km/h
+                        bearing = location.bearing
+                    }
 
                     runOnUiThread {
                         speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
