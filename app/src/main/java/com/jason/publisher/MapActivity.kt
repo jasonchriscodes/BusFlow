@@ -1166,14 +1166,14 @@ class MapActivity : AppCompatActivity() {
         }
 
     /**
-     * funtion to add circular markers to represent the detection area for each stop.
+     * Function to add circular markers to represent the detection area for each stop with 25% opacity.
      */
     private fun drawDetectionZones(busStops: List<BusStop>, radiusMeters: Double = 25.0) {
         busStops.forEach { stop ->
             val isPassed = passedStops.any { it.latitude == stop.latitude && it.longitude == stop.longitude }
 
-            val fillColor = if (isPassed) Color.argb(100, 0, 255, 0) // Green if passed
-            else Color.argb(100, 255, 0, 0) // Red if not passed
+            val fillColor = if (isPassed) Color.argb(64, 0, 255, 0) // Green with 25% opacity
+            else Color.argb(64, 255, 0, 0) // Red with 25% opacity
 
             val circleLayer = org.mapsforge.map.layer.overlay.Circle(
                 LatLong(stop.latitude!!, stop.longitude!!),
@@ -1194,7 +1194,6 @@ class MapActivity : AppCompatActivity() {
 
         binding.map.invalidate() // Refresh map view
     }
-
 
     /** Finds the nearest upcoming bus stop */
     @SuppressLint("LongLogTag")
