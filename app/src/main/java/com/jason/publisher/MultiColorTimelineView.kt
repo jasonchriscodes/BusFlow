@@ -135,7 +135,7 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
         }
     }
 
-    /** Draws time labels only for times listed in workIntervals */
+    /** Draws time labels with 100% opacity for start/end and completely transparent for internal times */
     private fun drawTimeLabels(canvas: Canvas, totalStart: Int, totalEnd: Int, totalWidth: Float) {
         val availableWidth = totalWidth - (2 * timelineMargin) // Account for margins
         val textY = height - 5f  // Lower the text position to prevent clipping
@@ -157,13 +157,24 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
             val xPosition = timelineMargin + ((time - totalStart).toFloat() / (totalEnd - totalStart)) * availableWidth
             val timeLabel = convertMinutesToTime(time)
 
-            canvas.drawText(timeLabel, xPosition, textY, timeTextPaint)
+            // Show only start and end labels; hide internal labels
+            val isStartOrEnd = (time == totalStart || time == totalEnd)
+            val textPaint = if (isStartOrEnd) timeTextPaint else transparentTextPaint
+
+            canvas.drawText(timeLabel, xPosition, textY, textPaint)
         }
     }
 
-    // Paint for time labels (White)
+    // Paint for fully visible text (Start/End times - 100% opacity)
     private val timeTextPaint = Paint().apply {
-        color = 0xFFFFFFFF.toInt() // White color
+        color = 0xFFFFFFFF.toInt() // Full white color
+        textSize = 22f
+        textAlign = Paint.Align.CENTER
+    }
+
+    // Paint for completely transparent text (Internal intervals - 0% opacity)
+    private val transparentTextPaint = Paint().apply {
+        color = Color.TRANSPARENT // Fully transparent color
         textSize = 22f
         textAlign = Paint.Align.CENTER
     }
