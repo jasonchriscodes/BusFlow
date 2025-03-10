@@ -334,7 +334,7 @@
             android:id="@+id/upcomingStopContainer"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:padding="8dp"
             android:gravity="center"
             android:layout_margin="4dp"
@@ -343,6 +343,12 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toStartOf="@id/guidelineVertical"
             app:layout_constraintBottom_toBottomOf="parent">
+
+        <!-- Upcoming Stop Row -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/upcomingStopLabel"
@@ -364,7 +370,19 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- New Combined Current Time and Finish Time Container -->
+        <!-- Countdown Text -->
+        <TextView
+            android:id="@+id/nextTripCountdownTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Next run in: -- mins -- seconds"
+            android:textColor="@color/white"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- New Combined Current Time and Finish Time Container -->
         <LinearLayout
             android:id="@+id/finishTimeContainer"
             android:layout_width="0dp"

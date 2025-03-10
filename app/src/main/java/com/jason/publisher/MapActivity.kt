@@ -129,7 +129,7 @@ class MapActivity : AppCompatActivity() {
     private lateinit var currentTimeTextView: TextView
     private lateinit var currentTimeHandler: Handler
     private lateinit var currentTimeRunnable: Runnable
-
+    private lateinit var nextTripCountdownTextView: TextView
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -182,6 +182,9 @@ class MapActivity : AppCompatActivity() {
 
         // Start the current time counter
         startCurrentTimeUpdater()
+
+        // Start the next trip countdown updater
+        startNextTripCountdownUpdater()
 
         updateApiTime() // Ensure API time is updated at the start
 
@@ -259,6 +262,71 @@ class MapActivity : AppCompatActivity() {
         binding.arriveButton.setOnClickListener {
             confirmArrival()
         }
+    }
+
+    /**
+     * function to calculate and display the remaining time until the next scheduled run
+     */
+    private fun startNextTripCountdownUpdater() {
+        Log.d("MapActivity startNextTripCountdownUpdater", "scheduleList: $scheduleList")
+        Log.d("MapActivity startNextTripCountdownUpdater", "scheduleData: $scheduleData")
+        val handler = Handler(Looper.getMainLooper())
+        val runnable = object : Runnable {
+            override fun run() {
+                val currentTime = Calendar.getInstance()
+                Log.d("MapActivity startNextTripCountdownUpdater", "Current time: ${currentTime.time}")
+
+                // Flatten scheduleData to extract individual ScheduleItem objects
+                val flatScheduleData = (scheduleData as? List<Any> ?: emptyList()).flatMap { element ->
+                    when (element) {
+                        is ScheduleItem -> listOf(element)
+                        is List<*> -> element.filterIsInstance<ScheduleItem>()
+                        else -> emptyList()
+                    }
+                }
+
+// Log the full schedule for clarity
+                Log.d("MapActivity startNextTripCountdownUpdater", "flatScheduleData: ${flatScheduleData.toString()}")
+
+// Select the second item directly (if available)
+                val nextTrip = if (flatScheduleData.size >= 2) flatScheduleData[1] else null
+
+// Log the selected trip
+                Log.d("MapActivity getNextScheduleStartTime", "nextTrip: ${nextTrip?.toString() ?: "No next trip found"}")
+
+                if (nextTrip != null) {
+                    Log.d("MapActivity startNextTripCountdownUpdater", "nextTrip: ${nextTrip.toString()}")
+                    Log.d("MapActivity startNextTripCountdownUpdater", "✅ Found next trip: ${nextTrip.startTime}")
+                    val tripTime = nextTrip.startTime.split(":").map { it.toInt() }
+                    val nextTripCalendar = Calendar.getInstance().apply {
+                        set(Calendar.HOUR_OF_DAY, tripTime[0])
+                        set(Calendar.MINUTE, tripTime[1])
+                        set(Calendar.SECOND, 0)
+                    }
+
+                    val timeDiffMillis = nextTripCalendar.timeInMillis - currentTime.timeInMillis
+                    if (timeDiffMillis > 0) {
+                        val minutesRemaining = (timeDiffMillis / 1000 / 60).toInt()
+                        val secondsRemaining = ((timeDiffMillis / 1000) % 60).toInt()
+
+                        runOnUiThread {
+                            nextTripCountdownTextView.text = "Next run in: $minutesRemaining mins $secondsRemaining seconds"
+                        }
+                    } else {
+                        runOnUiThread {
+                            nextTripCountdownTextView.text = "Trip is starting now!"
+                        }
+                    }
+                } else {
+                    runOnUiThread {
+                        nextTripCountdownTextView.text = "No more scheduled trips for today"
+                    }
+                }
+
+                handler.postDelayed(this, 1000) // Update every second
+            }
+        }
+        handler.post(runnable)
     }
 
     /**
@@ -1750,6 +1818,7 @@ class MapActivity : AppCompatActivity() {
         upcomingBusStopTextView = binding.upcomingBusStopTextView
         arriveButtonContainer = findViewById(R.id.arriveButtonContainer)
         currentTimeTextView = binding.currentTimeTextView
+        nextTripCountdownTextView = binding.nextTripCountdownTextView
 //            directionTextView = binding.directionTextView
 //            speedTextView = binding.speedTextView
 //            busNameTextView = binding.busNameTextView

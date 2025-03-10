@@ -53,7 +53,7 @@ import java.lang.Math.cos
 import java.lang.Math.sin
 import java.lang.Math.sqrt
 
-class TestTestMapActivity : AppCompatActivity() {
+class TestMapActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityTestmapBinding
     private lateinit var locationManager: LocationManager
@@ -378,7 +378,7 @@ class TestTestMapActivity : AppCompatActivity() {
                 } else {
                     isSimulating = false
                     stopActualTimeUpdater()
-                    Toast.makeText(this@TestTestMapActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@TestMapActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
                     showSummaryDialog() // Show the summary dialog after simulation completes.
                 }
             }
@@ -1006,7 +1006,7 @@ class TestTestMapActivity : AppCompatActivity() {
             } else if (distance > stopPassThreshold && distance <= failSafeThreshold) {
                 Log.w("TestMapActivity checkPassedStops", "⚠️ Warning: No bus stop detected within expected range!")
                 runOnUiThread {
-                    Toast.makeText(this@TestTestMapActivity, "⚠️ Warning: No bus stop detected!", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@TestMapActivity, "⚠️ Warning: No bus stop detected!", Toast.LENGTH_LONG).show()
                 }
             } else if (distance > failSafeThreshold) {
                 Log.e("TestMapActivity checkPassedStops", "❌ Missed stop! Triggering fail-safe...")
