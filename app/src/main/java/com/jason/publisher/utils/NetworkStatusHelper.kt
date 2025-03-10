@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
+import android.util.Log
 import android.view.View
 import android.widget.TextView
 import androidx.core.content.ContextCompat
@@ -19,9 +20,23 @@ object NetworkStatusHelper {
 
     /** Initializes and sets up network status views */
     fun setupNetworkStatus(activity: Activity, connectionStatusTextView: TextView, networkStatusIndicator: View) {
+        // ✅ Initial Check for Immediate Status Update
+        if (isNetworkAvailable(activity)) {
+            Log.d("NetworkStatusHelper", "✅ Initial Check: Network is Online")
+            connectionStatusTextView.text = "Online"
+            connectionStatusTextView.setTextColor(ContextCompat.getColor(activity, android.R.color.white))
+            networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_green)
+        } else {
+            Log.d("NetworkStatusHelper", "❌ Initial Check: Network is Offline")
+            connectionStatusTextView.text = "Offline"
+            connectionStatusTextView.setTextColor(ContextCompat.getColor(activity, android.R.color.white))
+            networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_grey)
+        }
+
         if (!isReceiverRegistered) {  // ✅ Only register if not already registered
             networkReceiver = NetworkReceiver(object : NetworkReceiver.NetworkListener {
                 override fun onNetworkAvailable() {
+                    Log.d("NetworkReceiver", "🔄 Network detected as AVAILABLE")
                     activity.runOnUiThread {
                         connectionStatusTextView.text = "Online"
                         connectionStatusTextView.setTextColor(ContextCompat.getColor(activity, android.R.color.white))
@@ -30,6 +45,7 @@ object NetworkStatusHelper {
                 }
 
                 override fun onNetworkUnavailable() {
+                    Log.d("NetworkReceiver", "🔄 Network detected as UNAVAILABLE")
                     activity.runOnUiThread {
                         connectionStatusTextView.text = "Offline"
                         connectionStatusTextView.setTextColor(ContextCompat.getColor(activity, android.R.color.white))

@@ -179,12 +179,6 @@ class ScheduleActivity : AppCompatActivity() {
             Log.e("ScheduleActivity onCreate", "❌ WorkTable or MultiColorTimelineView is not initialized!")
         }
 
-        NetworkStatusHelper.setupNetworkStatus(
-            this,
-            findViewById(R.id.connectionStatusTextView),
-            findViewById(R.id.networkStatusIndicator)
-        )
-
         // Check internet connection
         if (!NetworkStatusHelper.isNetworkAvailable(this)) {
             // **Offline Mode: Load cached data**
@@ -229,6 +223,12 @@ class ScheduleActivity : AppCompatActivity() {
                 }
             }
         }
+
+        NetworkStatusHelper.setupNetworkStatus(
+            this,
+            findViewById(R.id.connectionStatusTextView),
+            findViewById(R.id.networkStatusIndicator)
+        )
 
 //        busDataCache = getOrCreateAid()
         val file = File("/storage/emulated/0/Documents/.vlrshiddenfolder/busDataCache.txt")
