@@ -16,6 +16,8 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
 
     private var timelineRange = Pair("08:00", "11:10") // Default timeline range
     private val timelineMargin = 50f // Added margin on both sides of the timeline
+    private var dutyNames: List<String> = emptyList() // Add this at class level
+
     private val timeLabelInterval = 30 // Show a label every 30 minutes
     // Load and resize the bus icon, make it white
     private val busBitmap: Bitmap? = ContextCompat.getDrawable(context, R.drawable.ic_bustimeline)?.let { drawable ->
@@ -72,11 +74,16 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
     private var dutyName: String = "Work" // Default to "Work"
 
     /** Sets the work intervals and total timeline range */
-    fun setTimeIntervals(workIntervals: List<Pair<String, String>>, totalDayStart: String, totalDayEnd: String, dutyName: String) {
+    fun setTimeIntervals(
+        workIntervals: List<Pair<String, String>>,
+        totalDayStart: String,
+        totalDayEnd: String,
+        dutyNames: List<String> // Modified to accept dynamic duty names
+    ) {
         this.timeIntervals = workIntervals
+        this.dutyNames = dutyNames // Store duty names dynamically
         this.totalDuration = getMinutesDifference(totalDayStart, totalDayEnd)
-        this.dutyName = dutyName // Store dutyName
-        invalidate() // Refresh the view
+        invalidate()
     }
 
     /** Draws the timeline on the canvas */
@@ -89,9 +96,10 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
         val totalStartMinute = convertToMinutes(timelineRange.first)
         val totalEndMinute = convertToMinutes(timelineRange.second)
 
-        var lastEndMinute = totalStartMinute // Start from the timeline start
+        var lastEndMinute = totalStartMinute
 
-        for ((startTime, endTime) in timeIntervals) {
+        for ((index, interval) in timeIntervals.withIndex()) {
+            val (startTime, endTime) = interval
             val startMinute = convertToMinutes(startTime)
             val endMinute = convertToMinutes(endTime)
 
@@ -100,20 +108,17 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
                 drawSegment(canvas, lastEndMinute, startMinute, totalStartMinute, totalEndMinute, totalWidth, restPaint, "Break")
             }
 
-            // Draw work session with duty name
+            val dutyName = dutyNames.getOrNull(index) ?: "Unknown" // Display respective dutyName
             drawSegment(canvas, startMinute, endMinute, totalStartMinute, totalEndMinute, totalWidth, workPaint, dutyName)
+
             lastEndMinute = endMinute
         }
 
-        // Draw final rest segment after the last work period
         if (lastEndMinute < totalEndMinute) {
             drawSegment(canvas, lastEndMinute, totalEndMinute, totalStartMinute, totalEndMinute, totalWidth, restPaint, "Break")
         }
 
-        // Draw time labels at intervals along the timeline
         drawTimeLabels(canvas, totalStartMinute, totalEndMinute, totalWidth)
-
-        // Draw bus icon at the start
         drawBusIcon(canvas, totalStartMinute, totalEndMinute, totalWidth)
     }
 

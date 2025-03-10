@@ -395,7 +395,7 @@ class ScheduleActivity : AppCompatActivity() {
             return
         }
 
-        val workIntervals = extractWorkIntervals()
+        val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
         Log.d("ScheduleActivity updateTimeline", "Work intervals extracted: $workIntervals")
 
         if (workIntervals.isNotEmpty()) {
@@ -407,14 +407,40 @@ class ScheduleActivity : AppCompatActivity() {
             multiColorTimelineView.setTimelineRange(minStartTime, maxEndTime)
 
             // Extract dutyName correctly
-            val dutyName = scheduleData.firstOrNull()?.dutyName ?: "Work"
+            val dutyNames = scheduleData.map { it.dutyName ?: "Work" }
 
-            // Pass dutyName to MultiColorTimelineView
-            multiColorTimelineView.setTimeIntervals(workIntervals, minStartTime, maxEndTime, dutyName)
+// Pass dutyNames as a list to MultiColorTimelineView
+            multiColorTimelineView.setTimeIntervals(workIntervals, minStartTime, maxEndTime, dutyNames)
         }
     }
 
-    // Helper function to convert a time string "HH:mm" to minutes since midnight.
+    /**
+     * Extracts work intervals and duty names from the schedule data dynamically.
+     */
+    @SuppressLint("LongLogTag")
+    private fun extractWorkIntervalsAndDutyNames(): Pair<List<Pair<String, String>>, List<String>> {
+        val workIntervals = mutableListOf<Pair<String, String>>()
+        val dutyNames = mutableListOf<String>()
+
+        for (item in scheduleData) {
+            val startTime = item.startTime
+            val endTime = item.endTime
+            val dutyName = item.dutyName
+
+            if (startTime.isNotEmpty() && endTime.isNotEmpty()) {
+                workIntervals.add(Pair(startTime, endTime))
+                dutyNames.add(dutyName)  // Collect dutyName for each interval
+            }
+        }
+
+        Log.d("ScheduleActivity extractWorkIntervalsAndDutyNames", "✅ Extracted Work Intervals: $workIntervals")
+        Log.d("ScheduleActivity extractWorkIntervalsAndDutyNames", "✅ Extracted Duty Names: $dutyNames")
+        return Pair(workIntervals, dutyNames)
+    }
+
+    /**
+     * Helper function to convert a time string "HH:mm" to minutes since midnight.
+     */
     private fun convertToMinutes(time: String): Int {
         val parts = time.split(":").map { it.toInt() }
         return parts[0] * 60 + parts[1]
