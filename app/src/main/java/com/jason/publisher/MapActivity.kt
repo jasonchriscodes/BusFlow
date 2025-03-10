@@ -55,10 +55,11 @@ import java.lang.Math.sqrt
 import java.text.ParseException
 import com.google.android.gms.location.*
 import com.google.android.gms.tasks.Task
+import com.jason.publisher.databinding.ActivityMapBinding
 
 class MapActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityTestmapBinding
+    private lateinit var binding: ActivityMapBinding
     private lateinit var locationManager: LocationManager
     private lateinit var mapController: MapController
     private lateinit var dateTimeHandler: Handler
@@ -142,7 +143,7 @@ class MapActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AndroidGraphicFactory.createInstance(application)
-        binding = ActivityTestmapBinding.inflate(layoutInflater)
+        binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         // Initialize managers before using them
@@ -1105,13 +1106,13 @@ class MapActivity : AppCompatActivity() {
                         "%.2f".format(distance)
                     } meters away at $upcomingStopName."
                 )
-                Toast.makeText(
-                    this@MapActivity,
-                    "🛑At ${latitude} ${longitude} no stop passed. Nearest stop is ${
-                        "%.2f".format(distance)
-                    } meters away at $upcomingStopName.",
-                    Toast.LENGTH_LONG
-                ).show()
+//                Toast.makeText(
+//                    this@MapActivity,
+//                    "🛑At ${latitude} ${longitude} no stop passed. Nearest stop is ${
+//                        "%.2f".format(distance)
+//                    } meters away at $upcomingStopName.",
+//                    Toast.LENGTH_LONG
+//                ).show()
             }
         }
     }
@@ -1489,8 +1490,8 @@ class MapActivity : AppCompatActivity() {
         binding.map.setRotation(-bearing) // Negative to align with compass movement
 
         // Scale the map to prevent cropping
-        binding.map.scaleX = 1.5f  // Adjust scaling factor
-        binding.map.scaleY = 1.5f
+        binding.map.scaleX = 2.5f  // Adjust scaling factor
+        binding.map.scaleY = 2.5f
 
         // Keep the map centered on the bus location
         binding.map.setCenter(newPosition)
@@ -1907,10 +1908,10 @@ class MapActivity : AppCompatActivity() {
 
         // **Ensure the map is fully loaded before drawing the polyline**
         binding.map.post {
-            Log.d("MapActivity", "Map is fully initialized. Drawing polyline now.")
-            drawPolyline()  // Draw polyline only after map is loaded
-            addBusStopMarkers(stops)
-            drawDetectionZones(stops) // ✅ Add this for detection zones
+            Log.d("MapActivity", "Map is fully initialized. Drawing polyline and markers now.")
+            drawDetectionZones(stops)   // Draw detection zones first
+            drawPolyline()              // Then draw Polyline on top
+            addBusStopMarkers(stops)    // Bus stop markers as the final element
         }
     }
 

@@ -61,7 +61,8 @@
                     android:layout_height="48dp"
                     android:layout_gravity="start|center_vertical"
                     android:background="@drawable/backbut"
-                    android:padding="8dp" />
+                    android:padding="8dp"
+                    android:contentDescription="Back"/>
             </FrameLayout></LinearLayout>
 
 
@@ -147,16 +148,154 @@
             app:layout_constraintGuide_percent="0.7" />
 
         <!-- Top Left Quadrant: MapView -->
-        <org.mapsforge.map.android.view.MapView
-            android:id="@+id/map"
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/mapContainer"
             android:layout_width="0dp"
             android:layout_height="0dp"
             app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="@id/scheduleStatusContainer"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/guidelineVertical"
-            app:layout_constraintBottom_toTopOf="@id/guidelineHorizontal"
-            android:contentDescription="Live map"
-            android:layout_margin="4dp"/>
+            app:layout_constraintEnd_toEndOf="@id/upcomingStopContainer">
+
+            <org.mapsforge.map.android.view.MapView
+                android:id="@+id/map"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:contentDescription="Live map displaying bus routes and stops" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <!-- UI components hidden behind the map -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/hiddenUIContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:alpha="0"
+            android:clickable="false"
+            android:focusable="false"
+            android:padding="8dp">
+
+                <Button
+                    android:id="@+id/startSimulationButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/purple_400"
+                    android:drawableLeft="@drawable/ic_play"
+                    android:padding="10dp"
+                    android:text="Simulation"
+                    android:textAllCaps="false"
+                    android:textColor="@color/white"
+                    tools:ignore="MissingConstraints" />
+
+                <Button
+                    android:id="@+id/stopSimulationButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/purple_400"
+                    android:drawableLeft="@drawable/ic_stop"
+                    android:padding="10dp"
+                    android:text="Simulation"
+                    android:textAllCaps="false"
+                    android:textColor="@color/white"
+                    tools:ignore="MissingConstraints" />
+
+            <!-- Speed Control Buttons -->
+                <Button
+                    android:id="@+id/slowDownButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/purple_400"
+                    android:drawableLeft="@drawable/ic_slow_down"
+                    android:padding="10dp"
+                    android:text="Slow Down"
+                    android:textAllCaps="false"
+                    android:textColor="@color/white"
+                    tools:ignore="MissingConstraints" />
+
+                <Button
+                    android:id="@+id/speedUpButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/purple_400"
+                    android:drawableLeft="@drawable/ic_speed_up"
+                    android:padding="10dp"
+                    android:text="Speed Up"
+                    android:textAllCaps="false"
+                    android:textColor="@color/white"
+                    tools:ignore="MissingConstraints" />
+            <TextView
+                android:id="@+id/timingPointValueTextView"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Unknown"
+                android:textSize="16sp"
+                android:textColor="@android:color/white"
+                android:gravity="end"
+                tools:ignore="MissingConstraints" />
+
+            <TextView
+                android:id="@+id/speedTextView"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="0 km/h"
+                android:textSize="16sp"
+                android:textColor="@android:color/white"
+                android:gravity="end"
+                tools:ignore="MissingConstraints" />
+
+            <TextView
+                android:id="@+id/timingPointandStopsTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="start"
+                android:text="Bus stop 0 at 00:00"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                tools:ignore="MissingConstraints" />
+
+            <TextView
+                android:id="@+id/actualTimeValueTextView"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Unknown"
+                android:textSize="16sp"
+                android:textColor="@android:color/white"
+                android:gravity="end"
+                tools:ignore="MissingConstraints" />
+
+            <TextView
+                android:id="@+id/ApiTimeValueTextView"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Unknown"
+                android:textSize="16sp"
+                android:textColor="@android:color/white"
+                android:gravity="end"
+                tools:ignore="MissingConstraints" />
+
+            <TextView
+                android:id="@+id/thresholdRangeValueTextView"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Unknown"
+                android:textSize="16sp"
+                android:textColor="@android:color/white"
+                android:gravity="end"
+                tools:ignore="MissingConstraints" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
         <!-- Schedule Status Container with ic_schedule_ahead added -->
         <LinearLayout
