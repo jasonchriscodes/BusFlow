@@ -126,6 +126,9 @@ class MapActivity : AppCompatActivity() {
     private var simulationSpeedFactor: Int = 1
     private lateinit var arriveButtonContainer: LinearLayout
     private var nextTimingPoint: String = "Unknown"
+    private lateinit var currentTimeTextView: TextView
+    private lateinit var currentTimeHandler: Handler
+    private lateinit var currentTimeRunnable: Runnable
 
 
     companion object {
@@ -176,6 +179,9 @@ class MapActivity : AppCompatActivity() {
 
         // Initialize UI components
         initializeUIComponents()
+
+        // Start the current time counter
+        startCurrentTimeUpdater()
 
         updateApiTime() // Ensure API time is updated at the start
 
@@ -253,6 +259,23 @@ class MapActivity : AppCompatActivity() {
         binding.arriveButton.setOnClickListener {
             confirmArrival()
         }
+    }
+
+    /**
+     * function to update the currentTimeTextView
+     */
+    private fun startCurrentTimeUpdater() {
+        currentTimeHandler = Handler(Looper.getMainLooper())
+        currentTimeRunnable = object : Runnable {
+            override fun run() {
+                val currentTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                val currentTimeString = currentTimeFormat.format(Date())  // Display system time directly
+
+                currentTimeTextView.text = currentTimeString
+                currentTimeHandler.postDelayed(this, 1000) // Update every second
+            }
+        }
+        currentTimeHandler.post(currentTimeRunnable)
     }
 
     /**
@@ -1712,7 +1735,7 @@ class MapActivity : AppCompatActivity() {
 
             // Set text views with extracted stop info
             timingPointandStopsTextView.text = stopsInfo
-            tripEndTimeTextView.text = scheduleItem.endTime
+            tripEndTimeTextView.text = scheduleItem.endTime + ":00"
         }
         actualTimeTextView = binding.actualTimeValueTextView
         timingPointValueTextView = binding.timingPointValueTextView
@@ -1726,6 +1749,7 @@ class MapActivity : AppCompatActivity() {
         speedTextView = binding.speedTextView
         upcomingBusStopTextView = binding.upcomingBusStopTextView
         arriveButtonContainer = findViewById(R.id.arriveButtonContainer)
+        currentTimeTextView = binding.currentTimeTextView
 //            directionTextView = binding.directionTextView
 //            speedTextView = binding.speedTextView
 //            busNameTextView = binding.busNameTextView
@@ -2054,5 +2078,6 @@ class MapActivity : AppCompatActivity() {
             binding.map.invalidate()
         }
         Log.d("MapActivity", "🗑️ Removed polyline on destroy.")
+        currentTimeHandler.removeCallbacks(currentTimeRunnable)
     }
 }
