@@ -399,18 +399,19 @@ class ScheduleActivity : AppCompatActivity() {
         Log.d("ScheduleActivity updateTimeline", "Work intervals extracted: $workIntervals")
 
         if (workIntervals.isNotEmpty()) {
-            val minStartMinutes = workIntervals.minOf { convertToMinutes(it.first) }
-            val maxEndMinutes = workIntervals.maxOf { convertToMinutes(it.second) }
+            // Limit to the first 3 intervals
+            val limitedWorkIntervals = workIntervals.take(3)
+            val limitedDutyNames = dutyNames.take(3)
+
+            // Set timeline end time based on the end time of the last limited interval
+            val minStartMinutes = limitedWorkIntervals.minOf { convertToMinutes(it.first) }
+            val maxEndMinutes = limitedWorkIntervals.maxOf { convertToMinutes(it.second) }
             val minStartTime = String.format("%02d:%02d", minStartMinutes / 60, minStartMinutes % 60)
             val maxEndTime = String.format("%02d:%02d", maxEndMinutes / 60, maxEndMinutes % 60)
 
+            // Pass the trimmed data to the timeline view
             multiColorTimelineView.setTimelineRange(minStartTime, maxEndTime)
-
-            // Extract dutyName correctly
-            val dutyNames = scheduleData.map { it.dutyName ?: "Work" }
-
-// Pass dutyNames as a list to MultiColorTimelineView
-            multiColorTimelineView.setTimeIntervals(workIntervals, minStartTime, maxEndTime, dutyNames)
+            multiColorTimelineView.setTimeIntervals(limitedWorkIntervals, minStartTime, maxEndTime, limitedDutyNames)
         }
     }
 
@@ -422,14 +423,14 @@ class ScheduleActivity : AppCompatActivity() {
         val workIntervals = mutableListOf<Pair<String, String>>()
         val dutyNames = mutableListOf<String>()
 
-        for (item in scheduleData) {
+        for (item in scheduleData.take(3)) { // ✅ Limit to first 3 entries directly
             val startTime = item.startTime
             val endTime = item.endTime
             val dutyName = item.dutyName
 
             if (startTime.isNotEmpty() && endTime.isNotEmpty()) {
                 workIntervals.add(Pair(startTime, endTime))
-                dutyNames.add(dutyName)  // Collect dutyName for each interval
+                dutyNames.add(dutyName)
             }
         }
 
