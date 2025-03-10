@@ -64,6 +64,7 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var workTable: TableLayout
     private val timelineRange = Pair("08:00", "11:10")
     private lateinit var scheduleTable: TableLayout
+    private lateinit var networkStatusHelper: NetworkStatusHelper
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -177,6 +178,12 @@ class ScheduleActivity : AppCompatActivity() {
         } else {
             Log.e("ScheduleActivity onCreate", "❌ WorkTable or MultiColorTimelineView is not initialized!")
         }
+
+        NetworkStatusHelper.setupNetworkStatus(
+            this,
+            findViewById(R.id.connectionStatusTextView),
+            findViewById(R.id.networkStatusIndicator)
+        )
 
         // Check internet connection
         if (!NetworkStatusHelper.isNetworkAvailable(this)) {

@@ -15,35 +15,42 @@ import com.jason.publisher.R
 object NetworkStatusHelper {
 
     var networkReceiver: NetworkReceiver? = null
+    private var isReceiverRegistered = false // ✅ Added flag to track registration
 
     /** Initializes and sets up network status views */
     fun setupNetworkStatus(activity: Activity, connectionStatusTextView: TextView, networkStatusIndicator: View) {
-        networkReceiver = NetworkReceiver(object : NetworkReceiver.NetworkListener {
-            override fun onNetworkAvailable() {
-                activity.runOnUiThread {
-                    connectionStatusTextView.text = "Online"
-                    connectionStatusTextView.setTextColor(ContextCompat.getColor(activity, android.R.color.white))
-                    networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_green)
+        if (!isReceiverRegistered) {  // ✅ Only register if not already registered
+            networkReceiver = NetworkReceiver(object : NetworkReceiver.NetworkListener {
+                override fun onNetworkAvailable() {
+                    activity.runOnUiThread {
+                        connectionStatusTextView.text = "Online"
+                        connectionStatusTextView.setTextColor(ContextCompat.getColor(activity, android.R.color.white))
+                        networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_green)
+                    }
                 }
-            }
 
-            override fun onNetworkUnavailable() {
-                activity.runOnUiThread {
-                    connectionStatusTextView.text = "Offline"
-                    connectionStatusTextView.setTextColor(ContextCompat.getColor(activity, android.R.color.white))
-                    networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_grey)
+                override fun onNetworkUnavailable() {
+                    activity.runOnUiThread {
+                        connectionStatusTextView.text = "Offline"
+                        connectionStatusTextView.setTextColor(ContextCompat.getColor(activity, android.R.color.white))
+                        networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_grey)
+                    }
                 }
-            }
-        })
+            })
 
-        val intentFilter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
-        activity.registerReceiver(networkReceiver, intentFilter)
+            val intentFilter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
+            activity.registerReceiver(networkReceiver, intentFilter)
+            isReceiverRegistered = true  // ✅ Mark receiver as registered
+        }
     }
 
     /** Unregisters the network receiver when activity is destroyed */
     fun unregisterReceiver(activity: Activity) {
-        networkReceiver?.let {
-            activity.unregisterReceiver(it)
+        if (isReceiverRegistered) {  // ✅ Only unregister if registered
+            networkReceiver?.let {
+                activity.unregisterReceiver(it)
+            }
+            isReceiverRegistered = false // ✅ Mark receiver as unregistered
         }
     }
 

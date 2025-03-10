@@ -23,6 +23,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.Settings
 import android.view.View
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
@@ -246,11 +247,36 @@ class MapActivity : AppCompatActivity() {
             stopSimulation()
         }
         binding.backButton.setOnClickListener {
-            val intent = Intent(this, ScheduleActivity::class.java)
-            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
-            startActivity(intent)
-            finish()
+            if (speed > 5.0) {  // Treat speeds above 5 km/h as "moving"
+                Toast.makeText(this, "❌ Bus must be moving slower than 5 km/h before ending the trip.", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+
+            // Show number pad confirmation dialog
+            val numberPadDialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            val numberPadView = layoutInflater.inflate(R.layout.dialog_number_pad, null)
+            val numberPadInput = numberPadView.findViewById<EditText>(R.id.numberPadInput)
+
+            numberPadDialog.setView(numberPadView)
+                .setTitle("Enter Passcode")
+                .setPositiveButton("Confirm") { _, _ ->
+                    // Verify passcode
+                    val enteredCode = numberPadInput.text.toString()
+                    if (enteredCode == "0000") {
+                        val intent = Intent(this, ScheduleActivity::class.java)
+                        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        startActivity(intent)
+                        finish()
+                    } else {
+                        Toast.makeText(this, "❌ Incorrect code. Please enter 0000.", Toast.LENGTH_LONG).show()
+                    }
+                }
+                .setNegativeButton("Cancel") { dialog, _ ->
+                    dialog.dismiss()
+                }
+                .show()
         }
+
         binding.speedUpButton.setOnClickListener {
             speedUp()
         }
