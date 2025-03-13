@@ -291,6 +291,45 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
+     * Starts the start time from the scheduleList and counts up from there
+     */
+    private fun startStartTime() {
+        if (scheduleList.isEmpty()) {
+            Log.e("MapActivity", "❌ scheduleList is empty. Cannot start start time updater.")
+            return
+        }
+
+        // Extract the first schedule start time (e.g., "08:00")
+        val startTimeStr = scheduleList.first().startTime
+        val timeParts = startTimeStr.split(":")
+        if (timeParts.size != 2) {
+            Log.e("MapActivity", "❌ Invalid start time format in scheduleList: $startTimeStr")
+            return
+        }
+
+        // Initialize simulatedStartTime to the scheduled start time
+        simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+        simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
+        simulatedStartTime.set(Calendar.SECOND, 0)
+
+        currentTimeHandler = Handler(Looper.getMainLooper())
+        currentTimeRunnable = object : Runnable {
+            override fun run() {
+                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
+                Log.d("MapActivity startStartTime", "currentTimeTextView.text: ${currentTimeTextView.text}")
+
+                // Advance time by 1 second per tick
+                simulatedStartTime.add(Calendar.SECOND, 1)
+
+                currentTimeHandler.postDelayed(this, 1000) // Update every second
+            }
+        }
+
+        currentTimeHandler.post(currentTimeRunnable)
+    }
+
+    /**
      * function to calculate and display the remaining time until the next scheduled run
      */
     private fun startNextTripCountdownUpdater() {
@@ -331,6 +370,7 @@ class MapActivity : AppCompatActivity() {
                     }
 
                     val timeDiffMillis = nextTripCalendar.timeInMillis - currentTime.timeInMillis
+                    Log.d("MapActivity startNextTripCountdownUpdater", "timeDiffMillis: ${timeDiffMillis}")
                     if (timeDiffMillis > 0) {
                         val minutesRemaining = (timeDiffMillis / 1000 / 60).toInt()
                         val secondsRemaining = ((timeDiffMillis / 1000) % 60).toInt()
@@ -2102,10 +2142,12 @@ class MapActivity : AppCompatActivity() {
     @SuppressLint("LongLogTag")
     private fun addBusStopMarkers(busStops: List<BusStop>) {
         val totalStops = busStops.size
+        Log.d("MapActivity", "Total Stops: $totalStops")
 
         busStops.forEachIndexed { index, stop ->
             val stopName = when (index) {
-                0, totalStops - 1 -> "S/E" // First and last stop as S/E
+                0 -> "Start"
+                totalStops - 1 -> "End"
                 else -> index.toString() // Numbered stops
             }
 

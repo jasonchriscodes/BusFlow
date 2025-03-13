@@ -193,7 +193,7 @@ class ScheduleActivity : AppCompatActivity() {
 
             // Load bus route information from offline data
             // Note in getBusRoutesOffline() the route is already contain bus stop in it
-            jsonString = OfflineData.getBusRoutesOffline().toString()
+            jsonString = Gson().toJson(busRouteData)
             Log.d("MainActivity onCreate NetworkStatusHelper jsonString", jsonString)
             val (route, stops, durationBetweenStops) = RouteData.fromJson(jsonString)
 
@@ -275,7 +275,7 @@ class ScheduleActivity : AppCompatActivity() {
                 Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
                 rewriteOfflineScheduleData()
 
-                val intent = Intent(this, MapActivity::class.java).apply {
+                val intent = Intent(this, TestMapActivity::class.java).apply {
                     putExtra("AID", aid)
                     putExtra("CONFIG", ArrayList(config))
                     putExtra("JSON_STRING", jsonString)

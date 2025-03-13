@@ -348,6 +348,7 @@ class TestMapActivity : AppCompatActivity() {
         startActualTimeUpdater()
 
         simulationRunnable = object : Runnable {
+            @SuppressLint("LongLogTag")
             @RequiresApi(Build.VERSION_CODES.M)
             override fun run() {
                 if (currentRouteIndex < route.size - 1) {
@@ -360,6 +361,7 @@ class TestMapActivity : AppCompatActivity() {
                     val endLon = end.longitude!!
 
                     val distanceMeters = calculateDistance(startLat, startLon, endLat, endLon)
+                    Log.d("startSimulation distanceMeters", "distanceMeters: ${distanceMeters}")
                     // If simulationSpeedFactor is 0, bus is stopped; simply re-post without movement.
                     if (simulationSpeedFactor <= 0) {
                         simulationHandler.postDelayed(this, 1000)
@@ -1811,7 +1813,8 @@ class TestMapActivity : AppCompatActivity() {
 
         busStops.forEachIndexed { index, stop ->
             val stopName = when (index) {
-                0, totalStops - 1 -> "S/E" // First and last stop as S/E
+                0 -> "Start"
+                totalStops - 1 -> "End"
                 else -> index.toString() // Numbered stops
             }
 
