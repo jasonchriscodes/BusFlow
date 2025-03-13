@@ -1606,14 +1606,18 @@ class MapActivity : AppCompatActivity() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         locationRequest = LocationRequest.create().apply {
-            interval = 1000 // 1 second updates
+            interval = 1000 // 1-second updates
             fastestInterval = 500 // Fastest update in 500ms
-            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+            priority = Priority.PRIORITY_HIGH_ACCURACY
+            setWaitForAccurateLocation(true)  // Ensures precise GPS fix
         }
-
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 locationResult.lastLocation?.let { location ->
+                    Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
+                    Log.d("GPS_DEBUG", "Speed: ${location.speed}, Bearing: ${location.bearing}")
+                    Toast.makeText(this@MapActivity, "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MapActivity, "Speed: ${location.speed}, Bearing: ${location.bearing}", Toast.LENGTH_LONG).show()
                     if (!isManualMode) {
                         latitude = location.latitude
                         longitude = location.longitude
@@ -1644,7 +1648,17 @@ class MapActivity : AppCompatActivity() {
             }
         }
 
-        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+        // Check GPS settings and request updates if successful
+        val builder = LocationSettingsRequest.Builder().addLocationRequest(locationRequest)
+        LocationServices.getSettingsClient(this)
+            .checkLocationSettings(builder.build())
+            .addOnSuccessListener {
+                fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+            }
+            .addOnFailureListener { e ->
+                Log.e("MapActivity", "❌ GPS settings error: ${e.localizedMessage}")
+                Toast.makeText(this, "Please enable GPS for accurate tracking.", Toast.LENGTH_LONG).show()
+            }
 
         Toast.makeText(this, "Live location updates started", Toast.LENGTH_SHORT).show()
     }
@@ -2146,8 +2160,8 @@ class MapActivity : AppCompatActivity() {
 
         busStops.forEachIndexed { index, stop ->
             val stopName = when (index) {
-                0 -> "Start"
-                totalStops - 1 -> "End"
+                0 -> "S"
+                totalStops - 1 -> "E"
                 else -> index.toString() // Numbered stops
             }
 

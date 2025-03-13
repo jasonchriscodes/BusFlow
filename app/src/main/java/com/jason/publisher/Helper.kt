@@ -111,8 +111,8 @@ object Helper {
      */
     fun createBusStopSymbol(context: Context, busStopIndex: Int, totalStops: Int, isRed: Boolean): Drawable {
         val adjustedNumber = when (busStopIndex) {
-            0 -> "Start"
-            totalStops - 1 -> "End"
+            0 -> "S"
+            totalStops - 1 -> "E"
             else -> busStopIndex.toString() // Numbered stops
         }
 
