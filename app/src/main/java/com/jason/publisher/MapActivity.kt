@@ -1723,13 +1723,16 @@ class MapActivity : AppCompatActivity() {
         )
         binding.map.layerManager.layers.add(busMarker)
 
-        // ✅ Set the map's initial position only once
-        if (firstTimeCentering) {
-            binding.map.setCenter(newPosition)  // Center only at the start
-            firstTimeCentering = false         // Prevent future centering
-        }
+        // Apply map rotation
+        binding.map.setRotation(-bearing) // Negative to align with compass movement
 
-        binding.map.invalidate() // Refresh map view
+        // Scale the map to prevent cropping
+        binding.map.scaleX = 2.5f  // Adjust scaling factor
+        binding.map.scaleY = 2.5f
+
+        // Keep the map centered on the bus location
+        binding.map.setCenter(newPosition)
+        binding.map.invalidate() // Force redraw
     }
 
     /**
