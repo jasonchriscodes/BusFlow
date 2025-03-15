@@ -622,6 +622,7 @@ class TestMapActivity : AppCompatActivity() {
         val stepHandler = Handler(Looper.getMainLooper())
 
         val stepRunnable = object : Runnable {
+            @SuppressLint("LongLogTag")
             override fun run() {
                 if (step < steps) {
                     val newLat = startLat + (latStep * step)
@@ -658,6 +659,11 @@ class TestMapActivity : AppCompatActivity() {
                     // Save last location
                     lastLatitude = newLat
                     lastLongitude = newLon
+
+                    // ✅ Log simulation details every 1/3 second (333ms)
+                    if (step % 3 == 0) {  // Each step = 100ms → Log every 3rd step
+                        Log.d("SimulationLog", "Speed: ${"%.2f".format(speed)} km/h | Lat: $newLat | Lon: $newLon | Bearing: ${"%.2f".format(bearing)}°")
+                    }
 
                     step++
                     stepHandler.postDelayed(this, 100)

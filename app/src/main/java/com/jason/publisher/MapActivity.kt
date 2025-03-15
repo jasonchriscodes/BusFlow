@@ -22,6 +22,7 @@ import android.location.Location
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import android.view.Gravity
 import android.view.View
 import android.widget.EditText
 import android.widget.ImageView
@@ -1616,8 +1617,10 @@ class MapActivity : AppCompatActivity() {
                 locationResult.lastLocation?.let { location ->
                     Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
                     Log.d("GPS_DEBUG", "Speed: ${location.speed}, Bearing: ${location.bearing}")
-                    Toast.makeText(this@MapActivity, "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}", Toast.LENGTH_LONG).show()
-                    Toast.makeText(this@MapActivity, "Speed: ${location.speed}, Bearing: ${location.bearing}", Toast.LENGTH_LONG).show()
+
+                    showCustomToast("Latitude: ${location.latitude}, Longitude: ${location.longitude}, LocAccuracy: ${location.accuracy}, Speed: ${location.speed}, Bearing: ${location.bearing}, BearAccuracy: ${location.bearingAccuracyDegrees}")
+//                    Toast.makeText(this@MapActivity, "Lat: ${location.latitude}, Lon: ${location.longitude}, LocAcc: ${location.accuracy}, Speed: ${location.speed}, Bear: ${location.bearing}, BearAcc: ${location.bearingAccuracyDegrees}", Toast.LENGTH_LONG).show()
+//                    Toast.makeText(this@MapActivity, "Speed: ${location.speed}, Bearing: ${location.bearing}", Toast.LENGTH_LONG).show()
                     if (!isManualMode) {
                         latitude = location.latitude
                         longitude = location.longitude
@@ -1664,6 +1667,26 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
+     * custom toast align center
+     */
+    fun showCustomToast(message: String) {
+        val toast = Toast.makeText(this@MapActivity, message, Toast.LENGTH_LONG)
+
+        // Position the toast at the top-center
+        toast.setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, 100)
+
+        // Custom view with a TextView for longer text
+        val textView = TextView(this)
+        textView.text = message
+        textView.setTextColor(Color.WHITE)
+        textView.setBackgroundColor(Color.BLACK) // Custom background for visibility
+        textView.setPadding(20, 20, 20, 20)
+
+        toast.view = textView
+        toast.show()
+    }
+
+    /**
      * ✅ Function to validate time format (HH:mm:ss)
      */
     private fun isValidTime(time: String?): Boolean {
@@ -1679,6 +1702,8 @@ class MapActivity : AppCompatActivity() {
             false
         }
     }
+
+    private var firstTimeCentering = true  // Add this flag to track the initial centering
 
     /** Move the bus marker dynamically with updated bearing */
     private fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float) {
@@ -1698,16 +1723,13 @@ class MapActivity : AppCompatActivity() {
         )
         binding.map.layerManager.layers.add(busMarker)
 
-        // Apply map rotation
-        binding.map.setRotation(-bearing) // Negative to align with compass movement
+        // ✅ Set the map's initial position only once
+        if (firstTimeCentering) {
+            binding.map.setCenter(newPosition)  // Center only at the start
+            firstTimeCentering = false         // Prevent future centering
+        }
 
-        // Scale the map to prevent cropping
-        binding.map.scaleX = 2.5f  // Adjust scaling factor
-        binding.map.scaleY = 2.5f
-
-        // Keep the map centered on the bus location
-        binding.map.setCenter(newPosition)
-        binding.map.invalidate() // Force redraw
+        binding.map.invalidate() // Refresh map view
     }
 
     /**
