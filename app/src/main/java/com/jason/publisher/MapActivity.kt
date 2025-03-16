@@ -1631,6 +1631,10 @@ class MapActivity : AppCompatActivity() {
                     runOnUiThread {
                         speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
 
+                        bearing = smoothBearing(normalizeBearing(location.bearing))
+                        updateBusMarkerPosition(latitude, longitude, bearing)
+
+
                         updateBusMarkerPosition(latitude, longitude, bearing)
                         checkPassedStops(latitude, longitude)
                         updateTimingPointBasedOnLocation(latitude, longitude)
@@ -1664,6 +1668,29 @@ class MapActivity : AppCompatActivity() {
             }
 
         Toast.makeText(this, "Live location updates started", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * function to smooth the bearing to reduce sudden direction flips.
+     */
+    private var previousBearing: Float? = null
+
+    private fun smoothBearing(newBearing: Float, alpha: Float = 0.2f): Float {
+        return if (previousBearing == null) {
+            previousBearing = newBearing
+            newBearing
+        } else {
+            val smoothedBearing = (alpha * newBearing) + ((1 - alpha) * previousBearing!!)
+            previousBearing = smoothedBearing
+            smoothedBearing
+        }
+    }
+
+    /**
+     * normalize the bearing to ensure it’s within the valid range.
+     */
+    private fun normalizeBearing(bearing: Float): Float {
+        return (bearing + 360) % 360
     }
 
     /**
