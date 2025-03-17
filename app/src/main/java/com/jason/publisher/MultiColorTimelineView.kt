@@ -11,6 +11,7 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
 import androidx.core.content.ContextCompat
+import com.jason.publisher.model.BusScheduleInfo
 
 class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
 
@@ -73,6 +74,7 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
     private var totalDuration = 0 // Total duration of the timeline in minutes
     private var dutyName: String = "Work" // Default to "Work"
     private var showBusIcon: Boolean = true // Add this flag for control
+    private var busStops: List<BusScheduleInfo> = emptyList()
 
     /** Sets the work intervals and total timeline range */
     fun setTimeIntervals(
@@ -107,12 +109,11 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
             val startMinute = convertToMinutes(startTime)
             val endMinute = convertToMinutes(endTime)
 
-            // Draw rest period before this work session
             if (startMinute > lastEndMinute) {
                 drawSegment(canvas, lastEndMinute, startMinute, totalStartMinute, totalEndMinute, totalWidth, restPaint, "Break")
             }
 
-            val dutyName = dutyNames.getOrNull(index) ?: "Unknown" // Display respective dutyName
+            val dutyName = dutyNames.getOrNull(index) ?: "Unknown"
             drawSegment(canvas, startMinute, endMinute, totalStartMinute, totalEndMinute, totalWidth, workPaint, dutyName)
 
             lastEndMinute = endMinute
@@ -123,7 +124,65 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
         }
 
         drawTimeLabels(canvas, totalStartMinute, totalEndMinute, totalWidth)
-        drawBusIcon(canvas, totalStartMinute, totalEndMinute, totalWidth)
+        drawBusStopMarkers(canvas, totalStartMinute, totalEndMinute, totalWidth) // 🔥 New function
+    }
+
+    /**
+     * Draws markers for each bus stop
+     */
+    private fun drawBusStopMarkers(canvas: Canvas, totalStart: Int, totalEnd: Int, totalWidth: Float) {
+        val availableWidth = totalWidth - (2 * timelineMargin)
+
+        val markerPaint = Paint().apply {
+            color = Color.WHITE // Marker lines in white
+            strokeWidth = 4f
+            style = Paint.Style.STROKE
+        }
+
+        val textPaintWhite = Paint().apply {
+            color = Color.WHITE // Text in white
+            textSize = 20f
+            textAlign = Paint.Align.CENTER
+            isFakeBoldText = true
+            setShadowLayer(5f, 2f, 2f, Color.BLACK) // Shadow for readability
+        }
+
+        for (busStop in busStops) {
+            val stopMinute = convertToMinutes(busStop.time)
+            val startMinute = totalStart
+
+            // Calculate the delta value (time difference)
+            val deltaMinutes = stopMinute - startMinute
+            val deltaTime = if (deltaMinutes >= 60) {
+                val hours = deltaMinutes / 60
+                val minutes = deltaMinutes % 60
+                String.format("%d:%02d", hours, minutes) // 2:20 format for >= 60 mins
+            } else {
+                deltaMinutes.toString() // Show plain number for < 60 mins
+            }
+
+            // Calculate the percentage position
+            val position = ((stopMinute - totalStart).toFloat() / (totalEnd - totalStart)) * availableWidth
+            val markerX = timelineMargin + position
+            val markerY = height / 2f
+
+            // Draw a vertical line for the marker
+            canvas.drawLine(markerX, markerY - 15, markerX, markerY + 15, markerPaint)
+
+            // Display the bus stop abbreviation (e.g., NHS) above the marker
+            canvas.drawText(busStop.abbreviation, markerX, markerY - 30, textPaintWhite)
+
+            // Display the delta time (e.g., 20 or 2:20) below the marker
+            canvas.drawText(deltaTime, markerX, markerY + 30, textPaintWhite)
+        }
+    }
+
+    /**
+     * New function to set bus stops on the timeline
+     */
+    fun setBusStops(busStops: List<BusScheduleInfo>) {
+        this.busStops = busStops
+        invalidate() // Redraw the timeline
     }
 
     /**

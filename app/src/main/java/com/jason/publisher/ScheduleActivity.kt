@@ -419,6 +419,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         val workIntervals = mutableListOf<Pair<String, String>>()
         val dutyNames = mutableListOf<String>()
+        val busStopsList = mutableListOf<BusScheduleInfo>()
 
         for (item in currentPageData) {
             val startTime = item.startTime
@@ -429,10 +430,9 @@ class ScheduleActivity : AppCompatActivity() {
                 workIntervals.add(Pair(startTime, endTime))
                 dutyNames.add(dutyName)
             }
-        }
 
-        Log.d("ScheduleActivity updateTimelineForPage", "✅ Updated Work Intervals: $workIntervals")
-        Log.d("ScheduleActivity updateTimelineForPage", "✅ Updated Duty Names: $dutyNames")
+            busStopsList.addAll(item.busStops) // Collect bus stops for the timeline
+        }
 
         if (workIntervals.isNotEmpty()) {
             val minStartMinutes = workIntervals.minOf { convertToMinutes(it.first) }
@@ -442,6 +442,7 @@ class ScheduleActivity : AppCompatActivity() {
 
             multiColorTimelineView.setTimelineRange(minStartTime, maxEndTime)
             multiColorTimelineView.setTimeIntervals(workIntervals, minStartTime, maxEndTime, dutyNames, isFirstPage)
+            multiColorTimelineView.setBusStops(busStopsList) // ✅ Pass bus stops to the timeline
         }
     }
 
