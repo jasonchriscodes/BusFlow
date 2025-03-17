@@ -337,12 +337,53 @@ class ScheduleActivity : AppCompatActivity() {
         val startIndex = currentPage * itemsPerPage
         val endIndex = minOf(startIndex + itemsPerPage, scheduleData.size)
 
-        updateScheduleTable(scheduleData.subList(startIndex, endIndex)) // Show data for current page
+        val currentPageData = scheduleData.subList(startIndex, endIndex)
+
+        updateScheduleTable(currentPageData)
+        updateTimelineForPage(currentPageData, isFirstPage = currentPage == 0) // ✅ Pass flag to indicate first page
 
         // Show or hide pagination buttons based on total pages
         findViewById<Button>(R.id.btnPage1).visibility = if (totalPages >= 1) View.VISIBLE else View.GONE
         findViewById<Button>(R.id.btnPage2).visibility = if (totalPages >= 2) View.VISIBLE else View.GONE
         findViewById<Button>(R.id.btnPage3).visibility = if (totalPages >= 3) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * function to update the timeline based on the currently displayed data.
+     */
+    @SuppressLint("LongLogTag")
+    private fun updateTimelineForPage(currentPageData: List<ScheduleItem>, isFirstPage: Boolean) {
+        if (!::multiColorTimelineView.isInitialized) {
+            Log.e("ScheduleActivity updateTimelineForPage", "MultiColorTimelineView is not initialized!")
+            return
+        }
+
+        val workIntervals = mutableListOf<Pair<String, String>>()
+        val dutyNames = mutableListOf<String>()
+
+        for (item in currentPageData) {
+            val startTime = item.startTime
+            val endTime = item.endTime
+            val dutyName = item.dutyName
+
+            if (startTime.isNotEmpty() && endTime.isNotEmpty()) {
+                workIntervals.add(Pair(startTime, endTime))
+                dutyNames.add(dutyName)
+            }
+        }
+
+        Log.d("ScheduleActivity updateTimelineForPage", "✅ Updated Work Intervals: $workIntervals")
+        Log.d("ScheduleActivity updateTimelineForPage", "✅ Updated Duty Names: $dutyNames")
+
+        if (workIntervals.isNotEmpty()) {
+            val minStartMinutes = workIntervals.minOf { convertToMinutes(it.first) }
+            val maxEndMinutes = workIntervals.maxOf { convertToMinutes(it.second) }
+            val minStartTime = String.format("%02d:%02d", minStartMinutes / 60, minStartMinutes % 60)
+            val maxEndTime = String.format("%02d:%02d", maxEndMinutes / 60, maxEndMinutes % 60)
+
+            multiColorTimelineView.setTimelineRange(minStartTime, maxEndTime)
+            multiColorTimelineView.setTimeIntervals(workIntervals, minStartTime, maxEndTime, dutyNames, isFirstPage)
+        }
     }
 
     /**
@@ -463,7 +504,7 @@ class ScheduleActivity : AppCompatActivity() {
 
             // Pass the trimmed data to the timeline view
             multiColorTimelineView.setTimelineRange(minStartTime, maxEndTime)
-            multiColorTimelineView.setTimeIntervals(limitedWorkIntervals, minStartTime, maxEndTime, limitedDutyNames)
+            multiColorTimelineView.setTimeIntervals(limitedWorkIntervals, minStartTime, maxEndTime, limitedDutyNames, true)
         }
     }
 

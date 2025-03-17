@@ -72,18 +72,22 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
     private var timeIntervals: List<Pair<String, String>> = emptyList() // Work intervals
     private var totalDuration = 0 // Total duration of the timeline in minutes
     private var dutyName: String = "Work" // Default to "Work"
+    private var showBusIcon: Boolean = true // Add this flag for control
 
     /** Sets the work intervals and total timeline range */
     fun setTimeIntervals(
         workIntervals: List<Pair<String, String>>,
         totalDayStart: String,
         totalDayEnd: String,
-        dutyNames: List<String> // Modified to accept dynamic duty names
-    ) {
+        dutyNames: List<String>,
+        showBusIcon: Boolean
+    )
+    {
         this.timeIntervals = workIntervals
-        this.dutyNames = dutyNames // Store duty names dynamically
+        this.dutyNames = dutyNames
         this.totalDuration = getMinutesDifference(totalDayStart, totalDayEnd)
-        invalidate()
+        this.showBusIcon = showBusIcon // Set the flag to control bus icon drawing
+        invalidate() // Redraw the view when data changes
     }
 
     /** Draws the timeline on the canvas */
@@ -126,6 +130,8 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
      * Draw bus icon in Bitmap
      */
     private fun drawBusIcon(canvas: Canvas, totalStart: Int, totalEnd: Int, totalWidth: Float) {
+        if (!showBusIcon) return // ✅ Skip drawing if not the first page
+
         busBitmap?.let { bitmap ->
             val availableWidth = totalWidth - (2 * timelineMargin)
             val busX = timelineMargin - (bitmap.width / 2) // Position at the start of the timeline
