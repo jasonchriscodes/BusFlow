@@ -10,6 +10,9 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.view.View
+import android.widget.Button
+import android.widget.ImageButton
 import android.widget.TableLayout
 import android.widget.TableRow
 import android.widget.TextView
@@ -238,6 +241,9 @@ class ScheduleActivity : AppCompatActivity() {
             Log.e("MainActivity onCreate", "❌ File creation failed!")
         }
 
+        setupPaginationButtons()
+        changePage(0) // Display first 3 items by default
+
         // Set up the "Start Route" button
         binding.startRouteButton.setOnClickListener {
             if (scheduleData.isNotEmpty()) {
@@ -291,6 +297,52 @@ class ScheduleActivity : AppCompatActivity() {
                 Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    /** Initializes pagination buttons and assigns click listeners */
+    private var currentPage = 0 // Tracks the current page
+    private val itemsPerPage = 3 // Number of items per page
+    @RequiresApi(Build.VERSION_CODES.M)
+    /** Initializes pagination buttons and assigns click listeners */
+    private fun setupPaginationButtons() {
+        val btnPrevious = findViewById<ImageButton>(R.id.btnPrevious)
+        val btnPage1 = findViewById<Button>(R.id.btnPage1)
+        val btnPage2 = findViewById<Button>(R.id.btnPage2)
+        val btnPage3 = findViewById<Button>(R.id.btnPage3)
+        val btnNext = findViewById<ImageButton>(R.id.btnNext)
+
+        val totalPages = (scheduleData.size + itemsPerPage - 1) / itemsPerPage
+
+        // Show the correct number of page buttons based on totalPages
+        btnPage1.visibility = if (totalPages >= 1) View.VISIBLE else View.GONE
+        btnPage2.visibility = if (totalPages >= 2) View.VISIBLE else View.GONE
+        btnPage3.visibility = if (totalPages >= 3) View.VISIBLE else View.GONE
+
+        btnPrevious.setOnClickListener { changePage(currentPage - 1) }
+        btnNext.setOnClickListener { changePage(currentPage + 1) }
+
+        btnPage1.setOnClickListener { changePage(0) }
+        btnPage2.setOnClickListener { changePage(1) }
+        btnPage3.setOnClickListener { changePage(2) }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    /** Changes the page and updates the schedule table */
+    private fun changePage(page: Int) {
+        val totalPages = (scheduleData.size + itemsPerPage - 1) / itemsPerPage // Calculate total pages
+        if (page < 0 || page >= totalPages) return // Prevent invalid pages
+
+        currentPage = page // Update current page
+        val startIndex = currentPage * itemsPerPage
+        val endIndex = minOf(startIndex + itemsPerPage, scheduleData.size)
+
+        updateScheduleTable(scheduleData.subList(startIndex, endIndex)) // Show data for current page
+
+        // Show or hide pagination buttons based on total pages
+        findViewById<Button>(R.id.btnPage1).visibility = if (totalPages >= 1) View.VISIBLE else View.GONE
+        findViewById<Button>(R.id.btnPage2).visibility = if (totalPages >= 2) View.VISIBLE else View.GONE
+        findViewById<Button>(R.id.btnPage3).visibility = if (totalPages >= 3) View.VISIBLE else View.GONE
     }
 
     /**
