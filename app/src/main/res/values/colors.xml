@@ -18,4 +18,5 @@
     <color name="whatsapp_green">#dbf8c8</color>
     <color name="whatsapp_tick_blue">#5ac6e6</color>
     <color name="red">#FF0000</color>
+    <color name="green">#00FF00</color>
 </resources>

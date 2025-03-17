@@ -13,11 +13,13 @@ import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
+import android.widget.ProgressBar
 import android.widget.TableLayout
 import android.widget.TableRow
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivityScheduleBinding
@@ -161,31 +163,32 @@ class ScheduleActivity : AppCompatActivity() {
         // Start updating the date/time
         startDateTimeUpdater()
 
-        scheduleTable = findViewById(R.id.scheduleTable)
-
-//        // Populate only the first 3 schedule items
-//        updateScheduleTable(dummyScheduleData.take(3))
-
-        // Initialize Views
-        workTable = findViewById(R.id.scheduleTable) // Ensure this matches your XML
-        multiColorTimelineView = findViewById(R.id.multiColorTimelineView)
-
-        // Debugging to check if views are properly initialized
-        Log.d("ScheduleActivity onCreate", "workTable initialized: ${::workTable.isInitialized}")
-        Log.d("ScheduleActivity onCreate", "multiColorTimelineView initialized: ${::multiColorTimelineView.isInitialized}")
-
-        // Ensure updateTimeline() function exists before calling
-        if (::workTable.isInitialized && ::multiColorTimelineView.isInitialized) {
-            multiColorTimelineView.setTimelineRange(timelineRange.first, timelineRange.second)
-            updateTimeline() // Call function to update the timeline dynamically
-        } else {
-            Log.e("ScheduleActivity onCreate", "❌ WorkTable or MultiColorTimelineView is not initialized!")
-        }
-
         // Check internet connection
         if (!NetworkStatusHelper.isNetworkAvailable(this)) {
             // **Offline Mode: Load cached data**
             Toast.makeText(this, "You are disconnected from the internet. Loading data from tablet cache.", Toast.LENGTH_LONG).show()
+
+            scheduleTable = findViewById(R.id.scheduleTable)
+
+//        // Populate only the first 3 schedule items
+//        updateScheduleTable(dummyScheduleData.take(3))
+
+            // Initialize Views
+            workTable = findViewById(R.id.scheduleTable) // Ensure this matches your XML
+            multiColorTimelineView = findViewById(R.id.multiColorTimelineView)
+
+            // Debugging to check if views are properly initialized
+            Log.d("ScheduleActivity onCreate", "workTable initialized: ${::workTable.isInitialized}")
+            Log.d("ScheduleActivity onCreate", "multiColorTimelineView initialized: ${::multiColorTimelineView.isInitialized}")
+
+            // Ensure updateTimeline() function exists before calling
+            if (::workTable.isInitialized && ::multiColorTimelineView.isInitialized) {
+                multiColorTimelineView.setTimelineRange(timelineRange.first, timelineRange.second)
+                updateTimeline() // Call function to update the timeline dynamically
+            } else {
+                Log.e("ScheduleActivity onCreate", "❌ WorkTable or MultiColorTimelineView is not initialized!")
+            }
+
             loadBusDataFromCache()
             loadScheduleDataFromCache()
 
@@ -206,10 +209,82 @@ class ScheduleActivity : AppCompatActivity() {
 
             // Auto start route if the first schedule time has passed 1.5 minutes
 //            startPeriodicScheduleCheck()
+
+            //        busDataCache = getOrCreateAid()
+            val file = File("/storage/emulated/0/Documents/.vlrshiddenfolder/busDataCache.txt")
+            if (file.exists()) {
+                Log.d("MainActivity onCreate", "✅ File exists: ${file.absolutePath}")
+            } else {
+                Log.e("MainActivity onCreate", "❌ File creation failed!")
+            }
+
+            setupPaginationButtons()
+            changePage(0) // Display first 3 items by default
+
+            // Set up the "Start Route" button
+            binding.startRouteButton.setOnClickListener {
+                if (scheduleData.isNotEmpty()) {
+                    val firstScheduleItem = scheduleData.first() // Store first schedule item
+                    Log.d("ScheduleActivity testStartRouteButton firstScheduleItem", firstScheduleItem.toString())
+                    Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
+//                scheduleData = scheduleData.drop(1) // Remove the first item
+                    Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
+                    rewriteOfflineScheduleData()
+
+                    val intent = Intent(this, MapActivity::class.java).apply {
+                        putExtra("AID", aid)
+                        putExtra("CONFIG", ArrayList(config))
+                        putExtra("JSON_STRING", jsonString)
+                        putExtra("ROUTE", ArrayList(route))
+                        putExtra("STOPS", ArrayList(stops))
+                        putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
+                        putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+                        putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+                        putExtra("FULL_SCHEDULE_DATA", ArrayList(listOf(scheduleData)))
+                    }
+                    startActivity(intent)
+                } else {
+                    Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            // Set up the "Start Route" button
+            binding.testStartRouteButton.setOnClickListener {
+                if (scheduleData.isNotEmpty()) {
+                    val firstScheduleItem = scheduleData.first() // Store first schedule item
+                    Log.d("ScheduleActivity testStartRouteButton firstScheduleItem", firstScheduleItem.toString())
+                    Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
+//                scheduleData = scheduleData.drop(1) // Remove the first item
+                    Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
+                    rewriteOfflineScheduleData()
+
+                    val intent = Intent(this, TestMapActivity::class.java).apply {
+                        putExtra("AID", aid)
+                        putExtra("CONFIG", ArrayList(config))
+                        putExtra("JSON_STRING", jsonString)
+                        putExtra("ROUTE", ArrayList(route))
+                        putExtra("STOPS", ArrayList(stops))
+                        putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
+                        putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+                        putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+                        putExtra("FULL_SCHEDULE_DATA", ArrayList(listOf(scheduleData)))
+                    }
+                    startActivity(intent)
+                } else {
+                    Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+                }
+            }
         } else {
             // **Online Mode: Fetch data from ThingsBoard**
             Toast.makeText(this, "Online mode: Receiving data from Thingsboard.", Toast.LENGTH_LONG).show()
 
+            // Hide table, pagination, and route buttons
+            binding.scheduleTable.visibility = View.GONE
+            binding.paginationLayout.visibility = View.GONE
+            binding.startRouteButton.visibility = View.GONE
+            binding.testStartRouteButton.visibility = View.GONE
+
+            startLoadingBar() // Show progress bar
             fetchConfig { success ->
                 if (success) {
                     getAccessToken()
@@ -232,71 +307,37 @@ class ScheduleActivity : AppCompatActivity() {
             findViewById(R.id.connectionStatusTextView),
             findViewById(R.id.networkStatusIndicator)
         )
+    }
 
-//        busDataCache = getOrCreateAid()
-        val file = File("/storage/emulated/0/Documents/.vlrshiddenfolder/busDataCache.txt")
-        if (file.exists()) {
-            Log.d("MainActivity onCreate", "✅ File exists: ${file.absolutePath}")
-        } else {
-            Log.e("MainActivity onCreate", "❌ File creation failed!")
-        }
+    /**
+     * function to start loading bar from 0% to 100% with color transitioning from red to green
+     */
+    private fun startLoadingBar() {
+        val progressBar = findViewById<ProgressBar>(R.id.progressBar)
+        var progress = 0
+        val handler = Handler(Looper.getMainLooper())
 
-        setupPaginationButtons()
-        changePage(0) // Display first 3 items by default
-
-        // Set up the "Start Route" button
-        binding.startRouteButton.setOnClickListener {
-            if (scheduleData.isNotEmpty()) {
-                val firstScheduleItem = scheduleData.first() // Store first schedule item
-                Log.d("ScheduleActivity testStartRouteButton firstScheduleItem", firstScheduleItem.toString())
-                Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
-//                scheduleData = scheduleData.drop(1) // Remove the first item
-                Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
-                rewriteOfflineScheduleData()
-
-                val intent = Intent(this, MapActivity::class.java).apply {
-                    putExtra("AID", aid)
-                    putExtra("CONFIG", ArrayList(config))
-                    putExtra("JSON_STRING", jsonString)
-                    putExtra("ROUTE", ArrayList(route))
-                    putExtra("STOPS", ArrayList(stops))
-                    putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
-                    putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
-                    putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
-                    putExtra("FULL_SCHEDULE_DATA", ArrayList(listOf(scheduleData)))
+        @RequiresApi(Build.VERSION_CODES.M)
+        fun updateProgress(increment: Int, delay: Long) {
+            handler.postDelayed({
+                progress += increment
+                progressBar.progress = progress
+                progressBar.progressTintList = getColorStateList(R.color.green)
+                if (progress == 100) {
+                    Toast.makeText(this, "All data successfully received!", Toast.LENGTH_SHORT).show()
+                    showCacheCompleteDialog()  // Show dialog once progress hits 100%
                 }
-                startActivity(intent)
-            } else {
-                Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
-            }
+            }, delay)
         }
 
-        // Set up the "Start Route" button
-        binding.testStartRouteButton.setOnClickListener {
-            if (scheduleData.isNotEmpty()) {
-                val firstScheduleItem = scheduleData.first() // Store first schedule item
-                Log.d("ScheduleActivity testStartRouteButton firstScheduleItem", firstScheduleItem.toString())
-                Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
-//                scheduleData = scheduleData.drop(1) // Remove the first item
-                Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
-                rewriteOfflineScheduleData()
+        // Step 1: 33.33% Green
+        updateProgress(33, 2000)
 
-                val intent = Intent(this, TestMapActivity::class.java).apply {
-                    putExtra("AID", aid)
-                    putExtra("CONFIG", ArrayList(config))
-                    putExtra("JSON_STRING", jsonString)
-                    putExtra("ROUTE", ArrayList(route))
-                    putExtra("STOPS", ArrayList(stops))
-                    putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
-                    putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
-                    putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
-                    putExtra("FULL_SCHEDULE_DATA", ArrayList(listOf(scheduleData)))
-                }
-                startActivity(intent)
-            } else {
-                Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
-            }
-        }
+        // Step 2: 66.66% Green
+        updateProgress(33, 7000)
+
+        // Step 3: 100% Green
+        updateProgress(34, 9500)
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -325,6 +366,24 @@ class ScheduleActivity : AppCompatActivity() {
         btnPage1.setOnClickListener { changePage(0) }
         btnPage2.setOnClickListener { changePage(1) }
         btnPage3.setOnClickListener { changePage(2) }
+    }
+
+    /**
+     * a pop-up dialog that appears after the progress reaches 100%
+     */
+    private fun showCacheCompleteDialog() {
+        val alertDialog = AlertDialog.Builder(this)
+            .setTitle("Cache Complete")
+            .setMessage("All data has been cached successfully. Please turn off your Wi-Fi and relaunch the app.")
+            .setCancelable(false) // Prevent dismissal by tapping outside the dialog
+            .setPositiveButton("Quit") { _, _ ->
+                // Completely quit the app
+                finishAffinity() // Destroys all activities in the task
+                System.exit(0)   // Ensures the app is fully terminated
+            }
+            .create()
+
+        alertDialog.show()
     }
 
     @RequiresApi(Build.VERSION_CODES.M)

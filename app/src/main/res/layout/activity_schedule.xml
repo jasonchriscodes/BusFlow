@@ -61,6 +61,20 @@
         app:layout_constraintEnd_toStartOf="@id/networkStatusIndicator"
         app:layout_constraintTop_toTopOf="@id/networkStatusIndicator"/>
 
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:indeterminate="false"
+        android:max="100"
+        android:progress="0"
+        android:progressTint="@color/green"
+        style="?android:attr/progressBarStyleHorizontal"
+        app:layout_constraintTop_toBottomOf="@id/titleTextView"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
     <!-- Table Layout for Schedule -->
     <TableLayout
         android:id="@+id/scheduleTable"
