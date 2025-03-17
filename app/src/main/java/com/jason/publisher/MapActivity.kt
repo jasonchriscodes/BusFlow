@@ -1615,12 +1615,14 @@ class MapActivity : AppCompatActivity() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 locationResult.lastLocation?.let { location ->
-                    Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
-                    Log.d("GPS_DEBUG", "Speed: ${location.speed}, Bearing: ${location.bearing}")
 
-                    showCustomToast("Latitude: ${location.latitude}, Longitude: ${location.longitude}, LocAccuracy: ${location.accuracy}, Speed: ${location.speed}, Bearing: ${location.bearing}, BearAccuracy: ${location.bearingAccuracyDegrees}")
+//                    Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
+//                    Log.d("GPS_DEBUG", "Speed: ${location.speed}, Bearing: ${location.bearing}")
+//
+//                    showCustomToast("Latitude: ${location.latitude}, Longitude: ${location.longitude}, LocAccuracy: ${location.accuracy}, Speed: ${location.speed}, Bearing: ${location.bearing}, BearAccuracy: ${location.bearingAccuracyDegrees}")
 //                    Toast.makeText(this@MapActivity, "Lat: ${location.latitude}, Lon: ${location.longitude}, LocAcc: ${location.accuracy}, Speed: ${location.speed}, Bear: ${location.bearing}, BearAcc: ${location.bearingAccuracyDegrees}", Toast.LENGTH_LONG).show()
 //                    Toast.makeText(this@MapActivity, "Speed: ${location.speed}, Bearing: ${location.bearing}", Toast.LENGTH_LONG).show()
+
                     if (!isManualMode) {
                         latitude = location.latitude
                         longitude = location.longitude
@@ -1628,13 +1630,31 @@ class MapActivity : AppCompatActivity() {
                         bearing = location.bearing
                     }
 
+                    // Find nearest bus route point
+                    val nearestIndex = findNearestBusRoutePoint(latitude, longitude)
+
+                    // Point to the next index or stay at the last index
+                    val nextIndex = if (nearestIndex < route.size - 1) nearestIndex + 1 else nearestIndex
+
+                    // Calculate bearing
+                    val targetPoint = route[nextIndex]
+                    bearing = calculateBearing(
+                        latitude ?: 0.0,
+                        longitude ?: 0.0,
+                        targetPoint.latitude ?: 0.0,
+                        targetPoint.longitude ?: 0.0
+                    )
+
+                    Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
+                    Log.d("GPS_DEBUG", "Speed: ${location.speed}, Bearing: ${location.bearing}")
+
+                    showCustomToast("Latitude: ${location.latitude}, Longitude: ${location.longitude}, LocAccuracy: ${location.accuracy}, Speed: ${location.speed}, Bearing: ${location.bearing}, BearAccuracy: ${location.bearingAccuracyDegrees}")
+//                    Toast.makeText(this@MapActivity, "Lat: ${location.latitude}, Lon: ${location.longitude}, LocAcc: ${location.accuracy}, Speed: ${location.speed}, Bear: ${location.bearing}, BearAcc: ${location.bearingAccuracyDegrees}", Toast.LENGTH_LONG).show()
+//                    Toast.makeText(this@MapActivity, "Speed: ${location.speed}, Bearing: ${location.bearing}", Toast.LENGTH_LONG).show()
+
                     runOnUiThread {
                         speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
-
-                        bearing = smoothBearing(normalizeBearing(location.bearing))
                         updateBusMarkerPosition(latitude, longitude, bearing)
-
-
                         updateBusMarkerPosition(latitude, longitude, bearing)
                         checkPassedStops(latitude, longitude)
                         updateTimingPointBasedOnLocation(latitude, longitude)
@@ -1668,6 +1688,31 @@ class MapActivity : AppCompatActivity() {
             }
 
         Toast.makeText(this, "Live location updates started", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * function to calculate the nearest coordinate index in the busRoute
+     */
+    private fun findNearestBusRoutePoint(currentLat: Double, currentLon: Double): Int {
+        var nearestIndex = 0
+        var minDistance = Double.MAX_VALUE
+
+        for (i in route.indices) {
+            val routePoint = route[i]
+            val distance = calculateDistance(
+                currentLat ?: 0.0,
+                currentLon ?: 0.0,
+                routePoint.latitude ?: 0.0,
+                routePoint.longitude ?: 0.0
+            )
+
+            if (distance < minDistance) {
+                minDistance = distance
+                nearestIndex = i
+            }
+        }
+
+        return nearestIndex
     }
 
     /**
