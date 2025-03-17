@@ -507,7 +507,9 @@ class ScheduleActivity : AppCompatActivity() {
             val row = TableRow(this)
 
             val routeTextView = createTableCell(item.routeNo, 0.5f)
-            val stopsInfo = item.busStops.joinToString(", ") { "${it.name} - ${it.time}" } // ✅ Extract stops dynamically
+            val stopsInfo = item.busStops.joinToString(", ") {
+                "${it.name} (${it.abbreviation}) - ${it.time}"  // Added abbreviation display
+            }
             val stopTextView = createTableCell(stopsInfo, 1f)
             val startTimeTextView = createTableCell(item.startTime, 0.4f)
             val endTimeTextView = createTableCell(item.endTime, 0.4f)

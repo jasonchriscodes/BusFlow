@@ -9,10 +9,12 @@ data class ScheduleItem(
     val busStops: List<BusScheduleInfo>
 ) : Serializable
 
-data class BusScheduleInfo( // Renamed from BusStopInfo
+data class BusScheduleInfo(
     val name: String,
     val time: String,
     val latitude: Double,
     val longitude: Double,
-    val address: String
+    val address: String,
+    val abbreviation: String
 ) : Serializable
+
