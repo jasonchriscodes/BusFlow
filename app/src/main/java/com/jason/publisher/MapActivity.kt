@@ -1630,20 +1630,35 @@ class MapActivity : AppCompatActivity() {
                         bearing = location.bearing
                     }
 
-                    // Find nearest bus route point
+                    // Check if within 100m radius of route points
                     val nearestIndex = findNearestBusRoutePoint(latitude, longitude)
+                    val nearestRoutePoint = route[nearestIndex]
 
-                    // Point to the next index or stay at the last index
-                    val nextIndex = if (nearestIndex < route.size - 1) nearestIndex + 1 else nearestIndex
-
-                    // Calculate bearing
-                    val targetPoint = route[nextIndex]
-                    bearing = calculateBearing(
-                        latitude ?: 0.0,
-                        longitude ?: 0.0,
-                        targetPoint.latitude ?: 0.0,
-                        targetPoint.longitude ?: 0.0
+                    val distanceToNearestPoint = calculateDistance(
+                        latitude, longitude,
+                        nearestRoutePoint.latitude ?: 0.0,
+                        nearestRoutePoint.longitude ?: 0.0
                     )
+
+                    if (distanceToNearestPoint <= 200) {
+                        // Within 200m radius → Use nearest index's position
+                        latitude = nearestRoutePoint.latitude ?: latitude
+                        longitude = nearestRoutePoint.longitude ?: longitude
+
+                        // Calculate bearing to the next point in route
+                        val nextIndex = if (nearestIndex < route.size - 1) nearestIndex + 1 else nearestIndex
+                        val targetPoint = route[nextIndex]
+                        bearing = calculateBearing(
+                            latitude, longitude,
+                            targetPoint.latitude ?: 0.0,
+                            targetPoint.longitude ?: 0.0
+                        )
+                    }
+
+                    // Assuming 'route' is your List<BusRoute> already populated
+//                    if (route.isNotEmpty()) {
+//                        busRouteDetectionZone(route)
+//                    }
 
                     Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
                     Log.d("GPS_DEBUG", "Speed: ${location.speed}, Bearing: ${location.bearing}")
@@ -1690,6 +1705,30 @@ class MapActivity : AppCompatActivity() {
         Toast.makeText(this, "Live location updates started", Toast.LENGTH_SHORT).show()
     }
 
+    /**
+     * Function to add circular markers to represent the detection area for each stop with 25% opacity.
+     */
+    private fun busRouteDetectionZone(busRoute: List<BusRoute>, radiusMeters: Double = 200.0) {
+        busRoute.forEach { point ->
+            val circleLayer = org.mapsforge.map.layer.overlay.Circle(
+                LatLong(point.latitude!!, point.longitude!!),
+                radiusMeters.toFloat(),
+                AndroidGraphicFactory.INSTANCE.createPaint().apply {
+                    color = Color.argb(8, 128, 0, 128) // Purple with 25% opacity
+                    setStyle(org.mapsforge.core.graphics.Style.FILL)
+                },
+                AndroidGraphicFactory.INSTANCE.createPaint().apply {
+                    color = Color.rgb(128, 0, 128) // Solid Purple border
+                    strokeWidth = 2f
+                    setStyle(org.mapsforge.core.graphics.Style.STROKE)
+                }
+            )
+
+            binding.map.layerManager.layers.add(circleLayer)
+        }
+
+        binding.map.invalidate() // Refresh map view
+    }
     /**
      * function to calculate the nearest coordinate index in the busRoute
      */
