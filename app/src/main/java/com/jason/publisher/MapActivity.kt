@@ -1799,8 +1799,8 @@ class MapActivity : AppCompatActivity() {
         binding.map.setRotation(-bearing) // Negative to align with compass movement
 
         // Scale the map to prevent cropping
-        binding.map.scaleX = 2.5f  // Adjust scaling factor
-        binding.map.scaleY = 2.5f
+        binding.map.scaleX = 1f  // Adjust scaling factor
+        binding.map.scaleY = 1f
 
         // Keep the map centered on the bus location
         binding.map.setCenter(newPosition)
