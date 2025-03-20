@@ -1630,7 +1630,7 @@ class MapActivity : AppCompatActivity() {
                         bearing = location.bearing
                     }
 
-                    // Check if within 100m radius of route points
+                    // Check if within 150m radius of route points
                     val nearestIndex = findNearestBusRoutePoint(latitude, longitude)
                     val nearestRoutePoint = route[nearestIndex]
 
@@ -1640,8 +1640,8 @@ class MapActivity : AppCompatActivity() {
                         nearestRoutePoint.longitude ?: 0.0
                     )
 
-                    if (distanceToNearestPoint <= 100) {
-                        // Within 100m radius → Use nearest index's position
+                    if (distanceToNearestPoint <= 150) {
+                        // Within 150m radius → Use nearest index's position
                         latitude = nearestRoutePoint.latitude ?: latitude
                         longitude = nearestRoutePoint.longitude ?: longitude
 
@@ -1708,7 +1708,7 @@ class MapActivity : AppCompatActivity() {
     /**
      * Function to add circular markers to represent the detection area for each stop with 25% opacity.
      */
-    private fun busRouteDetectionZone(busRoute: List<BusRoute>, radiusMeters: Double = 100.0) {
+    private fun busRouteDetectionZone(busRoute: List<BusRoute>, radiusMeters: Double = 150.0) {
         busRoute.forEach { point ->
             val circleLayer = org.mapsforge.map.layer.overlay.Circle(
                 LatLong(point.latitude!!, point.longitude!!),
