@@ -36,6 +36,7 @@ import com.jason.publisher.utils.NetworkStatusHelper
 import org.json.JSONObject
 import org.osmdroid.config.Configuration
 import java.io.File
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -968,23 +969,37 @@ class ScheduleActivity : AppCompatActivity() {
 
         // ✅ Check if cache has already been updated
         if (isScheduleCacheUpdated) {
-            Log.d("MainActivity saveBusDataToCache", "🚫 Skipping cache update (already updated).")
+            Log.d("ScheduleActivity saveScheduleDataToCache", "🚫 Skipping cache update (already updated).")
             return
         }
 
         val cacheFile = File(getHiddenFolder(), "scheduleDataCache.txt")
-        Log.d("ScheduleActivity saveScheduleDataToCache before", "scheduleDataCache.txt content: ${cacheFile.readText()}")
-        Log.d("ScheduleActivity saveScheduleDataToCache", "Saving scheduleData: $scheduleData")
+
+        // ✅ Ensure the file exists before reading or writing
         try {
-            val jsonStringScheduleData = Gson().toJson(scheduleData) // Convert to JSON using the new structure
-            cacheFile.writeText(jsonStringScheduleData) // Save the data
-            Log.d("ScheduleActivity saveScheduleDataToCache jsonStringScheduleData", "scheduleDataCache.txt content: ${jsonStringScheduleData}")
-            Log.d("ScheduleActivity saveScheduleDataToCache after", "scheduleDataCache.txt content: ${cacheFile.readText()}")
+            if (!cacheFile.exists()) {
+                cacheFile.createNewFile()
+                Log.d("ScheduleActivity saveScheduleDataToCache", "✅ File created successfully: ${cacheFile.absolutePath}")
+            } else {
+                Log.d("ScheduleActivity saveScheduleDataToCache", "✅ File already exists.")
+            }
+
+            Log.d("ScheduleActivity saveScheduleDataToCache before", "scheduleDataCache.txt content before saving: ${cacheFile.readText()}")
+
+            // ✅ Save schedule data
+            val jsonStringScheduleData = Gson().toJson(scheduleData)
+            cacheFile.writeText(jsonStringScheduleData)
+
+            Log.d("ScheduleActivity saveScheduleDataToCache after", "scheduleDataCache.txt content after saving: ${cacheFile.readText()}")
             Log.d("ScheduleActivity saveScheduleDataToCache", "✅ Schedule data cache updated successfully.")
+
             Toast.makeText(this, "Schedule data cache updated successfully.", Toast.LENGTH_SHORT).show()
             isScheduleCacheUpdated = true
+
+        } catch (e: IOException) {
+            Log.e("ScheduleActivity saveScheduleDataToCache", "❌ Error creating or accessing schedule data cache: ${e.message}")
         } catch (e: Exception) {
-            Log.e("ScheduleActivity saveScheduleDataToCache", "❌ Error saving schedule data cache: ${e.message}")
+            Log.e("ScheduleActivity saveScheduleDataToCache", "❌ Unexpected error: ${e.message}")
         }
     }
 

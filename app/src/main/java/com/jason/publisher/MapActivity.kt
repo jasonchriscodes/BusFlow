@@ -1630,7 +1630,7 @@ class MapActivity : AppCompatActivity() {
                         bearing = location.bearing
                     }
 
-                    // Check if within 150m radius of route points
+                    // Check if within nearestDistance radius of route points
                     val nearestIndex = findNearestBusRoutePoint(latitude, longitude)
                     val nearestRoutePoint = route[nearestIndex]
 
@@ -1640,8 +1640,10 @@ class MapActivity : AppCompatActivity() {
                         nearestRoutePoint.longitude ?: 0.0
                     )
 
-                    if (distanceToNearestPoint <= 150) {
-                        // Within 150m radius → Use nearest index's position
+                    val nearestDistance = 300.0
+
+                    if (distanceToNearestPoint <= nearestDistance) {
+                        // Within nearestDistance radius → Use nearest index's position
                         latitude = nearestRoutePoint.latitude ?: latitude
                         longitude = nearestRoutePoint.longitude ?: longitude
 
@@ -1657,7 +1659,7 @@ class MapActivity : AppCompatActivity() {
 
                     // Assuming 'route' is your List<BusRoute> already populated
 //                    if (route.isNotEmpty()) {
-//                        busRouteDetectionZone(route)
+//                        busRouteDetectionZone(route, nearestDistance)
 //                    }
 
                     Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
@@ -1708,7 +1710,7 @@ class MapActivity : AppCompatActivity() {
     /**
      * Function to add circular markers to represent the detection area for each stop with 25% opacity.
      */
-    private fun busRouteDetectionZone(busRoute: List<BusRoute>, radiusMeters: Double = 150.0) {
+    private fun busRouteDetectionZone(busRoute: List<BusRoute>, radiusMeters: Double) {
         busRoute.forEach { point ->
             val circleLayer = org.mapsforge.map.layer.overlay.Circle(
                 LatLong(point.latitude!!, point.longitude!!),
