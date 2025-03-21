@@ -132,6 +132,7 @@ class MapActivity : AppCompatActivity() {
     private lateinit var currentTimeHandler: Handler
     private lateinit var currentTimeRunnable: Runnable
     private lateinit var nextTripCountdownTextView: TextView
+    private var busStopRadius: Double = 50.0
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -1178,9 +1179,8 @@ class MapActivity : AppCompatActivity() {
         val stopAddress = nextStop.address ?: getUpcomingBusStopName(stopLat, stopLon)
         upcomingStop = stopAddress
         val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
-        val stopPassThreshold = 25.0 // Normal detection range
 
-        if (distance <= stopPassThreshold) {
+        if (distance <= busStopRadius) {
 
             runOnUiThread {
                 upcomingBusStopTextView.text = "$stopAddress"
@@ -1239,7 +1239,7 @@ class MapActivity : AppCompatActivity() {
                     currentLat, currentLon,
                     stops[currentStopIndex].latitude ?: 0.0,
                     stops[currentStopIndex].longitude ?: 0.0
-                ) <= stopPassThreshold
+                ) <= busStopRadius
             ) {
                 passedStops.add(stops[currentStopIndex])
                 currentStopIndex++
@@ -1286,7 +1286,7 @@ class MapActivity : AppCompatActivity() {
                 runOnUiThread {
                     upcomingBusStopTextView.text = "$upcomingStopName"
                 }
-            } else if (distance > stopPassThreshold) {
+            } else if (distance > busStopRadius) {
                 Log.w("MapActivity checkPassedStops", "⚠️ Warning: No bus stop detected within expected range!")
                 runOnUiThread {
                     Toast.makeText(this@MapActivity, "⚠️ Warning: No bus stop detected!", Toast.LENGTH_LONG).show()
@@ -1318,7 +1318,7 @@ class MapActivity : AppCompatActivity() {
     /**
      * Geofence Detection Method
      */
-        private fun isBusInDetectionArea(currentLat: Double, currentLon: Double, stopLat: Double, stopLon: Double, radius: Double = 25.0): Boolean {
+        private fun isBusInDetectionArea(currentLat: Double, currentLon: Double, stopLat: Double, stopLon: Double, radius: Double = busStopRadius): Boolean {
             val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
             return distance <= radius
         }
@@ -1326,7 +1326,7 @@ class MapActivity : AppCompatActivity() {
     /**
      * Function to add circular markers to represent the detection area for each stop with 25% opacity.
      */
-    private fun drawDetectionZones(busStops: List<BusStop>, radiusMeters: Double = 50.0) {
+    private fun drawDetectionZones(busStops: List<BusStop>, radiusMeters: Double = busStopRadius) {
         busStops.forEach { stop ->
             val isPassed = passedStops.any { it.latitude == stop.latitude && it.longitude == stop.longitude }
 
@@ -1606,7 +1606,9 @@ class MapActivity : AppCompatActivity() {
     private var lastValidLatitude = 0.0
     private var lastValidLongitude = 0.0
     private var hasPassedFirstStop = false
-    private val jumpThreshold = 3 // The value of 'n' for jump validation
+    private val jumpThreshold = 3 // Prevents sudden jumps
+    private val detectionZoneRadius = 200.0 // 200m detection zone
+
 
     @SuppressLint("MissingPermission", "LongLogTag")
     private fun startLocationUpdate() {
@@ -1636,10 +1638,10 @@ class MapActivity : AppCompatActivity() {
                         bearing = location.bearing
                     }
 
-                    // Step 1: Find the nearest route point
+                    // Find the nearest route point
                     val nearestIndex = findNearestBusRoutePoint(latitude, longitude)
 
-                    // Step 2: Handle First Bus Stop Rule
+                    // Handle First Bus Stop Rule
                     if (!hasPassedFirstStop) {
                         if (nearestIndex == 0) {
                             hasPassedFirstStop = true // Mark the first bus stop as passed
@@ -1655,23 +1657,18 @@ class MapActivity : AppCompatActivity() {
                         }
                     }
 
-                    // Step 3: Handle Forward Progress Rule
-                    if (nearestIndex < nearestRouteIndex) {
-                        Log.d("MapActivity", "❌ Ignoring backward movement (Index: $nearestIndex)")
-                        // Retain the previous valid position
-                        latitude = lastValidLatitude
-                        longitude = lastValidLongitude
+                    // Ignore backward movement
+                    if (nearestIndex < nearestRouteIndex) return
+
+                    // Ignore sudden jumps (skip unexpected spikes)
+                    if (nearestIndex > nearestRouteIndex + jumpThreshold) return
+
+                    // Smooth marker animation for consecutive points
+                    if (nearestIndex >= nearestRouteIndex) {
+                        animateMarkerThroughPoints(nearestRouteIndex, nearestIndex)
                     }
 
-                    // Step 4: Stability Check
-                    if (nearestIndex > nearestRouteIndex + jumpThreshold) {
-                        Log.d("MapActivity", "⚠️ Ignoring unstable jump (Index jumped by more than $jumpThreshold)")
-                        // Retain the previous valid position
-                        latitude = lastValidLatitude
-                        longitude = lastValidLongitude
-                    }
-
-                    // Step 5: Update the valid position
+                    // Update the valid position
                     nearestRouteIndex = nearestIndex
                     val nearestRoutePoint = route[nearestIndex]
 
@@ -1680,7 +1677,7 @@ class MapActivity : AppCompatActivity() {
                     lastValidLatitude = latitude
                     lastValidLongitude = longitude
 
-                    // Step 6: Calculate bearing
+                    // Calculate bearing toward next index
                     val nextIndex = if (nearestIndex < route.size - 1) nearestIndex + 1 else nearestIndex
                     val targetPoint = route[nextIndex]
 
@@ -1738,6 +1735,28 @@ class MapActivity : AppCompatActivity() {
             }
 
         Toast.makeText(this, "Live location updates started", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * function to smoothly animate the marker's movement instead of jumping suddenly.
+     */
+    private fun animateMarkerThroughPoints(startIndex: Int, endIndex: Int) {
+        val handler = Handler(Looper.getMainLooper())
+        val pointsToAnimate = route.subList(startIndex, endIndex + 1)
+
+        var currentStep = 0
+        val totalSteps = pointsToAnimate.size
+
+        handler.post(object : Runnable {
+            override fun run() {
+                if (currentStep < totalSteps) {
+                    val point = pointsToAnimate[currentStep]
+                    updateBusMarkerPosition(point.latitude ?: 0.0, point.longitude ?: 0.0, bearing)
+                    currentStep++
+                    handler.postDelayed(this, 500) // Smooth animation every 500ms
+                }
+            }
+        })
     }
 
     /**
