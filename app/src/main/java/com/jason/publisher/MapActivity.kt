@@ -1326,7 +1326,7 @@ class MapActivity : AppCompatActivity() {
     /**
      * Function to add circular markers to represent the detection area for each stop with 25% opacity.
      */
-    private fun drawDetectionZones(busStops: List<BusStop>, radiusMeters: Double = 25.0) {
+    private fun drawDetectionZones(busStops: List<BusStop>, radiusMeters: Double = 50.0) {
         busStops.forEach { stop ->
             val isPassed = passedStops.any { it.latitude == stop.latitude && it.longitude == stop.longitude }
 
@@ -1601,6 +1601,12 @@ class MapActivity : AppCompatActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationRequest: LocationRequest
     private lateinit var locationCallback: LocationCallback
+    // New variables for tracking logic
+    private var nearestRouteIndex = 0
+    private var lastValidLatitude = 0.0
+    private var lastValidLongitude = 0.0
+    private var hasPassedFirstStop = false
+    private val jumpThreshold = 3 // The value of 'n' for jump validation
 
     @SuppressLint("MissingPermission", "LongLogTag")
     private fun startLocationUpdate() {
@@ -1630,32 +1636,59 @@ class MapActivity : AppCompatActivity() {
                         bearing = location.bearing
                     }
 
-                    // Check if within nearestDistance radius of route points
+                    // Step 1: Find the nearest route point
                     val nearestIndex = findNearestBusRoutePoint(latitude, longitude)
+
+                    // Step 2: Handle First Bus Stop Rule
+                    if (!hasPassedFirstStop) {
+                        if (nearestIndex == 0) {
+                            hasPassedFirstStop = true // Mark the first bus stop as passed
+                            Log.d("MapActivity", "✅ First bus stop passed. Rules activated.")
+                        } else {
+                            Log.d("MapActivity", "⚠️ Waiting for first bus stop to be passed.")
+                            // Use live GPS data until the first stop is passed
+                            runOnUiThread {
+                                updateBusMarkerPosition(latitude, longitude, bearing)
+                                binding.map.invalidate()
+                            }
+                            return
+                        }
+                    }
+
+                    // Step 3: Handle Forward Progress Rule
+                    if (nearestIndex < nearestRouteIndex) {
+                        Log.d("MapActivity", "❌ Ignoring backward movement (Index: $nearestIndex)")
+                        // Retain the previous valid position
+                        latitude = lastValidLatitude
+                        longitude = lastValidLongitude
+                    }
+
+                    // Step 4: Stability Check
+                    if (nearestIndex > nearestRouteIndex + jumpThreshold) {
+                        Log.d("MapActivity", "⚠️ Ignoring unstable jump (Index jumped by more than $jumpThreshold)")
+                        // Retain the previous valid position
+                        latitude = lastValidLatitude
+                        longitude = lastValidLongitude
+                    }
+
+                    // Step 5: Update the valid position
+                    nearestRouteIndex = nearestIndex
                     val nearestRoutePoint = route[nearestIndex]
 
-                    val distanceToNearestPoint = calculateDistance(
+                    latitude = nearestRoutePoint.latitude ?: latitude
+                    longitude = nearestRoutePoint.longitude ?: longitude
+                    lastValidLatitude = latitude
+                    lastValidLongitude = longitude
+
+                    // Step 6: Calculate bearing
+                    val nextIndex = if (nearestIndex < route.size - 1) nearestIndex + 1 else nearestIndex
+                    val targetPoint = route[nextIndex]
+
+                    bearing = calculateBearing(
                         latitude, longitude,
-                        nearestRoutePoint.latitude ?: 0.0,
-                        nearestRoutePoint.longitude ?: 0.0
+                        targetPoint.latitude ?: 0.0,
+                        targetPoint.longitude ?: 0.0
                     )
-
-                    val nearestDistance = 300.0
-
-                    if (distanceToNearestPoint <= nearestDistance) {
-                        // Within nearestDistance radius → Use nearest index's position
-                        latitude = nearestRoutePoint.latitude ?: latitude
-                        longitude = nearestRoutePoint.longitude ?: longitude
-
-                        // Calculate bearing to the next point in route
-                        val nextIndex = if (nearestIndex < route.size - 1) nearestIndex + 1 else nearestIndex
-                        val targetPoint = route[nextIndex]
-                        bearing = calculateBearing(
-                            latitude, longitude,
-                            targetPoint.latitude ?: 0.0,
-                            targetPoint.longitude ?: 0.0
-                        )
-                    }
 
                     // Assuming 'route' is your List<BusRoute> already populated
 //                    if (route.isNotEmpty()) {
