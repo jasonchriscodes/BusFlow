@@ -201,14 +201,19 @@ data class RouteData(
             val stops = mutableListOf<BusStop>()
             val durationBetweenStops = mutableListOf<Double>()
 
-            // Add all route coordinates
+            // Add all route coordinates (with duplicate filtering)
+            var previousCoordinate: BusRoute? = null
             for (nextPoint in routeData.nextPoints) {
                 for (coord in nextPoint.routeCoordinates) {
-                    route.add(BusRoute(latitude = coord[1], longitude = coord[0]))
+                    val newCoordinate = BusRoute(latitude = coord[1], longitude = coord[0])
+                    if (previousCoordinate == null || newCoordinate != previousCoordinate) {
+                        route.add(newCoordinate)
+                    }
+                    previousCoordinate = newCoordinate
                 }
             }
 
-            // Add all stop points
+            // Add bus stops
             stops.add(BusStop(latitude = routeData.startingPoint.latitude, longitude = routeData.startingPoint.longitude))
             for (nextPoint in routeData.nextPoints) {
                 stops.add(BusStop(latitude = nextPoint.latitude, longitude = nextPoint.longitude))
