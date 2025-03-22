@@ -1660,6 +1660,12 @@ class MapActivity : AppCompatActivity() {
                     // Ignore backward movement
                     if (nearestIndex < nearestRouteIndex) return
 
+                    // Unlock detection zone logic
+                    val distance = calculateDistance(lastLatitude, lastLongitude, latitude, longitude)
+                    if (distance > detectionZoneRadius * 2) {
+                        nearestRouteIndex = findNearestBusRoutePoint(latitude, longitude)
+                    }
+
                     // Ignore sudden jumps (skip unexpected spikes)
                     if (nearestIndex > nearestRouteIndex + jumpThreshold) return
 
