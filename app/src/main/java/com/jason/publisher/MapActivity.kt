@@ -415,80 +415,63 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * mark a bus stop as "arrived" and prevent duplicate arrivals.
+     * Mark a bus stop as "arrived" and prevent duplicate arrivals.
      */
-    private var manualStopIndex = 0
     private var isManualMode = false
-
     @SuppressLint("LongLogTag")
     private fun confirmArrival() {
         if (stops.isEmpty()) {
-            Toast.makeText(this, "No bus stops available", Toast.LENGTH_SHORT).show()
+            Log.e("MapActivity confirmArrival", "❌ No stops available.")
             return
         }
 
-        if (!isManualMode) {
-            isManualMode = true
-            Toast.makeText(this, "Manual mode activated", Toast.LENGTH_SHORT).show()
-        }
+        // Find the nearest stop (for when a stop is missed)
+        val nearestIndex = findNearestBusRoutePoint(latitude, longitude)
 
-        if (manualStopIndex >= stops.size) {
-            Toast.makeText(this, "You have reached the final stop.", Toast.LENGTH_SHORT).show()
-            isManualMode = false  // 🔹 Ensure manual mode is deactivated
-            startLocationUpdate() // 🔹 Resume GPS updates
+        if (nearestIndex < currentStopIndex) {
+            Log.w("MapActivity confirmArrival", "⚠️ Nearest stop is behind the current stop. Ignoring.")
+            Toast.makeText(this, "❌ Cannot confirm arrival at a previous stop.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val nextStop = stops[manualStopIndex]
-        latitude = nextStop.latitude ?: 0.0
-        longitude = nextStop.longitude ?: 0.0
-        upcomingStop = nextStop.address ?: "Unknown"
+        // Mark all stops up to the nearestIndex as passed
+        for (index in currentStopIndex until nearestIndex.coerceAtMost(stops.size)) {
+            val passedStop = stops.getOrNull(index)
+            if (passedStop != null && !passedStops.contains(passedStop)) {
+                passedStops.add(passedStop)
+            }
+        }
 
+        // Update the current stop index
+        currentStopIndex = nearestIndex.coerceAtMost(stops.size - 1)
+
+        // Mark detection zones for all passed stops
+        drawDetectionZones(stops)
+
+        // Handle final stop logic
+        if (currentStopIndex >= stops.size - 1) {
+            upcomingStop = "End of Route"
+            runOnUiThread {
+                upcomingBusStopTextView.text = "End of Route"
+                Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+            }
+            showSummaryDialog() // Trigger completion dialog
+            return
+        }
+
+        // Update UI with the new upcoming stop
+        val nextStop = stops.getOrNull(currentStopIndex)
+        upcomingStop = nextStop?.address ?: "Unknown"
         runOnUiThread {
-            upcomingBusStopTextView.text = "Next Stop: ${nextStop.address}"
-            Toast.makeText(this, "Arrived at ${nextStop.address}", Toast.LENGTH_SHORT).show()
+            upcomingBusStopTextView.text = "Next Stop: ${upcomingStop}"
         }
 
-        updateBusMarkerPosition(latitude, longitude, bearing)
-        manualStopIndex++
+        // Update schedule status and timing point
+        updateApiTime()
+        checkScheduleStatus()
 
-        // 🔹 Add Delay Before Resuming GPS Tracking
-        Handler(Looper.getMainLooper()).postDelayed({
-            isManualMode = false  // 🔹 Deactivate manual mode after delay
-            startLocationUpdate() // 🔹 Resume GPS updates
-            Toast.makeText(this, "Resuming GPS tracking...", Toast.LENGTH_SHORT).show()
-        }, 3000)  // 3-second delay
-    }
-
-    /**
-     * Moves to the next scheduled bus timing stop in the route.
-     */
-    @SuppressLint("LongLogTag")
-    private fun moveToNextStop() {
-        if (stops.isEmpty()) {
-            Log.e("MapActivity moveToNextStop", "❌ No stops available.")
-            return
-        }
-
-        if (manualStopIndex >= stops.size) {
-            Log.d("MapActivity moveToNextStop", "✅ Reached the final stop.")
-            Toast.makeText(this, "You have reached the final stop.", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        // Move to the next stop
-        val nextStop = stops[manualStopIndex]
-        latitude = nextStop.latitude ?: 0.0
-        longitude = nextStop.longitude ?: 0.0
-        upcomingStop = nextStop.address ?: "Unknown"
-
-        runOnUiThread {
-            upcomingBusStopTextView.text = "Next Stop: ${nextStop.address}"
-            timingPointValueTextView.text = nextTimingPoint
-        }
-
-        updateBusMarkerPosition(latitude, longitude, bearing)
-        manualStopIndex++
+        Toast.makeText(this, "✅ Arrival confirmed at: $upcomingStop", Toast.LENGTH_SHORT).show()
+        Log.d("MapActivity confirmArrival", "✅ Arrival confirmed at: $upcomingStop")
     }
 
     /**
