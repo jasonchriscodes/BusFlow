@@ -58,6 +58,7 @@ import java.text.ParseException
 import com.google.android.gms.location.*
 import com.google.android.gms.tasks.Task
 import com.jason.publisher.databinding.ActivityMapBinding
+import java.lang.Math.abs
 
 class MapActivity : AppCompatActivity() {
 
@@ -89,6 +90,7 @@ class MapActivity : AppCompatActivity() {
     private var arrBusData: List<BusItem> = emptyList()
     private var firstTime = true
     private var upcomingStop: String = "Unknown"
+    private var stopAddress: String = "Unknown"
 
     private lateinit var aidTextView: TextView
     private lateinit var latitudeTextView: TextView
@@ -287,6 +289,7 @@ class MapActivity : AppCompatActivity() {
             slowDown()
         }
 
+        binding.arriveButton.visibility = View.GONE
         binding.arriveButton.setOnClickListener {
             confirmArrival()
         }
@@ -420,71 +423,180 @@ class MapActivity : AppCompatActivity() {
     private var isManualMode = false
     @SuppressLint("LongLogTag")
     private fun confirmArrival() {
+        Log.d("MapActivity confirmArrival", "🚨 ConfirmArrival Triggered - Starting Process")
+
         val startingPoint = busRouteData?.first()?.startingPoint?.let { sp ->
             BusStop(latitude = sp.latitude, longitude = sp.longitude, address = sp.address)
         }
 
-        Log.d("MapActivity confirmArrival", startingPoint.toString())
         if (stops.isEmpty() || route.isEmpty()) {
             Log.e("MapActivity confirmArrival", "❌ No stops or route data available.")
             return
         }
 
-        val nearestIndex = findNearestBusRoutePoint(latitude, longitude)
+        Log.d("MapActivity confirmArrival", "🔎 Starting nearest route point search...")
+        var nearestIndex = findNearestBusRoutePoint(latitude, longitude)
+        Log.d("MapActivity confirmArrival", "✅ Nearest Route Point Found at Index: $nearestIndex")
 
-        // Dynamically mark the first stop in the list as passed if outside the detection zone
-        if (startingPoint != null && !passedStops.any { it.address == startingPoint.address }) {
-            passedStops.add(startingPoint) // Mark first stop as passed
-        }
+        var nearestStop: BusStop? = null
 
-        var nearestStop: BusStop? = null  // Track the nearest bus stop
-
-        // Iterate through bus stops and mark stops as passed based on the nearest point
         for (stopIndex in stops.indices) {
             val stop = stops[stopIndex]
 
-            // Find the nearest route point for each bus stop
-            val routePointIndex = route.indexOfFirst { routePoint ->
-                routePoint.latitude == stop.latitude && routePoint.longitude == stop.longitude
+            val routePointIndex = route.indexOfFirst {
+                it.latitude == stop.latitude && it.longitude == stop.longitude
             }
 
+            Log.d("MapActivity confirmArrival", "🔎 Checking Stop: ${stop.address}")
+            Log.d("MapActivity confirmArrival", "   Route Point Index: $routePointIndex | Nearest Index: $nearestIndex")
+
             if (routePointIndex != -1 && routePointIndex <= nearestIndex) {
-                // Mark all previous stops up to this point as passed
                 for (i in 0..stopIndex) {
                     if (!passedStops.contains(stops[i])) {
                         passedStops.add(stops[i])
+                        Log.d("MapActivity confirmArrival", "✅ Passed Stop Added: ${stops[i].address}")
                     }
                 }
 
-                // Update nearest stop and continue
                 if (nearestStop == null || routePointIndex < nearestIndex) {
                     nearestStop = stop
+                    Log.d("MapActivity confirmArrival", "➡️ Nearest Stop Updated to: ${nearestStop.address}")
                 }
 
-                // If the current bus stop has already been passed, continue to the next
                 if (passedStops.contains(stop)) continue
-
-                Log.d("MapActivity confirmArrival", "✅ Marked stop as passed: ${stop.address}")
             } else {
-                // Stop if the nearest route point is before this bus stop
+                Log.d("MapActivity confirmArrival", "❌ Stop Skipped: ${stop.address}")
                 break
             }
         }
 
-        // Force the nearest point to match the nearest bus stop's coordinates
         if (nearestStop != null) {
             latitude = nearestStop.latitude ?: latitude
             longitude = nearestStop.longitude ?: longitude
-            Log.d("MapActivity confirmArrival", "📍 Nearest point adjusted to: ${nearestStop.address}")
+            nearestStop.address = findAddressByCoordinates(latitude, longitude)
+            hasPassedFirstStop = true
+
+            if (nearestStop.address != null) {
+                stopAddress = nearestStop.address.toString()
+                upcomingBusStopTextView.text = "$stopAddress"
+                Log.d("MapActivity confirmArrival", "✅ Updated Address: $stopAddress")
+            } else {
+                Log.w("MapActivity confirmArrival", "⚠️ Address Not Found for Nearest Stop")
+            }
+        } else {
+            Log.w("MapActivity confirmArrival", "⚠️ No Nearest Stop Found")
         }
 
-        showCustomToast("Confirm Arrival at Latitude: ${latitude}, Longitude: ${longitude}, Address: ${upcomingStop}")
-
-        // Update UI and detection zones
         drawDetectionZones(stops)
 
-        Toast.makeText(this, "✅ Arrival confirmed at: ${upcomingStop}", Toast.LENGTH_SHORT).show()
-        Log.d("MapActivity confirmArrival", "✅ Arrival confirmed at: ${upcomingStop}")
+        // 🔹 Ensure schedule status updates correctly
+        Log.d("MapActivity confirmArrival", "🔄 Updating API Time...")
+        var busStopIndex = getBusStopIndex(latitude, longitude, stops)
+        currentStopIndex = busStopIndex
+
+        var totalDurationUntilArrive =
+            busStopIndex?.let { getTotalDurationUpToIndex(it, durationBetweenStops) }
+
+        val firstSchedule = scheduleList.first()
+        val startTimeParts = firstSchedule.startTime.split(":")
+        if (startTimeParts.size != 2) return
+
+        val startCalendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, startTimeParts[0].toInt())
+            set(Calendar.MINUTE, startTimeParts[1].toInt())
+            set(Calendar.SECOND, 0)
+        }
+
+        if (totalDurationUntilArrive == null) {
+            Log.d("MapActivity updateApiTime", "Upcoming bus stop not scheduled. Skipping API update.")
+            // If we already computed a final value before, do not override.
+            return
+        }
+        Log.d("MapActivity updateApiTime", "Total duration in minutes: $totalDurationUntilArrive")
+
+        // Add the duration (in seconds) to the start time.
+        val additionalSeconds = (totalDurationUntilArrive * 60).toInt()
+        startCalendar.add(Calendar.SECOND, additionalSeconds)
+
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        lockedApiTime = timeFormat.format(startCalendar.time)
+        ApiTimeValueTextView.text = lockedApiTime
+        updateApiTime()
+
+        Log.d("MapActivity confirmArrival", "🔄 Initializing Timing Point...")
+        initializeTimingPoint()
+
+        apiTimeLocked = false    // Unlock the API time to allow updates
+        Log.d("MapActivity confirmArrival", "🔓 API Time Unlocked")
+
+        checkScheduleStatus()    // Immediately refresh the schedule status
+        Log.d("MapActivity confirmArrival", "✅ Schedule Status Checked")
+
+        showCustomToast("Confirm Arrival at Latitude: ${latitude}, Longitude: ${longitude}, Address: ${stopAddress}")
+        Log.d("MapActivity confirmArrival", "✅ Arrival confirmed at: ${stopAddress}")
+
+        startLocationUpdate()   // ✅ Continue marker updates
+        Log.d("MapActivity confirmArrival", "✅ Tracking resumed after arrival confirmation.")
+
+        Toast.makeText(this@MapActivity, "✅ Tracking resumed after arrival confirmation.", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Finds the index of the bus stop that exactly matches the given latitude and longitude.
+     *
+     * @param latitude The current latitude.
+     * @param longitude The current longitude.
+     * @param stops The list of bus stops (each with a latitude and longitude).
+     * @return The index of the matching bus stop or -1 if no match is found.
+     */
+    fun getBusStopIndex(latitude: Double, longitude: Double, stops: List<BusStop>): Int {
+        for ((index, stop) in stops.withIndex()) {
+            if (latitude == stop.latitude && longitude == stop.longitude) {
+                return index
+            }
+        }
+        return -1 // Return -1 if no match is found
+    }
+
+    /**
+     * Calculates the total duration from index 0 to the given index (inclusive).
+     */
+    fun getTotalDurationUpToIndex(index: Int, durationList: List<Double>): Double {
+        if (index < 0 || index >= durationList.size) return 0.0
+        return durationList.take(index + 1).sum()
+    }
+
+    /**
+     * Finds the address for a given latitude and longitude from the busRouteData.
+     */
+    fun findAddressByCoordinates(latitude: Double, longitude: Double): String? {
+        // Check starting point first
+        busRouteData?.forEach { routeData ->
+            if (abs(routeData.startingPoint.latitude - latitude) < 0.0001 &&
+                abs(routeData.startingPoint.longitude - longitude) < 0.0001
+            ) {
+                return routeData.startingPoint.address
+            }
+
+            // Iterate through next points
+            routeData.nextPoints.forEach { nextPoint ->
+                if (abs(nextPoint.latitude - latitude) < 0.0001 &&
+                    abs(nextPoint.longitude - longitude) < 0.0001
+                ) {
+                    return nextPoint.address
+                }
+
+                // Iterate through routeCoordinates inside each nextPoint
+                nextPoint.routeCoordinates.forEach { coordinates ->
+                    if (abs(coordinates[1] - latitude) < 0.0001 &&
+                        abs(coordinates[0] - longitude) < 0.0001
+                    ) {
+                        return nextPoint.address
+                    }
+                }
+            }
+        }
+        return null // Address not found
     }
 
     /**
@@ -1172,7 +1284,7 @@ class MapActivity : AppCompatActivity() {
         val nextStop = stops[currentStopIndex]
         val stopLat = nextStop.latitude ?: return
         val stopLon = nextStop.longitude ?: return
-        val stopAddress = nextStop.address ?: getUpcomingBusStopName(stopLat, stopLon)
+        stopAddress = nextStop.address ?: getUpcomingBusStopName(stopLat, stopLon)
         upcomingStop = stopAddress
         val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
 
@@ -1221,36 +1333,36 @@ class MapActivity : AppCompatActivity() {
                     ).show()
                 }
 
-            // ✅ Add this block to track and update detection zones
-            if (!passedStops.contains(nextStop)) {
-                passedStops.add(nextStop)
-                drawDetectionZones(stops) // Redraw zones to reflect changes
-            }
-
-            passedStops.add(nextStop)
-            currentStopIndex++
-
-            // Ensure the next stop is updated correctly even if a stop is skipped
-            while (currentStopIndex < stops.size && calculateDistance(
-                    currentLat, currentLon,
-                    stops[currentStopIndex].latitude ?: 0.0,
-                    stops[currentStopIndex].longitude ?: 0.0
-                ) <= busStopRadius
-            ) {
-                passedStops.add(stops[currentStopIndex])
-                currentStopIndex++
-            }
-
-            // Automatically detect if this was the final stop
-            if (currentStopIndex >= stops.size) {
-                upcomingStop = "End of Route"
-                runOnUiThread {
-                    upcomingBusStopTextView.text = "End of Route"
-                    Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+                // ✅ Add this block to track and update detection zones
+                if (!passedStops.contains(nextStop)) {
+                    passedStops.add(nextStop)
+                    drawDetectionZones(stops) // Redraw zones to reflect changes
                 }
 
-                // ✅ Trigger trip completion dialog
-                showSummaryDialog()
+                passedStops.add(nextStop)
+                currentStopIndex++
+
+                // Ensure the next stop is updated correctly even if a stop is skipped
+                while (currentStopIndex < stops.size && calculateDistance(
+                        currentLat, currentLon,
+                        stops[currentStopIndex].latitude ?: 0.0,
+                        stops[currentStopIndex].longitude ?: 0.0
+                    ) <= busStopRadius
+                ) {
+                    passedStops.add(stops[currentStopIndex])
+                    currentStopIndex++
+                }
+
+                // Automatically detect if this was the final stop
+                if (currentStopIndex >= stops.size) {
+                    upcomingStop = "End of Route"
+                    runOnUiThread {
+                        upcomingBusStopTextView.text = "End of Route"
+                        Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+                    }
+
+                    // ✅ Trigger trip completion dialog
+                    showSummaryDialog()
                 }
             } else {
                 val upcomingStop = stops[currentStopIndex]
@@ -1314,10 +1426,10 @@ class MapActivity : AppCompatActivity() {
     /**
      * Geofence Detection Method
      */
-        private fun isBusInDetectionArea(currentLat: Double, currentLon: Double, stopLat: Double, stopLon: Double, radius: Double = busStopRadius): Boolean {
-            val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
-            return distance <= radius
-        }
+    private fun isBusInDetectionArea(currentLat: Double, currentLon: Double, stopLat: Double, stopLon: Double, radius: Double = busStopRadius): Boolean {
+        val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
+        return distance <= radius
+    }
 
     /**
      * Function to add circular markers to represent the detection area for each stop with 25% opacity.

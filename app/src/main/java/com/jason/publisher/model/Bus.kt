@@ -144,7 +144,7 @@ data class BusStop(
     @field:SerializedName("longitude")
     val longitude: Double? = null,
 
-    val address: String? = null
+    var address: String? = null
 ) : Parcelable
 
 /**
