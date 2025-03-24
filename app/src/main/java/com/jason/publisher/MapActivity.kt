@@ -420,58 +420,71 @@ class MapActivity : AppCompatActivity() {
     private var isManualMode = false
     @SuppressLint("LongLogTag")
     private fun confirmArrival() {
-        if (stops.isEmpty()) {
-            Log.e("MapActivity confirmArrival", "❌ No stops available.")
+        val startingPoint = busRouteData?.first()?.startingPoint?.let { sp ->
+            BusStop(latitude = sp.latitude, longitude = sp.longitude, address = sp.address)
+        }
+
+        Log.d("MapActivity confirmArrival", startingPoint.toString())
+        if (stops.isEmpty() || route.isEmpty()) {
+            Log.e("MapActivity confirmArrival", "❌ No stops or route data available.")
             return
         }
 
-        // Find the nearest stop (for when a stop is missed)
         val nearestIndex = findNearestBusRoutePoint(latitude, longitude)
 
-        if (nearestIndex < currentStopIndex) {
-            Log.w("MapActivity confirmArrival", "⚠️ Nearest stop is behind the current stop. Ignoring.")
-            Toast.makeText(this, "❌ Cannot confirm arrival at a previous stop.", Toast.LENGTH_SHORT).show()
-            return
+        // Dynamically mark the first stop in the list as passed if outside the detection zone
+        if (startingPoint != null && !passedStops.any { it.address == startingPoint.address }) {
+            passedStops.add(startingPoint) // Mark first stop as passed
         }
 
-        // Mark all stops up to the nearestIndex as passed
-        for (index in currentStopIndex until nearestIndex.coerceAtMost(stops.size)) {
-            val passedStop = stops.getOrNull(index)
-            if (passedStop != null && !passedStops.contains(passedStop)) {
-                passedStops.add(passedStop)
+        var nearestStop: BusStop? = null  // Track the nearest bus stop
+
+        // Iterate through bus stops and mark stops as passed based on the nearest point
+        for (stopIndex in stops.indices) {
+            val stop = stops[stopIndex]
+
+            // Find the nearest route point for each bus stop
+            val routePointIndex = route.indexOfFirst { routePoint ->
+                routePoint.latitude == stop.latitude && routePoint.longitude == stop.longitude
+            }
+
+            if (routePointIndex != -1 && routePointIndex <= nearestIndex) {
+                // Mark all previous stops up to this point as passed
+                for (i in 0..stopIndex) {
+                    if (!passedStops.contains(stops[i])) {
+                        passedStops.add(stops[i])
+                    }
+                }
+
+                // Update nearest stop and continue
+                if (nearestStop == null || routePointIndex < nearestIndex) {
+                    nearestStop = stop
+                }
+
+                // If the current bus stop has already been passed, continue to the next
+                if (passedStops.contains(stop)) continue
+
+                Log.d("MapActivity confirmArrival", "✅ Marked stop as passed: ${stop.address}")
+            } else {
+                // Stop if the nearest route point is before this bus stop
+                break
             }
         }
 
-        // Update the current stop index
-        currentStopIndex = nearestIndex.coerceAtMost(stops.size - 1)
+        // Force the nearest point to match the nearest bus stop's coordinates
+        if (nearestStop != null) {
+            latitude = nearestStop.latitude ?: latitude
+            longitude = nearestStop.longitude ?: longitude
+            Log.d("MapActivity confirmArrival", "📍 Nearest point adjusted to: ${nearestStop.address}")
+        }
 
-        // Mark detection zones for all passed stops
+        showCustomToast("Confirm Arrival at Latitude: ${latitude}, Longitude: ${longitude}, Address: ${upcomingStop}")
+
+        // Update UI and detection zones
         drawDetectionZones(stops)
 
-        // Handle final stop logic
-        if (currentStopIndex >= stops.size - 1) {
-            upcomingStop = "End of Route"
-            runOnUiThread {
-                upcomingBusStopTextView.text = "End of Route"
-                Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
-            }
-            showSummaryDialog() // Trigger completion dialog
-            return
-        }
-
-        // Update UI with the new upcoming stop
-        val nextStop = stops.getOrNull(currentStopIndex)
-        upcomingStop = nextStop?.address ?: "Unknown"
-        runOnUiThread {
-            upcomingBusStopTextView.text = "Next Stop: ${upcomingStop}"
-        }
-
-        // Update schedule status and timing point
-        updateApiTime()
-        checkScheduleStatus()
-
-        Toast.makeText(this, "✅ Arrival confirmed at: $upcomingStop", Toast.LENGTH_SHORT).show()
-        Log.d("MapActivity confirmArrival", "✅ Arrival confirmed at: $upcomingStop")
+        Toast.makeText(this, "✅ Arrival confirmed at: ${upcomingStop}", Toast.LENGTH_SHORT).show()
+        Log.d("MapActivity confirmArrival", "✅ Arrival confirmed at: ${upcomingStop}")
     }
 
     /**
