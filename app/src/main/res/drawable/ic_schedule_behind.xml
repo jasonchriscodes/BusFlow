@@ -4,7 +4,7 @@
     <!-- Darker Yellow Circle Background -->
     <item>
         <shape android:shape="oval">
-            <solid android:color="#CCAA00"/> <!-- Darker Yellow Color -->
+            <solid android:color="@color/blind_yellow"/>
             <size android:width="64dp" android:height="64dp"/> <!-- Circle Size -->
         </shape>
     </item>

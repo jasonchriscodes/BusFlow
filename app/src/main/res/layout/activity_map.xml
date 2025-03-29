@@ -329,7 +329,7 @@
                 android:id="@+id/scheduleAheadIcon"
                 android:layout_width="64dp"
                 android:layout_height="64dp"
-                android:src="@drawable/ic_schedule_ahead"
+                android:src="@drawable/ic_please_wait"
                 android:layout_marginTop="8dp" />
         </LinearLayout>
 

@@ -7,7 +7,7 @@
 
     <!-- Green Rectangle Background -->
     <path
-        android:fillColor="@android:color/holo_green_dark"
+        android:fillColor="@color/blind_cyan"
         android:pathData="M0,0h24v24h-24z"/>
 
     <!-- White Checkmark -->
