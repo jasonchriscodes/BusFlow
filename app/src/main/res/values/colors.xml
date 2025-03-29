@@ -19,4 +19,7 @@
     <color name="whatsapp_tick_blue">#5ac6e6</color>
     <color name="red">#FF0000</color>
     <color name="green">#00FF00</color>
+    <color name="blind_red">#FF0C0C</color>
+    <color name="blind_yellow">#E4E26B</color>
+    <color name="blind_cyan">#38E2BF</color>
 </resources>

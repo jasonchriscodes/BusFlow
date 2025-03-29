@@ -135,6 +135,10 @@ class MapActivity : AppCompatActivity() {
     private lateinit var currentTimeRunnable: Runnable
     private lateinit var nextTripCountdownTextView: TextView
     private var busStopRadius: Double = 50.0
+    private val forceAheadStatus = false
+    private var statusText  = "Please wait..."
+    private var baseTimeStr  = "00:00:00"
+    private var customTime  = "00:00:00"
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -244,6 +248,47 @@ class MapActivity : AppCompatActivity() {
         // Start tracking the location and updating the marker
         startLocationUpdate()
 
+        // Mock data to check scheduleStatusValueTextView
+        if (forceAheadStatus) {
+            Log.d("ForceAheadDebug", "Inside forceAheadStatus at 08:00:00")
+
+            //Example
+//            scheduledTimeStr: 09:10:00
+//            apiTimeStr: 09:09:30
+//            actualTimeStr: 09:00:00
+//            predictedArrivalMillis: (09:09:30)
+//            deltaSec: 30
+//            statusText: Ahead by 30 sec
+//
+//            scheduledTimeStr: 09:10:00
+//            apiTimeStr: 09:10:00
+//            actualTimeStr: 09:00:00
+//            predictedArrivalMillis: (09:10:00)
+//            deltaSec: 0
+//            statusText: On Time (0 sec)
+//
+//            scheduledTimeStr: 09:10:00
+//            apiTimeStr: 09:10:45
+//            actualTimeStr: 09:00:00
+//            predictedArrivalMillis: (09:10:45)
+//            deltaSec: -45
+//            statusText: Behind by 45 sec
+
+
+            // Manually set dummy values to simulate schedule status in advance
+            timingPointValueTextView.text = "09:10:00"     // scheduledTimeStr
+            ApiTimeValueTextView.text = "09:10:45"         // apiTimeStr
+            customTime = "09:00:00"                    // actualTimeStr
+            // result
+
+            stopCurrentTime()
+            startCustomTime(customTime)
+
+            // Trigger visual change to test schedule status UI
+            scheduleStatusValueTextView.text = "Calculating..."
+            checkScheduleStatus()
+        }
+
         binding.startSimulationButton.setOnClickListener {
 //            startSimulation()
         }
@@ -293,6 +338,48 @@ class MapActivity : AppCompatActivity() {
         binding.arriveButton.setOnClickListener {
             confirmArrival()
         }
+    }
+
+    /**
+     * Starts a custom time from a hardcoded string and counts up from there.
+     * Example: startCustomTime("08:11:00")
+     */
+    private fun startCustomTime(customTime: String) {
+        val timeParts = customTime.split(":")
+        if (timeParts.size != 3) {
+            Log.e("MapActivity startCustomTime", "❌ Invalid time format: $customTime. Expected HH:mm:ss")
+            return
+        }
+
+        // Initialize simulatedStartTime from the custom string
+        simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+        simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
+        simulatedStartTime.set(Calendar.SECOND, timeParts[2].toInt())
+
+        currentTimeHandler = Handler(Looper.getMainLooper())
+        currentTimeRunnable = object : Runnable {
+            override fun run() {
+                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
+                Log.d("MapActivity startCustomTime", "currentTimeTextView.text: ${currentTimeTextView.text}")
+
+                // Advance time by 1 second per tick
+                simulatedStartTime.add(Calendar.SECOND, 1)
+
+                currentTimeHandler.postDelayed(this, 1000) // Update every second
+            }
+        }
+
+        currentTimeHandler.post(currentTimeRunnable)
+    }
+
+    /**
+     * setter to adjust current time
+     */
+    private fun setSimulatedCurrentTime(hour: Int, minute: Int, second: Int) {
+        simulatedStartTime.set(Calendar.HOUR_OF_DAY, hour)
+        simulatedStartTime.set(Calendar.MINUTE, minute)
+        simulatedStartTime.set(Calendar.SECOND, second)
     }
 
     /**
@@ -418,6 +505,13 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
+     * Function to remove current time call back
+     */
+    fun stopCurrentTime() {
+        currentTimeRunnable?.let { currentTimeHandler.removeCallbacks(it) }
+    }
+
+    /**
      * Mark a bus stop as "arrived" and prevent duplicate arrivals.
      */
     private var isManualMode = false
@@ -529,6 +623,7 @@ class MapActivity : AppCompatActivity() {
         apiTimeLocked = false    // Unlock the API time to allow updates
         Log.d("MapActivity confirmArrival", "🔓 API Time Unlocked")
 
+        scheduleStatusValueTextView.text = "Calculating..."
         checkScheduleStatus()    // Immediately refresh the schedule status
         Log.d("MapActivity confirmArrival", "✅ Schedule Status Checked")
 
@@ -802,6 +897,7 @@ class MapActivity : AppCompatActivity() {
                 simulatedStartTime.add(Calendar.SECOND, 1)
 
                 // Update schedule status based on the new simulated time
+                scheduleStatusValueTextView.text = "Calculating..."
                 checkScheduleStatus()
 
                 actualTimeHandler.postDelayed(this, 1000)
@@ -816,27 +912,35 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * Checks and updates the bus schedule status by comparing the scheduled arrival time
-     * with the predicted arrival time.
+     * checkScheduleStatus() determines whether the bus is Ahead, Behind, or On Time
+     * based on the schedule and the current simulation time.
      *
-     * The predicted arrival is computed as:
-     *   predictedArrival = (apiTime - baseTime) + actualTime
+     * It compares the scheduled arrival time at the next timing point
+     * with the predicted arrival time, calculated using the simulation's actual time
+     * and the reference API time.
      *
-     * The difference (deltaSec) in seconds between the scheduled arrival and the predicted
-     * arrival is compared against a tolerance of 60 seconds.
-     * - If |deltaSec| ≤ 60, the status is set to "On Time".
-     * - If deltaSec > 60, the bus is considered to be "Ahead by" deltaSec seconds.
-     * - If deltaSec < -60, the bus is "Behind by" the absolute value of deltaSec seconds.
+     * Steps:
+     * 1. Get the scheduled arrival time for the next stop from UI (TextView).
+     * 2. Get the schedule's base start time from the first item in the schedule list.
+     * 3. Get the time from the API representing how long the trip takes.
+     * 4. Get the actual simulation time (based on the app's simulated clock).
+     * 5. Use all of the above to predict when the bus should arrive at the next point.
+     * 6. Compare the actual time with the scheduled time.
+     * 7. Calculate the difference in seconds (deltaSec).
+     * 8. Apply a tolerance (default 0 sec) and determine the schedule status:
+     *    - "Ahead by X sec" if early
+     *    - "Behind by X sec" if late
+     *    - "On Time (X sec)" if within tolerance
+     * 9. Display the status in the UI and color-code it.
      *
-     * Instead of displaying a time range, the threshold is now shown as a single value.
-     * For example, if the tolerance is 60 seconds, the thresholdRangeValueTextView will display "60 sec".
-     *
-     * This method logs all of the following values:
-     * - Schedule Status (statusText)
-     * - Next Timing Point (the text of timingPointValueTextView)
-     * - API Time (as shown in ApiTimeValueTextView)
-     * - Actual Time (current simulated time)
-     * - Threshold Range (the tolerance in seconds)
+     * Example:
+     *   scheduleList.first().startTime = "10:00"
+     *   timingPointValueTextView.text = "10:15:00"
+     *   ApiTimeValueTextView.text = "00:15:00"
+     *   simulatedStartTime = Calendar set to "10:02:30"
+     *   => Predicted arrival = 10:17:30 (10:00 + 15min = 10:15, then +2.5min = 10:17:30)
+     *   => Scheduled = 10:15:00 → Delta = +150 sec
+     *   => Status = "Behind by 150 sec"
      */
     @SuppressLint("LongLogTag")
     private fun checkScheduleStatus() {
@@ -851,8 +955,13 @@ class MapActivity : AppCompatActivity() {
             val scheduledTime = timeFormat.parse(scheduledTimeStr)
 
             // 2. Define the base time (schedule start) by appending ":00" for seconds.
-            val baseTimeStr = scheduleList.first().startTime + ":00"
-            Log.d("MapActivity checkScheduleStatus", "baseTimeStr: ${baseTimeStr}")
+            if (forceAheadStatus) {
+                baseTimeStr = customTime
+                Log.d("MapActivity checkScheduleStatus", "baseTimeStr: ${baseTimeStr}")
+            } else {
+                baseTimeStr = scheduleList.first().startTime + ":00"
+                Log.d("MapActivity checkScheduleStatus", "baseTimeStr: ${baseTimeStr}")
+            }
             val baseTime = timeFormat.parse(baseTimeStr)
 
             // 3. Retrieve the API time from its TextView.
@@ -866,34 +975,46 @@ class MapActivity : AppCompatActivity() {
             val actualTime = timeFormat.parse(actualTimeStr)
 
             // 5. Compute the predicted arrival time.
-            val predictedArrivalMillis = (apiTime.time - baseTime.time) + actualTime.time
+            val baseCal = normalizeTimeToToday(baseTime)
+            val apiCal = normalizeTimeToToday(apiTime)
+            val actualCal = normalizeTimeToToday(actualTime)
+
+            val predictedArrivalMillis = apiCal.timeInMillis - baseCal.timeInMillis + actualCal.timeInMillis
+
             Log.d("MapActivity checkScheduleStatus", "predictedArrivalMillis: ${predictedArrivalMillis}")
             val predictedArrival = Date(predictedArrivalMillis)
 
             // 6. Calculate the difference (delta) in seconds.
-            val deltaSec = ((scheduledTime.time - predictedArrival.time) / 1000).toInt()
+            val scheduledCalendar = normalizeTimeToToday(scheduledTime)
+            val actualCalendar = normalizeTimeToToday(actualTime)
+            val deltaSec = ((scheduledCalendar.timeInMillis - predictedArrivalMillis) / 1000).toInt()
+
             Log.d("MapActivity checkScheduleStatus", "deltaSec: ${deltaSec}")
 
             // 7. Define a tolerance value (in seconds).
             val tolerance = 0
 
             // 8. Determine the schedule status text based on deltaSec.
-            val statusText = when {
-                Math.abs(deltaSec) <= tolerance -> "On Time (${Math.abs(deltaSec)} sec)"
+            statusText = when {
+                abs(deltaSec) <= tolerance -> "On Time (${abs(deltaSec)} sec)"
                 deltaSec > tolerance -> "Ahead by $deltaSec sec"
                 else -> "Behind by ${-deltaSec} sec"
             }
+
             Log.d("MapActivity checkScheduleStatus", "statusText: ${statusText}")
 
             // 9. Update the UI: set the schedule status and display the tolerance as a single value.
             runOnUiThread {
                 scheduleStatusValueTextView.text = statusText
                 thresholdRangeValueTextView.text = "$tolerance sec"  // Displaying a single threshold value
-                if (Math.abs(deltaSec) <= tolerance) {
-                    scheduleStatusValueTextView.setTextColor(Color.GREEN)
-                } else {
-                    scheduleStatusValueTextView.setTextColor(Color.RED)
+
+                val statusColor = when {
+                    abs(deltaSec) <= tolerance -> ContextCompat.getColor(this, R.color.blind_cyan)   // On Time
+                    deltaSec > tolerance -> ContextCompat.getColor(this, R.color.blind_red)          // Ahead
+                    else -> ContextCompat.getColor(this, R.color.blind_yellow)                       // Behind
                 }
+
+                scheduleStatusValueTextView.setTextColor(statusColor)
             }
 
             // Log all the desired values.
@@ -907,6 +1028,19 @@ class MapActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e("MapActivity checkScheduleStatus", "Error parsing times: ${e.localizedMessage}")
         }
+    }
+
+    /**
+     * Function to normalize all times to the same date
+     */
+    fun normalizeTimeToToday(original: Date): Calendar {
+        val now = Calendar.getInstance()
+        val cal = Calendar.getInstance()
+        cal.time = original
+        cal.set(Calendar.YEAR, now.get(Calendar.YEAR))
+        cal.set(Calendar.MONTH, now.get(Calendar.MONTH))
+        cal.set(Calendar.DAY_OF_MONTH, now.get(Calendar.DAY_OF_MONTH))
+        return cal
     }
 
     /**
@@ -1819,6 +1953,7 @@ class MapActivity : AppCompatActivity() {
                         updateBusMarkerPosition(latitude, longitude, bearing)
                         checkPassedStops(latitude, longitude)
                         updateTimingPointBasedOnLocation(latitude, longitude)
+                        scheduleStatusValueTextView.text = "Calculating..."
                         checkScheduleStatus()
                         updateApiTime()
 
