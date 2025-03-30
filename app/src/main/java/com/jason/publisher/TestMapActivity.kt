@@ -564,10 +564,13 @@ class TestMapActivity : AppCompatActivity() {
             // 7. Define a tolerance value (in seconds).
             val tolerance = 0
 
+            val expectedTravelSec = ((scheduledTime.time - baseTime.time) / 1000).toInt()
+            val farBehindThreshold = (expectedTravelSec * 0.2).toInt()  // or 0.25, tweak as needed
             // 8. Determine the schedule status text based on deltaSec.
             val statusText = when {
                 Math.abs(deltaSec) <= tolerance -> "On Time (${Math.abs(deltaSec)} sec)"
                 deltaSec > tolerance -> "Ahead by $deltaSec sec"
+                deltaSec < -farBehindThreshold -> "So Far Behind by ${-deltaSec} sec"
                 else -> "Behind by ${-deltaSec} sec"
             }
 
@@ -588,8 +591,9 @@ class TestMapActivity : AppCompatActivity() {
             Log.d("TestMapActivity checkScheduleStatus", "API Time: $apiTimeStr")
             Log.d("TestMapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
             Log.d("TestMapActivity checkScheduleStatus", "Threshold Range: $tolerance sec")
-
-            Log.d("TestMapActivity checkScheduleStatus", "Scheduled: $scheduledTimeStr, Predicted: ${timeFormat.format(predictedArrival)}, Delta: $deltaSec sec, Status: $statusText")
+            Log.d("TestMapActivity checkScheduleStatus", "Predicted Arrival: ${timeFormat.format(predictedArrival)}")
+            Log.d("TestMapActivity checkScheduleStatus", "Delta (sec): $deltaSec")
+            Log.d("TestMapActivity checkScheduleStatus", "Far Behind Threshold: $farBehindThreshold sec")
         } catch (e: Exception) {
             Log.e("TestMapActivity checkScheduleStatus", "Error parsing times: ${e.localizedMessage}")
         }
