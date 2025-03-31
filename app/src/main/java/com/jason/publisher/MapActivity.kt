@@ -912,7 +912,7 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * checkScheduleStatus() determines whether the bus is Ahead, Behind, or On Time
+     * checkScheduleStatus() determines whether the bus is Ahead, Behind, So Far Behind, or On Time
      * based on the schedule and the current simulation time.
      *
      * It compares the scheduled arrival time at the next timing point
@@ -925,22 +925,25 @@ class MapActivity : AppCompatActivity() {
      * 3. Get the time from the API representing how long the trip takes.
      * 4. Get the actual simulation time (based on the app's simulated clock).
      * 5. Use all of the above to predict when the bus should arrive at the next point.
-     * 6. Compare the actual time with the scheduled time.
+     * 6. Compare the predicted arrival time with the scheduled time.
      * 7. Calculate the difference in seconds (deltaSec).
-     * 8. Apply a tolerance (default 0 sec) and determine the schedule status:
-     *    - "Ahead by X sec" if early
-     *    - "Behind by X sec" if late
+     * 8. Compute a dynamic threshold (20% of expected travel time to this timing point).
+     * 9. Apply the threshold and determine the schedule status:
+     *    - "Ahead by X sec" if arriving early
      *    - "On Time (X sec)" if within tolerance
-     * 9. Display the status in the UI and color-code it.
+     *    - "Behind by X sec" if late but not significantly
+     *    - "So Far Behind by X sec" if late beyond the dynamic threshold
+     * 10. Display the status in the UI and color-code it.
      *
      * Example:
      *   scheduleList.first().startTime = "10:00"
      *   timingPointValueTextView.text = "10:15:00"
      *   ApiTimeValueTextView.text = "00:15:00"
      *   simulatedStartTime = Calendar set to "10:02:30"
-     *   => Predicted arrival = 10:17:30 (10:00 + 15min = 10:15, then +2.5min = 10:17:30)
+     *   => Predicted arrival = 10:17:30 (10:00 + 15min + 2.5min)
      *   => Scheduled = 10:15:00 → Delta = +150 sec
-     *   => Status = "Behind by 150 sec"
+     *   => Threshold = 180 sec * 0.2 = 36 sec
+     *   => Status = "So Far Behind by 150 sec"
      */
     @SuppressLint("LongLogTag")
     private fun checkScheduleStatus() {
@@ -979,6 +982,16 @@ class MapActivity : AppCompatActivity() {
             val apiCal = normalizeTimeToToday(apiTime)
             val actualCal = normalizeTimeToToday(actualTime)
 
+            // predictedArrivalMillis = API Time - Start Time + Actual Time
+            // Next Timing Point: 22:18:00
+            // API Time: 22:21:00
+            // Actual Time: 22:15:02
+            // Threshold Range: 0 sec
+            // Predicted Arrival: 22:21:02
+            // Delta (sec): -182
+            // predictedArrivalMillis = 22:21:02 - 22:15:02 + 22:15:02
+            // predictedArrivalMillis = 22:21:02
+
             val predictedArrivalMillis = apiCal.timeInMillis - baseCal.timeInMillis + actualCal.timeInMillis
 
             Log.d("MapActivity checkScheduleStatus", "predictedArrivalMillis: ${predictedArrivalMillis}")
@@ -987,6 +1000,10 @@ class MapActivity : AppCompatActivity() {
             // 6. Calculate the difference (delta) in seconds.
             val scheduledCalendar = normalizeTimeToToday(scheduledTime)
             val actualCalendar = normalizeTimeToToday(actualTime)
+
+            // deltaSec = (Next Timing Point - predictedArrivalMillis) / 1000
+            // deltaSec = (22:18:00 - 22:21:02) / 1000
+            // deltaSec = -182
             val deltaSec = ((scheduledCalendar.timeInMillis - predictedArrivalMillis) / 1000).toInt()
 
             Log.d("MapActivity checkScheduleStatus", "deltaSec: ${deltaSec}")
@@ -994,10 +1011,16 @@ class MapActivity : AppCompatActivity() {
             // 7. Define a tolerance value (in seconds).
             val tolerance = 0
 
+            // Dynamic "So Far Behind" threshold: 20% of the scheduled segment duration
+            val expectedTravelSec = ((scheduledCalendar.timeInMillis - baseCal.timeInMillis) / 1000).toInt()
+            val farBehindThreshold = (expectedTravelSec * 0.2).toInt()
+            Log.d("MapActivity checkScheduleStatus", "Expected Travel Sec: $expectedTravelSec, Far Behind Threshold: $farBehindThreshold")
+
             // 8. Determine the schedule status text based on deltaSec.
             statusText = when {
                 abs(deltaSec) <= tolerance -> "On Time (${abs(deltaSec)} sec)"
                 deltaSec > tolerance -> "Ahead by $deltaSec sec"
+                deltaSec < -farBehindThreshold -> "So Far Behind by ${-deltaSec} sec"
                 else -> "Behind by ${-deltaSec} sec"
             }
 
@@ -1009,11 +1032,23 @@ class MapActivity : AppCompatActivity() {
                 thresholdRangeValueTextView.text = "$tolerance sec"  // Displaying a single threshold value
 
                 val statusColor = when {
-                    abs(deltaSec) <= tolerance -> ContextCompat.getColor(this, R.color.blind_cyan)   // On Time
-                    deltaSec > tolerance -> ContextCompat.getColor(this, R.color.blind_red)          // Ahead
-                    else -> ContextCompat.getColor(this, R.color.blind_yellow)                       // Behind
+                    abs(deltaSec) <= tolerance -> {
+                        binding.scheduleAheadIcon.setImageResource(R.drawable.ic_schedule_on_time)
+                        ContextCompat.getColor(this, R.color.blind_cyan)
+                    }
+                    deltaSec > tolerance -> {
+                        binding.scheduleAheadIcon.setImageResource(R.drawable.ic_schedule_ahead)
+                        ContextCompat.getColor(this, R.color.blind_red)
+                    }
+                    deltaSec < -farBehindThreshold -> {
+                        binding.scheduleAheadIcon.setImageResource(R.drawable.ic_schedule_so_far_behind)
+                        ContextCompat.getColor(this, R.color.blind_orange)
+                    }
+                    else -> {
+                        binding.scheduleAheadIcon.setImageResource(R.drawable.ic_schedule_behind)
+                        ContextCompat.getColor(this, R.color.blind_yellow)
+                    }
                 }
-
                 scheduleStatusValueTextView.setTextColor(statusColor)
             }
 
@@ -1023,7 +1058,6 @@ class MapActivity : AppCompatActivity() {
             Log.d("MapActivity checkScheduleStatus", "API Time: $apiTimeStr")
             Log.d("MapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
             Log.d("MapActivity checkScheduleStatus", "Threshold Range: $tolerance sec")
-
             Log.d("MapActivity checkScheduleStatus", "Scheduled: $scheduledTimeStr, Predicted: ${timeFormat.format(predictedArrival)}, Delta: $deltaSec sec, Status: $statusText")
         } catch (e: Exception) {
             Log.e("MapActivity checkScheduleStatus", "Error parsing times: ${e.localizedMessage}")
