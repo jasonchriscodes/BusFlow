@@ -154,6 +154,48 @@ class MapActivity : AppCompatActivity() {
         private const val SOUND_FILE_NAME = "notif.wav"
     }
 
+    /**
+     * Starts a custom time from a hardcoded string and counts up from there.
+     * Example: startCustomTime("08:11:00")
+     */
+    private fun startCustomTime(customTime: String) {
+        val timeParts = customTime.split(":")
+        if (timeParts.size != 3) {
+            Log.e("MapActivity startCustomTime", "❌ Invalid time format: $customTime. Expected HH:mm:ss")
+            return
+        }
+
+        // Initialize simulatedStartTime from the custom string
+        simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+        simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
+        simulatedStartTime.set(Calendar.SECOND, timeParts[2].toInt())
+
+        currentTimeHandler = Handler(Looper.getMainLooper())
+        currentTimeRunnable = object : Runnable {
+            override fun run() {
+                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
+                Log.d("MapActivity startCustomTime", "currentTimeTextView.text: ${currentTimeTextView.text}")
+
+                // Advance time by 1 second per tick
+                simulatedStartTime.add(Calendar.SECOND, 1)
+
+                currentTimeHandler.postDelayed(this, 1000) // Update every second
+            }
+        }
+
+        currentTimeHandler.post(currentTimeRunnable)
+    }
+
+    /**
+     * setter to adjust current time
+     */
+    private fun setSimulatedCurrentTime(hour: Int, minute: Int, second: Int) {
+        simulatedStartTime.set(Calendar.HOUR_OF_DAY, hour)
+        simulatedStartTime.set(Calendar.MINUTE, minute)
+        simulatedStartTime.set(Calendar.SECOND, second)
+    }
+
     @SuppressLint("LongLogTag")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -339,48 +381,6 @@ class MapActivity : AppCompatActivity() {
         binding.arriveButton.setOnClickListener {
             confirmArrival()
         }
-    }
-
-    /**
-     * Starts a custom time from a hardcoded string and counts up from there.
-     * Example: startCustomTime("08:11:00")
-     */
-    private fun startCustomTime(customTime: String) {
-        val timeParts = customTime.split(":")
-        if (timeParts.size != 3) {
-            Log.e("MapActivity startCustomTime", "❌ Invalid time format: $customTime. Expected HH:mm:ss")
-            return
-        }
-
-        // Initialize simulatedStartTime from the custom string
-        simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
-        simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
-        simulatedStartTime.set(Calendar.SECOND, timeParts[2].toInt())
-
-        currentTimeHandler = Handler(Looper.getMainLooper())
-        currentTimeRunnable = object : Runnable {
-            override fun run() {
-                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
-                Log.d("MapActivity startCustomTime", "currentTimeTextView.text: ${currentTimeTextView.text}")
-
-                // Advance time by 1 second per tick
-                simulatedStartTime.add(Calendar.SECOND, 1)
-
-                currentTimeHandler.postDelayed(this, 1000) // Update every second
-            }
-        }
-
-        currentTimeHandler.post(currentTimeRunnable)
-    }
-
-    /**
-     * setter to adjust current time
-     */
-    private fun setSimulatedCurrentTime(hour: Int, minute: Int, second: Int) {
-        simulatedStartTime.set(Calendar.HOUR_OF_DAY, hour)
-        simulatedStartTime.set(Calendar.MINUTE, minute)
-        simulatedStartTime.set(Calendar.SECOND, second)
     }
 
     /**
@@ -1014,13 +1014,13 @@ class MapActivity : AppCompatActivity() {
 
             // predictedArrivalMillis = API Time - Start Time + Actual Time
             // Next Timing Point: 22:18:00
-            // API Time: 22:21:00
-            // Actual Time: 22:15:02
+            // API Time: 22:18:00
+            // Actual Time: 22:15:05
             // Threshold Range: 0 sec
-            // Predicted Arrival: 22:21:02
-            // Delta (sec): -182
-            // predictedArrivalMillis = 22:21:02 - 22:15:02 + 22:15:02
-            // predictedArrivalMillis = 22:21:02
+            // Predicted Arrival: 22:18:05
+            // Delta (sec): -5
+            // predictedArrivalMillis = 22:18:00 - 22:15:00 + 22:15:05
+            // predictedArrivalMillis = 22:18:05
 
             val predictedArrivalMillis = apiCal.timeInMillis - baseCal.timeInMillis + actualCal.timeInMillis
 
@@ -1032,8 +1032,8 @@ class MapActivity : AppCompatActivity() {
             val actualCalendar = normalizeTimeToToday(actualTime)
 
             // deltaSec = (Next Timing Point - predictedArrivalMillis) / 1000
-            // deltaSec = (22:18:00 - 22:21:02) / 1000
-            // deltaSec = -182
+            // deltaSec = (22:18:00 - 22:18:05) / 1000
+            // deltaSec = -5
             val deltaSec = ((scheduledCalendar.timeInMillis - predictedArrivalMillis) / 1000).toInt()
 
             Log.d("MapActivity checkScheduleStatus", "deltaSec: ${deltaSec}")
