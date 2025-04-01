@@ -721,10 +721,15 @@ class TestMapActivity : AppCompatActivity() {
      */
     @SuppressLint("LongLogTag")
     private fun updateApiTime() {
-        // If locked, simply reuse the locked value.
+        // If locked, simply reuse the locked value — only if upcomingStopName matches the first timing point
         if (apiTimeLocked && lockedApiTime != null) {
-            runOnUiThread { ApiTimeValueTextView.text = lockedApiTime }
-            Log.d("TestMapActivity updateApiTime", "API time locked, using last computed value: $lockedApiTime")
+            val firstAddress = scheduleList.firstOrNull()?.busStops?.firstOrNull()?.address
+            if (upcomingStopName == firstAddress) {
+                runOnUiThread { ApiTimeValueTextView.text = lockedApiTime }
+                Log.d("TestMapActivity updateApiTime", "API time locked, using last computed value: $lockedApiTime")
+            } else {
+                Log.d("TestMapActivity updateApiTime", "⏩ Skipped locked API time update because upcomingStopName == firstAddress")
+            }
             return
         }
 
@@ -773,9 +778,16 @@ class TestMapActivity : AppCompatActivity() {
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
         val updatedApiTime = timeFormat.format(startCalendar.time)
 
-        runOnUiThread {
-            ApiTimeValueTextView.text = updatedApiTime
+        val firstAddress = scheduleList.firstOrNull()?.busStops?.firstOrNull()?.address
+        if (upcomingStopName == firstAddress) {
+            runOnUiThread {
+                ApiTimeValueTextView.text = updatedApiTime
+            }
+            Log.d("TestMapActivity updateApiTime", "API Time updated to: $updatedApiTime")
+        } else {
+            Log.d("TestMapActivity updateApiTime", "⏩ Skipped updating API Time because upcomingStopName == firstAddress")
         }
+
         Log.d("TestMapActivity updateApiTime", "API Time updated to: $updatedApiTime")
 
         // If the upcoming stop is the final scheduled stop, lock the API time.
