@@ -83,6 +83,8 @@ class TestMapActivity : AppCompatActivity() {
     private var arrBusData: List<BusItem> = emptyList()
     private var firstTime = true
     private var upcomingStop: String = "Unknown"
+    private var stopAddress: String = "Unknown"
+    private var upcomingStopName: String = "Unknown"
 
     private lateinit var aidTextView: TextView
     private lateinit var latitudeTextView: TextView
@@ -121,7 +123,6 @@ class TestMapActivity : AppCompatActivity() {
     private var lockedApiTime: String? = null
     private var simulationSpeedFactor: Int = 1
     private lateinit var arriveButtonContainer: LinearLayout
-
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
         const val CLIENT_ID = "jasonAndroidClientId"
@@ -540,19 +541,48 @@ class TestMapActivity : AppCompatActivity() {
         try {
             // 1. Retrieve the scheduled arrival (next timing point) from the UI.
             val scheduledTimeStr = timingPointValueTextView.text.toString()
-            val scheduledTime = timeFormat.parse(scheduledTimeStr) ?: return
+            val scheduledTime = timeFormat.parse(scheduledTimeStr)
 
             // 2. Define the base time (schedule start) by appending ":00" for seconds.
             val baseTimeStr = scheduleList.first().startTime + ":00"
-            val baseTime = timeFormat.parse(baseTimeStr) ?: return
+            val baseTime = timeFormat.parse(baseTimeStr)
 
             // 3. Retrieve the API time from its TextView.
-            val apiTimeStr = ApiTimeValueTextView.text.toString()
-            val apiTime = timeFormat.parse(apiTimeStr) ?: return
+            var apiTimeStr = ApiTimeValueTextView.text.toString()
+            Log.d("TestMapActivity checkScheduleStatus apiTimeStr", "📦 Retrieved API Time String (initial): $apiTimeStr")
+            Log.d("TestMapActivity checkScheduleStatus apiTimeStr", "Upcoming stop address: $upcomingStopName")
+
+            // Override the first api time
+            val firstAddress = scheduleList.firstOrNull()?.busStops?.firstOrNull()?.address
+            Log.d("TestMapActivity checkScheduleStatus apiTimeStr", "📍 First Bus Stop with Timing Point: $firstAddress")
+            Log.d("TestMapActivity checkScheduleStatus apiTimeStr", "📍 Current Stop Index: $currentStopIndex")
+
+            if (upcomingStopName == firstAddress && currentStopIndex > 0 && currentStopIndex - 1 < durationBetweenStops.size) {
+                val durationToFirstTimingPoint = durationBetweenStops[currentStopIndex - 1]
+                val firstSchedule = scheduleList.first()
+                val startTimeParts = firstSchedule.startTime.split(":")
+                if (startTimeParts.size != 2) return
+                val adjustedCalendar = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, startTimeParts[0].toInt())
+                    set(Calendar.MINUTE, startTimeParts[1].toInt())
+                    set(Calendar.SECOND, 0)
+                    add(Calendar.SECOND, (durationToFirstTimingPoint * 60).toInt())
+                }
+
+                val adjustedApiTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(adjustedCalendar.time)
+
+                runOnUiThread {
+                    ApiTimeValueTextView.text = adjustedApiTime
+                }
+
+                Log.d("TestMapActivity updateApiTime", "🕒 API Time overridden at first timing point: $adjustedApiTime")
+            }
+
+            val apiTime = timeFormat.parse(apiTimeStr)
 
             // 4. Get the actual (simulated) time.
             val actualTimeStr = timeFormat.format(simulatedStartTime.time)
-            val actualTime = timeFormat.parse(actualTimeStr) ?: return
+            val actualTime = timeFormat.parse(actualTimeStr)
 
             // 5. Compute the predicted arrival time.
             val predictedArrivalMillis = (apiTime.time - baseTime.time) + actualTime.time
@@ -973,7 +1003,7 @@ class TestMapActivity : AppCompatActivity() {
         val nextStop = stops[currentStopIndex]
         val stopLat = nextStop.latitude ?: return
         val stopLon = nextStop.longitude ?: return
-        val stopAddress = nextStop.address ?: getUpcomingBusStopName(stopLat, stopLon)
+        stopAddress = nextStop.address ?: getUpcomingBusStopName(stopLat, stopLon)
         upcomingStop = stopAddress
         val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
         val stopPassThreshold = 25.0 // Normal detection range
@@ -1003,7 +1033,7 @@ class TestMapActivity : AppCompatActivity() {
 
             if (currentStopIndex < stops.size) {
                 val upcomingStop = stops[currentStopIndex]
-                val upcomingStopName = getUpcomingBusStopName(upcomingStop.latitude ?: 0.0, upcomingStop.longitude ?: 0.0)
+                upcomingStopName = getUpcomingBusStopName(upcomingStop.latitude ?: 0.0, upcomingStop.longitude ?: 0.0)
 
                 Log.d(
                     "TestMapActivity checkPassedStops",

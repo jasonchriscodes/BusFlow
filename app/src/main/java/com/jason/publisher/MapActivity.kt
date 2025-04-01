@@ -139,6 +139,7 @@ class MapActivity : AppCompatActivity() {
     private var statusText  = "Please wait..."
     private var baseTimeStr  = "00:00:00"
     private var customTime  = "00:00:00"
+    private var upcomingStopName: String = "Unknown"
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -968,8 +969,37 @@ class MapActivity : AppCompatActivity() {
             val baseTime = timeFormat.parse(baseTimeStr)
 
             // 3. Retrieve the API time from its TextView.
-            val apiTimeStr = ApiTimeValueTextView.text.toString()
-            Log.d("MapActivity checkScheduleStatus", "apiTimeStr: ${apiTimeStr}")
+            var apiTimeStr = ApiTimeValueTextView.text.toString()
+            Log.d("TestMapActivity checkScheduleStatus apiTimeStr", "📦 Retrieved API Time String (initial): $apiTimeStr")
+            Log.d("TestMapActivity checkScheduleStatus apiTimeStr", "Upcoming stop address: $upcomingStopName")
+
+            // Override the first api time
+            val firstAddress = scheduleList.firstOrNull()?.busStops?.firstOrNull()?.address
+            Log.d("TestMapActivity checkScheduleStatus apiTimeStr", "📍 First Bus Stop with Timing Point: $firstAddress")
+            Log.d("TestMapActivity checkScheduleStatus apiTimeStr", "📍 Current Stop Index: $currentStopIndex")
+
+            if (upcomingStopName == firstAddress && currentStopIndex > 0 && currentStopIndex - 1 < durationBetweenStops.size) {
+                val durationToFirstTimingPoint = durationBetweenStops[currentStopIndex - 1]
+                val firstSchedule = scheduleList.first()
+                val startTimeParts = firstSchedule.startTime.split(":")
+                if (startTimeParts.size != 2) return
+                val adjustedCalendar = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, startTimeParts[0].toInt())
+                    set(Calendar.MINUTE, startTimeParts[1].toInt())
+                    set(Calendar.SECOND, 0)
+                    add(Calendar.SECOND, (durationToFirstTimingPoint * 60).toInt())
+                }
+
+                val adjustedApiTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(adjustedCalendar.time)
+
+                runOnUiThread {
+                    ApiTimeValueTextView.text = adjustedApiTime
+                }
+
+                Log.d("TestMapActivity updateApiTime", "🕒 API Time overridden at first timing point: $adjustedApiTime")
+                return // Exit early so the default logic doesn't override it
+            }
+
             val apiTime = timeFormat.parse(apiTimeStr)
 
             // 4. Get the actual (simulated) time.
@@ -1550,7 +1580,7 @@ class MapActivity : AppCompatActivity() {
 
             if (currentStopIndex < stops.size) {
                 val upcomingStop = stops[currentStopIndex]
-                val upcomingStopName = getUpcomingBusStopName(upcomingStop.latitude ?: 0.0, upcomingStop.longitude ?: 0.0)
+                upcomingStopName = getUpcomingBusStopName(upcomingStop.latitude ?: 0.0, upcomingStop.longitude ?: 0.0)
 
 //                Log.d(
 //                    "MapActivity checkPassedStops",
@@ -1569,7 +1599,7 @@ class MapActivity : AppCompatActivity() {
                 }
             }
         } else {
-            val upcomingStopName = getUpcomingBusStopName(stopLat, stopLon)
+            upcomingStopName = getUpcomingBusStopName(stopLat, stopLon)
 
             runOnUiThread {
                 upcomingBusStopTextView.text = "$upcomingStopName"
