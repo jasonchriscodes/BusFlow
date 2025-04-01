@@ -123,6 +123,9 @@ class TestMapActivity : AppCompatActivity() {
     private var lockedApiTime: String? = null
     private var simulationSpeedFactor: Int = 1
     private lateinit var arriveButtonContainer: LinearLayout
+    private var standardBusMarker: org.mapsforge.map.layer.overlay.Marker? = null
+    private var constantBusMarker: org.mapsforge.map.layer.overlay.Marker? = null
+
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
         const val CLIENT_ID = "jasonAndroidClientId"
@@ -348,6 +351,9 @@ class TestMapActivity : AppCompatActivity() {
         // Start the actual time from the schedule's start time
         startActualTimeUpdater()
 
+        // Start constant-speed simulation
+        startConstantSpeedSimulation()
+
         simulationRunnable = object : Runnable {
             @SuppressLint("LongLogTag")
             @RequiresApi(Build.VERSION_CODES.M)
@@ -388,6 +394,109 @@ class TestMapActivity : AppCompatActivity() {
         }
         simulationHandler.post(simulationRunnable)
         Toast.makeText(this, "Simulation started", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Starts the constant-speed simulation based on timing points.
+     */
+    private fun startConstantSpeedSimulation() {
+        val redStops = scheduleList.first().busStops
+        val segmentTargets = mutableListOf<Pair<BusRoute, String>>() // (destination point, scheduled time)
+
+        // Segment 1: Start to first red stop
+        val firstStop = redStops.first()
+        val firstRedPoint = BusRoute(firstStop.latitude, firstStop.longitude)
+        segmentTargets.add(Pair(firstRedPoint, firstStop.time))
+
+        // Intermediate red stop segments
+        for (i in 1 until redStops.size) {
+            val stop = redStops[i]
+            segmentTargets.add(Pair(BusRoute(stop.latitude, stop.longitude), stop.time))
+        }
+
+        // Final segment: last red stop to final route point
+        val lastStop = redStops.last()
+        val lastPoint = route.last()
+        segmentTargets.add(Pair(lastPoint, scheduleList.first().endTime))
+
+        currentRouteIndex = 0
+        simulatedStartTime = Calendar.getInstance().apply {
+            val (h, m) = scheduleList.first().startTime.split(":").map { it.toInt() }
+            set(Calendar.HOUR_OF_DAY, h)
+            set(Calendar.MINUTE, m)
+            set(Calendar.SECOND, 0)
+        }
+
+        runConstantSpeedSegment(0, segmentTargets)
+    }
+
+    /**
+     * Runs one segment of the simulation between two points.
+     */
+    private fun runConstantSpeedSegment(segmentIndex: Int, targets: List<Pair<BusRoute, String>>) {
+        if (segmentIndex >= targets.size) {
+            Toast.makeText(this, "🚍 Reached end of route!", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val startLatLng = if (segmentIndex == 0) route.first() else targets[segmentIndex - 1].first
+        val (endLatLng, endTimeStr) = targets[segmentIndex]
+        val totalDurationSec = getTimeDifferenceInSeconds(simulatedStartTime.time, endTimeStr)
+
+        // 🔄 Get sub-route between these 2 lat/lons
+        val subRoute = extractSubRoute(startLatLng, endLatLng)
+        val intervalMillis = (totalDurationSec * 1000L) / subRoute.size
+
+        simulateConstantStep(subRoute, 0, intervalMillis) {
+
+            // Proceed to next segment
+            runConstantSpeedSegment(segmentIndex + 1, targets)
+        }
+    }
+
+    /**
+     * Returns the difference in seconds between start time and target HH:mm string.
+     */
+    private fun getTimeDifferenceInSeconds(start: Date, endTimeStr: String): Int {
+        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+        val end = sdf.parse(endTimeStr)
+        val diff = end.time - start.time
+        return (diff / 1000).toInt()
+    }
+
+    /**
+     * Extracts a sub-route between two points in the main route.
+     */
+    private fun extractSubRoute(start: BusRoute, end: BusRoute): List<BusRoute> {
+        val startIndex = route.indexOfFirst { it.latitude == start.latitude && it.longitude == start.longitude }
+        val endIndex = route.indexOfFirst { it.latitude == end.latitude && it.longitude == end.longitude }
+        return if (startIndex != -1 && endIndex != -1 && startIndex < endIndex) {
+            route.subList(startIndex, endIndex + 1)
+        } else {
+            emptyList()
+        }
+    }
+
+    /**
+     * Moves the marker step-by-step along the sub-route at fixed intervals.
+     */
+    private fun simulateConstantStep(
+        subRoute: List<BusRoute>,
+        index: Int,
+        intervalMillis: Long,
+        onComplete: () -> Unit
+    ) {
+        if (index >= subRoute.size) {
+            onComplete()
+            return
+        }
+
+        val point = subRoute[index]
+        updateBusMarkerPosition(point.latitude!!, point.longitude!!, bearing, useConstantIcon = true)
+
+        Handler(Looper.getMainLooper()).postDelayed({
+            simulateConstantStep(subRoute, index + 1, intervalMillis, onComplete)
+        }, intervalMillis)
     }
 
     /**
@@ -617,7 +726,7 @@ class TestMapActivity : AppCompatActivity() {
 
             // Log all the desired values.
             Log.d("TestMapActivity checkScheduleStatus", "Schedule Status: $statusText")
-            Log.d("checkScheduleStatus", "Next Timing Point: ${timingPointValueTextView.text}")
+            Log.d("TestMapActivity checkScheduleStatus", "Next Timing Point: ${timingPointValueTextView.text}")
             Log.d("TestMapActivity checkScheduleStatus", "API Time: $apiTimeStr")
             Log.d("TestMapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
             Log.d("TestMapActivity checkScheduleStatus", "Threshold Range: $tolerance sec")
@@ -627,24 +736,6 @@ class TestMapActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e("TestMapActivity checkScheduleStatus", "Error parsing times: ${e.localizedMessage}")
         }
-    }
-
-    /**
-     * Converts seconds to mm:ss format.
-     */
-    private fun formatSecondsAsTime(seconds: Int): String {
-        val sign = if (seconds < 0) "-" else ""
-        val absSeconds = Math.abs(seconds)
-        val hours = absSeconds / 3600
-        val minutes = (absSeconds % 3600) / 60
-        val secs = absSeconds % 60
-        return String.format("%s%02d:%02d:%02d", sign, hours, minutes, secs)
-    }
-
-    /** 🔹 Reset actual time when the bus reaches a stop or upcoming stop changes */
-    private fun resetActualTime() {
-        simulationStartTime = System.currentTimeMillis()
-        Log.d("TestMapActivity", "✅ Actual time reset to current time.")
     }
 
     /** Interpolates movement between two points with dynamic bearing and speed updates */
@@ -1273,67 +1364,6 @@ class TestMapActivity : AppCompatActivity() {
     }
 
     /**
-     * Retrieves the Android ID (AID) from a hidden JSON file in the app-specific documents directory.
-     * If the file or directory does not exist, it creates them and generates a new AID.
-     *
-     * @return The AID (Android ID) as a String.
-     */
-    @SuppressLint("HardwareIds", "LongLogTag")
-    private fun getOrCreateAid(): String {
-        // Ensure we have the correct storage permission
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                Log.e("TestMapActivity getOrCreateAid", "Storage permission not granted.")
-                return "Permission Denied"
-            }
-        } else {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED) {
-                Log.e("TestMapActivity getOrCreateAid", "Storage permission not granted.")
-                return "Permission Denied"
-            }
-        }
-
-        // Use External Storage Public Directory for Documents
-        val externalDocumentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
-        val hiddenFolder = File(externalDocumentsDir, ".vlrshiddenfolder")
-
-        if (!hiddenFolder.exists()) {
-            val success = hiddenFolder.mkdirs()
-            if (!success) {
-                Log.e("TestMapActivity getOrCreateAid", "Failed to create directory: ${hiddenFolder.absolutePath}")
-                return "Failed to create directory"
-            }
-        }
-
-        val aidFile = File(hiddenFolder, "busDataCache.json")
-        Log.d("TestMapActivity getOrCreateAid", "Attempting to create: ${aidFile.absolutePath}")
-
-        if (!aidFile.exists()) {
-            val newAid = generateNewAid()
-            val jsonObject = JSONObject().apply {
-                put("aid", newAid)
-            }
-            try {
-                aidFile.writeText(jsonObject.toString())
-                Toast.makeText(this, "AID saved successfully in busDataCache.json", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Log.e("TestMapActivity getOrCreateAid", "Error writing to file: ${e.message}")
-                return "Error writing file"
-            }
-            return newAid
-        }
-
-        return try {
-            val jsonContent = JSONObject(aidFile.readText())
-            jsonContent.getString("aid").trim()
-        } catch (e: Exception) {
-            Log.e("TestMapActivity getOrCreateAid", "Error reading JSON file: ${e.message}")
-            "Error reading file"
-        }
-    }
-
-    /**
      * Generates a new Android ID (AID) using the device's secure Android ID.
      *
      * @return A unique Android ID as a String.
@@ -1343,114 +1373,38 @@ class TestMapActivity : AppCompatActivity() {
         return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
     }
 
-    /**
-     * Starts location updates, calculates bearing and direction, and identifies the nearest route coordinate.
-     * Calls checkScheduleStatus() to keep the schedule status updated in real-time.
-     */
-    private fun startLocationUpdate() {
-        // Reset actual time to current system time
-//        actualTime = Calendar.getInstance()
-
-        // Start incrementing actual time dynamically
-        startActualTimeUpdater()
-
-        // Ensure API time remains from the list
-        updateApiTime()
-
-        locationManager.startLocationUpdates(object : LocationListener {
-            override fun onLocationUpdate(location: Location) {
-                latitude = location.latitude
-                longitude = location.longitude
-
-                if (lastLatitude != 0.0 && lastLongitude != 0.0) {
-                    bearing = calculateBearing(lastLatitude, lastLongitude, latitude, longitude)
-                    direction = Helper.bearingToDirection(bearing)
-                }
-
-                speed = if (location.speed != 0.0F) {
-                    (location.speed * 3.6).toFloat()
-                } else {
-                    val distance = calculateDistance(lastLatitude, lastLongitude, latitude, longitude)
-                    if (distance > 0) (distance / 5).toFloat() else 0.0F
-                }
-
-                lastLatitude = latitude
-                lastLongitude = longitude
-
-                runOnUiThread {
-                    speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
-                }
-
-                updateBusMarkerPosition(latitude, longitude, bearing)
-
-                checkPassedStops(latitude, longitude)
-                updateTimingPointBasedOnLocation(latitude, longitude)
-                checkScheduleStatus()
-            }
-        })
-    }
-
     /** Move the bus marker dynamically with updated bearing */
-    private fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float) {
+    private fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float, useConstantIcon: Boolean = false) {
         val newPosition = LatLong(lat, lon)
 
-        // Convert Drawable to Bitmap and rotate it
-        val rotatedBitmap = rotateDrawable(bearing)
-
-        // Remove old marker if it exists
-        busMarker?.let {
-            binding.map.layerManager.layers.remove(it)
-        }
-
-        // Create a new rotated marker at the updated position
-        busMarker = org.mapsforge.map.layer.overlay.Marker(
-            newPosition, rotatedBitmap, 0, 0
-        )
-        binding.map.layerManager.layers.add(busMarker)
-
-        // Apply map rotation
-        binding.map.setRotation(-bearing) // Negative to align with compass movement
-
-        // Scale the map to prevent cropping
-        binding.map.scaleX = 1.5f  // Adjust scaling factor
-        binding.map.scaleY = 1.5f
-
-        // Keep the map centered on the bus location
-        binding.map.setCenter(newPosition)
-        binding.map.invalidate() // Force redraw
-    }
-
-    /**
-     * Calculates the average latitude and longitude of the next 'count' points in the busRoute.
-     */
-    private fun calculateAverageNextCoordinates(lat: Double, lon: Double, count: Int): Pair<Double, Double>? {
-        if (route.isEmpty()) return null
-
-        var totalLat = 0.0
-        var totalLon = 0.0
-        var validPoints = 0
-
-        // Find the current position in the route
-        val currentIndex = route.indexOfFirst { it.latitude == lat && it.longitude == lon }
-        if (currentIndex == -1) return null // Current position not found
-
-        // Take the next 'count' points
-        for (i in 1..count) {
-            val nextIndex = currentIndex + i
-            if (nextIndex < route.size) {
-                totalLat += route[nextIndex].latitude ?: 0.0
-                totalLon += route[nextIndex].longitude ?: 0.0
-                validPoints++
-            } else {
-                break // Stop if we run out of points
-            }
-        }
-
-        return if (validPoints > 0) {
-            Pair(totalLat / validPoints, totalLon / validPoints)
+        val markerBitmap = if (useConstantIcon) {
+            AndroidGraphicFactory.convertToBitmap(
+                ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol_transparent, null)
+            )
         } else {
-            null
+            rotateDrawable(bearing, useConstantIcon = false)
         }
+
+        val marker = org.mapsforge.map.layer.overlay.Marker(
+            newPosition, markerBitmap, 0, 0
+        )
+
+        if (useConstantIcon) {
+            constantBusMarker?.let { binding.map.layerManager.layers.remove(it) }
+            constantBusMarker = marker
+        } else {
+            standardBusMarker?.let { binding.map.layerManager.layers.remove(it) }
+            standardBusMarker = marker
+
+            // Only center camera for the standard icon
+            binding.map.setCenter(newPosition)
+            binding.map.setRotation(-bearing)
+            binding.map.scaleX = 1.5f
+            binding.map.scaleY = 1.5f
+        }
+
+        binding.map.layerManager.layers.add(marker)
+        binding.map.invalidate()
     }
 
     /**
@@ -1459,8 +1413,9 @@ class TestMapActivity : AppCompatActivity() {
      * @param angle The angle in degrees.
      * @return Rotated Bitmap.
      */
-    private fun rotateDrawable(angle: Float): org.mapsforge.core.graphics.Bitmap {
-        val markerDrawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)
+    private fun rotateDrawable(angle: Float, useConstantIcon: Boolean = false): org.mapsforge.core.graphics.Bitmap {
+        val drawableRes = if (useConstantIcon) R.drawable.ic_bus_symbol_transparent else R.drawable.ic_bus_symbol
+        val markerDrawable = ResourcesCompat.getDrawable(resources, drawableRes, null)
 
         if (markerDrawable == null) {
             Log.e("rotateDrawable", "Drawable is null!")
@@ -1579,27 +1534,6 @@ class TestMapActivity : AppCompatActivity() {
             // Store it in markerBus HashMap
             markerBus[bus.accessToken] = marker
             Log.d("TestMapActivity getDefaultConfigValue MarkerDrawable", "Bus symbol drawable applied")
-        }
-    }
-
-    /**
-     * Helper function to convert stops to busStopInfo
-     */
-    @SuppressLint("LongLogTag")
-    private fun updateBusStopProximityManager() {
-        if (stops.isNotEmpty()) {
-            busStopInfo = stops.map { stop ->
-                BusStopInfo(
-                    latitude = stop.latitude ?: 0.0,
-                    longitude = stop.longitude ?: 0.0,
-                    busStopName = "BusStop_${stop.latitude}_${stop.longitude}"
-                )
-            }
-            BusStopProximityManager.setBusStopList(busStopInfo)
-            Log.d("TestMapActivity updateBusStopProximityManager", "BusStopProximityManager updated with ${busStopInfo.size} stops.")
-            Log.d("TestMapActivity updateBusStopProximityManager", "busStopInfo ${busStopInfo.toString()}")
-        } else {
-            Log.d("TestMapActivity updateBusStopProximityManager", "No stops available to update BusStopProximityManager.")
         }
     }
 
