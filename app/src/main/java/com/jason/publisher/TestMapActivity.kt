@@ -66,7 +66,7 @@ class TestMapActivity : AppCompatActivity() {
     private var lastLatitude = 0.0
     private var lastLongitude = 0.0
     private var bearing = 0.0F
-    private var speed = 0.0F
+    private var speed = 30.0F
     private var direction = ""
     private var busConfig = ""
     private var busname = ""
@@ -123,6 +123,8 @@ class TestMapActivity : AppCompatActivity() {
     private var lockedApiTime: String? = null
     private var simulationSpeedFactor: Int = 1
     private lateinit var arriveButtonContainer: LinearLayout
+    private val stepHandler = Handler(Looper.getMainLooper())
+    private var stepRunnable: Runnable? = null
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
         const val CLIENT_ID = "jasonAndroidClientId"
@@ -369,8 +371,13 @@ class TestMapActivity : AppCompatActivity() {
                         return
                     }
                     // Adjust travel time: base travel time divided by the speed factor.
-                    val travelTimeSeconds = (distanceMeters / 8.33) / simulationSpeedFactor
+                    val baseSpeedMetersPerSecond = speed / 3.6
+                    val travelTimeSeconds = (distanceMeters / baseSpeedMetersPerSecond)
                     val steps = (travelTimeSeconds * 10).toInt() // Update every 100ms
+
+                    // Cancel any previously running simulation steps
+                    val handler = Handler(Looper.getMainLooper())
+                    handler.removeCallbacksAndMessages(null)
 
                     simulateMovement(startLat, startLon, endLat, endLon, steps)
 
@@ -456,8 +463,8 @@ class TestMapActivity : AppCompatActivity() {
      */
     @SuppressLint("LongLogTag")
     private fun speedUp() {
-        simulationSpeedFactor++ // Increase by 1 second per tick
-        Log.d("TestMapActivity SpeedControl", "Speed Up: simulationSpeedFactor is now $simulationSpeedFactor")
+        speed += 5.0f
+        Log.d("SpeedControl", "Speed increased to $speed km/h")
     }
 
     /**
@@ -465,11 +472,10 @@ class TestMapActivity : AppCompatActivity() {
      */
     @SuppressLint("LongLogTag")
     private fun slowDown() {
-        // Ensure never go below 0.
-        if (simulationSpeedFactor > 0) {
-            simulationSpeedFactor--
+        if (speed > 5.0f) {
+            speed -= 5.0f
+            Log.d("SpeedControl", "Speed decreased to $speed km/h")
         }
-        Log.d("TestMapActivity SpeedControl", "Slow Down: simulationSpeedFactor is now $simulationSpeedFactor")
     }
 
     /**
@@ -653,50 +659,31 @@ class TestMapActivity : AppCompatActivity() {
         val lonStep = (endLon - startLon) / steps
 
         var step = 0
-        val stepHandler = Handler(Looper.getMainLooper())
 
-        val stepRunnable = object : Runnable {
-            @SuppressLint("LongLogTag")
+        // Cancel previous one safely
+        stepRunnable?.let { stepHandler.removeCallbacks(it) }
+
+        stepRunnable = object : Runnable {
             override fun run() {
                 if (step < steps) {
                     val newLat = startLat + (latStep * step)
                     val newLon = startLon + (lonStep * step)
 
-                    // Check if the bus has passed any stops
                     checkPassedStops(newLat, newLon)
-
-                    // Update timing point if needed
                     updateTimingPointBasedOnLocation(newLat, newLon)
 
-                    // Calculate speed dynamically (meters per second)
-                    if (step > 0) {
-                        val distance = calculateDistance(lastLatitude, lastLongitude, newLat, newLon)
-                        if (distance < 100) { // Prevents unrealistic jumps
-                            speed = (distance / 0.1).toFloat() // 0.1 sec per step (100ms)
-                        } else {
-                            speed = 8.33f // Reset speed to normal when an anomaly is detected
-                        }
-                        // Update speed text view
-                        runOnUiThread {
-                            speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
-                        }
+                    runOnUiThread {
+                        speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
                     }
 
-                    // Update bearing dynamically
-                    if (step > 0) {
-                        bearing = calculateBearing(lastLatitude, lastLongitude, newLat, newLon)
-                    }
-
-                    // Move the bus marker
+                    bearing = calculateBearing(newLat, newLon, endLat, endLon)
                     updateBusMarkerPosition(newLat, newLon, bearing)
 
-                    // Save last location
                     lastLatitude = newLat
                     lastLongitude = newLon
 
-                    // ✅ Log simulation details every 1/3 second (333ms)
-                    if (step % 3 == 0) {  // Each step = 100ms → Log every 3rd step
-                        Log.d("SimulationLog", "Speed: ${"%.2f".format(speed)} km/h | Lat: $newLat | Lon: $newLon | Bearing: ${"%.2f".format(bearing)}°")
+                    if (step % 3 == 0) {
+                        Log.d("simulateMovement", "Lat: $newLat, Lon: $newLon, Bearing: $bearing")
                     }
 
                     step++
@@ -704,7 +691,8 @@ class TestMapActivity : AppCompatActivity() {
                 }
             }
         }
-        stepHandler.post(stepRunnable)
+
+        stepHandler.post(stepRunnable!!)
     }
 
     /**
@@ -1273,67 +1261,6 @@ class TestMapActivity : AppCompatActivity() {
     }
 
     /**
-     * Retrieves the Android ID (AID) from a hidden JSON file in the app-specific documents directory.
-     * If the file or directory does not exist, it creates them and generates a new AID.
-     *
-     * @return The AID (Android ID) as a String.
-     */
-    @SuppressLint("HardwareIds", "LongLogTag")
-    private fun getOrCreateAid(): String {
-        // Ensure we have the correct storage permission
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                Log.e("TestMapActivity getOrCreateAid", "Storage permission not granted.")
-                return "Permission Denied"
-            }
-        } else {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED) {
-                Log.e("TestMapActivity getOrCreateAid", "Storage permission not granted.")
-                return "Permission Denied"
-            }
-        }
-
-        // Use External Storage Public Directory for Documents
-        val externalDocumentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
-        val hiddenFolder = File(externalDocumentsDir, ".vlrshiddenfolder")
-
-        if (!hiddenFolder.exists()) {
-            val success = hiddenFolder.mkdirs()
-            if (!success) {
-                Log.e("TestMapActivity getOrCreateAid", "Failed to create directory: ${hiddenFolder.absolutePath}")
-                return "Failed to create directory"
-            }
-        }
-
-        val aidFile = File(hiddenFolder, "busDataCache.json")
-        Log.d("TestMapActivity getOrCreateAid", "Attempting to create: ${aidFile.absolutePath}")
-
-        if (!aidFile.exists()) {
-            val newAid = generateNewAid()
-            val jsonObject = JSONObject().apply {
-                put("aid", newAid)
-            }
-            try {
-                aidFile.writeText(jsonObject.toString())
-                Toast.makeText(this, "AID saved successfully in busDataCache.json", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Log.e("TestMapActivity getOrCreateAid", "Error writing to file: ${e.message}")
-                return "Error writing file"
-            }
-            return newAid
-        }
-
-        return try {
-            val jsonContent = JSONObject(aidFile.readText())
-            jsonContent.getString("aid").trim()
-        } catch (e: Exception) {
-            Log.e("TestMapActivity getOrCreateAid", "Error reading JSON file: ${e.message}")
-            "Error reading file"
-        }
-    }
-
-    /**
      * Generates a new Android ID (AID) using the device's secure Android ID.
      *
      * @return A unique Android ID as a String.
@@ -1393,20 +1320,20 @@ class TestMapActivity : AppCompatActivity() {
     /** Move the bus marker dynamically with updated bearing */
     private fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float) {
         val newPosition = LatLong(lat, lon)
-
-        // Convert Drawable to Bitmap and rotate it
         val rotatedBitmap = rotateDrawable(bearing)
 
-        // Remove old marker if it exists
-        busMarker?.let {
-            binding.map.layerManager.layers.remove(it)
+        if (busMarker == null) {
+            busMarker = org.mapsforge.map.layer.overlay.Marker(
+                newPosition, rotatedBitmap, 0, 0
+            )
+            binding.map.layerManager.layers.add(busMarker)
+        } else {
+            busMarker?.let {
+                it.latLong = newPosition
+                it.bitmap = rotatedBitmap
+                binding.map.invalidate()
+            }
         }
-
-        // Create a new rotated marker at the updated position
-        busMarker = org.mapsforge.map.layer.overlay.Marker(
-            newPosition, rotatedBitmap, 0, 0
-        )
-        binding.map.layerManager.layers.add(busMarker)
 
         // Apply map rotation
         binding.map.setRotation(-bearing) // Negative to align with compass movement
@@ -1418,39 +1345,6 @@ class TestMapActivity : AppCompatActivity() {
         // Keep the map centered on the bus location
         binding.map.setCenter(newPosition)
         binding.map.invalidate() // Force redraw
-    }
-
-    /**
-     * Calculates the average latitude and longitude of the next 'count' points in the busRoute.
-     */
-    private fun calculateAverageNextCoordinates(lat: Double, lon: Double, count: Int): Pair<Double, Double>? {
-        if (route.isEmpty()) return null
-
-        var totalLat = 0.0
-        var totalLon = 0.0
-        var validPoints = 0
-
-        // Find the current position in the route
-        val currentIndex = route.indexOfFirst { it.latitude == lat && it.longitude == lon }
-        if (currentIndex == -1) return null // Current position not found
-
-        // Take the next 'count' points
-        for (i in 1..count) {
-            val nextIndex = currentIndex + i
-            if (nextIndex < route.size) {
-                totalLat += route[nextIndex].latitude ?: 0.0
-                totalLon += route[nextIndex].longitude ?: 0.0
-                validPoints++
-            } else {
-                break // Stop if we run out of points
-            }
-        }
-
-        return if (validPoints > 0) {
-            Pair(totalLat / validPoints, totalLon / validPoints)
-        } else {
-            null
-        }
     }
 
     /**
@@ -1582,27 +1476,6 @@ class TestMapActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Helper function to convert stops to busStopInfo
-     */
-    @SuppressLint("LongLogTag")
-    private fun updateBusStopProximityManager() {
-        if (stops.isNotEmpty()) {
-            busStopInfo = stops.map { stop ->
-                BusStopInfo(
-                    latitude = stop.latitude ?: 0.0,
-                    longitude = stop.longitude ?: 0.0,
-                    busStopName = "BusStop_${stop.latitude}_${stop.longitude}"
-                )
-            }
-            BusStopProximityManager.setBusStopList(busStopInfo)
-            Log.d("TestMapActivity updateBusStopProximityManager", "BusStopProximityManager updated with ${busStopInfo.size} stops.")
-            Log.d("TestMapActivity updateBusStopProximityManager", "busStopInfo ${busStopInfo.toString()}")
-        } else {
-            Log.d("TestMapActivity updateBusStopProximityManager", "No stops available to update BusStopProximityManager.")
-        }
-    }
-
 
     /**
      * Loads the offline map from assets and configures the map.
@@ -1647,14 +1520,11 @@ class TestMapActivity : AppCompatActivity() {
         binding.map.setZoomLevel(17) // Set default zoom level
 //        binding.map.setZoomLevel(11) // Set default zoom level
 
-        // **Initialize the bus marker**
-        addBusMarker(latitude, longitude)
-
-        // **Ensure the map is fully loaded before drawing the polyline**
+        // **Initialize the bus marker and map**
         binding.map.post {
-            Log.d("TestMapActivity", "Map is fully initialized. Drawing polyline now.")
-            drawPolyline()  // Draw polyline only after map is loaded
+            drawPolyline()  // Draw polyline first
             addBusStopMarkers(stops)
+            addBusMarker(latitude, longitude) // 🔁 Move marker here so it is on top
         }
     }
 
