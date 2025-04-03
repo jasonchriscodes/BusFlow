@@ -421,7 +421,7 @@ class TestMapActivity : AppCompatActivity() {
 
         currentRouteIndex = 0
         simulatedStartTime = Calendar.getInstance().apply {
-            val (h, m) = scheduleList.first().startTime.split(":").map { it.toInt() }
+            val (h, m) = scheduleList.first().startTime.split(":").map { it.toInt() }  // 22:15
             set(Calendar.HOUR_OF_DAY, h)
             set(Calendar.MINUTE, m)
             set(Calendar.SECOND, 0)
@@ -445,7 +445,11 @@ class TestMapActivity : AppCompatActivity() {
 
         // 🔄 Get sub-route between these 2 lat/lons
         val subRoute = extractSubRoute(startLatLng, endLatLng)
-        val intervalMillis = (totalDurationSec * 1000L) / subRoute.size
+        val intervalMillis = if (subRoute.isNotEmpty()) {
+            (totalDurationSec * 1000L) / subRoute.size
+        } else {
+            1000L // default to 1 sec if empty
+        }
 
         simulateConstantStep(subRoute, 0, intervalMillis) {
 
@@ -458,9 +462,13 @@ class TestMapActivity : AppCompatActivity() {
      * Returns the difference in seconds between start time and target HH:mm string.
      */
     private fun getTimeDifferenceInSeconds(start: Date, endTimeStr: String): Int {
-        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-        val end = sdf.parse(endTimeStr)
-        val diff = end.time - start.time
+        val cal = Calendar.getInstance()
+        val parts = endTimeStr.split(":")
+        cal.time = start
+        cal.set(Calendar.HOUR_OF_DAY, parts[0].toInt())
+        cal.set(Calendar.MINUTE, parts[1].toInt())
+        cal.set(Calendar.SECOND, 0)
+        val diff = cal.timeInMillis - start.time
         return (diff / 1000).toInt()
     }
 
@@ -486,17 +494,31 @@ class TestMapActivity : AppCompatActivity() {
         intervalMillis: Long,
         onComplete: () -> Unit
     ) {
-        if (index >= subRoute.size) {
+        if (subRoute.isEmpty() || index >= subRoute.size) {
             onComplete()
             return
         }
 
-        val point = subRoute[index]
-        updateBusMarkerPosition(point.latitude!!, point.longitude!!, bearing, useConstantIcon = true)
+        val handler = Handler(Looper.getMainLooper())
 
-        Handler(Looper.getMainLooper()).postDelayed({
-            simulateConstantStep(subRoute, index + 1, intervalMillis, onComplete)
-        }, intervalMillis)
+        val tickRunnable = object : Runnable {
+            override fun run() {
+                if (index < subRoute.size) {
+                    val point = subRoute[index]
+                    updateBusMarkerPosition(point.latitude!!, point.longitude!!, bearing, useConstantIcon = true)
+
+                    // Log actual time and point
+                    Log.d("ConstantMarker", "🟦 Moved to point #$index at lat=${point.latitude}, lon=${point.longitude}, actualTime=${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(simulatedStartTime.time)}")
+
+                    // Schedule next step
+                    simulateConstantStep(subRoute, index + 1, intervalMillis, onComplete)
+                } else {
+                    onComplete()
+                }
+            }
+        }
+
+        handler.postDelayed(tickRunnable, intervalMillis)
     }
 
     /**
