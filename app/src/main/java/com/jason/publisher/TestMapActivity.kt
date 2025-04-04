@@ -1520,7 +1520,7 @@ class TestMapActivity : AppCompatActivity() {
         binding.map.setZoomLevel(17) // Set default zoom level
 //        binding.map.setZoomLevel(11) // Set default zoom level
 
-        // **Initialize the bus marker and map**
+        // **Initialize the bus marker and ma**
         binding.map.post {
             drawPolyline()  // Draw polyline first
             addBusStopMarkers(stops)

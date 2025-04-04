@@ -8,7 +8,6 @@ import android.os.Looper
 import android.util.Log
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.jason.publisher.databinding.ActivityTestmapBinding
 import com.jason.publisher.model.BusRoute
 import org.osmdroid.views.MapController
 import java.text.SimpleDateFormat
@@ -54,9 +53,7 @@ import java.lang.Math.atan2
 import java.lang.Math.cos
 import java.lang.Math.sin
 import java.lang.Math.sqrt
-import java.text.ParseException
 import com.google.android.gms.location.*
-import com.google.android.gms.tasks.Task
 import com.jason.publisher.databinding.ActivityMapBinding
 import java.lang.Math.abs
 
@@ -1067,15 +1064,15 @@ class MapActivity : AppCompatActivity() {
                         ContextCompat.getColor(this, R.color.blind_cyan)
                     }
                     deltaSec > tolerance -> {
-                        binding.scheduleAheadIcon.setImageResource(R.drawable.ic_schedule_ahead)
+                        binding.scheduleAheadIcon.setImageResource(R.drawable.ic_schedule_late)
                         ContextCompat.getColor(this, R.color.blind_red)
                     }
                     deltaSec < -farBehindThreshold -> {
-                        binding.scheduleAheadIcon.setImageResource(R.drawable.ic_schedule_so_far_behind)
+                        binding.scheduleAheadIcon.setImageResource(R.drawable.ic_schedule_very_behind)
                         ContextCompat.getColor(this, R.color.blind_orange)
                     }
                     else -> {
-                        binding.scheduleAheadIcon.setImageResource(R.drawable.ic_schedule_behind)
+                        binding.scheduleAheadIcon.setImageResource(R.drawable.ic_schedule_slightly_behind)
                         ContextCompat.getColor(this, R.color.blind_yellow)
                     }
                 }
