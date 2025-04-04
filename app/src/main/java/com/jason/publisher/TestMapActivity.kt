@@ -647,12 +647,6 @@ class TestMapActivity : AppCompatActivity() {
         return String.format("%s%02d:%02d:%02d", sign, hours, minutes, secs)
     }
 
-    /** 🔹 Reset actual time when the bus reaches a stop or upcoming stop changes */
-    private fun resetActualTime() {
-        simulationStartTime = System.currentTimeMillis()
-        Log.d("TestMapActivity", "✅ Actual time reset to current time.")
-    }
-
     /** Interpolates movement between two points with dynamic bearing and speed updates */
     private fun simulateMovement(startLat: Double, startLon: Double, endLat: Double, endLon: Double, steps: Int) {
         val latStep = (endLat - startLat) / steps
@@ -879,34 +873,6 @@ class TestMapActivity : AppCompatActivity() {
             .map { it.index }
         // Find the first scheduled index greater than currentIndex
         return scheduledIndices.firstOrNull { it > currentIndex }
-    }
-
-    /**
-     * Calculates the total duration to be used in API time update.
-     * If the bus stop at [currentIndex] is in the schedule list,
-     * then the total duration is the sum of durations from index 0 up to and including
-     * the next scheduled bus stop (if one exists). Otherwise, it simply sums up
-     * durations from index 0 to [currentIndex].
-     */
-    private fun calculateDurationBetweenBusStopWithTimingPoint(
-        timingList: List<BusStopWithTimingPoint>,
-        scheduleList: List<ScheduleItem>,
-        currentIndex: Int
-    ): Double {
-        return if (isBusStopInScheduleList(timingList[currentIndex].address, scheduleList)) {
-            // Find the next scheduled bus stop index in timingList
-            val nextScheduledIndex = nextBusStopIndexInScheduleList(timingList, scheduleList, currentIndex)
-            if (nextScheduledIndex != null) {
-                // Sum durations from index 0 to nextScheduledIndex (inclusive)
-                timingList.subList(0, nextScheduledIndex + 1).sumOf { it.duration }
-            } else {
-                // Fallback: sum durations from index 0 to currentIndex if no next scheduled stop found
-                timingList.subList(0, currentIndex + 1).sumOf { it.duration }
-            }
-        } else {
-            // Not a scheduled bus stop; sum durations normally from index 0 to currentIndex
-            timingList.subList(0, currentIndex + 1).sumOf { it.duration }
-        }
     }
 
     /** Updates timing point based on current bus location */
@@ -1258,63 +1224,6 @@ class TestMapActivity : AppCompatActivity() {
         } else {
             Log.e("TestMapActivity drawPolyline", "❌ No route data available for polyline.")
         }
-    }
-
-    /**
-     * Generates a new Android ID (AID) using the device's secure Android ID.
-     *
-     * @return A unique Android ID as a String.
-     */
-    @SuppressLint("HardwareIds")
-    private fun generateNewAid(): String {
-        return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-    }
-
-    /**
-     * Starts location updates, calculates bearing and direction, and identifies the nearest route coordinate.
-     * Calls checkScheduleStatus() to keep the schedule status updated in real-time.
-     */
-    private fun startLocationUpdate() {
-        // Reset actual time to current system time
-//        actualTime = Calendar.getInstance()
-
-        // Start incrementing actual time dynamically
-        startActualTimeUpdater()
-
-        // Ensure API time remains from the list
-        updateApiTime()
-
-        locationManager.startLocationUpdates(object : LocationListener {
-            override fun onLocationUpdate(location: Location) {
-                latitude = location.latitude
-                longitude = location.longitude
-
-                if (lastLatitude != 0.0 && lastLongitude != 0.0) {
-                    bearing = calculateBearing(lastLatitude, lastLongitude, latitude, longitude)
-                    direction = Helper.bearingToDirection(bearing)
-                }
-
-                speed = if (location.speed != 0.0F) {
-                    (location.speed * 3.6).toFloat()
-                } else {
-                    val distance = calculateDistance(lastLatitude, lastLongitude, latitude, longitude)
-                    if (distance > 0) (distance / 5).toFloat() else 0.0F
-                }
-
-                lastLatitude = latitude
-                lastLongitude = longitude
-
-                runOnUiThread {
-                    speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
-                }
-
-                updateBusMarkerPosition(latitude, longitude, bearing)
-
-                checkPassedStops(latitude, longitude)
-                updateTimingPointBasedOnLocation(latitude, longitude)
-                checkScheduleStatus()
-            }
-        })
     }
 
     /** Move the bus marker dynamically with updated bearing */
