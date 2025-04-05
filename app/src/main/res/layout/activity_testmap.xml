@@ -300,32 +300,32 @@
                     android:gravity="end" />
             </LinearLayout>
 
-            <!-- Threshold Range Display -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingTop="4dp">
+<!--            &lt;!&ndash; Threshold Range Display &ndash;&gt;-->
+<!--            <LinearLayout-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:orientation="horizontal"-->
+<!--                android:paddingTop="4dp">-->
 
-                <TextView
-                    android:id="@+id/thresholdRangeLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Threshold Range:"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/white"
-                    android:gravity="start" />
+<!--                <TextView-->
+<!--                    android:id="@+id/thresholdRangeLabel"-->
+<!--                    android:layout_width="wrap_content"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:text="Threshold Range:"-->
+<!--                    android:textSize="16sp"-->
+<!--                    android:textColor="@android:color/white"-->
+<!--                    android:gravity="start" />-->
 
-                <TextView
-                    android:id="@+id/thresholdRangeValueTextView"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Unknown"
-                    android:textSize="16sp"
-                    android:textColor="@android:color/white"
-                    android:gravity="end" />
-            </LinearLayout>
+<!--                <TextView-->
+<!--                    android:id="@+id/thresholdRangeValueTextView"-->
+<!--                    android:layout_width="0dp"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:layout_weight="1"-->
+<!--                    android:text="Unknown"-->
+<!--                    android:textSize="16sp"-->
+<!--                    android:textColor="@android:color/white"-->
+<!--                    android:gravity="end" />-->
+<!--            </LinearLayout>-->
 
             <!-- Speed Display -->
             <LinearLayout

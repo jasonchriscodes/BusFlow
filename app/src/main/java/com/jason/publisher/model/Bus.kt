@@ -213,10 +213,22 @@ data class RouteData(
                 }
             }
 
-            // Add bus stops
-            stops.add(BusStop(latitude = routeData.startingPoint.latitude, longitude = routeData.startingPoint.longitude))
+            // Add bus stops with address
+            stops.add(
+                BusStop(
+                    latitude = routeData.startingPoint.latitude,
+                    longitude = routeData.startingPoint.longitude,
+                    address = routeData.startingPoint.address
+                )
+            )
             for (nextPoint in routeData.nextPoints) {
-                stops.add(BusStop(latitude = nextPoint.latitude, longitude = nextPoint.longitude))
+                stops.add(
+                    BusStop(
+                        latitude = nextPoint.latitude,
+                        longitude = nextPoint.longitude,
+                        address = nextPoint.address
+                    )
+                )
             }
 
             // Extract duration values

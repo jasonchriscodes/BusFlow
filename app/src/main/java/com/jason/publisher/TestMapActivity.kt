@@ -1,6 +1,5 @@
 package com.jason.publisher
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.os.Handler
@@ -14,20 +13,16 @@ import org.osmdroid.views.MapController
 import java.text.SimpleDateFormat
 import java.util.*
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.location.Location
 import android.os.Build
-import android.os.Environment
-import android.provider.Settings
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.annotation.RequiresApi
-import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.jason.publisher.model.BusItem
 import com.jason.publisher.model.BusStop
@@ -36,10 +31,8 @@ import com.jason.publisher.model.BusStopWithTimingPoint
 import com.jason.publisher.model.RouteData
 import com.jason.publisher.model.ScheduleItem
 import com.jason.publisher.services.LocationManager
-import com.jason.publisher.utils.BusStopProximityManager
 import com.jason.publisher.utils.NetworkStatusHelper
 import org.json.JSONArray
-import org.json.JSONObject
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidBitmap
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
@@ -125,6 +118,8 @@ class TestMapActivity : AppCompatActivity() {
     private lateinit var arriveButtonContainer: LinearLayout
     private val stepHandler = Handler(Looper.getMainLooper())
     private var stepRunnable: Runnable? = null
+    private var lastTimingPointStopAddress: String? = null
+
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
         const val CLIENT_ID = "jasonAndroidClientId"
@@ -303,7 +298,7 @@ class TestMapActivity : AppCompatActivity() {
             val firstSchedule = scheduleList.first()
             Log.d("TestMapActivity extractRedBusStops firstSchedule", "$firstSchedule")
 
-            val stops = firstSchedule.busStops.map { it.name }
+            val stops = firstSchedule.busStops.mapNotNull { it.address }
             redBusStops.addAll(stops)
             Log.d("TestMapActivity extractRedBusStops stops", "$stops")
         }
@@ -472,9 +467,12 @@ class TestMapActivity : AppCompatActivity() {
      */
     @SuppressLint("LongLogTag")
     private fun slowDown() {
-        if (speed > 5.0f) {
-            speed -= 5.0f
+        if (speed > 1.0f) {
+            speed = maxOf(1.0f, speed - 5.0f)
             Log.d("SpeedControl", "Speed decreased to $speed km/h")
+        } else {
+            Toast.makeText(this, "Minimum speed is 1 km/h", Toast.LENGTH_SHORT).show()
+            Log.d("SpeedControl", "🚫 Speed is already at minimum (1 km/h)")
         }
     }
 
@@ -516,27 +514,39 @@ class TestMapActivity : AppCompatActivity() {
     }
 
     /**
-     * Checks and updates the bus schedule status by comparing the scheduled arrival time
-     * with the predicted arrival time.
+     * Checks and updates the bus schedule status by comparing the **predicted arrival time**
+     * (based on current simulation speed and location) with the **API-scheduled arrival time**
+     * for the upcoming timing point.
      *
-     * The predicted arrival is computed as:
-     *   predictedArrival = (apiTime - baseTime) + actualTime
+     * 🔄 Real-Time Prediction Formula:
+     *     t1 = d1 / v
      *
-     * The difference (deltaSec) in seconds between the scheduled arrival and the predicted
-     * arrival is compared against a tolerance of 60 seconds.
-     * - If |deltaSec| ≤ 60, the status is set to "On Time".
-     * - If deltaSec > 60, the bus is considered to be "Ahead by" deltaSec seconds.
-     * - If deltaSec < -60, the bus is "Behind by" the absolute value of deltaSec seconds.
+     * Then:
+     *     predictedArrival = actualTime + t1
      *
-     * Instead of displaying a time range, the threshold is now shown as a single value.
-     * For example, if the tolerance is 60 seconds, the thresholdRangeValueTextView will display "60 sec".
+     * ✅ Variables:
+     * - d1: Distance (in meters) from current bus position to upcoming timing point (next bus stop).
+     * - v:  Bus speed (in meters per second), calculated from the current simulation speed (`speed / 3.6`).
+     * - t1: Estimated time to arrival (in seconds), calculated using t1 = d1 / v.
+     * - predictedArrival: Current simulated time + t1.
+     * - apiTime: Scheduled arrival time for the upcoming stop (from schedule or duration).
+     * - deltaSec: Time difference (in seconds) between predicted and scheduled arrival (timingPoint - predictedArrival).
      *
-     * This method logs all of the following values:
-     * - Schedule Status (statusText)
-     * - Next Timing Point (the text of timingPointValueTextView)
-     * - API Time (as shown in ApiTimeValueTextView)
-     * - Actual Time (current simulated time)
-     * - Threshold Range (the tolerance in seconds)
+     * 📊 Outcome:
+     * - If predictedArrival is earlier than apiTime → status is "Ahead"
+     * - If close enough → status is "On Time"
+     * - If later → status is "Behind" or "Late"
+     *
+     * 🚦 UI:
+     * - Updates `scheduleStatusValueTextView` with labels like:
+     *   "Very Ahead", "Slightly Behind", "On Time", "Late for Next Run", etc.
+     * - Also sets color:
+     *   Green = early, Yellow = on time, Orange = slightly behind, Red = very behind/late.
+     *
+     * ⚠️ Note:
+     * - A slower speed will increase `t1`, making the bus appear behind schedule.
+     * - A faster speed will reduce `t1`, making the bus appear ahead of schedule.
+     * - If speed = 0, arrival prediction will stop progressing (∞ t1).
      */
     @SuppressLint("LongLogTag")
     private fun checkScheduleStatus() {
@@ -544,24 +554,20 @@ class TestMapActivity : AppCompatActivity() {
 
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
+        if (latitude == 0.0 && longitude == 0.0) {
+            Log.w("checkScheduleStatus", "Skipping status check: Invalid location (0.0, 0.0)")
+            return
+        }
+
         try {
-            // 1. Retrieve the scheduled arrival (next timing point) from the UI.
             val scheduledTimeStr = timingPointValueTextView.text.toString()
-            val scheduledTime = timeFormat.parse(scheduledTimeStr)
+            val timingPointTime = parseTimeToday(scheduledTimeStr)
 
-            // 2. Define the base time (schedule start) by appending ":00" for seconds.
             val baseTimeStr = scheduleList.first().startTime + ":00"
-            val baseTime = timeFormat.parse(baseTimeStr)
+            val baseTime = parseTimeToday(baseTimeStr)
 
-            // 3. Retrieve the API time from its TextView.
             var apiTimeStr = ApiTimeValueTextView.text.toString()
-            Log.d("TestMapActivity checkScheduleStatus apiTimeStr", "📦 Retrieved API Time String (initial): $apiTimeStr")
-            Log.d("TestMapActivity checkScheduleStatus apiTimeStr", "Upcoming stop address: $upcomingStopName")
-
-            // Override the first api time
             val firstAddress = scheduleList.firstOrNull()?.busStops?.firstOrNull()?.address
-            Log.d("TestMapActivity checkScheduleStatus apiTimeStr", "📍 First Bus Stop with Timing Point: $firstAddress")
-            Log.d("TestMapActivity checkScheduleStatus apiTimeStr", "📍 Current Stop Index: $currentStopIndex")
 
             if (upcomingStopName == firstAddress && currentStopIndex > 0 && currentStopIndex - 1 < durationBetweenStops.size) {
                 val durationToFirstTimingPoint = durationBetweenStops[currentStopIndex - 1]
@@ -575,64 +581,125 @@ class TestMapActivity : AppCompatActivity() {
                     add(Calendar.SECOND, (durationToFirstTimingPoint * 60).toInt())
                 }
 
-                val adjustedApiTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(adjustedCalendar.time)
-
+                val adjustedApiTime = timeFormat.format(adjustedCalendar.time)
                 runOnUiThread {
                     ApiTimeValueTextView.text = adjustedApiTime
                 }
-
-                Log.d("TestMapActivity updateApiTime", "🕒 API Time overridden at first timing point: $adjustedApiTime")
+                apiTimeStr = adjustedApiTime
             }
 
-            val apiTime = timeFormat.parse(apiTimeStr)
-
-            // 4. Get the actual (simulated) time.
+            val apiTime = parseTimeToday(apiTimeStr)
             val actualTimeStr = timeFormat.format(simulatedStartTime.time)
-            val actualTime = timeFormat.parse(actualTimeStr)
+            val actualTime = simulatedStartTime.time
 
-            // 5. Compute the predicted arrival time.
-            val predictedArrivalMillis = (apiTime.time - baseTime.time) + actualTime.time
-            val predictedArrival = Date(predictedArrivalMillis)
-
-            // 6. Calculate the difference (delta) in seconds.
-            val deltaSec = ((scheduledTime.time - predictedArrival.time) / 1000).toInt()
-
-            // 7. Define a tolerance value (in seconds).
-            val tolerance = 0
-
-            val expectedTravelSec = ((scheduledTime.time - baseTime.time) / 1000).toInt()
-            val farBehindThreshold = (expectedTravelSec * 0.2).toInt()  // or 0.25, tweak as needed
-            // 8. Determine the schedule status text based on deltaSec.
-            val statusText = when {
-                Math.abs(deltaSec) <= tolerance -> "On Time (${Math.abs(deltaSec)} sec)"
-                deltaSec > tolerance -> "Ahead by $deltaSec sec"
-                deltaSec < -farBehindThreshold -> "So Far Behind by ${-deltaSec} sec"
-                else -> "Behind by ${-deltaSec} sec"
+            // ✅ Find next stop that is a red timing point
+            var redStopIndex = stops.indexOfFirst { stop ->
+                redBusStops.contains(stop.address ?: "") &&
+                        stops.indexOf(stop) >= currentStopIndex
             }
 
-            // 9. Update the UI: set the schedule status and display the tolerance as a single value.
+// 🔁 Fallback: If no red timing point found, use last stop instead
+            if (redStopIndex == -1) {
+                Log.d("checkScheduleStatus", "⚠️ No red timing point found after index $currentStopIndex, using final stop as fallback.")
+                redStopIndex = stops.lastIndex
+            }
+
+            val redStop = stops[redStopIndex]
+            val stopLat = redStop.latitude!!
+            val stopLon = redStop.longitude!!
+
+            // --- 1. Distance from current location to red timing point (d1) ---
+            val d1 = calculateDistance(latitude, longitude, stopLat, stopLon)
+
+            // --- 2. Total distance from route start to this red timing point (d2) ---
+            val upcomingIndex = route.indexOfLast {
+                calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
+            }.coerceAtLeast(1)
+
+            val d2 = (0 until upcomingIndex).sumOf { i ->
+                val p1 = route[i]
+                val p2 = route[i + 1]
+                calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
+            }
+
+            if (d2 == 0.0) {
+                Log.e("checkScheduleStatus", "❌ d2 (total distance) is 0. Cannot compute estimated time.")
+                return
+            }
+
+            // --- 3. Total time from start to red timing point in seconds (t2) ---
+            val t2 = ((apiTime.time - baseTime.time) / 1000).toDouble()
+
+            // --- 4. Estimate time to arrival from current position (t1) ---
+            val speedMetersPerSec = speed / 3.6
+            val t1 = d1 / speedMetersPerSec
+
+            val predictedArrival = Calendar.getInstance().apply {
+                time = simulatedStartTime.time
+                add(Calendar.SECOND, t1.toInt())
+            }
+
+            val predictedArrivalStr = timeFormat.format(predictedArrival.time)
+
+            // --- 5. Compare predicted arrival with Timing Point ---
+            val deltaSec = ((timingPointTime.time - predictedArrival.time.time) / 1000).toInt()
+
+            val statusText = when {
+                deltaSec >= 120 -> "Very Ahead (~${deltaSec}s early)"
+                deltaSec in 60..119 -> "Slightly Ahead (~${deltaSec}s early)"
+                deltaSec in -59..59 -> "On Time"
+                deltaSec in -119..-60 -> "Slightly Behind (~${-deltaSec}s late)"
+                deltaSec in -299..-120 -> "Very Behind (~${-deltaSec}s late)"
+                deltaSec <= -300 -> "Late for Next Run (~${-deltaSec}s late)"
+                else -> "Unknown"
+            }
+
             runOnUiThread {
                 scheduleStatusValueTextView.text = statusText
-                thresholdRangeValueTextView.text = "$tolerance sec"  // Displaying a single threshold value
-                if (Math.abs(deltaSec) <= tolerance) {
-                    scheduleStatusValueTextView.setTextColor(Color.GREEN)
-                } else {
-                    scheduleStatusValueTextView.setTextColor(Color.RED)
-                }
+                scheduleStatusValueTextView.setTextColor(
+                    when {
+                        deltaSec >= 60 -> Color.parseColor("#00C853") // Green
+                        deltaSec in -59..59 -> Color.parseColor("#FFD600") // Yellow
+                        deltaSec in -299..-60 -> Color.parseColor("#FF6D00") // Orange
+                        else -> Color.parseColor("#D50000") // Red
+                    }
+                )
             }
 
-            // Log all the desired values.
-            Log.d("TestMapActivity checkScheduleStatus", "Schedule Status: $statusText")
-            Log.d("checkScheduleStatus", "Next Timing Point: ${timingPointValueTextView.text}")
+            Log.d("TestMapActivity checkScheduleStatus", "======= Schedule Status Debug =======")
+            Log.d("TestMapActivity checkScheduleStatus", "Current Lat: $latitude, Lng: $longitude")
+            Log.d("TestMapActivity checkScheduleStatus", "Red Stop Index: $redStopIndex")
+            Log.d("TestMapActivity checkScheduleStatus", "Red Stop Name: ${redStop.address}")
+            Log.d("TestMapActivity checkScheduleStatus", "Speed (km/h): $speed, Speed (m/s): ${speed / 3.6}")
+            Log.d("TestMapActivity checkScheduleStatus", "Distance to Red Stop (d1): $d1 meters")
+            Log.d("TestMapActivity checkScheduleStatus", "Total Distance (d2): $d2 meters")
+            Log.d("TestMapActivity checkScheduleStatus", "Total Time (t2): $t2 seconds")
+            Log.d("TestMapActivity checkScheduleStatus", "Estimated Time Remaining (t1 = d1 * t2 / d2): $t1 seconds")
+            Log.d("TestMapActivity checkScheduleStatus", "Predicted Arrival: $predictedArrivalStr")
             Log.d("TestMapActivity checkScheduleStatus", "API Time: $apiTimeStr")
             Log.d("TestMapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
-            Log.d("TestMapActivity checkScheduleStatus", "Threshold Range: $tolerance sec")
-            Log.d("TestMapActivity checkScheduleStatus", "Predicted Arrival: ${timeFormat.format(predictedArrival)}")
-            Log.d("TestMapActivity checkScheduleStatus", "Delta (sec): $deltaSec")
-            Log.d("TestMapActivity checkScheduleStatus", "Far Behind Threshold: $farBehindThreshold sec")
+            Log.d("TestMapActivity checkScheduleStatus", "Delta to Timing Point: $deltaSec seconds")
+            Log.d("TestMapActivity checkScheduleStatus", "Status: $statusText")
+            Log.d("TestMapActivity checkScheduleStatus", "=====================================")
         } catch (e: Exception) {
-            Log.e("TestMapActivity checkScheduleStatus", "Error parsing times: ${e.localizedMessage}")
+            Log.e("TestMapActivity checkScheduleStatus", "Error: ${e.localizedMessage}")
         }
+    }
+
+    /**
+     * Set the same base date for all Date
+     */
+    private fun parseTimeToday(timeStr: String): Date {
+        val parts = timeStr.split(":")
+        if (parts.size != 3) return Date()
+
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, parts[0].toInt())
+            set(Calendar.MINUTE, parts[1].toInt())
+            set(Calendar.SECOND, parts[2].toInt())
+            set(Calendar.MILLISECOND, 0)
+        }
+        return calendar.time
     }
 
     /**
@@ -675,6 +742,8 @@ class TestMapActivity : AppCompatActivity() {
 
                     lastLatitude = newLat
                     lastLongitude = newLon
+                    latitude = newLat
+                    longitude = newLon
 
                     if (step % 3 == 0) {
                         Log.d("simulateMovement", "Lat: $newLat, Lon: $newLon, Bearing: $bearing")
@@ -705,12 +774,34 @@ class TestMapActivity : AppCompatActivity() {
     private fun updateApiTime() {
         // If locked, simply reuse the locked value — only if upcomingStopName matches the first timing point
         if (apiTimeLocked && lockedApiTime != null) {
-            val firstAddress = scheduleList.firstOrNull()?.busStops?.firstOrNull()?.address
-            if (upcomingStopName == firstAddress) {
+            val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+            // Parse the locked time into a Calendar object
+            val lockedCal = Calendar.getInstance().apply {
+                time = timeFormat.parse(lockedApiTime!!) ?: return
+            }
+
+            // Get timing list and last red timing point
+            val timingList = BusStopWithTimingPoint.fromRouteData(busRouteData.first())
+            val lastScheduledAddress = getLastScheduledAddress(timingList, scheduleList)
+            val lastTimingPointIndex = timingList.indexOfFirst { it.address == lastScheduledAddress }
+            val finalStopIndex = timingList.lastIndex
+
+            if (lastTimingPointIndex != -1 && lastTimingPointIndex < finalStopIndex) {
+                // Calculate remaining duration from last timing point to final stop
+                val remainingDurationMinutes = timingList.subList(lastTimingPointIndex + 1, timingList.size)
+                    .sumOf { it.duration }
+                val additionalSeconds = (remainingDurationMinutes * 60).toInt()
+                lockedCal.add(Calendar.SECOND, additionalSeconds)
+
+                val updatedFinalApiTime = timeFormat.format(lockedCal.time)
+                runOnUiThread {
+                    ApiTimeValueTextView.text = updatedFinalApiTime
+                }
+                Log.d("TestMapActivity updateApiTime", "⏩ Updated API time after last timing point to: $updatedFinalApiTime")
+            } else {
                 runOnUiThread { ApiTimeValueTextView.text = lockedApiTime }
                 Log.d("TestMapActivity updateApiTime", "API time locked, using last computed value: $lockedApiTime")
-            } else {
-                Log.d("TestMapActivity updateApiTime", "⏩ Skipped locked API time update because upcomingStopName == firstAddress")
             }
             return
         }
@@ -823,22 +914,27 @@ class TestMapActivity : AppCompatActivity() {
         targetIndex: Int
     ): Double? {
         val scheduledIndices = getScheduledIndices(timingList, scheduleList)
-        // Always update if targetIndex == 0 (even if unscheduled)
+
         if (targetIndex == 0) {
             return timingList.subList(0, 1).sumOf { it.duration }
         }
-        // If targetIndex is scheduled...
+
         if (targetIndex in scheduledIndices) {
             val pos = scheduledIndices.indexOf(targetIndex)
             return if (pos < scheduledIndices.size - 1) {
                 val nextScheduledIndex = scheduledIndices[pos + 1]
                 timingList.subList(0, nextScheduledIndex).sumOf { it.duration }
             } else {
-                // Last scheduled stop: sum entire list.
-                timingList.sumOf { it.duration }
+                // 🟢 NEW LOGIC: Last timing point → return full duration to end
+                return timingList.subList(0, targetIndex + 1).sumOf { it.duration }
             }
         }
-        // Not scheduled → return null so that update is skipped.
+
+        // If not scheduled, check if it's after the last scheduled index
+        if (scheduledIndices.isNotEmpty() && targetIndex >= scheduledIndices.last()) {
+            // Add all remaining durations from this point onward
+            return timingList.subList(0, targetIndex + 1).sumOf { it.duration }
+        }
         return null
     }
 
@@ -971,6 +1067,16 @@ class TestMapActivity : AppCompatActivity() {
         val stopLon = nextStop.longitude ?: return
         stopAddress = nextStop.address ?: getUpcomingBusStopName(stopLat, stopLon)
         upcomingStop = stopAddress
+        // 🔁 Check if the stop is a timing point
+        val isTimingPoint = redBusStops.contains(stopAddress)
+
+        // 🔁 Only update API time if this timing point stop is different than last one
+        if (isTimingPoint && stopAddress != lastTimingPointStopAddress) {
+            Log.d("checkPassedStops", "⏱️ Timing point changed to: $stopAddress")
+            lastTimingPointStopAddress = stopAddress
+            updateApiTime()
+        }
+
         val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
         val stopPassThreshold = 25.0 // Normal detection range
         val failSafeThreshold = 100.0 // Fail-safe trigger range
@@ -1345,7 +1451,7 @@ class TestMapActivity : AppCompatActivity() {
         timingPointValueTextView = binding.timingPointValueTextView
         ApiTimeValueTextView = binding.ApiTimeValueTextView
         scheduleStatusValueTextView = binding.scheduleStatusValueTextView
-        thresholdRangeValueTextView = binding.thresholdRangeValueTextView
+//        thresholdRangeValueTextView = binding.thresholdRangeValueTextView
         speedTextView = binding.speedTextView
         upcomingBusStopTextView = binding.upcomingBusStopTextView
         arriveButtonContainer = findViewById(R.id.arriveButtonContainer)
@@ -1466,15 +1572,9 @@ class TestMapActivity : AppCompatActivity() {
         val totalStops = busStops.size
 
         busStops.forEachIndexed { index, stop ->
-            val stopName = when (index) {
-                0 -> "Start"
-                totalStops - 1 -> "End"
-                else -> index.toString() // Numbered stops
-            }
-
-            val formattedStopName = stopName.replace("Stop ", "").trim()
-            val isRed = redBusStops.any { it.replace("Stop ", "").trim().equals(formattedStopName, ignoreCase = true) }
-            Log.d("TestMapActivity addBusStopMarkers", "Checking stop: $stopName, isRed: $isRed (stored stops: $redBusStops)")
+            val stopAddress = stop.address ?: ""
+            val isRed = redBusStops.any { it.equals(stopAddress, ignoreCase = true) }
+            Log.d("TestMapActivity addBusStopMarkers", "Checking stop address: $stopAddress, isRed: $isRed")
 
             val busStopSymbol = Helper.createBusStopSymbol(applicationContext, index, totalStops, isRed)
             val markerBitmap = AndroidGraphicFactory.convertToBitmap(busStopSymbol)
