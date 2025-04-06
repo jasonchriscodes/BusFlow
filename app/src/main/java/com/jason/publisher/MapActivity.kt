@@ -727,68 +727,6 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
-    /** Starts the simulation with realistic speed */
-//    private fun startSimulation() {
-//        if (route.isEmpty()) {
-//            Toast.makeText(this, "No route data available", Toast.LENGTH_SHORT).show()
-//            return
-//        }
-//
-//        if (isSimulating) {
-//            Toast.makeText(this, "Simulation already running", Toast.LENGTH_SHORT).show()
-//            return
-//        }
-//
-//        isSimulating = true
-//        simulationStartTime = System.currentTimeMillis() // Track simulation time
-//        simulationHandler = Handler(Looper.getMainLooper())
-//        currentRouteIndex = 0
-//
-//        initializeTimingPoint()
-//
-//        // Start the actual time from the schedule's start time
-//        startActualTimeUpdater()
-//
-//        simulationRunnable = object : Runnable {
-//            @RequiresApi(Build.VERSION_CODES.M)
-//            override fun run() {
-//                if (currentRouteIndex < route.size - 1) {
-//                    val start = route[currentRouteIndex]
-//                    val end = route[currentRouteIndex + 1]
-//
-//                    val startLat = start.latitude!!
-//                    val startLon = start.longitude!!
-//                    val endLat = end.latitude!!
-//                    val endLon = end.longitude!!
-//
-//                    val distanceMeters = calculateDistance(startLat, startLon, endLat, endLon)
-//                    // If simulationSpeedFactor is 0, bus is stopped; simply re-post without movement.
-//                    if (simulationSpeedFactor <= 0) {
-//                        simulationHandler.postDelayed(this, 1000)
-//                        return
-//                    }
-//                    // Adjust travel time: base travel time divided by the speed factor.
-//                    val travelTimeSeconds = (distanceMeters / 8.33) / simulationSpeedFactor
-//                    val steps = (travelTimeSeconds * 10).toInt() // Update every 100ms
-//
-//                    simulateMovement(startLat, startLon, endLat, endLon, steps)
-//
-//                    simulationHandler.postDelayed({
-//                        currentRouteIndex++
-//                        simulationHandler.post(this)
-//                    }, (travelTimeSeconds * 1000).toLong())
-//                } else {
-//                    isSimulating = false
-//                    stopActualTimeUpdater()
-//                    Toast.makeText(this@MapActivity, "Simulation completed", Toast.LENGTH_SHORT).show()
-//                    showSummaryDialog() // Show the summary dialog after simulation completes.
-//                }
-//            }
-//        }
-//        simulationHandler.post(simulationRunnable)
-//        Toast.makeText(this, "Simulation started", Toast.LENGTH_SHORT).show()
-//    }
-
     /**
      * Add this helper function to convert a time string (e.g. "08:11") to minutes since midnight.
      */
@@ -1121,60 +1059,6 @@ class MapActivity : AppCompatActivity() {
         simulationStartTime = System.currentTimeMillis()
         Log.d("MapActivity", "✅ Actual time reset to current time.")
     }
-
-    /** Interpolates movement between two points with dynamic bearing and speed updates */
-//    private fun simulateMovement(startLat: Double, startLon: Double, endLat: Double, endLon: Double, steps: Int) {
-//        val latStep = (endLat - startLat) / steps
-//        val lonStep = (endLon - startLon) / steps
-//
-//        var step = 0
-//        val stepHandler = Handler(Looper.getMainLooper())
-//
-//        val stepRunnable = object : Runnable {
-//            override fun run() {
-//                if (step < steps) {
-//                    val newLat = startLat + (latStep * step)
-//                    val newLon = startLon + (lonStep * step)
-//
-//                    // Check if the bus has passed any stops
-//                    checkPassedStops(newLat, newLon)
-//
-//                    // Update timing point if needed
-//                    updateTimingPointBasedOnLocation(newLat, newLon)
-//
-//                    // Calculate speed dynamically (meters per second)
-//                    if (step > 0) {
-//                        val distance = calculateDistance(lastLatitude, lastLongitude, newLat, newLon)
-//                        if (distance < 100) { // Prevents unrealistic jumps
-//                            speed = (distance / 0.1).toFloat() // 0.1 sec per step (100ms)
-//                        } else {
-//                            speed = 8.33f // Reset speed to normal when an anomaly is detected
-//                        }
-//                        // Update speed text view
-//                        runOnUiThread {
-//                            speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
-//                        }
-//                    }
-//
-//                    // Update bearing dynamically
-//                    if (step > 0) {
-//                        bearing = calculateBearing(lastLatitude, lastLongitude, newLat, newLon)
-//                    }
-//
-//                    // Move the bus marker
-//                    updateBusMarkerPosition(newLat, newLon, bearing)
-//
-//                    // Save last location
-//                    lastLatitude = newLat
-//                    lastLongitude = newLon
-//
-//                    step++
-//                    stepHandler.postDelayed(this, 100)
-//                }
-//            }
-//        }
-//        stepHandler.post(stepRunnable)
-//    }
 
     /**
      * Updates the API Time TextView based on the schedule start time and the cumulative durations
@@ -1579,13 +1463,6 @@ class MapActivity : AppCompatActivity() {
                 val upcomingStop = stops[currentStopIndex]
                 upcomingStopName = getUpcomingBusStopName(upcomingStop.latitude ?: 0.0, upcomingStop.longitude ?: 0.0)
 
-//                Log.d(
-//                    "MapActivity checkPassedStops",
-//                    "🛑 No stop passed. Nearest stop: ${upcomingStop.latitude}, ${upcomingStop.longitude} is ${
-//                        "%.2f".format(distance)
-//                    } meters away at $upcomingStopName."
-//                )
-
                 runOnUiThread {
                     upcomingBusStopTextView.text = "$upcomingStopName"
                 }
@@ -1607,13 +1484,6 @@ class MapActivity : AppCompatActivity() {
                         "%.2f".format(distance)
                     } meters away at $upcomingStopName."
                 )
-//                Toast.makeText(
-//                    this@MapActivity,
-//                    "🛑At ${latitude} ${longitude} no stop passed. Nearest stop is ${
-//                        "%.2f".format(distance)
-//                    } meters away at $upcomingStopName.",
-//                    Toast.LENGTH_LONG
-//                ).show()
             }
         }
     }
@@ -2312,62 +2182,6 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * Sets up the map view and initializes markers and polylines with the provided coordinates.
-     *
-     * @param lat The latitude for the initial map center.
-     * @param lon The longitude for the initial map center.
-     */
-//    private fun mapViewSetup(lat: Double, lon: Double) {
-//        val center = GeoPoint(lat, lon)
-//
-//        val marker = Marker(binding.map)
-//        marker.icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null) // Use custom drawable
-//        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-//
-//        mapController = binding.map.controller as MapController
-//        mapController.setCenter(center)
-//        mapController.setZoom(18.0)
-//
-//        binding.map.apply {
-//            setTileSource(TileSourceFactory.MAPNIK)
-//            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-//            mapCenter
-//            setMultiTouchControls(true)
-//            getLocalVisibleRect(Rect())
-//        }
-//        updateMarkerPosition(marker)
-//    }
-
-    /**
-     * Updates the position of the marker on the map and publishes telemetry data.
-     *
-     * @param marker The marker to be updated.
-     */
-//    private fun updateMarkerPosition(marker: Marker) {
-//        val handler = Handler(Looper.getMainLooper())
-//        val updateRunnable = object : Runnable {
-//            override fun run() {
-//                marker.position = GeoPoint(latitude, longitude)
-//                marker.rotation = bearing // The bearing now correctly matches the polar coordinate system
-//                binding.map.overlays.add(marker)
-//                binding.map.invalidate()
-//
-//                // Update UI elements
-//                runOnUiThread {
-//                    updateTextViews()
-//                }
-//
-//                handler.postDelayed(this, PUBLISH_POSITION_TIME)
-//
-//                // To reset the map center position based on the location of the publisher device.
-//                val newCenterLocationBasedOnPubDevice = GeoPoint(latitude, longitude)
-//                mapController.animateTo(newCenterLocationBasedOnPubDevice)
-//            }
-//        }
-//        handler.post(updateRunnable)
-//    }
-
-    /**
      * Initialize UI components and assign them to the corresponding views.
      */
     private fun initializeUIComponents() {
@@ -2390,33 +2204,11 @@ class MapActivity : AppCompatActivity() {
         ApiTimeValueTextView = binding.ApiTimeValueTextView
         scheduleStatusValueTextView = binding.scheduleStatusValueTextView
         thresholdRangeValueTextView = binding.thresholdRangeValueTextView
-//            bearingTextView = binding.bearingTextView
-//        latitudeTextView = binding.latitudeTextView
-//        longitudeTextView = binding.longitudeTextView
-//        bearingTextView = binding.bearingTextView
         speedTextView = binding.speedTextView
         upcomingBusStopTextView = binding.upcomingBusStopTextView
         arriveButtonContainer = findViewById(R.id.arriveButtonContainer)
         currentTimeTextView = binding.currentTimeTextView
         nextTripCountdownTextView = binding.nextTripCountdownTextView
-//            directionTextView = binding.directionTextView
-//            speedTextView = binding.speedTextView
-//            busNameTextView = binding.busNameTextView
-//            showDepartureTimeTextView = binding.showDepartureTimeTextView
-//            departureTimeTextView = binding.departureTimeTextView
-//            etaToNextBStopTextView = binding.etaToNextBStopTextView
-//            networkStatusIndicator = binding.networkStatusIndicator
-//            reconnectProgressBar = binding.reconnectProgressBar
-//            attemptingToConnectTextView = binding.attemptingToConnectTextView
-//            aidTextView = binding.aidTextView
-//            closestBusStopToPubDeviceTextView = binding.closestBusStopToPubDeviceTextView
-//            busDirectionTitleTextView = binding.busDirectionTitleTextView
-//            busTelemetryTitleTextView = binding.busTelemetryTitleTextView
-//            currentRoadTextView = binding.currentRoadTextView
-//            upcomingRoadTitleTextView = binding.upcomingRoadTitleTextView
-//            upcomingRoadTextView = binding.upcomingRoadTextView
-//            busDirectionBearing = binding.busDirectionBearing
-//            busDirectionIcon = binding.busDirectionIcon
     }
 
     /**
@@ -2453,35 +2245,6 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
-//    /**
-//     * Clears any existing bus data from the map and other UI elements.
-//     */
-//    private fun clearBusData() {
-//        binding.map.layerManager.layers.clear() // Clear all layers
-//        binding.map.invalidate()
-//        markerBus.clear()
-//    }
-
-    /** Fetches the configuration data and initializes the config variable. */
-//    private fun fetchConfig(callback: (Boolean) -> Unit) {
-//        Log.d("MapActivity fetchConfig", "Fetching config...")
-//
-//        mqttManagerConfig.fetchSharedAttributes(tokenConfigData) { listConfig ->
-//            runOnUiThread {
-//                if (listConfig.isNotEmpty()) {
-//                    config = listConfig
-//                    Log.d("MapActivity fetchConfig", "✅ Config received: $config")
-//                    subscribeSharedData()
-//                    callback(true)
-//                } else {
-//                    Log.e("MapActivity fetchConfig", "❌ Failed to initialize config. Running in offline mode.")
-////                    Toast.makeText(this@MapActivity, "Running in offline mode. No bus information available.", Toast.LENGTH_SHORT).show()
-//                    callback(false)
-//                }
-//            }
-//        }
-//    }
-
     /**
      * Helper function to convert stops to busStopInfo
      */
@@ -2502,77 +2265,6 @@ class MapActivity : AppCompatActivity() {
             Log.d("MapActivity updateBusStopProximityManager", "No stops available to update BusStopProximityManager.")
         }
     }
-
-//    /**
-//     * function to convert route to the required BusStopInfo format
-//     */
-//    private fun convertRouteToBusStopInfo(route: List<BusRoute>): List<BusStopInfo> {
-//        val result = route.mapIndexed { index, busStop ->
-//            BusStopInfo(
-//                latitude = busStop.latitude ?: 0.0,
-//                longitude = busStop.longitude ?: 0.0,
-//                busStopName = when (index) {
-//                    0 -> "S/E"
-//                    else -> index.toString()
-//                }
-//            )
-//        }
-//        Log.d("convertRouteToBusStopInfo", "Converted route to BusStopInfo: $result")
-//        return result
-//    }
-
-    /**
-     * Generates polylines and markers for the bus route and stops.
-     *
-     * @param busRoute The bus route data in the new format.
-     * @param busStops The bus stop data in the new format.
-     */
-//    private fun generatePolyline(busRoute: List<BusRoute>, busStops: List<BusStop>) {
-//        val routes = mutableListOf<LatLong>()
-//        for (route in busRoute) {
-//            routes.add(LatLong(route.latitude!!, route.longitude!!))
-//        }
-//        Log.d("Route Polylines", routes.toString())
-//        Log.d("Check Length Route", routes.size.toString())
-//
-//        // Create a Polyline Layer for Mapsforge
-//        val polylinePaint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
-//            color = Color.BLUE
-//            strokeWidth = 5f
-//            setStyle(org.mapsforge.core.graphics.Style.STROKE)
-//        }
-//
-//        val polylineLayer = org.mapsforge.map.layer.overlay.Polyline(polylinePaint, AndroidGraphicFactory.INSTANCE)
-//        polylineLayer.addPoints(routes)
-//
-//        // Add to Mapsforge Layer Manager
-//        binding.map.layerManager.layers.add(polylineLayer)
-//
-//        // Generate Bus Stop Markers
-//        val stopLayers = mutableListOf<org.mapsforge.map.layer.overlay.Marker>()
-//        busStops.forEachIndexed { index, stop ->
-//            val busStopNumber = index + 1
-//            val busStopSymbol = Helper.createBusStopSymbol(applicationContext, busStopNumber, busStops.size)
-//
-//            val markerBitmap = AndroidGraphicFactory.convertToBitmap(busStopSymbol)
-//            val markerLayer = org.mapsforge.map.layer.overlay.Marker(
-//                LatLong(stop.latitude!!, stop.longitude!!),
-//                markerBitmap,
-//                0, // x offset
-//                0 // y offset
-//            )
-//
-//            stopLayers.add(markerLayer)
-//        }
-//
-//        // Add all bus stop markers to the layer manager
-//        stopLayers.forEach { binding.map.layerManager.layers.add(it) }
-//
-//        // Refresh the map
-//        binding.map.invalidate()
-//    }
-
-
 
     /**
      * Loads the offline map from assets and configures the map.
@@ -2696,26 +2388,6 @@ class MapActivity : AppCompatActivity() {
         }
         return file
     }
-
-    /** Starts a periodic task to update the current date and time in the UI. */
-//    @SuppressLint("SimpleDateFormat")
-//    private fun startDateTimeUpdater() {
-//        dateTimeHandler = Handler(Looper.getMainLooper())
-//        dateTimeRunnable = object : Runnable {
-//            override fun run() {
-//                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-//                val currentDateTime = dateFormat.format(Date())
-//                binding.currentDateAndTime.text = currentDateTime
-//                dateTimeHandler.postDelayed(this, 1000) // Update every second
-//            }
-//        }
-//        dateTimeHandler.post(dateTimeRunnable)
-//    }
-
-    /** Stops the date/time updater when the activity is destroyed. */
-//    private fun stopDateTimeUpdater() {
-//        dateTimeHandler.removeCallbacks(dateTimeRunnable)
-//    }
 
     /** Cleans up resources on activity destruction. */
     override fun onDestroy() {
