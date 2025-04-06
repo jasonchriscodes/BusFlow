@@ -163,7 +163,8 @@
                 android:layout_height="800dp"
                 android:translationY="-250dp"
                 android:translationX="-50dp"
-                android:contentDescription="Live map displaying bus routes and stops">
+                android:contentDescription="Live map displaying bus routes and stops"
+                tools:ignore="MissingConstraints">
 
             <androidx.constraintlayout.widget.ConstraintLayout
                     android:id="@+id/hiddenUIContainer"

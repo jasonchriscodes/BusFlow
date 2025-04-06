@@ -1547,7 +1547,7 @@ class TestMapActivity : AppCompatActivity() {
         binding.map.setCenter(LatLong(latitude, longitude)) // Set the default location to center the bus marker
 //        binding.map.setCenter(LatLong(-36.855647, 174.765249)) // Airedale
 //        binding.map.setCenter(LatLong(-36.8485, 174.7633)) // Auckland, NZ
-        binding.map.setZoomLevel(17) // Set default zoom level
+        binding.map.setZoomLevel(16) // Set default zoom level
 //        binding.map.setZoomLevel(11) // Set default zoom level
 
         // **Initialize the bus marker and ma**
