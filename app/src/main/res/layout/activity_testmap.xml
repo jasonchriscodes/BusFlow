@@ -358,6 +358,21 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:paddingTop="4dp">
+
+            <ImageView
+                android:id="@+id/scheduleAheadIcon"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:contentDescription="Schedule Status Symbol"
+                android:src="@drawable/ic_please_wait" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
             android:orientation="horizontal">

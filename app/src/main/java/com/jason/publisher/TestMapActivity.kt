@@ -23,6 +23,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.jason.publisher.model.BusItem
 import com.jason.publisher.model.BusStop
@@ -654,16 +655,30 @@ class TestMapActivity : AppCompatActivity() {
                 else -> "Unknown"
             }
 
+            val symbolRes = when {
+                deltaSec >= 120 -> R.drawable.ic_schedule_very_ahead
+                deltaSec in 60..119 -> R.drawable.ic_schedule_slightly_ahead
+                deltaSec in -59..59 -> R.drawable.ic_schedule_on_time
+                deltaSec in -119..-60 -> R.drawable.ic_schedule_slightly_behind
+                deltaSec in -299..-120 -> R.drawable.ic_schedule_very_behind
+                deltaSec <= -300 -> R.drawable.ic_schedule_late
+                else -> R.drawable.ic_schedule_on_time
+            }
+
+            val colorRes = when {
+                deltaSec >= 120 -> R.color.blind_red            // Very Ahead
+                deltaSec in 60..119 -> R.color.blind_orange     // Slightly Ahead
+                deltaSec in -59..59 -> R.color.blind_cyan       // On Time
+                deltaSec in -119..-60 -> R.color.blind_orange   // Slightly Behind
+                deltaSec in -299..-120 -> R.color.blind_orange  // Very Behind
+                deltaSec <= -300 -> R.color.blind_red           // Going Red For Next Run
+                else -> R.color.blind_cyan
+            }
+
             runOnUiThread {
                 scheduleStatusValueTextView.text = statusText
-                scheduleStatusValueTextView.setTextColor(
-                    when {
-                        deltaSec >= 60 -> Color.parseColor("#00C853") // Green
-                        deltaSec in -59..59 -> Color.parseColor("#FFD600") // Yellow
-                        deltaSec in -299..-60 -> Color.parseColor("#FF6D00") // Orange
-                        else -> Color.parseColor("#D50000") // Red
-                    }
-                )
+                scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(this@TestMapActivity, colorRes))
+                findViewById<ImageView>(R.id.scheduleAheadIcon).setImageResource(symbolRes)
             }
 
             Log.d("TestMapActivity checkScheduleStatus", "======= Schedule Status Debug =======")
