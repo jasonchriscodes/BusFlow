@@ -88,6 +88,7 @@ class MapActivity : AppCompatActivity() {
     private var firstTime = true
     private var upcomingStop: String = "Unknown"
     private var stopAddress: String = "Unknown"
+    private var upcomingStopName: String = "Unknown"
 
     private lateinit var aidTextView: TextView
     private lateinit var latitudeTextView: TextView
@@ -136,7 +137,6 @@ class MapActivity : AppCompatActivity() {
     private var statusText  = "Please wait..."
     private var baseTimeStr  = "00:00:00"
     private var customTime  = "00:00:00"
-    private var upcomingStopName: String = "Unknown"
     private var lastTimingPointStopAddress: String? = null
 
     companion object {
@@ -150,48 +150,6 @@ class MapActivity : AppCompatActivity() {
         private const val LAST_MSG_KEY = "lastMessageKey"
         private const val MSG_KEY = "messageKey"
         private const val SOUND_FILE_NAME = "notif.wav"
-    }
-
-    /**
-     * Starts a custom time from a hardcoded string and counts up from there.
-     * Example: startCustomTime("08:11:00")
-     */
-    private fun startCustomTime(customTime: String) {
-        val timeParts = customTime.split(":")
-        if (timeParts.size != 3) {
-            Log.e("MapActivity startCustomTime", "❌ Invalid time format: $customTime. Expected HH:mm:ss")
-            return
-        }
-
-        // Initialize simulatedStartTime from the custom string
-        simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
-        simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
-        simulatedStartTime.set(Calendar.SECOND, timeParts[2].toInt())
-
-        currentTimeHandler = Handler(Looper.getMainLooper())
-        currentTimeRunnable = object : Runnable {
-            override fun run() {
-                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
-                Log.d("MapActivity startCustomTime", "currentTimeTextView.text: ${currentTimeTextView.text}")
-
-                // Advance time by 1 second per tick
-                simulatedStartTime.add(Calendar.SECOND, 1)
-
-                currentTimeHandler.postDelayed(this, 1000) // Update every second
-            }
-        }
-
-        currentTimeHandler.post(currentTimeRunnable)
-    }
-
-    /**
-     * setter to adjust current time
-     */
-    private fun setSimulatedCurrentTime(hour: Int, minute: Int, second: Int) {
-        simulatedStartTime.set(Calendar.HOUR_OF_DAY, hour)
-        simulatedStartTime.set(Calendar.MINUTE, minute)
-        simulatedStartTime.set(Calendar.SECOND, second)
     }
 
     @SuppressLint("LongLogTag")
@@ -290,7 +248,7 @@ class MapActivity : AppCompatActivity() {
         startLocationUpdate()
 
         // Mock data to check scheduleStatusValueTextView
-        if (forceAheadStatus) {
+        if (forceAheadStatus == true) {
             Log.d("ForceAheadDebug", "Inside forceAheadStatus at 08:00:00")
 
             //Example
@@ -317,13 +275,14 @@ class MapActivity : AppCompatActivity() {
 
 
             // Manually set dummy values to simulate schedule status in advance
-            timingPointValueTextView.text = "09:10:00"     // scheduledTimeStr
-            ApiTimeValueTextView.text = "09:10:45"         // apiTimeStr
-            customTime = "09:00:00"                    // actualTimeStr
+            timingPointValueTextView.text = "22:21:00"     // scheduledTimeStr
+            ApiTimeValueTextView.text = "22:21:00"         // apiTimeStr
+            customTime = "22:15:00"                    // actualTimeStr
             // result
 
             stopCurrentTime()
             startCustomTime(customTime)
+//            startActualTimeUpdater()
 
             // Trigger visual change to test schedule status UI
             scheduleStatusValueTextView.text = "Calculating..."
@@ -379,6 +338,52 @@ class MapActivity : AppCompatActivity() {
         binding.arriveButton.setOnClickListener {
             confirmArrival()
         }
+    }
+
+    /**
+     * Starts a custom time from a hardcoded string and counts up from there.
+     * Example: startCustomTime("08:11:00")
+     */
+    private fun startCustomTime(customTime: String) {
+        val timeParts = customTime.split(":")
+        if (timeParts.size != 3) {
+            Log.e("MapActivity startCustomTime", "❌ Invalid time format: $customTime. Expected HH:mm:ss")
+            return
+        }
+
+        // Initialize simulatedStartTime from the custom string
+        simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+        simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
+        simulatedStartTime.set(Calendar.SECOND, timeParts[2].toInt())
+
+        currentTimeHandler = Handler(Looper.getMainLooper())
+        currentTimeRunnable = object : Runnable {
+            override fun run() {
+                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
+                Log.d("MapActivity startCustomTime", "currentTimeTextView.text: ${currentTimeTextView.text}")
+
+                // Advance time by 1 second per tick
+                simulatedStartTime.add(Calendar.SECOND, 1)
+
+                // Update schedule status based on the new simulated time
+                scheduleStatusValueTextView.text = "Calculating..."
+                checkScheduleStatus()
+
+                currentTimeHandler.postDelayed(this, 1000) // Update every second
+            }
+        }
+
+        currentTimeHandler.post(currentTimeRunnable)
+    }
+
+    /**
+     * setter to adjust current time
+     */
+    private fun setSimulatedCurrentTime(hour: Int, minute: Int, second: Int) {
+        simulatedStartTime.set(Calendar.HOUR_OF_DAY, hour)
+        simulatedStartTime.set(Calendar.MINUTE, minute)
+        simulatedStartTime.set(Calendar.SECOND, second)
     }
 
     /**
@@ -701,13 +706,13 @@ class MapActivity : AppCompatActivity() {
         redBusStops.clear()
         if (scheduleList.isNotEmpty()) {
             val firstSchedule = scheduleList.first()
-            Log.d("MapActivity extractRedBusStops firstSchedule", "$firstSchedule")
+            Log.d("TestMapActivity extractRedBusStops firstSchedule", "$firstSchedule")
 
-            val stops = firstSchedule.busStops.map { it.name }
+            val stops = firstSchedule.busStops.mapNotNull { it.address }
             redBusStops.addAll(stops)
-            Log.d("MapActivity extractRedBusStops stops", "$stops")
+            Log.d("TestMapActivity extractRedBusStops stops", "$stops")
         }
-        Log.d("MapActivity extractRedBusStops", "Updated Red bus stops: $redBusStops")
+        Log.d("TestMapActivity extractRedBusStops", "Updated Red bus stops: $redBusStops")
     }
 
     /** Updates bus name if AID matches a config entry */
@@ -885,6 +890,14 @@ class MapActivity : AppCompatActivity() {
      */
     @SuppressLint("LongLogTag")
     private fun checkScheduleStatus() {
+        // If using mock data and first stop hasn't been passed, show "Please wait..."
+        if (forceAheadStatus && !hasPassedFirstStop) {
+            runOnUiThread {
+                scheduleStatusValueTextView.text = "Please wait..."
+            }
+            return
+        }
+
         if (scheduleList.isEmpty()) return
 
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -898,7 +911,13 @@ class MapActivity : AppCompatActivity() {
             val scheduledTimeStr = timingPointValueTextView.text.toString()
             val timingPointTime = parseTimeToday(scheduledTimeStr)
 
-            val baseTimeStr = scheduleList.first().startTime + ":00"
+            if (forceAheadStatus) {
+                baseTimeStr = customTime
+                Log.d("MapActivity checkScheduleStatus", "baseTimeStr: ${baseTimeStr}")
+            } else {
+                baseTimeStr = scheduleList.first().startTime + ":00"
+                Log.d("MapActivity checkScheduleStatus", "baseTimeStr: ${baseTimeStr}")
+            }
             val baseTime = parseTimeToday(baseTimeStr)
 
             var apiTimeStr = ApiTimeValueTextView.text.toString()
@@ -1030,6 +1049,7 @@ class MapActivity : AppCompatActivity() {
             Log.d("MapActivity checkScheduleStatus", "Delta to Timing Point: $deltaSec seconds")
             Log.d("MapActivity checkScheduleStatus", "Status: $statusText")
             Log.d("MapActivity checkScheduleStatus", "=====================================")
+            showCustomToastBottom("Distance to Red Stop (d1): $d1 meters, Total Distance (d2): $d2 meters, Total Time (t2): $t2 seconds, Estimated Time Remaining (t1 = d1 * t2 / d2): $t1 seconds, Predicted Arrival: $predictedArrivalStr, API Time: $apiTimeStr, Actual Time: $actualTimeStr, Delta to Timing Point: $deltaSec seconds")
         } catch (e: Exception) {
             Log.e("MapActivity checkScheduleStatus", "Error: ${e.localizedMessage}")
         }
@@ -1945,7 +1965,7 @@ class MapActivity : AppCompatActivity() {
                     Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
                     Log.d("GPS_DEBUG", "Speed: ${location.speed}, Bearing: ${location.bearing}")
 
-                    showCustomToast("Latitude: ${location.latitude}, Longitude: ${location.longitude}, LocAccuracy: ${location.accuracy}, Speed: ${location.speed}, Bearing: ${location.bearing}, BearAccuracy: ${location.bearingAccuracyDegrees}")
+//                    showCustomToast("Latitude: ${location.latitude}, Longitude: ${location.longitude}, LocAccuracy: ${location.accuracy}, Speed: ${location.speed}, Bearing: ${location.bearing}, BearAccuracy: ${location.bearingAccuracyDegrees}")
 //                    Toast.makeText(this@MapActivity, "Lat: ${location.latitude}, Lon: ${location.longitude}, LocAcc: ${location.accuracy}, Speed: ${location.speed}, Bear: ${location.bearing}, BearAcc: ${location.bearingAccuracyDegrees}", Toast.LENGTH_LONG).show()
 //                    Toast.makeText(this@MapActivity, "Speed: ${location.speed}, Bearing: ${location.bearing}", Toast.LENGTH_LONG).show()
 
@@ -1962,7 +1982,7 @@ class MapActivity : AppCompatActivity() {
                         binding.map.invalidate() // Refresh map view
                     }
 
-                    if (firstTime) {
+                    if (firstTime && !forceAheadStatus) {
                         firstTime = false
                         startActualTimeUpdater()
                     }
@@ -2090,6 +2110,26 @@ class MapActivity : AppCompatActivity() {
 
         // Position the toast at the top-center
         toast.setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, 100)
+
+        // Custom view with a TextView for longer text
+        val textView = TextView(this)
+        textView.text = message
+        textView.setTextColor(Color.WHITE)
+        textView.setBackgroundColor(Color.BLACK) // Custom background for visibility
+        textView.setPadding(20, 20, 20, 20)
+
+        toast.view = textView
+        toast.show()
+    }
+
+    /**
+     * custom toast align bottom
+     */
+    fun showCustomToastBottom(message: String) {
+        val toast = Toast.makeText(this@MapActivity, message, Toast.LENGTH_LONG)
+
+        // Position the toast at the top-center
+        toast.setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, 140)
 
         // Custom view with a TextView for longer text
         val textView = TextView(this)
