@@ -138,6 +138,10 @@ class MapActivity : AppCompatActivity() {
     private var baseTimeStr  = "00:00:00"
     private var customTime  = "00:00:00"
     private var lastTimingPointStopAddress: String? = null
+    // Class-level variable (initialize it to zero or a default simulation value)
+    private var smoothedSpeed: Float = 0f
+    // Choose an alpha value between 0 and 1: smaller alpha means slower adjustment (more smoothing)
+    private val smoothingAlpha = 0.2f
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -337,7 +341,7 @@ class MapActivity : AppCompatActivity() {
             slowDown()
         }
 
-        binding.arriveButton.visibility = View.GONE
+//        binding.arriveButton.visibility = View.GONE
         binding.arriveButton.setOnClickListener {
             confirmArrival()
         }
@@ -988,8 +992,9 @@ class MapActivity : AppCompatActivity() {
             val t2 = ((apiTime.time - baseTime.time) / 1000).toDouble()
 
             // --- 4. Estimate time to arrival from current position (t1) ---
-            val speedMetersPerSec = speed / 3.6
-            val t1 = d1 / speedMetersPerSec
+            val minSpeedMps = 0.1  // Avoid division by zero
+            val effectiveSpeed = if (smoothedSpeed / 3.6 < minSpeedMps) minSpeedMps else smoothedSpeed / 3.6
+            val t1 = d1 / effectiveSpeed  // d1 is the distance to the red stop in meters
 
             val predictedArrival = Calendar.getInstance().apply {
                 time = simulatedStartTime.time
@@ -1041,18 +1046,18 @@ class MapActivity : AppCompatActivity() {
             FileLogger.d("MapActivity checkScheduleStatus", "Current Lat: $latitude, Lng: $longitude")
             FileLogger.d("MapActivity checkScheduleStatus", "Red Stop Index: $redStopIndex")
             FileLogger.d("MapActivity checkScheduleStatus", "Red Stop Name: ${redStop.address}")
-            FileLogger.d("MapActivity checkScheduleStatus", "Speed (km/h): $speed, Speed (m/s): ${speed / 3.6}")
+            FileLogger.d("MapActivity checkScheduleStatus", "effectiveSpeed (km/h): $effectiveSpeed, effectiveSpeed (m/s): ${effectiveSpeed / 3.6}")
             FileLogger.d("MapActivity checkScheduleStatus", "Distance to Red Stop (d1): $d1 meters")
             FileLogger.d("MapActivity checkScheduleStatus", "Total Distance (d2): $d2 meters")
             Log.d("MapActivity checkScheduleStatus", "Total Time (t2): $t2 seconds")
-            FileLogger.d("MapActivity checkScheduleStatus", "Estimated Time Remaining (t1 = d1 * t2 / d2): $t1 seconds")
+            FileLogger.d("MapActivity checkScheduleStatus", "Estimated Time Remaining (t1 = d1 / effectiveSpeed): $t1 seconds")
             FileLogger.d("MapActivity checkScheduleStatus", "Predicted Arrival: $predictedArrivalStr")
             FileLogger.d("MapActivity checkScheduleStatus", "API Time: $apiTimeStr")
             FileLogger.d("MapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
             FileLogger.d("MapActivity checkScheduleStatus", "Delta to Timing Point: $deltaSec seconds")
             FileLogger.d("MapActivity checkScheduleStatus", "Status: $statusText")
             FileLogger.d("MapActivity checkScheduleStatus", "=====================================")
-            showCustomToast("Latitude: ${latitude}, Longitude: ${longitude}, Speed: ${speed}, Bearing: ${bearing}, Distance to Red Stop (d1): $d1 meters, Total Distance (d2): $d2 meters, Total Time (t2): $t2 seconds, Estimated Time Remaining (t1 = d1 * t2 / d2): $t1 seconds, Predicted Arrival: $predictedArrivalStr, API Time: $apiTimeStr, Actual Time: $actualTimeStr, Delta to Timing Point: $deltaSec seconds")
+            showCustomToastBottom("Latitude: ${latitude}, Longitude: ${longitude}, effectiveSpeed: ${effectiveSpeed}, Bearing: ${bearing}, Distance to Red Stop (d1): $d1 meters, Total Distance (d2): $d2 meters, Total Time (t2): $t2 seconds, Estimated Time Remaining (t1 = d1 / effectiveSpeed): $t1 seconds, Predicted Arrival: $predictedArrivalStr, API Time: $apiTimeStr, Actual Time: $actualTimeStr, Delta to Timing Point: $deltaSec seconds")
         } catch (e: Exception) {
             Log.e("MapActivity checkScheduleStatus", "Error: ${e.localizedMessage}")
         }
@@ -1901,7 +1906,7 @@ class MapActivity : AppCompatActivity() {
                     if (!isManualMode) {
                         latitude = location.latitude
                         longitude = location.longitude
-                        speed = location.speed * 3.6f // Convert m/s to km/h
+                        updateSpeed(location.speed * 3.6f)
                         bearing = location.bearing
                     }
 
@@ -2009,6 +2014,20 @@ class MapActivity : AppCompatActivity() {
             }
 
         Toast.makeText(this, "Live location updates started", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Smoothly updates the speed using an exponential moving average.
+     */
+    fun updateSpeed(newSpeed: Float) {
+        // If smoothedSpeed is zero (e.g., at startup), simply take the new speed.
+        smoothedSpeed = if (smoothedSpeed == 0f) {
+            newSpeed
+        } else {
+            smoothingAlpha * newSpeed + (1 - smoothingAlpha) * smoothedSpeed
+        }
+        // Optionally log the smoothed speed for debugging:
+        Log.d("MapActivity", "Smoothed speed: $smoothedSpeed km/h")
     }
 
     /**
