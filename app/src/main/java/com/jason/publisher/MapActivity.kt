@@ -159,6 +159,9 @@ class MapActivity : AppCompatActivity() {
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Add logger
+        FileLogger.init(this)
+
         // Initialize managers before using them
         initializeManagers()
 
@@ -1034,22 +1037,22 @@ class MapActivity : AppCompatActivity() {
                 findViewById<ImageView>(R.id.scheduleAheadIcon).setImageResource(symbolRes)
             }
 
-            Log.d("MapActivity checkScheduleStatus", "======= Schedule Status Debug =======")
-            Log.d("MapActivity checkScheduleStatus", "Current Lat: $latitude, Lng: $longitude")
-            Log.d("MapActivity checkScheduleStatus", "Red Stop Index: $redStopIndex")
-            Log.d("MapActivity checkScheduleStatus", "Red Stop Name: ${redStop.address}")
-            Log.d("MapActivity checkScheduleStatus", "Speed (km/h): $speed, Speed (m/s): ${speed / 3.6}")
-            Log.d("MapActivity checkScheduleStatus", "Distance to Red Stop (d1): $d1 meters")
-            Log.d("MapActivity checkScheduleStatus", "Total Distance (d2): $d2 meters")
+            FileLogger.d("MapActivity checkScheduleStatus", "======= Schedule Status Debug =======")
+            FileLogger.d("MapActivity checkScheduleStatus", "Current Lat: $latitude, Lng: $longitude")
+            FileLogger.d("MapActivity checkScheduleStatus", "Red Stop Index: $redStopIndex")
+            FileLogger.d("MapActivity checkScheduleStatus", "Red Stop Name: ${redStop.address}")
+            FileLogger.d("MapActivity checkScheduleStatus", "Speed (km/h): $speed, Speed (m/s): ${speed / 3.6}")
+            FileLogger.d("MapActivity checkScheduleStatus", "Distance to Red Stop (d1): $d1 meters")
+            FileLogger.d("MapActivity checkScheduleStatus", "Total Distance (d2): $d2 meters")
             Log.d("MapActivity checkScheduleStatus", "Total Time (t2): $t2 seconds")
-            Log.d("MapActivity checkScheduleStatus", "Estimated Time Remaining (t1 = d1 * t2 / d2): $t1 seconds")
-            Log.d("MapActivity checkScheduleStatus", "Predicted Arrival: $predictedArrivalStr")
-            Log.d("MapActivity checkScheduleStatus", "API Time: $apiTimeStr")
-            Log.d("MapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
-            Log.d("MapActivity checkScheduleStatus", "Delta to Timing Point: $deltaSec seconds")
-            Log.d("MapActivity checkScheduleStatus", "Status: $statusText")
-            Log.d("MapActivity checkScheduleStatus", "=====================================")
-            showCustomToastBottom("Distance to Red Stop (d1): $d1 meters, Total Distance (d2): $d2 meters, Total Time (t2): $t2 seconds, Estimated Time Remaining (t1 = d1 * t2 / d2): $t1 seconds, Predicted Arrival: $predictedArrivalStr, API Time: $apiTimeStr, Actual Time: $actualTimeStr, Delta to Timing Point: $deltaSec seconds")
+            FileLogger.d("MapActivity checkScheduleStatus", "Estimated Time Remaining (t1 = d1 * t2 / d2): $t1 seconds")
+            FileLogger.d("MapActivity checkScheduleStatus", "Predicted Arrival: $predictedArrivalStr")
+            FileLogger.d("MapActivity checkScheduleStatus", "API Time: $apiTimeStr")
+            FileLogger.d("MapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
+            FileLogger.d("MapActivity checkScheduleStatus", "Delta to Timing Point: $deltaSec seconds")
+            FileLogger.d("MapActivity checkScheduleStatus", "Status: $statusText")
+            FileLogger.d("MapActivity checkScheduleStatus", "=====================================")
+            showCustomToast("Latitude: ${latitude}, Longitude: ${longitude}, Speed: ${speed}, Bearing: ${bearing}, Distance to Red Stop (d1): $d1 meters, Total Distance (d2): $d2 meters, Total Time (t2): $t2 seconds, Estimated Time Remaining (t1 = d1 * t2 / d2): $t1 seconds, Predicted Arrival: $predictedArrivalStr, API Time: $apiTimeStr, Actual Time: $actualTimeStr, Delta to Timing Point: $deltaSec seconds")
         } catch (e: Exception) {
             Log.e("MapActivity checkScheduleStatus", "Error: ${e.localizedMessage}")
         }
@@ -1891,7 +1894,7 @@ class MapActivity : AppCompatActivity() {
 //                    Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
 //                    Log.d("GPS_DEBUG", "Speed: ${location.speed}, Bearing: ${location.bearing}")
 //
-                    showCustomToast("Latitude: ${latitude}, Longitude: ${longitude}, LocAccuracy: ${location.accuracy}, Speed: ${speed}, Bearing: ${bearing}, BearAccuracy: ${location.bearingAccuracyDegrees}")
+//                    showCustomToast("Latitude: ${latitude}, Longitude: ${longitude}, LocAccuracy: ${location.accuracy}, Speed: ${speed}, Bearing: ${bearing}, BearAccuracy: ${location.bearingAccuracyDegrees}")
 //                    Toast.makeText(this@MapActivity, "Lat: ${location.latitude}, Lon: ${location.longitude}, LocAcc: ${location.accuracy}, Speed: ${location.speed}, Bear: ${location.bearing}, BearAcc: ${location.bearingAccuracyDegrees}", Toast.LENGTH_LONG).show()
 //                    Toast.makeText(this@MapActivity, "Speed: ${location.speed}, Bearing: ${location.bearing}", Toast.LENGTH_LONG).show()
 
