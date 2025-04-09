@@ -375,7 +375,8 @@ class TestMapActivity : AppCompatActivity() {
                     val handler = Handler(Looper.getMainLooper())
                     handler.removeCallbacksAndMessages(null)
 
-                    simulateMovement(startLat, startLon, endLat, endLon, steps)
+//                    simulateMovement(startLat, startLon, endLat, endLon, steps)
+                    simulateMovement(startLat, startLon, endLat, endLon)
 
                     simulationHandler.postDelayed({
                         currentRouteIndex++
@@ -729,49 +730,136 @@ class TestMapActivity : AppCompatActivity() {
         return String.format("%s%02d:%02d:%02d", sign, hours, minutes, secs)
     }
 
-    /** Interpolates movement between two points with dynamic bearing and speed updates */
-    private fun simulateMovement(startLat: Double, startLon: Double, endLat: Double, endLon: Double, steps: Int) {
-        val latStep = (endLat - startLat) / steps
-        val lonStep = (endLon - startLon) / steps
+//    /** Interpolates movement between two points with dynamic bearing and speed updates */
+//    private fun simulateMovement(startLat: Double, startLon: Double, endLat: Double, endLon: Double, steps: Int) {
+//        val latStep = (endLat - startLat) / steps
+//        val lonStep = (endLon - startLon) / steps
+//
+//        var step = 0
+//
+//        // Cancel previous one safely
+//        stepRunnable?.let { stepHandler.removeCallbacks(it) }
+//
+//        stepRunnable = object : Runnable {
+//            override fun run() {
+//                if (step < steps) {
+//                    val newLat = startLat + (latStep * step)
+//                    val newLon = startLon + (lonStep * step)
+//
+//                    checkPassedStops(newLat, newLon)
+//                    updateTimingPointBasedOnLocation(newLat, newLon)
+//
+//                    runOnUiThread {
+//                        speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
+//                    }
+//
+//                    bearing = calculateBearing(newLat, newLon, endLat, endLon)
+//                    updateBusMarkerPosition(newLat, newLon, bearing)
+//
+//                    lastLatitude = newLat
+//                    lastLongitude = newLon
+//                    latitude = newLat
+//                    longitude = newLon
+//
+//                    if (step % 3 == 0) {
+//                        Log.d("simulateMovement", "Lat: $newLat, Lon: $newLon, Bearing: $bearing")
+//                    }
+//
+//                    step++
+//                    stepHandler.postDelayed(this, 100)
+//                }
+//            }
+//        }
+//
+//        stepHandler.post(stepRunnable!!)
+//    }
 
-        var step = 0
+    /**
+     * Simulates the movement of the bus marker from a starting point to an ending point dynamically
+     * using a time-based integration approach. The function calculates the traveled distance based on
+     * the current speed and elapsed time, interpolates the new marker position accordingly, and updates
+     * the marker's bearing to ensure correct rotation. The update is executed repeatedly every 100ms until
+     * the complete distance for the segment has been covered.
+     *
+     * When the marker reaches the destination (i.e. the progress fraction reaches 1.0), the [onSegmentComplete]
+     * function is called to move on to the next segment.
+     *
+     * @param startLat The latitude of the starting point.
+     * @param startLon The longitude of the starting point.
+     * @param endLat The latitude of the destination point.
+     * @param endLon The longitude of the destination point.
+     */
+    private fun simulateMovement(startLat: Double, startLon: Double, endLat: Double, endLon: Double) {
+        // Calculate the total distance for the segment.
+        val totalDistance = calculateDistance(startLat, startLon, endLat, endLon)
+        var distanceTravelled = 0.0
+        var lastUpdateTime = System.currentTimeMillis()
 
-        // Cancel previous one safely
+        // Remove any previous callbacks if necessary.
         stepRunnable?.let { stepHandler.removeCallbacks(it) }
 
         stepRunnable = object : Runnable {
             override fun run() {
-                if (step < steps) {
-                    val newLat = startLat + (latStep * step)
-                    val newLon = startLon + (lonStep * step)
+                val currentTime = System.currentTimeMillis()
+                // dt in seconds, adjust the scaling if needed.
+                val dt = (currentTime - lastUpdateTime) / 1000.0
+                lastUpdateTime = currentTime
 
-                    checkPassedStops(newLat, newLon)
-                    updateTimingPointBasedOnLocation(newLat, newLon)
+                // Update the traveled distance based on current speed (m/s).
+                val currentSpeedMetersPerSec = speed / 3.6
+                distanceTravelled += currentSpeedMetersPerSec * dt
 
-                    runOnUiThread {
-                        speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
-                    }
+                // Calculate progress fraction (clamp it to 1.0 maximum).
+                val fraction = (distanceTravelled / totalDistance).coerceAtMost(1.0)
 
-                    bearing = calculateBearing(newLat, newLon, endLat, endLon)
-                    updateBusMarkerPosition(newLat, newLon, bearing)
+                // Interpolate the new latitude and longitude.
+                val newLat = startLat + (endLat - startLat) * fraction
+                val newLon = startLon + (endLon - startLon) * fraction
 
-                    lastLatitude = newLat
-                    lastLongitude = newLon
-                    latitude = newLat
-                    longitude = newLon
+                checkPassedStops(newLat, newLon)
+                updateTimingPointBasedOnLocation(newLat, newLon)
 
-                    if (step % 3 == 0) {
-                        Log.d("simulateMovement", "Lat: $newLat, Lon: $newLon, Bearing: $bearing")
-                    }
+                runOnUiThread {
+                    speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
+                }
 
-                    step++
+                // Calculate bearing (so marker rotates correctly).
+                val newBearing = calculateBearing(newLat, newLon, endLat, endLon)
+                updateBusMarkerPosition(newLat, newLon, newBearing)
+
+                lastLatitude = newLat
+                lastLongitude = newLon
+                latitude = newLat
+                longitude = newLon
+
+                if (fraction < 1.0) {
+                    // Schedule the next update after 100ms.
                     stepHandler.postDelayed(this, 100)
+                } else {
+                    // Segment complete; you may trigger moving to the next segment.
+                    onSegmentComplete()
                 }
             }
         }
 
+        // Start the simulation for this segment.
         stepHandler.post(stepRunnable!!)
     }
+
+    private fun onSegmentComplete() {
+        // Increment your route index and start simulation for the next segment.
+        currentRouteIndex++
+        // Optionally, check if simulation is over, then schedule next simulation segment.
+        if (currentRouteIndex < route.size - 1) {
+            val start = route[currentRouteIndex]
+            val end = route[currentRouteIndex + 1]
+            simulateMovement(start.latitude!!, start.longitude!!, end.latitude!!, end.longitude!!)
+        } else {
+            // End of route: stop simulation.
+            isSimulating = false
+        }
+    }
+
 
     /**
      * Updates the API Time TextView based on the schedule start time and the cumulative durations
