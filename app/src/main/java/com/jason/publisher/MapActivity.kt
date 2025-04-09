@@ -2211,6 +2211,57 @@ class MapActivity : AppCompatActivity() {
         // Keep the map centered on the bus location
         binding.map.setCenter(newPosition)
         binding.map.invalidate() // Force redraw
+
+        // Call our new listener function to check/update upcoming bus stop details
+        onBusMarkerUpdated()
+    }
+
+    /**
+     * Listener function that is called whenever the bus marker is updated.
+     * It checks whether the currently displayed upcoming bus stop (in the upcomingBusStopTextView)
+     * has been passed by comparing the current bus position (latitude, longitude) with the bus stop’s coordinates.
+     * If the stop is within the defined busStopRadius, then it automatically updates the upcoming stop to the next one.
+     * For stops that are timing points (i.e. red bus stops) the API timing is also updated.
+     */
+    private fun onBusMarkerUpdated() {
+        // Get the stop address currently shown in the upcoming bus stop text view.
+        val currentDisplayedStop = upcomingBusStopTextView.text.toString()
+        // Try to find this stop in the stops list.
+        val currentStopIndexFromDisplay = stops.indexOfFirst {
+            it.address?.equals(currentDisplayedStop, ignoreCase = true) == true
+        }
+        if (currentStopIndexFromDisplay != -1) {
+            val currentStop = stops[currentStopIndexFromDisplay]
+            // Compute the distance between the bus marker position and this bus stop.
+            val distanceToStop = calculateDistance(
+                latitude, longitude,
+                currentStop.latitude ?: 0.0,
+                currentStop.longitude ?: 0.0
+            )
+            Log.d("MapActivity onBusMarkerUpdated", "Distance to current stop '${currentStop.address}': ${"%.2f".format(distanceToStop)} m")
+            // If the bus is close enough—i.e. the stop is considered "passed"
+            if (distanceToStop <= busStopRadius) {
+                // Only update if there is a next stop available.
+                if (currentStopIndexFromDisplay + 1 < stops.size) {
+                    val nextStop = stops[currentStopIndexFromDisplay + 1]
+                    upcomingBusStopTextView.text = nextStop.address ?: "Unknown Stop"
+                    upcomingStop = nextStop.address ?: "Unknown Stop"
+                    Log.d("MapActivity onBusMarkerUpdated", "Updated upcoming bus stop to: ${nextStop.address}")
+                    // If the new upcoming stop has a timing point (red mark), update its API time.
+                    if (redBusStops.contains(nextStop.address)) {
+                        updateApiTime()
+                        Log.d("MapActivity onBusMarkerUpdated", "Upcoming stop is a timing point. API time updated.")
+                    }
+                } else {
+                    // End of route reached.
+                    upcomingBusStopTextView.text = "End of Route"
+                    upcomingStop = "End of Route"
+                    Log.d("MapActivity onBusMarkerUpdated", "Reached end of route.")
+                }
+            }
+        } else {
+            Log.d("MapActivity onBusMarkerUpdated", "The displayed upcoming stop '$currentDisplayedStop' is not found in the stops list.")
+        }
     }
 
     /**
