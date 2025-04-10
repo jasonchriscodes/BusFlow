@@ -142,6 +142,10 @@ class MapActivity : AppCompatActivity() {
     private var smoothedSpeed: Float = 0f
     // Choose an alpha value between 0 and 1: smaller alpha means slower adjustment (more smoothing)
     private val smoothingAlpha = 0.2f
+    // Time (in milliseconds) when we first detect a stop (newSpeed == 0)
+    private var stopStartTimestamp: Long? = null
+    // Total accumulated stop time (in milliseconds) that will be added to the predicted arrival
+    private var accumulatedStopTime: Long = 0L
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -996,9 +1000,13 @@ class MapActivity : AppCompatActivity() {
             val effectiveSpeed = if (smoothedSpeed / 3.6 < minSpeedMps) minSpeedMps else smoothedSpeed / 3.6
             val t1 = d1 / effectiveSpeed  // d1 is the distance to the red stop in meters
 
+            // add the stop time (convert accumulatedStopTime from milliseconds to seconds).
+            val extraStopSeconds = (accumulatedStopTime / 1000).toInt()
+
+            // Now, when computing the predicted arrival, add the extra stop seconds:
             val predictedArrival = Calendar.getInstance().apply {
                 time = simulatedStartTime.time
-                add(Calendar.SECOND, t1.toInt())
+                add(Calendar.SECOND, t1.toInt() + extraStopSeconds)
             }
 
             val predictedArrivalStr = timeFormat.format(predictedArrival.time)
@@ -2017,17 +2025,40 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * Smoothly updates the speed using an exponential moving average.
+     * Updates the smoothed (moving average) speed value based on a new instantaneous speed reading.
+     *
+     * This function applies an exponential moving average filter to smooth out sudden changes in the bus's speed.
+     * It also accounts for stops (when the bus is nearly stopped) by recording the stop start time. When a near-zero
+     * speed is detected (below MIN_SPEED_THRESHOLD), the function refrains from updating the smoothedSpeed and marks
+     * the stop start timestamp. When the bus resumes movement, it accumulates the total stop duration and then updates
+     * the smoothedSpeed using the new speed value.
+     *
+     * @param newSpeed The instantaneous speed (in km/h) as measured by the device or provided by simulation.
      */
     fun updateSpeed(newSpeed: Float) {
-        // If smoothedSpeed is zero (e.g., at startup), simply take the new speed.
-        smoothedSpeed = if (smoothedSpeed == 0f) {
-            newSpeed
+        // Define a minimal moving threshold (you can adjust this as needed)
+        val MIN_SPEED_THRESHOLD = 0.5f
+
+        if (newSpeed <= MIN_SPEED_THRESHOLD) {
+            // Bus appears to be stopped; if we haven't recorded the stop time, mark it now.
+            if (stopStartTimestamp == null) {
+                stopStartTimestamp = System.currentTimeMillis()
+                Log.d("MapActivity", "Stop detected: marking stop start time.")
+            }
+            // Do not update smoothedSpeed when newSpeed is (almost) zero.
+            Log.d("MapActivity", "Speed is near zero. Keeping smoothedSpeed at: $smoothedSpeed km/h")
         } else {
-            smoothingAlpha * newSpeed + (1 - smoothingAlpha) * smoothedSpeed
+            // If bus is moving and we previously were stopped, accumulate the stop duration.
+            if (stopStartTimestamp != null) {
+                accumulatedStopTime += System.currentTimeMillis() - stopStartTimestamp!!
+                stopStartTimestamp = null
+                Log.d("MapActivity", "Resuming movement. Accumulated stop time: ${accumulatedStopTime} ms")
+            }
+            // Standard exponential moving average update
+            smoothedSpeed = if (smoothedSpeed == 0f) newSpeed
+            else smoothingAlpha * newSpeed + (1 - smoothingAlpha) * smoothedSpeed
+            Log.d("MapActivity", "Updated smoothedSpeed: $smoothedSpeed km/h")
         }
-        // Optionally log the smoothed speed for debugging:
-        Log.d("MapActivity", "Smoothed speed: $smoothedSpeed km/h")
     }
 
     /**
