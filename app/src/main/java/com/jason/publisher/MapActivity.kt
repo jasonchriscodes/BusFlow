@@ -194,6 +194,16 @@ class MapActivity : AppCompatActivity() {
         Log.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
         Log.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
 
+        FileLogger.d("MapActivity onCreate retrieve", "Received aid: $aid")
+        FileLogger.d("MapActivity onCreate retrieve", "Received config: ${config.toString()}")
+        FileLogger.d("MapActivity onCreate retrieve", "Received jsonString: $jsonString")
+        FileLogger.d("MapActivity onCreate retrieve", "Received route: ${route.toString()}")
+        FileLogger.d("MapActivity onCreate retrieve", "Received stops: ${stops.toString()}")
+        FileLogger.d("MapActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
+        FileLogger.d("MapActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
+        FileLogger.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
+        FileLogger.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
+
         extractRedBusStops()
 
         // Initialize UI components
@@ -1052,6 +1062,13 @@ class MapActivity : AppCompatActivity() {
 
             FileLogger.d("MapActivity checkScheduleStatus", "======= Schedule Status Debug =======")
             FileLogger.d("MapActivity checkScheduleStatus", "Current Lat: $latitude, Lng: $longitude")
+            FileLogger.d("MapActivity checkScheduleStatus", "Upcoming Stop: $stopAddress")
+            Log.d("MapActivity checkScheduleStatus", "Upcoming Stop UI Text: ${upcomingBusStopTextView.text}")
+            if (currentStopIndex in stops.indices) {
+                FileLogger.d("MapActivity checkScheduleStatus", "Current Stop (index $currentStopIndex): ${stops[currentStopIndex].address}")
+            } else {
+                FileLogger.d("MapActivity checkScheduleStatus", "Current Stop not available; currentStopIndex: $currentStopIndex, stops count: ${stops.size}")
+            }
             FileLogger.d("MapActivity checkScheduleStatus", "Red Stop Index: $redStopIndex")
             FileLogger.d("MapActivity checkScheduleStatus", "Red Stop Name: ${redStop.address}")
             FileLogger.d("MapActivity checkScheduleStatus", "effectiveSpeed (km/h): $effectiveSpeed, effectiveSpeed (m/s): ${effectiveSpeed / 3.6}")
@@ -1483,6 +1500,10 @@ class MapActivity : AppCompatActivity() {
                     "MapActivity checkPassedStops",
                     "✅ Nearest stop passed: $stopLat, $stopLon (Distance: ${"%.2f".format(distance)} meters) at $stopAddress"
                 )
+                FileLogger.d(
+                    "MapActivity checkPassedStops",
+                    "✅ Nearest stop passed: $stopLat, $stopLon (Distance: ${"%.2f".format(distance)} meters) at $stopAddress"
+                )
                 Toast.makeText(
                     this@MapActivity,
                     "✅At ${latitude} ${longitude} nearest stop passed: $stopLat, $stopLon (Distance: ${"%.2f".format(distance)} meters) at $stopAddress",
@@ -1517,6 +1538,10 @@ class MapActivity : AppCompatActivity() {
                         "✅ Arrived at: $stopAddress",
                         Toast.LENGTH_LONG
                     ).show()
+                    FileLogger.d(
+                        "MapActivity checkPassedStops",
+                        "✅ Arrived at: $stopAddress"
+                    )
                 }
 
                 // ✅ Add this block to track and update detection zones
@@ -2027,34 +2052,37 @@ class MapActivity : AppCompatActivity() {
     /**
      * Updates the smoothed (moving average) speed value based on a new instantaneous speed reading.
      *
-     * This function applies an exponential moving average filter to smooth out sudden changes in the bus's speed.
-     * It also accounts for stops (when the bus is nearly stopped) by recording the stop start time. When a near-zero
-     * speed is detected (below MIN_SPEED_THRESHOLD), the function refrains from updating the smoothedSpeed and marks
-     * the stop start timestamp. When the bus resumes movement, it accumulates the total stop duration and then updates
-     * the smoothedSpeed using the new speed value.
+     * The function applies an exponential moving average filter to smooth out sudden changes in speed.
+     * With a threshold set to 15 km/h, any instantaneous speed below this value is considered as "stopped"
+     * or in a heavy slowdown. In that case, the smoothedSpeed is not updated; instead, the stop duration
+     * is accumulated so that predicted arrival time adjustments include the waiting period.
      *
-     * @param newSpeed The instantaneous speed (in km/h) as measured by the device or provided by simulation.
+     * @param newSpeed The instantaneous speed (in km/h) from the current measurement.
      */
     fun updateSpeed(newSpeed: Float) {
-        // Define a minimal moving threshold (you can adjust this as needed)
-        val MIN_SPEED_THRESHOLD = 0.5f
+        // Define a minimal speed threshold (set to 15 km/h)
+        val MIN_SPEED_THRESHOLD = 15.0f
 
         if (newSpeed <= MIN_SPEED_THRESHOLD) {
-            // Bus appears to be stopped; if we haven't recorded the stop time, mark it now.
+            // When the speed drops below 15 km/h, consider the bus as "stopped" or in heavy traffic.
+            // Record the stop time if it hasn't been recorded yet.
             if (stopStartTimestamp == null) {
                 stopStartTimestamp = System.currentTimeMillis()
-                Log.d("MapActivity", "Stop detected: marking stop start time.")
+                Log.d("MapActivity", "Low speed detected (< 15 km/h): marking stop start time.")
             }
-            // Do not update smoothedSpeed when newSpeed is (almost) zero.
-            Log.d("MapActivity", "Speed is near zero. Keeping smoothedSpeed at: $smoothedSpeed km/h")
+            // Do NOT update smoothedSpeed during a low-speed condition to avoid a sudden drop in the prediction.
+            Log.d("MapActivity", "Speed ($newSpeed km/h) is below threshold. Keeping smoothedSpeed at: $smoothedSpeed km/h")
         } else {
-            // If bus is moving and we previously were stopped, accumulate the stop duration.
+            // When newSpeed exceeds the threshold, treat this as resumed movement.
+            // If previously the bus was stopped, update the accumulated stop time.
             if (stopStartTimestamp != null) {
                 accumulatedStopTime += System.currentTimeMillis() - stopStartTimestamp!!
                 stopStartTimestamp = null
                 Log.d("MapActivity", "Resuming movement. Accumulated stop time: ${accumulatedStopTime} ms")
             }
-            // Standard exponential moving average update
+            // Update the smoothed speed using exponential moving average:
+            // If smoothedSpeed is still zero (e.g., at startup), assign newSpeed directly.
+            // Otherwise, use the smoothing factor.
             smoothedSpeed = if (smoothedSpeed == 0f) newSpeed
             else smoothingAlpha * newSpeed + (1 - smoothingAlpha) * smoothedSpeed
             Log.d("MapActivity", "Updated smoothedSpeed: $smoothedSpeed km/h")
