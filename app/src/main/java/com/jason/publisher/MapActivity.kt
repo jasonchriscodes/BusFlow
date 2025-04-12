@@ -142,10 +142,6 @@ class MapActivity : AppCompatActivity() {
     private var smoothedSpeed: Float = 0f
     // Choose an alpha value between 0 and 1: smaller alpha means slower adjustment (more smoothing)
     private val smoothingAlpha = 0.2f
-    // Time (in milliseconds) when we first detect a stop (newSpeed == 0)
-    private var stopStartTimestamp: Long? = null
-    // Total accumulated stop time (in milliseconds) that will be added to the predicted arrival
-    private var accumulatedStopTime: Long = 0L
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -1010,13 +1006,9 @@ class MapActivity : AppCompatActivity() {
             val effectiveSpeed = if (smoothedSpeed / 3.6 < minSpeedMps) minSpeedMps else smoothedSpeed / 3.6
             val t1 = d1 / effectiveSpeed  // d1 is the distance to the red stop in meters
 
-            // add the stop time (convert accumulatedStopTime from milliseconds to seconds).
-            val extraStopSeconds = (accumulatedStopTime / 1000).toInt()
-
-            // Now, when computing the predicted arrival, add the extra stop seconds:
             val predictedArrival = Calendar.getInstance().apply {
                 time = simulatedStartTime.time
-                add(Calendar.SECOND, t1.toInt() + extraStopSeconds)
+                add(Calendar.SECOND, t1.toInt())
             }
 
             val predictedArrivalStr = timeFormat.format(predictedArrival.time)
@@ -1026,31 +1018,28 @@ class MapActivity : AppCompatActivity() {
 
             val statusText = when {
                 deltaSec >= 120 -> "Very Ahead (~${deltaSec}s early)"
-                deltaSec in 60..119 -> "Slightly Ahead (~${deltaSec}s early)"
-                deltaSec in -59..59 -> "On Time"
-                deltaSec in -119..-60 -> "Slightly Behind (~${-deltaSec}s late)"
-                deltaSec in -299..-120 -> "Very Behind (~${-deltaSec}s late)"
-                deltaSec <= -300 -> "Late for Next Run (~${-deltaSec}s late)"
+                deltaSec in 1..119 -> "Slightly Ahead (~${deltaSec}s early)"
+                deltaSec in -179..0 -> "On Time (~${-deltaSec}s on time)"
+                deltaSec in -299..-180 -> "Slightly Behind (~${-deltaSec}s late)"
+                deltaSec <= -300 -> "Very Behind (~${-deltaSec}s late)"
                 else -> "Unknown"
             }
 
             val symbolRes = when {
                 deltaSec >= 120 -> R.drawable.ic_schedule_very_ahead
-                deltaSec in 60..119 -> R.drawable.ic_schedule_slightly_ahead
-                deltaSec in -59..59 -> R.drawable.ic_schedule_on_time
-                deltaSec in -119..-60 -> R.drawable.ic_schedule_slightly_behind
-                deltaSec in -299..-120 -> R.drawable.ic_schedule_very_behind
-                deltaSec <= -300 -> R.drawable.ic_schedule_late
+                deltaSec in 1..119 -> R.drawable.ic_schedule_slightly_ahead
+                deltaSec in -179..0 -> R.drawable.ic_schedule_on_time
+                deltaSec in -299..-180 -> R.drawable.ic_schedule_slightly_behind
+                deltaSec <= -300 -> R.drawable.ic_schedule_very_behind
                 else -> R.drawable.ic_schedule_on_time
             }
 
             val colorRes = when {
                 deltaSec >= 120 -> R.color.blind_red            // Very Ahead
-                deltaSec in 60..119 -> R.color.blind_light_orange     // Slightly Ahead
-                deltaSec in -59..59 -> R.color.blind_cyan       // On Time
-                deltaSec in -119..-60 -> R.color.blind_orange   // Slightly Behind
-                deltaSec in -299..-120 -> R.color.blind_orange  // Very Behind
-                deltaSec <= -300 -> R.color.blind_red           // Going Red For Next Run
+                deltaSec in 1..119 -> R.color.blind_light_orange     // Slightly Ahead
+                deltaSec in -179..0 -> R.color.blind_cyan       // On Time
+                deltaSec in -299..-180 -> R.color.blind_orange   // Slightly Behind
+                deltaSec <= -300 -> R.color.blind_orange          // Very Behind
                 else -> R.color.blind_cyan
             }
 
@@ -2050,43 +2039,17 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * Updates the smoothed (moving average) speed value based on a new instantaneous speed reading.
-     *
-     * The function applies an exponential moving average filter to smooth out sudden changes in speed.
-     * With a threshold set to 15 km/h, any instantaneous speed below this value is considered as "stopped"
-     * or in a heavy slowdown. In that case, the smoothedSpeed is not updated; instead, the stop duration
-     * is accumulated so that predicted arrival time adjustments include the waiting period.
-     *
-     * @param newSpeed The instantaneous speed (in km/h) from the current measurement.
+     * Smoothly updates the speed using an exponential moving average.
      */
     fun updateSpeed(newSpeed: Float) {
-        // Define a minimal speed threshold (set to 15 km/h)
-        val MIN_SPEED_THRESHOLD = 15.0f
-
-        if (newSpeed <= MIN_SPEED_THRESHOLD) {
-            // When the speed drops below 15 km/h, consider the bus as "stopped" or in heavy traffic.
-            // Record the stop time if it hasn't been recorded yet.
-            if (stopStartTimestamp == null) {
-                stopStartTimestamp = System.currentTimeMillis()
-                Log.d("MapActivity", "Low speed detected (< 15 km/h): marking stop start time.")
-            }
-            // Do NOT update smoothedSpeed during a low-speed condition to avoid a sudden drop in the prediction.
-            Log.d("MapActivity", "Speed ($newSpeed km/h) is below threshold. Keeping smoothedSpeed at: $smoothedSpeed km/h")
+        // If smoothedSpeed is zero (e.g., at startup), simply take the new speed.
+        smoothedSpeed = if (smoothedSpeed == 0f) {
+            newSpeed
         } else {
-            // When newSpeed exceeds the threshold, treat this as resumed movement.
-            // If previously the bus was stopped, update the accumulated stop time.
-            if (stopStartTimestamp != null) {
-                accumulatedStopTime += System.currentTimeMillis() - stopStartTimestamp!!
-                stopStartTimestamp = null
-                Log.d("MapActivity", "Resuming movement. Accumulated stop time: ${accumulatedStopTime} ms")
-            }
-            // Update the smoothed speed using exponential moving average:
-            // If smoothedSpeed is still zero (e.g., at startup), assign newSpeed directly.
-            // Otherwise, use the smoothing factor.
-            smoothedSpeed = if (smoothedSpeed == 0f) newSpeed
-            else smoothingAlpha * newSpeed + (1 - smoothingAlpha) * smoothedSpeed
-            Log.d("MapActivity", "Updated smoothedSpeed: $smoothedSpeed km/h")
+            smoothingAlpha * newSpeed + (1 - smoothingAlpha) * smoothedSpeed
         }
+        // Optionally log the smoothed speed for debugging:
+        Log.d("MapActivity", "Smoothed speed: $smoothedSpeed km/h")
     }
 
     /**

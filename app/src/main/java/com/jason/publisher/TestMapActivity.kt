@@ -648,31 +648,28 @@ class TestMapActivity : AppCompatActivity() {
 
             val statusText = when {
                 deltaSec >= 120 -> "Very Ahead (~${deltaSec}s early)"
-                deltaSec in 60..119 -> "Slightly Ahead (~${deltaSec}s early)"
-                deltaSec in -59..59 -> "On Time"
-                deltaSec in -119..-60 -> "Slightly Behind (~${-deltaSec}s late)"
-                deltaSec in -299..-120 -> "Very Behind (~${-deltaSec}s late)"
-                deltaSec <= -300 -> "Late for Next Run (~${-deltaSec}s late)"
+                deltaSec in 1..119 -> "Slightly Ahead (~${deltaSec}s early)"
+                deltaSec in -179..0 -> "On Time (~${-deltaSec}s on time)"
+                deltaSec in -299..-180 -> "Slightly Behind (~${-deltaSec}s late)"
+                deltaSec <= -300 -> "Very Behind (~${-deltaSec}s late)"
                 else -> "Unknown"
             }
 
             val symbolRes = when {
                 deltaSec >= 120 -> R.drawable.ic_schedule_very_ahead
-                deltaSec in 60..119 -> R.drawable.ic_schedule_slightly_ahead
-                deltaSec in -59..59 -> R.drawable.ic_schedule_on_time
-                deltaSec in -119..-60 -> R.drawable.ic_schedule_slightly_behind
-                deltaSec in -299..-120 -> R.drawable.ic_schedule_very_behind
-                deltaSec <= -300 -> R.drawable.ic_schedule_late
+                deltaSec in 1..119 -> R.drawable.ic_schedule_slightly_ahead
+                deltaSec in -179..0 -> R.drawable.ic_schedule_on_time
+                deltaSec in -299..-180 -> R.drawable.ic_schedule_slightly_behind
+                deltaSec <= -300 -> R.drawable.ic_schedule_very_behind
                 else -> R.drawable.ic_schedule_on_time
             }
 
             val colorRes = when {
                 deltaSec >= 120 -> R.color.blind_red            // Very Ahead
-                deltaSec in 60..119 -> R.color.blind_light_orange     // Slightly Ahead
-                deltaSec in -59..59 -> R.color.blind_cyan       // On Time
-                deltaSec in -119..-60 -> R.color.blind_orange   // Slightly Behind
-                deltaSec in -299..-120 -> R.color.blind_orange  // Very Behind
-                deltaSec <= -300 -> R.color.blind_red           // Going Red For Next Run
+                deltaSec in 1..119 -> R.color.blind_light_orange     // Slightly Ahead
+                deltaSec in -179..0 -> R.color.blind_cyan       // On Time
+                deltaSec in -299..-180 -> R.color.blind_orange   // Slightly Behind
+                deltaSec <= -300 -> R.color.blind_orange          // Very Behind
                 else -> R.color.blind_cyan
             }
 
