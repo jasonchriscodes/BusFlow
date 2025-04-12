@@ -1,5 +1,6 @@
 package com.jason.publisher
 
+import FileLogger
 import android.Manifest
 import android.annotation.SuppressLint
 import android.os.Bundle
@@ -55,7 +56,9 @@ import java.lang.Math.sin
 import java.lang.Math.sqrt
 import com.google.android.gms.location.*
 import com.jason.publisher.databinding.ActivityMapBinding
+import com.jason.publisher.utils.TimeBasedMovingAverageFilterDouble
 import java.lang.Math.abs
+import java.util.logging.Logger
 
 class MapActivity : AppCompatActivity() {
 
@@ -142,6 +145,10 @@ class MapActivity : AppCompatActivity() {
     private var smoothedSpeed: Float = 0f
     // Choose an alpha value between 0 and 1: smaller alpha means slower adjustment (more smoothing)
     private val smoothingAlpha = 0.2f
+    // At class level (near your other properties)
+    private val t1Filter = TimeBasedMovingAverageFilterDouble(windowMillis = 30000)
+    // Last valid filtered t1 value (in seconds)
+    private var lastValidT1: Double = 0.0
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -1004,17 +1011,25 @@ class MapActivity : AppCompatActivity() {
             // --- 3. Total time from start to red timing point in seconds (t2) ---
             val t2 = ((apiTime.time - baseTime.time) / 1000).toDouble()
 
-            // --- 4. Estimate time to arrival from current position (t1) ---
-            val minSpeedMps = 0.1  // Avoid division by zero
-            val effectiveSpeed = if (smoothedSpeed / 3.6 < minSpeedMps) minSpeedMps else smoothedSpeed / 3.6
-            val t1 = d1 / effectiveSpeed  // d1 is the distance to the red stop in meters
-
-            val predictedArrival = Calendar.getInstance().apply {
-                time = simulatedStartTime.time
-                add(Calendar.SECOND, t1.toInt())
+            // --- 4. Estimate time to arrival (t₁) ---
+            // Use the filtered moving average approach:
+            val currentSpeedMps = smoothedSpeed / 3.6f  // Convert smoothedSpeed from km/h to m/s
+            val t1Instant: Double = if (currentSpeedMps > 0.0001) d1 / currentSpeedMps else Double.NaN
+            val filteredT1: Double = if (!t1Instant.isNaN() && t1Instant.isFinite()) {
+                lastValidT1 = t1Filter.add(t1Instant)
+                lastValidT1
+            } else {
+                lastValidT1
             }
 
+            // Use filteredT1 to compute predicted arrival time:
+            val predictedArrival = Calendar.getInstance().apply {
+                time = simulatedStartTime.time
+                add(Calendar.SECOND, filteredT1.toInt())
+            }
             val predictedArrivalStr = timeFormat.format(predictedArrival.time)
+
+            FileLogger.d("MapActivity checkScheduleStatus", "Estimated Time Remaining (t₁): $filteredT1 seconds")
 
             // --- 5. Compare predicted arrival with Timing Point ---
             val deltaSec = ((timingPointTime.time - predictedArrival.time.time) / 1000).toInt()
@@ -1063,17 +1078,17 @@ class MapActivity : AppCompatActivity() {
             }
             FileLogger.d("MapActivity checkScheduleStatus", "Red Stop Index: $redStopIndex")
             FileLogger.d("MapActivity checkScheduleStatus", "Red Stop Name: ${redStop.address}")
-            FileLogger.d("MapActivity checkScheduleStatus", "effectiveSpeed (km/h): $effectiveSpeed, effectiveSpeed (m/s): ${effectiveSpeed / 3.6}")
+            FileLogger.d("MapActivity checkScheduleStatus", "currentSpeedMps (km/h): $currentSpeedMps , effectiveSpeed (m/s): ${currentSpeedMps  / 3.6}")
             FileLogger.d("MapActivity checkScheduleStatus", "Distance to Red Stop (d1): $d1 meters")
             FileLogger.d("MapActivity checkScheduleStatus", "Total Distance (d2): $d2 meters")
             Log.d("MapActivity checkScheduleStatus", "Total Time (t2): $t2 seconds")
-            FileLogger.d("MapActivity checkScheduleStatus", "Estimated Time Remaining (t1 = d1 / effectiveSpeed): $t1 seconds")
+            FileLogger.d("MapActivity checkScheduleStatus", "Estimated Time Remaining (filteredT1 = d1 / effectiveSpeed): $filteredT1 seconds")
             FileLogger.d("MapActivity checkScheduleStatus", "Predicted Arrival: $predictedArrivalStr")
             FileLogger.d("MapActivity checkScheduleStatus", "API Time: $apiTimeStr")
             FileLogger.d("MapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
             FileLogger.d("MapActivity checkScheduleStatus", "Delta to Timing Point: $deltaSec seconds")
             FileLogger.d("MapActivity checkScheduleStatus", "Status: $statusText")
-            showCustomToastBottom("Latitude: ${latitude}, Longitude: ${longitude}, effectiveSpeed: ${effectiveSpeed}, Bearing: ${bearing}, Distance to Red Stop (d1): $d1 meters, Total Distance (d2): $d2 meters, Total Time (t2): $t2 seconds, Estimated Time Remaining (t1 = d1 / effectiveSpeed): $t1 seconds, Predicted Arrival: $predictedArrivalStr, API Time: $apiTimeStr, Actual Time: $actualTimeStr, Delta to Timing Point: $deltaSec seconds")
+            showCustomToastBottom("Latitude: ${latitude}, Longitude: ${longitude}, effectiveSpeed: ${currentSpeedMps}, Bearing: ${bearing}, Distance to Red Stop (d1): $d1 meters, Total Distance (d2): $d2 meters, Total Time (t2): $t2 seconds, Estimated Time Remaining (t1 = d1 / effectiveSpeed): $filteredT1 seconds, Predicted Arrival: $predictedArrivalStr, API Time: $apiTimeStr, Actual Time: $actualTimeStr, Delta to Timing Point: $deltaSec seconds")
 
             overrideLateStatusForNextSchedule()
 
