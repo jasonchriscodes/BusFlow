@@ -655,7 +655,7 @@ class MapActivity : AppCompatActivity() {
         checkScheduleStatus()    // Immediately refresh the schedule status
         Log.d("MapActivity confirmArrival", "✅ Schedule Status Checked")
 
-        showCustomToast("Confirm Arrival at Latitude: ${latitude}, Longitude: ${longitude}, Address: ${stopAddress}")
+//        showCustomToast("Confirm Arrival at Latitude: ${latitude}, Longitude: ${longitude}, Address: ${stopAddress}")
         Log.d("MapActivity confirmArrival", "✅ Arrival confirmed at: ${stopAddress}")
 
         startLocationUpdate()   // ✅ Continue marker updates
@@ -1088,7 +1088,7 @@ class MapActivity : AppCompatActivity() {
             FileLogger.d("MapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
             FileLogger.d("MapActivity checkScheduleStatus", "Delta to Timing Point: $deltaSec seconds")
             FileLogger.d("MapActivity checkScheduleStatus", "Status: $statusText")
-            showCustomToastBottom("Latitude: ${latitude}, Longitude: ${longitude}, effectiveSpeed: ${currentSpeedMps}, Bearing: ${bearing}, Distance to Red Stop (d1): $d1 meters, Total Distance (d2): $d2 meters, Total Time (t2): $t2 seconds, Estimated Time Remaining (t1 = d1 / effectiveSpeed): $filteredT1 seconds, Predicted Arrival: $predictedArrivalStr, API Time: $apiTimeStr, Actual Time: $actualTimeStr, Delta to Timing Point: $deltaSec seconds")
+//            showCustomToastBottom("Latitude: ${latitude}, Longitude: ${longitude}, effectiveSpeed: ${currentSpeedMps}, Bearing: ${bearing}, Distance to Red Stop (d1): $d1 meters, Total Distance (d2): $d2 meters, Total Time (t2): $t2 seconds, Estimated Time Remaining (t1 = d1 / effectiveSpeed): $filteredT1 seconds, Predicted Arrival: $predictedArrivalStr, API Time: $apiTimeStr, Actual Time: $actualTimeStr, Delta to Timing Point: $deltaSec seconds")
 
             overrideLateStatusForNextSchedule()
 
@@ -2146,7 +2146,6 @@ class MapActivity : AppCompatActivity() {
 
                     runOnUiThread {
                         speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
-                        updateBusMarkerPosition(latitude, longitude, bearing)
                         updateBusMarkerPosition(latitude, longitude, bearing)
                         checkPassedStops(latitude, longitude)
                         updateTimingPointBasedOnLocation(latitude, longitude)
