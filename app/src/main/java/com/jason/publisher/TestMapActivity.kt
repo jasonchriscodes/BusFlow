@@ -415,21 +415,24 @@ class TestMapActivity : AppCompatActivity() {
                 else -> emptyList()
             }
         }
-        val messageText = if (flatSchedule.size < 2) {
+
+        // Use the helper to retrieve the next schedule's start time.
+        val nextScheduleStartStr = getNextScheduleStartTime()
+
+        val messageText = if (nextScheduleStartStr == null) {
+            // No next schedule: finish of day message.
             "You have completed last run of the day."
         } else {
-            val nextTrip = flatSchedule[1]
-            val nextStartMinutes = convertTimeToMinutes(nextTrip.startTime)
+            // Compute the next schedule start time in minutes.
+            val nextStartMinutes = convertTimeToMinutes(nextScheduleStartStr)
             val currentMinutes = simulatedStartTime.get(Calendar.HOUR_OF_DAY) * 60 +
                     simulatedStartTime.get(Calendar.MINUTE)
             val restTotalMinutes = if (nextStartMinutes > currentMinutes) nextStartMinutes - currentMinutes else 0
             val restHours = restTotalMinutes / 60
             val restMinutes = restTotalMinutes % 60
-            "Trip complete! You have $restHours hour(s) and $restMinutes minute(s) rest before your next trip, which starts at ${nextTrip.startTime}:00."
+            "Trip complete! You have $restHours hour(s) and $restMinutes minute(s) rest before your next trip, which starts at ${nextScheduleStartStr}:00."
         }
-        // late notification: You are $restMinutes minute(s) for your next trip. Please notify operations of late departure.
-        // break (lunch break):  You are $restMinutes minute(s) for your break time.
-        // end of shift: You have completed last run of the day.
+
         val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("Trip Completed")
             .setMessage(messageText)
@@ -678,7 +681,6 @@ class TestMapActivity : AppCompatActivity() {
                 scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(this@TestMapActivity, colorRes))
                 findViewById<ImageView>(R.id.scheduleAheadIcon).setImageResource(symbolRes)
             }
-
             Log.d("TestMapActivity checkScheduleStatus", "======= Schedule Status Debug =======")
             Log.d("TestMapActivity checkScheduleStatus", "Current Lat: $latitude, Lng: $longitude")
             Log.d("TestMapActivity checkScheduleStatus", "Red Stop Index: $redStopIndex")
@@ -693,10 +695,137 @@ class TestMapActivity : AppCompatActivity() {
             Log.d("TestMapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
             Log.d("TestMapActivity checkScheduleStatus", "Delta to Timing Point: $deltaSec seconds")
             Log.d("TestMapActivity checkScheduleStatus", "Status: $statusText")
-            Log.d("TestMapActivity checkScheduleStatus", "=====================================")
+
+            overrideLateStatusForNextSchedule()
+
         } catch (e: Exception) {
             Log.e("TestMapActivity checkScheduleStatus", "Error: ${e.localizedMessage}")
         }
+    }
+
+    /**
+     * Override the schedule status text with a late-for-next-run message if the difference between
+     * the next schedule's start time and the predicted arrival time at the final bus stop (predictedArrivalLastStop)
+     * is within the range [-86400, 300] seconds.
+     *
+     * Calculation details:
+     * - First, the predicted arrival at the final bus stop is computed (using variable names ending with LastStop).
+     * - Then, the next schedule start time (converted to full HH:mm:ss) is parsed.
+     * - The difference deltaNextSec = nextScheduleStartTime - predictedArrival is obtained in seconds.
+     * - If deltaNextSec is negative, then the override value is computed as (-deltaNextSec) + 300.
+     * - The status text is then overridden with:
+     *      "Late for next run by <overrideValue>s"
+     */
+    @SuppressLint("LongLogTag")
+    private fun overrideLateStatusForNextSchedule() {
+        val logTag = "TestMapActivity checkScheduleStatus"
+        // Set up time format.
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+        // Retrieve the scheduled final stop time from the current schedule's endTime.
+        val scheduledTimeForFinalStopStr = scheduleList.first().endTime + ":00"
+        val finalStopScheduledTime = parseTimeToday(scheduledTimeForFinalStopStr)
+        Log.d(logTag, "Final stop scheduled time: $scheduledTimeForFinalStopStr")
+
+        // Base time is the schedule's start time.
+        val baseTimeStr = scheduleList.first().startTime + ":00"
+        val baseTime = parseTimeToday(baseTimeStr)
+        Log.d(logTag, "Base time: $baseTimeStr")
+
+        // Use the final bus stop (last element in the stops list).
+        val finalStop = stops.last()
+        val stopLat = finalStop.latitude!!
+        val stopLon = finalStop.longitude!!
+        Log.d(logTag, "Final stop coordinates: lat=$stopLat, lon=$stopLon")
+
+        // --- Compute distance from current position to final stop (d1) ---
+        val d1 = calculateDistance(latitude, longitude, stopLat, stopLon)
+        Log.d(logTag, "d1 (distance current to final stop): $d1 meters")
+
+        // --- Calculate the total distance (d2) along the route to near the final stop ---
+        val finalStopRouteIndex = route.indexOfLast {
+            calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
+        }.coerceAtLeast(1)
+        val d2 = (0 until finalStopRouteIndex).sumOf { i ->
+            val p1 = route[i]
+            val p2 = route[i + 1]
+            calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
+        }
+        Log.d(logTag, "d2 (total route distance to final stop): $d2 meters")
+        if (d2 == 0.0) {
+            Log.e(logTag, "Total route distance is zero; cannot compute predicted arrival.")
+            return
+        }
+
+        // --- Compute total scheduled time in seconds (t2) from start to final stop ---
+        val t2 = ((finalStopScheduledTime.time - baseTime.time) / 1000).toDouble()
+        Log.d(logTag, "t2 (total scheduled time to final stop): $t2 seconds")
+
+        // --- Estimate time to final stop from current position (t1) ---
+        val speedMetersPerSec = speed / 3.6
+        val t1 = d1 / speedMetersPerSec
+        Log.d(logTag, "t1 (estimated time remaining): $t1 seconds")
+
+        // Compute predicted arrival at final stop.
+        val predictedArrival = Calendar.getInstance().apply {
+            time = simulatedStartTime.time
+            add(Calendar.SECOND, t1.toInt())
+        }
+        val predictedArrivalLastStop = timeFormat.format(predictedArrival.time)
+        Log.d(logTag, "Predicted arrival at final stop: $predictedArrivalLastStop")
+
+        // Retrieve the next schedule start time.
+        val nextScheduleStartRaw = getNextScheduleStartTime()
+        if (nextScheduleStartRaw == null) {
+            Log.d(logTag, "No next schedule start time available; skipping override.")
+            return
+        }
+        // Append ":00" for seconds.
+        val nextScheduleStartStr = nextScheduleStartRaw + ":00"
+        val nextScheduleStartTime = parseTimeToday(nextScheduleStartStr)
+        Log.d(logTag, "Next schedule start time: $nextScheduleStartStr")
+
+        // Compute delta in seconds: (next schedule start time - predicted arrival time).
+        val deltaNextSec = ((nextScheduleStartTime.time - predictedArrival.time.time) / 1000).toInt()
+        Log.d(logTag, "Delta (next schedule - predicted arrival): $deltaNextSec seconds")
+
+        // Check if delta falls within the override range [-86400, 300].
+        if (deltaNextSec in -86400..300) {
+            // If the delta is negative, compute override value as (-delta) + 300.
+            val overrideValue = if (deltaNextSec < 0) (-deltaNextSec) + 300 else deltaNextSec
+            val overrideStatusText = "Late for next run by ${overrideValue}s"
+            runOnUiThread {
+                // Set status text.
+                scheduleStatusValueTextView.text = overrideStatusText
+                // Set text color to blind_red.
+                scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(this@TestMapActivity, R.color.blind_red))
+                // Set the symbol to ic_schedule_late.
+                findViewById<ImageView>(R.id.scheduleAheadIcon).setImageResource(R.drawable.ic_schedule_late)
+            }
+            Log.d(logTag, "Overridden status text: \"$overrideStatusText\" (overrideValue: $overrideValue)")
+        } else {
+            Log.d(logTag, "Delta not within override range; no status override applied.")
+        }
+    }
+
+    /**
+     * Returns the start time for the next schedule.
+     * Assumes that the scheduleData list is sorted chronologically.
+     */
+    @SuppressLint("LongLogTag")
+    private fun getNextScheduleStartTime(): String? {
+        // Flatten scheduleData in case it's a nested list.
+        val flatSchedule = (scheduleData as? List<Any> ?: emptyList()).flatMap { element ->
+            when (element) {
+                is ScheduleItem -> listOf(element)
+                is List<*> -> element.filterIsInstance<ScheduleItem>()
+                else -> emptyList()
+            }
+        }
+        // Now check if we have a second schedule item.
+        val nextStartTime = if (flatSchedule.size > 1) flatSchedule[1].startTime else null
+        Log.d("TestMapActivity getNextScheduleStartTime", "Next schedule start time: ${nextStartTime ?: "None"}")
+        return nextStartTime
     }
 
     /**
