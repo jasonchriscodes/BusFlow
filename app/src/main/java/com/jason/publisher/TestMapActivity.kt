@@ -33,6 +33,7 @@ import com.jason.publisher.model.RouteData
 import com.jason.publisher.model.ScheduleItem
 import com.jason.publisher.services.LocationManager
 import com.jason.publisher.utils.NetworkStatusHelper
+import com.jason.publisher.utils.TimeBasedMovingAverageFilterDouble
 import org.json.JSONArray
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidBitmap
@@ -120,6 +121,9 @@ class TestMapActivity : AppCompatActivity() {
     private val stepHandler = Handler(Looper.getMainLooper())
     private var stepRunnable: Runnable? = null
     private var lastTimingPointStopAddress: String? = null
+    // A time-based filter for computed t₁ values (in seconds) with a 30-second window.
+    private val t1Filter = TimeBasedMovingAverageFilterDouble(windowMillis = 30000)
+    private var lastValidT1: Double = 0.0
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -368,6 +372,12 @@ class TestMapActivity : AppCompatActivity() {
                     }
                     // Adjust travel time: base travel time divided by the speed factor.
                     val baseSpeedMetersPerSecond = speed / 3.6
+                    if (baseSpeedMetersPerSecond < 0.0001f) {
+                        // Bus is stopped; wait and do not advance the segment.
+                        simulationHandler.postDelayed(this, 1000)
+                        return
+                    }
+
                     val travelTimeSeconds = (distanceMeters / baseSpeedMetersPerSecond)
                     val steps = (travelTimeSeconds * 10).toInt() // Update every 100ms
 
@@ -472,12 +482,12 @@ class TestMapActivity : AppCompatActivity() {
      */
     @SuppressLint("LongLogTag")
     private fun slowDown() {
-        if (speed > 1.0f) {
-            speed = maxOf(1.0f, speed - 5.0f)
+        if (speed > 0.0f) {
+            speed = maxOf(0.0f, speed - 5.0f)
             Log.d("SpeedControl", "Speed decreased to $speed km/h")
         } else {
-            Toast.makeText(this, "Minimum speed is 1 km/h", Toast.LENGTH_SHORT).show()
-            Log.d("SpeedControl", "🚫 Speed is already at minimum (1 km/h)")
+            Toast.makeText(this, "Speed is already at 0 km/h", Toast.LENGTH_SHORT).show()
+            Log.d("SpeedControl", "🚫 Speed is already at minimum (0 km/h)")
         }
     }
 
@@ -635,16 +645,30 @@ class TestMapActivity : AppCompatActivity() {
             // --- 3. Total time from start to red timing point in seconds (t2) ---
             val t2 = ((apiTime.time - baseTime.time) / 1000).toDouble()
 
-            // --- 4. Estimate time to arrival from current position (t1) ---
+            // --- 4. Estimate time to arrival from current position (t₁) ---
+            // Calculate speed in meters per second.
             val speedMetersPerSec = speed / 3.6
-            val t1 = d1 / speedMetersPerSec
-
-            val predictedArrival = Calendar.getInstance().apply {
-                time = simulatedStartTime.time
-                add(Calendar.SECOND, t1.toInt())
+            // Compute instantaneous t₁ only if speed is sufficiently high, else assign NaN.
+            val t1Instant: Double = if (speedMetersPerSec > 0.0001) d1 / speedMetersPerSec else Double.NaN
+            // Use the filter only when t1Instant is a valid number; otherwise, fall back to the last valid value.
+            val filteredT1 = if (!t1Instant.isNaN() && t1Instant.isFinite()) {
+                // Update the moving average filter with the new valid sample and store it.
+                lastValidT1 = t1Filter.add(t1Instant)
+                lastValidT1
+            } else {
+                // When speed is 0, do not update—simply use the last valid average.
+                lastValidT1
             }
 
+            // Use filteredT1 for predicted arrival
+            val predictedArrival = Calendar.getInstance().apply {
+                time = simulatedStartTime.time
+                add(Calendar.SECOND, filteredT1.toInt())
+            }
             val predictedArrivalStr = timeFormat.format(predictedArrival.time)
+
+            // Logging: display filtered t₁ rather than the instantaneous value
+            Log.d("TestMapActivity checkScheduleStatus", "Estimated Time Remaining (t₁): $filteredT1 seconds")
 
             // --- 5. Compare predicted arrival with Timing Point ---
             val deltaSec = ((timingPointTime.time - predictedArrival.time.time) / 1000).toInt()
@@ -689,7 +713,7 @@ class TestMapActivity : AppCompatActivity() {
             Log.d("TestMapActivity checkScheduleStatus", "Distance to Red Stop (d1): $d1 meters")
             Log.d("TestMapActivity checkScheduleStatus", "Total Distance (d2): $d2 meters")
             Log.d("TestMapActivity checkScheduleStatus", "Total Time (t2): $t2 seconds")
-            Log.d("TestMapActivity checkScheduleStatus", "Estimated Time Remaining (t1 = d1 * t2 / d2): $t1 seconds")
+            Log.d("TestMapActivity checkScheduleStatus", "Filtered Estimated Time Remaining (t1 = d1 * t2 / d2): $filteredT1 seconds")
             Log.d("TestMapActivity checkScheduleStatus", "Predicted Arrival: $predictedArrivalStr")
             Log.d("TestMapActivity checkScheduleStatus", "API Time: $apiTimeStr")
             Log.d("TestMapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
