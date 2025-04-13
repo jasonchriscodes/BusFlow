@@ -145,10 +145,6 @@ class MapActivity : AppCompatActivity() {
     private var smoothedSpeed: Float = 0f
     // Choose an alpha value between 0 and 1: smaller alpha means slower adjustment (more smoothing)
     private val smoothingAlpha = 0.2f
-    // At class level (near your other properties)
-    private val t1Filter = TimeBasedMovingAverageFilterDouble(windowMillis = 30000)
-    // Last valid filtered t1 value (in seconds)
-    private var lastValidT1: Double = 0.0
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -156,8 +152,8 @@ class MapActivity : AppCompatActivity() {
         const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
         private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
         private const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
-        private const val REQUEST_PERIODIC_TIME = 5000L
-        private const val PUBLISH_POSITION_TIME = 5000L
+        private const val REQUEST_PERIODIC_TIME = 1000L
+        private const val PUBLISH_POSITION_TIME = 1000L
         private const val LAST_MSG_KEY = "lastMessageKey"
         private const val MSG_KEY = "messageKey"
         private const val SOUND_FILE_NAME = "notif.wav"
@@ -213,7 +209,8 @@ class MapActivity : AppCompatActivity() {
         initializeUIComponents()
 
         // Start the current time counter
-        startCurrentTimeUpdater()
+//        startCurrentTimeUpdater()
+        startStartTime()
 
         // Start the next trip countdown updater
         startNextTripCountdownUpdater()
@@ -411,7 +408,7 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * Starts the start time from the scheduleList and counts up from there
+     * Starts the simulated clock using the startTime of the first ScheduleItem in scheduleList.
      */
     private fun startStartTime() {
         if (scheduleList.isEmpty()) {
@@ -419,7 +416,7 @@ class MapActivity : AppCompatActivity() {
             return
         }
 
-        // Extract the first schedule start time (e.g., "08:00")
+        // Extract the first schedule start time (e.g., "11:15")
         val startTimeStr = scheduleList.first().startTime
         val timeParts = startTimeStr.split(":")
         if (timeParts.size != 2) {
@@ -437,12 +434,13 @@ class MapActivity : AppCompatActivity() {
             override fun run() {
                 val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                 currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
-                Log.d("MapActivity startStartTime", "currentTimeTextView.text: ${currentTimeTextView.text}")
+                Log.d("MapActivity startStartTime", "Current simulated time: ${currentTimeTextView.text}")
 
-                // Advance time by 1 second per tick
+                // Advance the simulated time by 1 second per tick
                 simulatedStartTime.add(Calendar.SECOND, 1)
 
-                currentTimeHandler.postDelayed(this, 1000) // Update every second
+                // Schedule the next update after 1 second
+                currentTimeHandler.postDelayed(this, 1000)
             }
         }
 
@@ -778,24 +776,21 @@ class MapActivity : AppCompatActivity() {
                 else -> emptyList()
             }
         }
-
-        // Use the helper to retrieve the next schedule's start time.
-        val nextScheduleStartStr = getNextScheduleStartTime()
-
-        val messageText = if (nextScheduleStartStr == null) {
-            // No next schedule: finish of day message.
+        val messageText = if (flatSchedule.size < 2) {
             "You have completed last run of the day."
         } else {
-            // Compute the next schedule start time in minutes.
-            val nextStartMinutes = convertTimeToMinutes(nextScheduleStartStr)
+            val nextTrip = flatSchedule[1]
+            val nextStartMinutes = convertTimeToMinutes(nextTrip.startTime)
             val currentMinutes = simulatedStartTime.get(Calendar.HOUR_OF_DAY) * 60 +
                     simulatedStartTime.get(Calendar.MINUTE)
             val restTotalMinutes = if (nextStartMinutes > currentMinutes) nextStartMinutes - currentMinutes else 0
             val restHours = restTotalMinutes / 60
             val restMinutes = restTotalMinutes % 60
-            "Trip complete! You have $restHours hour(s) and $restMinutes minute(s) rest before your next trip, which starts at ${nextScheduleStartStr}:00."
+            "Trip complete! You have $restHours hour(s) and $restMinutes minute(s) rest before your next trip, which starts at ${nextTrip.startTime}:00."
         }
-
+        // late notification: You are $restMinutes minute(s) for your next trip. Please notify operations of late departure.
+        // break (lunch break):  You are $restMinutes minute(s) for your break time.
+        // end of shift: You have completed last run of the day.
         val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("Trip Completed")
             .setMessage(messageText)
@@ -842,38 +837,38 @@ class MapActivity : AppCompatActivity() {
         Log.d("MapActivity SpeedControl", "Slow Down: simulationSpeedFactor is now $simulationSpeedFactor")
     }
 
-    /**
-     * Starts actual time from schedule
-     */
-    private fun startActualTimeUpdater() {
-        if (scheduleList.isNotEmpty()) {
-            val startTimeStr = scheduleList.first().startTime  // e.g. "08:00"
-            val timeParts = startTimeStr.split(":")
-            if (timeParts.size == 2) {
-                simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
-                simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
-                simulatedStartTime.set(Calendar.SECOND, 0)
-            }
-        }
-
-        actualTimeHandler = Handler(Looper.getMainLooper())
-        actualTimeRunnable = object : Runnable {
-            override fun run() {
-                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                actualTimeTextView.text = timeFormat.format(simulatedStartTime.time)
-
-                // Always advance time by 1 second per tick (simulate real clock)
-                simulatedStartTime.add(Calendar.SECOND, 1)
-
-                // Update schedule status based on the new simulated time
-                scheduleStatusValueTextView.text = "Calculating..."
-                checkScheduleStatus()
-
-                actualTimeHandler.postDelayed(this, 1000)
-            }
-        }
-        actualTimeHandler.post(actualTimeRunnable)
-    }
+//    /**
+//     * Starts actual time from schedule
+//     */
+//    private fun startActualTimeUpdater() {
+//        if (scheduleList.isNotEmpty()) {
+//            val startTimeStr = scheduleList.first().startTime  // e.g. "08:00"
+//            val timeParts = startTimeStr.split(":")
+//            if (timeParts.size == 2) {
+//                simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+//                simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
+//                simulatedStartTime.set(Calendar.SECOND, 0)
+//            }
+//        }
+//
+//        actualTimeHandler = Handler(Looper.getMainLooper())
+//        actualTimeRunnable = object : Runnable {
+//            override fun run() {
+//                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+//                actualTimeTextView.text = timeFormat.format(simulatedStartTime.time)
+//
+//                // Always advance time by 1 second per tick (simulate real clock)
+//                simulatedStartTime.add(Calendar.SECOND, 1)
+//
+//                // Update schedule status based on the new simulated time
+//                scheduleStatusValueTextView.text = "Calculating..."
+//                checkScheduleStatus()
+//
+//                actualTimeHandler.postDelayed(this, 1000)
+//            }
+//        }
+//        actualTimeHandler.post(actualTimeRunnable)
+//    }
 
     /** Stops actual time */
     private fun stopActualTimeUpdater() {
@@ -1011,25 +1006,17 @@ class MapActivity : AppCompatActivity() {
             // --- 3. Total time from start to red timing point in seconds (t2) ---
             val t2 = ((apiTime.time - baseTime.time) / 1000).toDouble()
 
-            // --- 4. Estimate time to arrival (t₁) ---
-            // Use the filtered moving average approach:
-            val currentSpeedMps = smoothedSpeed / 3.6f  // Convert smoothedSpeed from km/h to m/s
-            val t1Instant: Double = if (currentSpeedMps > 0.0001) d1 / currentSpeedMps else Double.NaN
-            val filteredT1: Double = if (!t1Instant.isNaN() && t1Instant.isFinite()) {
-                lastValidT1 = t1Filter.add(t1Instant)
-                lastValidT1
-            } else {
-                lastValidT1
-            }
+            // --- 4. Estimate time to arrival from current position (t1) ---
+            val minSpeedMps = 0.1  // Avoid division by zero
+            val effectiveSpeed = if (smoothedSpeed / 3.6 < minSpeedMps) minSpeedMps else smoothedSpeed / 3.6
+            val t1 = d1 / effectiveSpeed  // d1 is the distance to the red stop in meters
 
-            // Use filteredT1 to compute predicted arrival time:
             val predictedArrival = Calendar.getInstance().apply {
                 time = simulatedStartTime.time
-                add(Calendar.SECOND, filteredT1.toInt())
+                add(Calendar.SECOND, t1.toInt())
             }
-            val predictedArrivalStr = timeFormat.format(predictedArrival.time)
 
-            FileLogger.d("MapActivity checkScheduleStatus", "Estimated Time Remaining (t₁): $filteredT1 seconds")
+            val predictedArrivalStr = timeFormat.format(predictedArrival.time)
 
             // --- 5. Compare predicted arrival with Timing Point ---
             val deltaSec = ((timingPointTime.time - predictedArrival.time.time) / 1000).toInt()
@@ -1078,20 +1065,18 @@ class MapActivity : AppCompatActivity() {
             }
             FileLogger.d("MapActivity checkScheduleStatus", "Red Stop Index: $redStopIndex")
             FileLogger.d("MapActivity checkScheduleStatus", "Red Stop Name: ${redStop.address}")
-            FileLogger.d("MapActivity checkScheduleStatus", "currentSpeedMps (km/h): $currentSpeedMps , effectiveSpeed (m/s): ${currentSpeedMps  / 3.6}")
+            FileLogger.d("MapActivity checkScheduleStatus", "effectiveSpeed (km/h): $effectiveSpeed, effectiveSpeed (m/s): ${effectiveSpeed / 3.6}")
             FileLogger.d("MapActivity checkScheduleStatus", "Distance to Red Stop (d1): $d1 meters")
             FileLogger.d("MapActivity checkScheduleStatus", "Total Distance (d2): $d2 meters")
             Log.d("MapActivity checkScheduleStatus", "Total Time (t2): $t2 seconds")
-            FileLogger.d("MapActivity checkScheduleStatus", "Estimated Time Remaining (filteredT1 = d1 / effectiveSpeed): $filteredT1 seconds")
+            FileLogger.d("MapActivity checkScheduleStatus", "Estimated Time Remaining (t1 = d1 / effectiveSpeed): $t1 seconds")
             FileLogger.d("MapActivity checkScheduleStatus", "Predicted Arrival: $predictedArrivalStr")
             FileLogger.d("MapActivity checkScheduleStatus", "API Time: $apiTimeStr")
             FileLogger.d("MapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
             FileLogger.d("MapActivity checkScheduleStatus", "Delta to Timing Point: $deltaSec seconds")
             FileLogger.d("MapActivity checkScheduleStatus", "Status: $statusText")
-//            showCustomToastBottom("Latitude: ${latitude}, Longitude: ${longitude}, effectiveSpeed: ${currentSpeedMps}, Bearing: ${bearing}, Distance to Red Stop (d1): $d1 meters, Total Distance (d2): $d2 meters, Total Time (t2): $t2 seconds, Estimated Time Remaining (t1 = d1 / effectiveSpeed): $filteredT1 seconds, Predicted Arrival: $predictedArrivalStr, API Time: $apiTimeStr, Actual Time: $actualTimeStr, Delta to Timing Point: $deltaSec seconds")
-
+//            showCustomToastBottom("Latitude: ${latitude}, Longitude: ${longitude}, effectiveSpeed: ${effectiveSpeed}, Bearing: ${bearing}, Distance to Red Stop (d1): $d1 meters, Total Distance (d2): $d2 meters, Total Time (t2): $t2 seconds, Estimated Time Remaining (t1 = d1 / effectiveSpeed): $t1 seconds, Predicted Arrival: $predictedArrivalStr, API Time: $apiTimeStr, Actual Time: $actualTimeStr, Delta to Timing Point: $deltaSec seconds")
             overrideLateStatusForNextSchedule()
-
         } catch (e: Exception) {
             Log.e("MapActivity checkScheduleStatus", "Error: ${e.localizedMessage}")
         }
@@ -2147,6 +2132,7 @@ class MapActivity : AppCompatActivity() {
                     runOnUiThread {
                         speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
                         updateBusMarkerPosition(latitude, longitude, bearing)
+                        updateBusMarkerPosition(latitude, longitude, bearing)
                         checkPassedStops(latitude, longitude)
                         updateTimingPointBasedOnLocation(latitude, longitude)
                         scheduleStatusValueTextView.text = "Calculating..."
@@ -2158,7 +2144,7 @@ class MapActivity : AppCompatActivity() {
 
                     if (firstTime && !forceAheadStatus) {
                         firstTime = false
-                        startActualTimeUpdater()
+//                        startActualTimeUpdater()
                     }
 
                     lastLatitude = latitude
@@ -2183,17 +2169,15 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * Smoothly updates the speed using an exponential moving average.
+     * Smoothly updates the speed using an time‑based filter moving average.
      */
+    private val speedFilter = TimeBasedMovingAverageFilterDouble(windowMillis = 15000)
+    // For example, a window of 15000 ms (15 seconds):
     fun updateSpeed(newSpeed: Float) {
-        // If smoothedSpeed is zero (e.g., at startup), simply take the new speed.
-        smoothedSpeed = if (smoothedSpeed == 0f) {
-            newSpeed
-        } else {
-            smoothingAlpha * newSpeed + (1 - smoothingAlpha) * smoothedSpeed
-        }
-        // Optionally log the smoothed speed for debugging:
-        Log.d("MapActivity", "Smoothed speed: $smoothedSpeed km/h")
+        // The filter expects a Double value; newSpeed is given in km/h.
+        // You can directly pass newSpeed.toDouble() to the filter.
+        smoothedSpeed = speedFilter.add(newSpeed.toDouble()).toFloat()
+        Log.d("MapActivity", "Smoothed speed (time-based moving average): $smoothedSpeed km/h")
     }
 
     /**
@@ -2290,45 +2274,45 @@ class MapActivity : AppCompatActivity() {
         return (bearing + 360) % 360
     }
 
-    /**
-     * custom toast align center
-     */
-    fun showCustomToast(message: String) {
-        val toast = Toast.makeText(this@MapActivity, message, Toast.LENGTH_LONG)
+//    /**
+//     * custom toast align center
+//     */
+//    fun showCustomToast(message: String) {
+//        val toast = Toast.makeText(this@MapActivity, message, Toast.LENGTH_LONG)
+//
+//        // Position the toast at the top-center
+//        toast.setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, 100)
+//
+//        // Custom view with a TextView for longer text
+//        val textView = TextView(this)
+//        textView.text = message
+//        textView.setTextColor(Color.WHITE)
+//        textView.setBackgroundColor(Color.BLACK) // Custom background for visibility
+//        textView.setPadding(20, 20, 20, 20)
+//
+//        toast.view = textView
+//        toast.show()
+//    }
 
-        // Position the toast at the top-center
-        toast.setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, 100)
-
-        // Custom view with a TextView for longer text
-        val textView = TextView(this)
-        textView.text = message
-        textView.setTextColor(Color.WHITE)
-        textView.setBackgroundColor(Color.BLACK) // Custom background for visibility
-        textView.setPadding(20, 20, 20, 20)
-
-        toast.view = textView
-        toast.show()
-    }
-
-    /**
-     * custom toast align bottom
-     */
-    fun showCustomToastBottom(message: String) {
-        val toast = Toast.makeText(this@MapActivity, message, Toast.LENGTH_LONG)
-
-        // Position the toast at the top-center
-        toast.setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, 140)
-
-        // Custom view with a TextView for longer text
-        val textView = TextView(this)
-        textView.text = message
-        textView.setTextColor(Color.WHITE)
-        textView.setBackgroundColor(Color.BLACK) // Custom background for visibility
-        textView.setPadding(20, 20, 20, 20)
-
-        toast.view = textView
-        toast.show()
-    }
+//    /**
+//     * custom toast align bottom
+//     */
+//    fun showCustomToastBottom(message: String) {
+//        val toast = Toast.makeText(this@MapActivity, message, Toast.LENGTH_LONG)
+//
+//        // Position the toast at the top-center
+//        toast.setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, 140)
+//
+//        // Custom view with a TextView for longer text
+//        val textView = TextView(this)
+//        textView.text = message
+//        textView.setTextColor(Color.WHITE)
+//        textView.setBackgroundColor(Color.BLACK) // Custom background for visibility
+//        textView.setPadding(20, 20, 20, 20)
+//
+//        toast.view = textView
+//        toast.show()
+//    }
 
     /**
      * ✅ Function to validate time format (HH:mm:ss)
