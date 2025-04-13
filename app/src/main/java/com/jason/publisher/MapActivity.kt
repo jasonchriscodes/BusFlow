@@ -456,49 +456,42 @@ class MapActivity : AppCompatActivity() {
         val handler = Handler(Looper.getMainLooper())
         val runnable = object : Runnable {
             override fun run() {
-                val currentTime = Calendar.getInstance()
-                Log.d("MapActivity startNextTripCountdownUpdater", "Current time: ${currentTime.time}")
+                // Use the simulated clock (instead of the real system time)
+                val currentTime = simulatedStartTime.clone() as Calendar
+                Log.d("MapActivity startNextTripCountdownUpdater", "Current simulated time: ${currentTime.time}")
 
-                // Flatten scheduleData to extract individual ScheduleItem objects
-                val flatScheduleData = (scheduleData as? List<Any> ?: emptyList()).flatMap { element ->
-                    when (element) {
-                        is ScheduleItem -> listOf(element)
-                        is List<*> -> element.filterIsInstance<ScheduleItem>()
-                        else -> emptyList()
-                    }
-                }
+                // Retrieve the next schedule start time using your helper function.
+                val nextTripStartTime = getNextScheduleStartTime()
 
-// Log the full schedule for clarity
-                Log.d("MapActivity startNextTripCountdownUpdater", "flatScheduleData: ${flatScheduleData.toString()}")
-
-// Select the second item directly (if available)
-                val nextTrip = if (flatScheduleData.size >= 2) flatScheduleData[1] else null
-
-// Log the selected trip
-                Log.d("MapActivity getNextScheduleStartTime", "nextTrip: ${nextTrip?.toString() ?: "No next trip found"}")
-
-                if (nextTrip != null) {
-                    Log.d("MapActivity startNextTripCountdownUpdater", "nextTrip: ${nextTrip.toString()}")
-                    Log.d("MapActivity startNextTripCountdownUpdater", "✅ Found next trip: ${nextTrip.startTime}")
-                    val tripTime = nextTrip.startTime.split(":").map { it.toInt() }
+                if (nextTripStartTime != null) {
+                    // Parse the nextTripStartTime (e.g., "12:00") into a Calendar object.
+                    val timeParts = nextTripStartTime.split(":").map { it.toInt() }
                     val nextTripCalendar = Calendar.getInstance().apply {
-                        set(Calendar.HOUR_OF_DAY, tripTime[0])
-                        set(Calendar.MINUTE, tripTime[1])
+                        // Set date to match the current simulation time
+                        set(Calendar.YEAR, currentTime.get(Calendar.YEAR))
+                        set(Calendar.MONTH, currentTime.get(Calendar.MONTH))
+                        set(Calendar.DAY_OF_MONTH, currentTime.get(Calendar.DAY_OF_MONTH))
+                        // Set the schedule start time from the string
+                        set(Calendar.HOUR_OF_DAY, timeParts[0])
+                        set(Calendar.MINUTE, timeParts[1])
                         set(Calendar.SECOND, 0)
+                        // If the scheduled time has already passed for this day, assume the next trip is tomorrow:
+                        if (timeInMillis <= currentTime.timeInMillis) {
+                            add(Calendar.DATE, 1)
+                        }
                     }
 
                     val timeDiffMillis = nextTripCalendar.timeInMillis - currentTime.timeInMillis
-                    Log.d("MapActivity startNextTripCountdownUpdater", "timeDiffMillis: ${timeDiffMillis}")
+                    Log.d("MapActivity startNextTripCountdownUpdater", "timeDiffMillis: $timeDiffMillis")
                     if (timeDiffMillis > 0) {
                         val minutesRemaining = (timeDiffMillis / 1000 / 60).toInt()
                         val secondsRemaining = ((timeDiffMillis / 1000) % 60).toInt()
-
                         runOnUiThread {
                             nextTripCountdownTextView.text = "Next run in: $minutesRemaining mins $secondsRemaining seconds"
                         }
                     } else {
                         runOnUiThread {
-                            nextTripCountdownTextView.text = "Trip is starting now!"
+                            nextTripCountdownTextView.text = "You are late for the next run"
                         }
                     }
                 } else {
@@ -506,7 +499,6 @@ class MapActivity : AppCompatActivity() {
                         nextTripCountdownTextView.text = "No more scheduled trips for today"
                     }
                 }
-
                 handler.postDelayed(this, 1000) // Update every second
             }
         }
