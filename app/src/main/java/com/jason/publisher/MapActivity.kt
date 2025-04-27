@@ -868,39 +868,61 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * Checks and updates the bus schedule status by comparing the **predicted arrival time**
-     * (based on current simulation speed and location) with the **API-scheduled arrival time**
-     * for the upcoming timing point.
+     * Checks and updates the bus schedule status for the upcoming red timing point.
      *
-     * 🔄 Real-Time Prediction Formula:
-     *     t1 = d1 / v
+     * The function calculates the predicted arrival time based on the current simulation speed
+     * and the distance from the bus’s current location to the next red timing point, then compares
+     * this value against the expected timing point arrival time shown in the UI.
      *
-     * Then:
-     *     predictedArrival = actualTime + t1
+     * Key Steps:
+     * 1. **Initial Validation and Base Time Determination:**
+     *    - If in force-ahead mode and the first stop has not yet been passed, displays "Please wait...".
+     *    - Sets a base time:
+     *         - If forceAheadStatus is true, uses a custom time.
+     *         - Otherwise, uses the start time from the first schedule.
      *
-     * ✅ Variables:
-     * - d1: Distance (in meters) from current bus position to upcoming timing point (next bus stop).
-     * - v:  Bus speed (in meters per second), calculated from the current simulation speed (`speed / 3.6`).
-     * - t1: Estimated time to arrival (in seconds), calculated using t1 = d1 / v.
-     * - predictedArrival: Current simulated time + t1.
-     * - apiTime: Scheduled arrival time for the upcoming stop (from schedule or duration).
-     * - deltaSec: Time difference (in seconds) between predicted and scheduled arrival (timingPoint - predictedArrival).
+     * 2. **Extracting and Adjusting Timing Values:**
+     *    - Retrieves the scheduled timing point from the UI (via `timingPointValueTextView`).
+     *    - Extracts the API-based scheduled arrival time from `ApiTimeValueTextView` and, when
+     *      necessary (i.e. if the upcoming stop is the first bus stop and additional duration applies),
+     *      adjusts it to account for the initial stop duration.
      *
-     * 📊 Outcome:
-     * - If predictedArrival is earlier than apiTime → status is "Ahead"
-     * - If close enough → status is "On Time"
-     * - If later → status is "Behind" or "Late"
+     * 3. **Determining the Next Red Timing Point:**
+     *    - Searches for the next bus stop designated as a “red” timing point (used as a key reference).
+     *    - If none is found after the current stop, falls back to using the final bus stop.
      *
-     * 🚦 UI:
-     * - Updates `scheduleStatusValueTextView` with labels like:
-     *   "Very Ahead", "Slightly Behind", "On Time", "Late for Next Run", etc.
-     * - Also sets color:
-     *   Green = early, Yellow = on time, Orange = slightly behind, Red = very behind/late.
+     * 4. **Distance and Time Calculations:**
+     *    - **d1:** Computes the distance (in meters) from the current location to the identified red timing point.
+     *    - **d2:** Sums the distances along the route from the start to the red timing point.
+     *         - If d2 equals zero, the function logs an error and exits.
+     *    - **t2:** Calculates the total scheduled travel time (in seconds) from the base time until the red timing point,
+     *         using the API-provided schedule.
      *
-     * ⚠️ Note:
-     * - A slower speed will increase `t1`, making the bus appear behind schedule.
-     * - A faster speed will reduce `t1`, making the bus appear ahead of schedule.
-     * - If speed = 0, arrival prediction will stop progressing (∞ t1).
+     * 5. **Predicted Arrival Estimation:**
+     *    - Determines the effective speed (in m/s) from the current smoothed speed, applying a minimum threshold
+     *      (to avoid division by zero).
+     *    - **t1:** Estimates the remaining travel time to the red timing point as `t1 = d1 / effectiveSpeed`.
+     *    - Computes the predicted arrival time by adding t1 (in seconds) to the simulation start time.
+     *
+     * 6. **Status Comparison and UI Update:**
+     *    - **deltaSec:** Calculates the time difference (in seconds) between the timing point’s displayed time
+     *      (parsed from `timingPointValueTextView`) and the predicted arrival time.
+     *    - Determines the schedule status based on deltaSec:
+     *         - ≥120 sec → "Very Ahead"
+     *         - 1 to 119 sec → "Slightly Ahead"
+     *         - -179 to 0 sec → "On Time"
+     *         - -299 to -180 sec → "Slightly Behind"
+     *         - ≤ -300 sec → "Very Behind"
+     *    - Updates the UI:
+     *         - Sets the appropriate status text.
+     *         - Changes text color and icon based on how early or late the bus is predicted to be.
+     *
+     * **Notes:**
+     * - The API-based scheduled arrival time (apiTime) is used to calculate the overall journey time (t2),
+     *   while the timing point value from the UI is used for the final status comparison.
+     * - Lower speeds (or a speed near zero) extend t1, making the bus appear behind schedule; higher speeds reduce t1,
+     *   showing the bus as ahead.
+     * - If the upcoming stop is the first bus stop and additional duration applies, the API time is adjusted accordingly.
      */
     @SuppressLint("LongLogTag")
     private fun checkScheduleStatus() {
