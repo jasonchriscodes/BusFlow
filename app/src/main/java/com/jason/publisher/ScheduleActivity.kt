@@ -1,7 +1,12 @@
 package com.jason.publisher
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -21,6 +26,7 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivityScheduleBinding
 import com.jason.publisher.model.Bus
@@ -71,6 +77,9 @@ class ScheduleActivity : AppCompatActivity() {
     private val timelineRange = Pair("08:00", "11:10")
     private lateinit var scheduleTable: TableLayout
     private lateinit var networkStatusHelper: NetworkStatusHelper
+    private lateinit var connectivityManager: ConnectivityManager
+    private lateinit var networkCallback: ConnectivityManager.NetworkCallback
+    private val loadingBarHandler = Handler(Looper.getMainLooper())
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -141,16 +150,61 @@ class ScheduleActivity : AppCompatActivity() {
         binding = ActivityScheduleBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Initialize all views up front:
+        scheduleTable            = findViewById(R.id.scheduleTable)
+        workTable                = findViewById(R.id.scheduleTable)
+        multiColorTimelineView   = findViewById(R.id.multiColorTimelineView)
+
+        // 0) init your MQTT managers *before* you ever call enterOnlineMode()/fetchConfig()
+        mqttManagerConfig = MqttManager(
+            serverUri = SERVER_URI,
+            clientId  = CLIENT_ID,
+            username  = tokenConfigData
+        )
+        mqttManager = MqttManager(
+            serverUri = SERVER_URI,
+            clientId  = CLIENT_ID
+        )
+
+        // 1. get connectivity service
+        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+// 2. define the callback
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                // when internet is back
+                runOnUiThread { enterOnlineMode() }
+            }
+            override fun onLost(network: Network) {
+                // when internet is gone
+                runOnUiThread { enterOfflineMode() }
+            }
+        }
+
+// 3. register it
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            connectivityManager.registerDefaultNetworkCallback(networkCallback)
+        } else {
+            // on API 21–23
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            connectivityManager.registerNetworkCallback(request, networkCallback)
+        }
+
+// 4. do an initial-mode check
+        if (NetworkStatusHelper.isNetworkAvailable(this)) {
+            enterOnlineMode()
+        } else {
+            enterOfflineMode()
+        }
+
         // Check and request permission
         requestAllFilesAccessPermission()
 
         // Fetch AID from the device
         aid = getAndroidId()
         Log.d("TimeTableActivity", "Fetched AID: $aid")
-
-        // Initialize MQTT managers
-        mqttManagerConfig = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = tokenConfigData)
-        mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID)
 
         // Set up network status UI
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
@@ -164,145 +218,6 @@ class ScheduleActivity : AppCompatActivity() {
         // Start updating the date/time
         startDateTimeUpdater()
 
-        // Check internet connection
-        if (!NetworkStatusHelper.isNetworkAvailable(this)) {
-            // **Offline Mode: Load cached data**
-            Toast.makeText(this, "You are disconnected from the internet. Loading data from tablet cache.", Toast.LENGTH_LONG).show()
-
-            scheduleTable = findViewById(R.id.scheduleTable)
-
-//        // Populate only the first 3 schedule items
-//        updateScheduleTable(dummyScheduleData.take(3))
-
-            // Initialize Views
-            workTable = findViewById(R.id.scheduleTable) // Ensure this matches your XML
-            multiColorTimelineView = findViewById(R.id.multiColorTimelineView)
-
-            // Debugging to check if views are properly initialized
-            Log.d("ScheduleActivity onCreate", "workTable initialized: ${::workTable.isInitialized}")
-            Log.d("ScheduleActivity onCreate", "multiColorTimelineView initialized: ${::multiColorTimelineView.isInitialized}")
-
-            // Ensure updateTimeline() function exists before calling
-            if (::workTable.isInitialized && ::multiColorTimelineView.isInitialized) {
-                multiColorTimelineView.setTimelineRange(timelineRange.first, timelineRange.second)
-                updateTimeline() // Call function to update the timeline dynamically
-            } else {
-                Log.e("ScheduleActivity onCreate", "❌ WorkTable or MultiColorTimelineView is not initialized!")
-            }
-
-            loadBusDataFromCache()
-            loadScheduleDataFromCache()
-
-            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached config: $config")
-            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busRoute: $route")
-            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busStop: $stops")
-            Log.d("MainActivity onCreate NetworkStatusHelper", "Loaded cached busStop: $stops")
-
-            // Load bus route information from offline data
-            // Note in getBusRoutesOffline() the route is already contain bus stop in it
-            jsonString = Gson().toJson(busRouteData)
-            Log.d("MainActivity onCreate NetworkStatusHelper jsonString", jsonString)
-            val (route, stops, durationBetweenStops) = RouteData.fromJson(jsonString)
-
-            Log.d("MainActivity onCreate NetworkStatusHelper offline", "Updated busRoute: $route")
-            Log.d("MainActivity onCreate  NetworkStatusHelperoffline", "Updated busStop: $stops")
-            Log.d("MainActivity onCreate  NetworkStatusHelperoffline", "Updated durationBetweenStops: $durationBetweenStops")
-
-            // Auto start route if the first schedule time has passed 1.5 minutes
-//            startPeriodicScheduleCheck()
-
-            //        busDataCache = getOrCreateAid()
-            val file = File("/storage/emulated/0/Documents/.vlrshiddenfolder/busDataCache.txt")
-            if (file.exists()) {
-                Log.d("MainActivity onCreate", "✅ File exists: ${file.absolutePath}")
-            } else {
-                Log.e("MainActivity onCreate", "❌ File creation failed!")
-            }
-
-            setupPaginationButtons()
-            changePage(0) // Display first 3 items by default
-
-            // Set up the "Start Route" button
-            binding.startRouteButton.setOnClickListener {
-                if (scheduleData.isNotEmpty()) {
-                    val firstScheduleItem = scheduleData.first() // Store first schedule item
-                    Log.d("ScheduleActivity testStartRouteButton firstScheduleItem", firstScheduleItem.toString())
-                    Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
-//                scheduleData = scheduleData.drop(1) // Remove the first item
-                    Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
-                    rewriteOfflineScheduleData()
-
-                    val intent = Intent(this, MapActivity::class.java).apply {
-                        putExtra("AID", aid)
-                        putExtra("CONFIG", ArrayList(config))
-                        putExtra("JSON_STRING", jsonString)
-                        putExtra("ROUTE", ArrayList(route))
-                        putExtra("STOPS", ArrayList(stops))
-                        putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
-                        putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
-                        putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
-                        putExtra("FULL_SCHEDULE_DATA", ArrayList(listOf(scheduleData)))
-                    }
-                    startActivity(intent)
-                } else {
-                    Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
-                }
-            }
-
-            // Set up the "Start Route" button
-            binding.testStartRouteButton.setOnClickListener {
-                if (scheduleData.isNotEmpty()) {
-                    val firstScheduleItem = scheduleData.first() // Store first schedule item
-                    Log.d("ScheduleActivity testStartRouteButton firstScheduleItem", firstScheduleItem.toString())
-                    Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
-//                scheduleData = scheduleData.drop(1) // Remove the first item
-                    Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
-                    rewriteOfflineScheduleData()
-
-                    val intent = Intent(this, TestMapActivity::class.java).apply {
-                        putExtra("AID", aid)
-                        putExtra("CONFIG", ArrayList(config))
-                        putExtra("JSON_STRING", jsonString)
-                        putExtra("ROUTE", ArrayList(route))
-                        putExtra("STOPS", ArrayList(stops))
-                        putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
-                        putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
-                        putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
-                        putExtra("FULL_SCHEDULE_DATA", ArrayList(listOf(scheduleData)))
-                    }
-                    startActivity(intent)
-                } else {
-                    Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
-                }
-            }
-        } else {
-            // **Online Mode: Fetch data from ThingsBoard**
-            Toast.makeText(this, "Online mode: Receiving data from Thingsboard.", Toast.LENGTH_LONG).show()
-
-            // Hide table, pagination, and route buttons
-            binding.scheduleTable.visibility = View.GONE
-            binding.paginationLayout.visibility = View.GONE
-            binding.startRouteButton.visibility = View.GONE
-            binding.testStartRouteButton.visibility = View.GONE
-
-            startLoadingBar() // Show progress bar
-            fetchConfig { success ->
-                if (success) {
-                    getAccessToken()
-                    Log.d("MainActivity onCreate Token", token)
-                    mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
-//                    getDefaultConfigValue()
-                    requestAdminMessage()
-                    connectAndSubscribe()
-//                Log.d("MainActivity oncreate fetchConfig config", config.toString())
-//                Log.d("MainActivity oncreate fetchConfig busRoute", route.toString())
-//                Log.d("MainActivity oncreate fetchConfig busStop", stops.toString())
-                } else {
-                    Log.e("MainActivity onCreate", "Failed to fetch config, running in offline mode.")
-                }
-            }
-        }
-
         NetworkStatusHelper.setupNetworkStatus(
             this,
             findViewById(R.id.connectionStatusTextView),
@@ -311,22 +226,103 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /**
+     * Switches the activity into offline mode:
+     * - Notifies the user that cached data will be used
+     * - Reveals the schedule table, pagination controls, and route buttons
+     * - Loads bus and schedule data from the local cache
+     * - Rebuilds pagination and shows the first page
+     * - Resets and redraws the timeline view based on the loaded schedule
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun enterOfflineMode() {
+        Toast.makeText(this, "Offline: loading from cache…", Toast.LENGTH_LONG).show()
+
+        // hide loading bar
+        findViewById<ProgressBar>(R.id.progressBar).apply {
+            visibility = View.GONE
+            progress = 0
+        }
+        // if you used a Handler in startLoadingBar(), cancel it:
+        loadingBarHandler.removeCallbacksAndMessages(null)
+
+        binding.scheduleTable.visibility = View.VISIBLE
+        binding.paginationLayout.visibility = View.VISIBLE
+        binding.startRouteButton.visibility = View.VISIBLE
+        binding.testStartRouteButton.visibility = View.VISIBLE
+        binding.multiColorTimelineView.visibility = View.VISIBLE
+        workTable.visibility             = View.VISIBLE
+
+        loadBusDataFromCache()
+        loadScheduleDataFromCache()
+        setupPaginationButtons()
+        changePage(0)
+
+        multiColorTimelineView.setTimelineRange(timelineRange.first, timelineRange.second)
+        updateTimeline()
+    }
+
+    /**
+     * Switches the activity into online mode:
+     * - Notifies the user that fresh data is being fetched from ThingsBoard
+     * - Hides the offline UI elements while loading
+     * - Starts the loading progress bar
+     * - Fetches the configuration; on success:
+     *     • Retrieves the device token
+     *     • Initializes MQTT with the new token
+     *     • Subscribes for admin messages and telemetry
+     *   On failure, falls back to offline mode
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun enterOnlineMode() {
+        Toast.makeText(this, "Online: fetching from ThingsBoard…", Toast.LENGTH_LONG).show()
+        binding.scheduleTable.visibility = View.GONE
+        binding.paginationLayout.visibility = View.GONE
+        binding.startRouteButton.visibility = View.GONE
+        binding.testStartRouteButton.visibility = View.GONE
+        binding.multiColorTimelineView.visibility = View.GONE
+        workTable.visibility             = View.GONE
+
+        findViewById<ProgressBar>(R.id.progressBar).visibility = View.VISIBLE
+        startLoadingBar()
+
+        fetchConfig { success ->
+            if (success) {
+                getAccessToken()
+                mqttManager = MqttManager(
+                    serverUri = SERVER_URI,
+                    clientId = CLIENT_ID,
+                    username = token
+                )
+                requestAdminMessage()
+                connectAndSubscribe()
+            } else {
+                enterOfflineMode()
+            }
+        }
+    }
+
+    /**
      * function to start loading bar from 0% to 100% with color transitioning from red to green
      */
     private fun startLoadingBar() {
         val progressBar = findViewById<ProgressBar>(R.id.progressBar)
-        var progress = 0
-        val handler = Handler(Looper.getMainLooper())
+        progressBar.visibility = View.VISIBLE
+        progressBar.progress   = 0
 
+        // cancel any leftover callbacks
+        loadingBarHandler.removeCallbacksAndMessages(null)
+
+        var progress = 0
         @RequiresApi(Build.VERSION_CODES.M)
         fun updateProgress(increment: Int, delay: Long) {
-            handler.postDelayed({
+            loadingBarHandler.postDelayed({
                 progress += increment
                 progressBar.progress = progress
-                progressBar.progressTintList = getColorStateList(R.color.green)
+                progressBar.progressTintList =
+                    ContextCompat.getColorStateList(this, R.color.green)
                 if (progress == 100) {
                     Toast.makeText(this, "All data successfully received!", Toast.LENGTH_SHORT).show()
-                    showCacheCompleteDialog()  // Show dialog once progress hits 100%
+                    showCacheCompleteDialog()
                 }
             }, delay)
         }
@@ -373,18 +369,14 @@ class ScheduleActivity : AppCompatActivity() {
      * a pop-up dialog that appears after the progress reaches 100%
      */
     private fun showCacheCompleteDialog() {
-        val alertDialog = AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle("Cache Complete")
-            .setMessage("All data has been cached successfully. Please turn off your Wi-Fi and relaunch the app.")
-            .setCancelable(false) // Prevent dismissal by tapping outside the dialog
-            .setPositiveButton("Quit") { _, _ ->
-                // Completely quit the app
-                finishAffinity() // Destroys all activities in the task
-                System.exit(0)   // Ensures the app is fully terminated
+            .setMessage("All data has been cached successfully. Please turn off your Wi-Fi to switch to online mode.")
+            .setCancelable(false)
+            .setPositiveButton("OK") { dialog, _ ->
+                dialog.dismiss()
             }
-            .create()
-
-        alertDialog.show()
+            .show()
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -685,12 +677,8 @@ class ScheduleActivity : AppCompatActivity() {
             runOnUiThread {
                 if (listConfig.isNotEmpty()) {
                     config = listConfig
-                    Log.d("MainActivity fetchConfig", "✅ Config received: $config")
-                    subscribeSharedData()
                     callback(true)
                 } else {
-                    Log.e("MainActivity fetchConfig", "❌ Failed to initialize config. Running in offline mode.")
-//                    Toast.makeText(this@MainActivity, "Running in offline mode. No bus information available.", Toast.LENGTH_SHORT).show()
                     callback(false)
                 }
             }
@@ -1061,6 +1049,7 @@ class ScheduleActivity : AppCompatActivity() {
         super.onDestroy()
         NetworkStatusHelper.unregisterReceiver(this)
         dateTimeHandler.removeCallbacks(dateTimeRunnable)
+        connectivityManager.unregisterNetworkCallback(networkCallback)
     }
 
     /** Fetches the Android ID (AID) of the device. */
