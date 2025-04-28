@@ -124,7 +124,9 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
         }
 
         drawTimeLabels(canvas, totalStartMinute, totalEndMinute, totalWidth)
-        drawBusStopMarkers(canvas, totalStartMinute, totalEndMinute, totalWidth) // 🔥 New function
+        drawBusStopMarkers(canvas, totalStartMinute, totalEndMinute, totalWidth)
+
+        drawBusIcon(canvas, totalStartMinute, totalEndMinute, totalWidth) // 👈 ADD THIS
     }
 
     /**
@@ -134,46 +136,43 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
         val availableWidth = totalWidth - (2 * timelineMargin)
 
         val markerPaint = Paint().apply {
-            color = Color.WHITE // Marker lines in white
-            strokeWidth = 4f
-            style = Paint.Style.STROKE
+            color = Color.WHITE
+            strokeWidth = 6f
+            style = Paint.Style.FILL // 🔥 make the line solid
         }
 
         val textPaintWhite = Paint().apply {
-            color = Color.WHITE // Text in white
+            color = Color.WHITE
             textSize = 20f
             textAlign = Paint.Align.CENTER
             isFakeBoldText = true
-            setShadowLayer(5f, 2f, 2f, Color.BLACK) // Shadow for readability
+            setShadowLayer(5f, 2f, 2f, Color.BLACK)
         }
+
+        val timelineCenterY = height / 2f // 👉 Timeline center
 
         for (busStop in busStops) {
             val stopMinute = convertToMinutes(busStop.time)
-            val startMinute = totalStart
+            val deltaMinutes = stopMinute - totalStart
 
-            // Calculate the delta value (time difference)
-            val deltaMinutes = stopMinute - startMinute
             val deltaTime = if (deltaMinutes >= 60) {
                 val hours = deltaMinutes / 60
                 val minutes = deltaMinutes % 60
-                String.format("%d:%02d", hours, minutes) // 2:20 format for >= 60 mins
+                String.format("%d:%02d", hours, minutes)
             } else {
-                deltaMinutes.toString() // Show plain number for < 60 mins
+                deltaMinutes.toString()
             }
 
-            // Calculate the percentage position
             val position = ((stopMinute - totalStart).toFloat() / (totalEnd - totalStart)) * availableWidth
             val markerX = timelineMargin + position
-            val markerY = height / 2f
 
-            // Draw a vertical line for the marker
-            canvas.drawLine(markerX, markerY - 15, markerX, markerY + 15, markerPaint)
+            // Draw a line that cuts through the timeline
+            val lineLength = 40f // Total length
+            canvas.drawLine(markerX, timelineCenterY - lineLength / 2, markerX, timelineCenterY + lineLength / 2, markerPaint)
 
-            // Display the bus stop abbreviation (e.g., NHS) above the marker
-            canvas.drawText(busStop.abbreviation, markerX, markerY - 30, textPaintWhite)
-
-            // Display the delta time (e.g., 20 or 2:20) below the marker
-            canvas.drawText(deltaTime, markerX, markerY + 30, textPaintWhite)
+            // Draw texts
+            canvas.drawText(busStop.abbreviation, markerX, timelineCenterY - lineLength / 2 - 10f, textPaintWhite)
+            canvas.drawText(deltaTime, markerX, timelineCenterY + lineLength / 2 + 25f, textPaintWhite)
         }
     }
 

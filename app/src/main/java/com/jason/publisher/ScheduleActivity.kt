@@ -73,6 +73,7 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var dateTimeHandler: Handler
     private lateinit var dateTimeRunnable: Runnable
     private lateinit var multiColorTimelineView: MultiColorTimelineView
+    private lateinit var multiColorTimelineView2: MultiColorTimelineView
     private lateinit var workTable: TableLayout
     private val timelineRange = Pair("08:00", "11:10")
     private lateinit var scheduleTable: TableLayout
@@ -154,6 +155,7 @@ class ScheduleActivity : AppCompatActivity() {
         scheduleTable            = findViewById(R.id.scheduleTable)
         workTable                = findViewById(R.id.scheduleTable)
         multiColorTimelineView   = findViewById(R.id.multiColorTimelineView)
+        multiColorTimelineView2 = findViewById(R.id.multiColorTimelineView2)
 
         // 0) init your MQTT managers *before* you ever call enterOnlineMode()/fetchConfig()
         mqttManagerConfig = MqttManager(
@@ -223,6 +225,70 @@ class ScheduleActivity : AppCompatActivity() {
             findViewById(R.id.connectionStatusTextView),
             findViewById(R.id.networkStatusIndicator)
         )
+
+        // Set up the "Start Route" button
+        binding.startRouteButton.setOnClickListener {
+            if (scheduleData.isNotEmpty()) {
+                val firstScheduleItem = scheduleData.first() // ✅ Store first schedule item
+                Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
+                Log.d("ScheduleActivity startRouteButton before", scheduleData.toString())
+
+                // ✅ Actually remove the first item
+                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+                updateScheduleTable(scheduleData.take(3))
+                updateTimeline()
+                rewriteOfflineScheduleData()
+
+                Log.d("ScheduleActivity startRouteButton after", scheduleData.toString())
+
+                val intent = Intent(this, MapActivity::class.java).apply {
+                    putExtra("AID", aid)
+                    putExtra("CONFIG", ArrayList(config))
+                    putExtra("JSON_STRING", jsonString)
+                    putExtra("ROUTE", ArrayList(route))
+                    putExtra("STOPS", ArrayList(stops))
+                    putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
+                    putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+                    putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+                    putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+                }
+                startActivity(intent)
+            } else {
+                Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+// Set up the "Test Start Route" button
+        binding.testStartRouteButton.setOnClickListener {
+            if (scheduleData.isNotEmpty()) {
+                val firstScheduleItem = scheduleData.first()
+                Log.d("ScheduleActivity testStartRouteButton firstScheduleItem", firstScheduleItem.toString())
+                Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
+
+                // ✅ Actually remove the first item
+                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+                updateScheduleTable(scheduleData.take(3))
+                updateTimeline()
+                rewriteOfflineScheduleData()
+
+                Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
+
+                val intent = Intent(this, TestMapActivity::class.java).apply {
+                    putExtra("AID", aid)
+                    putExtra("CONFIG", ArrayList(config))
+                    putExtra("JSON_STRING", jsonString)
+                    putExtra("ROUTE", ArrayList(route))
+                    putExtra("STOPS", ArrayList(stops))
+                    putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
+                    putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+                    putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+                    putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+                }
+                startActivity(intent)
+            } else {
+                Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     /**
@@ -250,6 +316,7 @@ class ScheduleActivity : AppCompatActivity() {
         binding.startRouteButton.visibility = View.VISIBLE
         binding.testStartRouteButton.visibility = View.VISIBLE
         binding.multiColorTimelineView.visibility = View.VISIBLE
+        binding.multiColorTimelineView2.visibility = View.VISIBLE
         workTable.visibility             = View.VISIBLE
 
         loadBusDataFromCache()
@@ -280,6 +347,7 @@ class ScheduleActivity : AppCompatActivity() {
         binding.startRouteButton.visibility = View.GONE
         binding.testStartRouteButton.visibility = View.GONE
         binding.multiColorTimelineView.visibility = View.GONE
+        binding.multiColorTimelineView2.visibility = View.GONE
         workTable.visibility             = View.GONE
 
         findViewById<ProgressBar>(R.id.progressBar).visibility = View.VISIBLE
@@ -392,51 +460,11 @@ class ScheduleActivity : AppCompatActivity() {
         val currentPageData = scheduleData.subList(startIndex, endIndex)
 
         updateScheduleTable(currentPageData)
-        updateTimelineForPage(currentPageData, isFirstPage = currentPage == 0) // ✅ Pass flag to indicate first page
 
         // Show or hide pagination buttons based on total pages
         findViewById<Button>(R.id.btnPage1).visibility = if (totalPages >= 1) View.VISIBLE else View.GONE
         findViewById<Button>(R.id.btnPage2).visibility = if (totalPages >= 2) View.VISIBLE else View.GONE
         findViewById<Button>(R.id.btnPage3).visibility = if (totalPages >= 3) View.VISIBLE else View.GONE
-    }
-
-    /**
-     * function to update the timeline based on the currently displayed data.
-     */
-    @SuppressLint("LongLogTag")
-    private fun updateTimelineForPage(currentPageData: List<ScheduleItem>, isFirstPage: Boolean) {
-        if (!::multiColorTimelineView.isInitialized) {
-            Log.e("ScheduleActivity updateTimelineForPage", "MultiColorTimelineView is not initialized!")
-            return
-        }
-
-        val workIntervals = mutableListOf<Pair<String, String>>()
-        val dutyNames = mutableListOf<String>()
-        val busStopsList = mutableListOf<BusScheduleInfo>()
-
-        for (item in currentPageData) {
-            val startTime = item.startTime
-            val endTime = item.endTime
-            val dutyName = item.dutyName
-
-            if (startTime.isNotEmpty() && endTime.isNotEmpty()) {
-                workIntervals.add(Pair(startTime, endTime))
-                dutyNames.add(dutyName)
-            }
-
-            busStopsList.addAll(item.busStops) // Collect bus stops for the timeline
-        }
-
-        if (workIntervals.isNotEmpty()) {
-            val minStartMinutes = workIntervals.minOf { convertToMinutes(it.first) }
-            val maxEndMinutes = workIntervals.maxOf { convertToMinutes(it.second) }
-            val minStartTime = String.format("%02d:%02d", minStartMinutes / 60, minStartMinutes % 60)
-            val maxEndTime = String.format("%02d:%02d", maxEndMinutes / 60, maxEndMinutes % 60)
-
-            multiColorTimelineView.setTimelineRange(minStartTime, maxEndTime)
-            multiColorTimelineView.setTimeIntervals(workIntervals, minStartTime, maxEndTime, dutyNames, isFirstPage)
-            multiColorTimelineView.setBusStops(busStopsList) // ✅ Pass bus stops to the timeline
-        }
     }
 
     /**
@@ -547,21 +575,45 @@ class ScheduleActivity : AppCompatActivity() {
         Log.d("ScheduleActivity updateTimeline", "Work intervals extracted: $workIntervals")
 
         if (workIntervals.isNotEmpty()) {
-            // Limit to the first 3 intervals
-            val limitedWorkIntervals = workIntervals.take(3)
-            val limitedDutyNames = dutyNames.take(3)
+            val halfSize = workIntervals.size / 2
 
-            // Set timeline end time based on the end time of the last limited interval
-            val minStartMinutes = limitedWorkIntervals.minOf { convertToMinutes(it.first) }
-            val maxEndMinutes = limitedWorkIntervals.maxOf { convertToMinutes(it.second) }
-            val minStartTime = String.format("%02d:%02d", minStartMinutes / 60, minStartMinutes % 60)
-            val maxEndTime = String.format("%02d:%02d", maxEndMinutes / 60, maxEndMinutes % 60)
+            val firstHalfIntervals = workIntervals.take(halfSize)
+            val secondHalfIntervals = workIntervals.drop(halfSize)
 
-            // Pass the trimmed data to the timeline view
-            multiColorTimelineView.setTimelineRange(minStartTime, maxEndTime)
-            multiColorTimelineView.setTimeIntervals(limitedWorkIntervals, minStartTime, maxEndTime, limitedDutyNames, true)
+            val firstHalfDutyNames = dutyNames.take(halfSize)
+            val secondHalfDutyNames = dutyNames.drop(halfSize)
+
+            val minStartMinutesFirst = firstHalfIntervals.minOf { convertToMinutes(it.first) }
+            val maxEndMinutesFirst = firstHalfIntervals.maxOf { convertToMinutes(it.second) }
+            val minStartTimeFirst = String.format("%02d:%02d", minStartMinutesFirst / 60, minStartMinutesFirst % 60)
+            val maxEndTimeFirst = String.format("%02d:%02d", maxEndMinutesFirst / 60, maxEndMinutesFirst % 60)
+
+            val minStartMinutesSecond = maxEndMinutesFirst
+            val maxEndMinutesSecond = secondHalfIntervals.maxOf { convertToMinutes(it.second) }
+            val minStartTimeSecond = String.format("%02d:%02d", minStartMinutesSecond / 60, minStartMinutesSecond % 60)
+            val maxEndTimeSecond = String.format("%02d:%02d", maxEndMinutesSecond / 60, maxEndMinutesSecond % 60)
+
+            multiColorTimelineView.setTimelineRange(minStartTimeFirst, maxEndTimeFirst)
+            multiColorTimelineView.setTimeIntervals(firstHalfIntervals, minStartTimeFirst, maxEndTimeFirst, firstHalfDutyNames, true)
+            multiColorTimelineView.setBusStops(extractBusStops()) // ✅ ADDED
+
+            multiColorTimelineView2.setTimelineRange(minStartTimeSecond, maxEndTimeSecond)
+            multiColorTimelineView2.setTimeIntervals(secondHalfIntervals, minStartTimeSecond, maxEndTimeSecond, secondHalfDutyNames, false)
+            multiColorTimelineView2.setBusStops(extractBusStops()) // ✅ ADDED
         }
     }
+
+    /**
+     * a helper to grab the busStops list from your scheduleData
+     */
+    private fun extractBusStops(): List<BusScheduleInfo> {
+        val busStopsList = mutableListOf<BusScheduleInfo>()
+        for (item in scheduleData) {
+            busStopsList.addAll(item.busStops)
+        }
+        return busStopsList
+    }
+
 
     /**
      * Extracts work intervals and duty names from the schedule data dynamically.
@@ -571,7 +623,7 @@ class ScheduleActivity : AppCompatActivity() {
         val workIntervals = mutableListOf<Pair<String, String>>()
         val dutyNames = mutableListOf<String>()
 
-        for (item in scheduleData.take(3)) { // ✅ Limit to first 3 entries directly
+        for (item in scheduleData) { // ✅ Limit to first 3 entries directly
             val startTime = item.startTime
             val endTime = item.endTime
             val dutyName = item.dutyName
