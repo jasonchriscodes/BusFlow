@@ -2623,9 +2623,10 @@ class MapActivity : AppCompatActivity() {
         binding.map.mapScaleBar.isVisible = true
         binding.map.setBuiltInZoomControls(true)
 
+        // Instead of creating “mycache”, open the existing “preloadCache”:
         val cache = AndroidUtil.createTileCache(
             this,
-            "mycache",
+            "preloadCache",                    // same name!
             binding.map.model.displayModel.tileSize,
             1f,
             binding.map.model.frameBufferModel.overdrawFactor

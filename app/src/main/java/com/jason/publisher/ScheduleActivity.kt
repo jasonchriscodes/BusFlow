@@ -40,6 +40,13 @@ import com.jason.publisher.model.ScheduleItem
 import com.jason.publisher.services.MqttManager
 import com.jason.publisher.utils.NetworkStatusHelper
 import org.json.JSONObject
+import org.mapsforge.core.model.LatLong
+import org.mapsforge.map.android.graphics.AndroidGraphicFactory
+import org.mapsforge.map.android.util.AndroidUtil
+import org.mapsforge.map.android.view.MapView
+import org.mapsforge.map.layer.renderer.TileRendererLayer
+import org.mapsforge.map.reader.MapFile
+import org.mapsforge.map.rendertheme.InternalRenderTheme
 import org.osmdroid.config.Configuration
 import java.io.File
 import java.io.IOException
@@ -226,6 +233,44 @@ class ScheduleActivity : AppCompatActivity() {
             findViewById(R.id.networkStatusIndicator)
         )
 
+        // 1. Initialize Mapsforge
+        AndroidGraphicFactory.createInstance(application)
+
+        // 2. Find the hidden MapView
+        val preloadMap: MapView = findViewById(R.id.preloadMapView)
+
+        // 3. Create tile cache
+        val cache = AndroidUtil.createTileCache(
+            this,
+            "preloadCache",
+            preloadMap.model.displayModel.tileSize,
+            1f,
+            preloadMap.model.frameBufferModel.overdrawFactor
+        )
+
+        // 4. Open the .map file
+        val mapFile = copyAssetToFile("new-zealand-2.map")  // reuse your helper
+        val mapStore = MapFile(mapFile)
+
+        // 5. Create renderer and add to the hidden MapView
+        val renderer = TileRendererLayer(
+            cache,
+            mapStore,
+            preloadMap.model.mapViewPosition,
+            AndroidGraphicFactory.INSTANCE
+        ).apply {
+            setXmlRenderTheme(InternalRenderTheme.DEFAULT)
+        }
+
+        preloadMap.layerManager.layers.add(renderer)
+
+        // 6. Force one render cycle:
+        preloadMap.post {
+            preloadMap.model.mapViewPosition.setZoomLevel(16)
+            preloadMap.model.mapViewPosition.setCenter(LatLong(-36.855647, 174.765249))
+            preloadMap.invalidate()
+        }
+
         // Set up the "Start Route" button
         binding.startRouteButton.setOnClickListener {
             if (scheduleData.isNotEmpty()) {
@@ -289,6 +334,19 @@ class ScheduleActivity : AppCompatActivity() {
                 Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    /** Copies a file from assets to the device's file system and returns the File object. */
+    private fun copyAssetToFile(assetName: String): File {
+        val file = File(cacheDir, assetName)
+        if (!file.exists()) {
+            assets.open(assetName).use { inputStream ->
+                file.outputStream().use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+        }
+        return file
     }
 
     /**

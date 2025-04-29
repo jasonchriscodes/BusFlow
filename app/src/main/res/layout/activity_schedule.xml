@@ -7,6 +7,12 @@
     android:background="@color/colorPrimaryDark"
     tools:context=".ScheduleActivity">
 
+    <org.mapsforge.map.android.view.MapView
+        android:id="@+id/preloadMapView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="invisible"/>
+
     <!-- Current Date and Time (Top Left) -->
     <TextView
         android:id="@+id/currentDateTimeTextView"
