@@ -250,8 +250,18 @@ class ScheduleActivity : AppCompatActivity() {
         )
 
         // 4. Open the .map file
-        val mapFile = copyAssetToFile("new-zealand-2.map")  // reuse your helper
+        val expectedMapFileSize = 363837457L
+        val mapFile = File(getHiddenFolder(), "new-zealand-2.map")
+
+        if (!mapFile.exists() || mapFile.length() != expectedMapFileSize) {
+//            Toast.makeText(this, "Map file missing or corrupted. Please re-download or connect to internet.", Toast.LENGTH_LONG).show()
+//            Log.e("ScheduleActivity", "Invalid or missing map file. Exists: ${mapFile.exists()}, Size: ${mapFile.length()}")
+            return
+        }
+
+        // Now safe to use
         val mapStore = MapFile(mapFile)
+
 
         // 5. Create renderer and add to the hidden MapView
         val renderer = TileRendererLayer(
