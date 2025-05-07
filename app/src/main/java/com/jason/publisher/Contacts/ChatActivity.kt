@@ -5,10 +5,10 @@ import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import com.jason.publisher.Chats.ContentFragment
 import com.jason.publisher.Chats.DetailFragment
-import com.jason.publisher.Constant
+import com.jason.publisher.old.Constant
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityChatBinding
-import com.jason.publisher.`interface`.ContactClickListener
+import com.jason.publisher.main.`interface`.ContactClickListener
 
 /**
  * Activity for displaying chat interface with a list of contacts and detailed chat view.

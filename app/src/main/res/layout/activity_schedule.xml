@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/colorPrimaryDark"
-    tools:context=".ScheduleActivity">
+    tools:context=".main.ScheduleActivity">
 
     <org.mapsforge.map.android.view.MapView
         android:id="@+id/preloadMapView"
@@ -331,13 +331,13 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-    <com.jason.publisher.MultiColorTimelineView
+    <com.jason.publisher.main.MultiColorTimelineView
         android:id="@+id/multiColorTimelineView"
         android:layout_width="match_parent"
         android:layout_height="90dp"
         android:layout_marginTop="45dp"/>
 
-        <com.jason.publisher.MultiColorTimelineView
+        <com.jason.publisher.main.MultiColorTimelineView
             android:id="@+id/multiColorTimelineView2"
             android:layout_width="match_parent"
             android:layout_height="90dp"

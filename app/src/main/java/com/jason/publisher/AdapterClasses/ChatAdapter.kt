@@ -4,9 +4,9 @@ import android.content.Context
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
-import com.jason.publisher.model.Contact
+import com.jason.publisher.main.model.Contact
 import com.jason.publisher.databinding.ItemListChatBinding
-import com.jason.publisher.`interface`.ContactClickListener
+import com.jason.publisher.main.`interface`.ContactClickListener
 
 /**
  * Adapter class for displaying chat items in a RecyclerView.

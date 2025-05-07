@@ -12,9 +12,9 @@ import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.jason.publisher.AdapterClasses.ContentChatAdapter
-import com.jason.publisher.model.Chat
+import com.jason.publisher.main.model.Chat
 import com.jason.publisher.databinding.FragmentDetailBinding
-import com.jason.publisher.services.SharedPrefMananger
+import com.jason.publisher.main.services.SharedPrefMananger
 
 
 /**

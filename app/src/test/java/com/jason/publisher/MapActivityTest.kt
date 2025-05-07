@@ -1,10 +1,10 @@
 package com.jason.publisher
 
-import android.content.ContentResolver
-import android.provider.Settings
-import com.jason.publisher.model.BusItem
+import com.jason.publisher.main.model.BusItem
+import com.jason.publisher.old.OfflineData
+import com.jason.publisher.old.OnlineData
+import com.jason.publisher.old.Utils
 import io.mockk.every
-import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkAll
 import org.junit.After
@@ -14,7 +14,6 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
-import org.mockito.kotlin.whenever
 
 /**
  * Unit tests for the MainActivity class.

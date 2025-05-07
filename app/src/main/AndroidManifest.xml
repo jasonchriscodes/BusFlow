@@ -45,20 +45,20 @@
             android:name=".FeedbackActivity"
             android:exported="false" />
         <activity
-            android:name=".TestActivity"
+            android:name=".old.TestActivity"
             android:exported="false"
             android:screenOrientation="landscape" />
         <activity
             android:name=".Contacts.ChatActivity"
             android:exported="false"
             android:screenOrientation="landscape" />
-        <activity android:name=".LoginActivity"></activity>
-        <activity android:name=".RegisterActivity" />
+        <activity android:name=".old.LoginActivity"></activity>
+        <activity android:name=".old.RegisterActivity" />
         <activity
-            android:name=".MapActivity"
+            android:name=".main.MapActivity"
             android:exported="false"
             android:screenOrientation="landscape" />
-        <activity android:name=".TestMapActivity"
+        <activity android:name=".main.TestMapActivity"
             android:exported="false"
             android:screenOrientation="landscape"/>
 
@@ -74,7 +74,7 @@
 <!--            </intent-filter>-->
 <!--        </activity>-->
         <activity
-            android:name=".ScheduleActivity"
+            android:name=".main.ScheduleActivity"
             android:exported="true"
             android:screenOrientation="landscape">
             <intent-filter>

@@ -9,10 +9,10 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.jason.publisher.AdapterClasses.ChatAdapter
-import com.jason.publisher.Constant
+import com.jason.publisher.old.Constant
 import com.jason.publisher.databinding.FragmentChatBinding
-import com.jason.publisher.model.Contact
-import com.jason.publisher.services.SharedPrefMananger
+import com.jason.publisher.main.model.Contact
+import com.jason.publisher.main.services.SharedPrefMananger
 
 /**
  * A simple [Fragment] subclass representing the chat list screen.

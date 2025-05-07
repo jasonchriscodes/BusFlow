@@ -5,7 +5,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.jason.publisher.databinding.LayoutChatLeftBinding
 import com.jason.publisher.databinding.LayoutChatRightBinding
-import com.jason.publisher.model.Chat
+import com.jason.publisher.main.model.Chat
 
 /**
  * Adapter class for displaying chat messages in a RecyclerView.
