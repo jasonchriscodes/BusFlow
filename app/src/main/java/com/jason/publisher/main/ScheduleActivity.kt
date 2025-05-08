@@ -3,6 +3,7 @@ package com.jason.publisher.main
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -15,6 +16,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
@@ -538,27 +540,48 @@ class ScheduleActivity : AppCompatActivity() {
      */
     @RequiresApi(Build.VERSION_CODES.M)
     private fun updateScheduleTable(scheduleItems: List<ScheduleItem>) {
-        scheduleTable.removeViews(1, scheduleTable.childCount - 1) // Clear previous rows (except header)
+        scheduleTable.removeViews(2, scheduleTable.childCount - 2) // Keep header + separator
 
-        val limitedSchedule = scheduleItems.take(3) // Show only the first 3 schedule items
-
-        for (item in limitedSchedule) {
-            val row = TableRow(this)
-
-            val routeTextView = createTableCell(item.routeNo, 0.5f)
-            val stopsInfo = item.busStops.joinToString(", ") {
-                "${it.name} (${it.abbreviation}) - ${it.time}"  // Added abbreviation display
+        for (item in scheduleItems) {
+            val row = TableRow(this).apply {
+                layoutParams = TableLayout.LayoutParams(
+                    TableLayout.LayoutParams.MATCH_PARENT,
+                    TableLayout.LayoutParams.WRAP_CONTENT
+                )
             }
-            val stopTextView = createTableCell(stopsInfo, 1f)
-            val startTimeTextView = createTableCell(item.startTime, 0.4f)
-            val endTimeTextView = createTableCell(item.endTime, 0.4f)
+
+            val routeTextView = createStyledCell(item.routeNo, Gravity.START)
+            val startTimeView = createStyledCell(item.startTime, Gravity.CENTER)
+            val endTimeView = createStyledCell(item.endTime, Gravity.END)
 
             row.addView(routeTextView)
-            row.addView(stopTextView)
-            row.addView(startTimeTextView)
-            row.addView(endTimeTextView)
+            row.addView(startTimeView)
+            row.addView(endTimeView)
 
             scheduleTable.addView(row)
+
+            // Add separator line after each row
+            val separator = View(this).apply {
+                layoutParams = TableLayout.LayoutParams(
+                    TableLayout.LayoutParams.MATCH_PARENT, 1
+                )
+                setBackgroundColor(Color.BLACK)
+            }
+            scheduleTable.addView(separator)
+        }
+    }
+
+    /**
+     * function to style the table cell
+     */
+    private fun createStyledCell(text: String, gravity: Int): TextView {
+        return TextView(this).apply {
+            this.text = text
+            textSize = 18f // smaller text
+            setTextColor(Color.BLACK)
+            setPadding(4, 4, 4, 4) // smaller padding
+            this.gravity = gravity
+            layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f)
         }
     }
 
