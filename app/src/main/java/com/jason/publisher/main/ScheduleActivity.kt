@@ -82,8 +82,8 @@ class ScheduleActivity : AppCompatActivity() {
 
     private lateinit var dateTimeHandler: Handler
     private lateinit var dateTimeRunnable: Runnable
-    private lateinit var multiColorTimelineView: MultiColorTimelineView
-    private lateinit var multiColorTimelineView2: MultiColorTimelineView
+    private lateinit var timeline1: StyledMultiColorTimeline
+    private lateinit var timeline2: StyledMultiColorTimeline
     private lateinit var workTable: TableLayout
     private val timelineRange = Pair("08:00", "11:10")
     private lateinit var scheduleTable: TableLayout
@@ -91,6 +91,9 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
     private val loadingBarHandler = Handler(Looper.getMainLooper())
+    private lateinit var markerOverlay1: OverlayBusStopMarkerView
+    private lateinit var markerOverlay2: OverlayBusStopMarkerView
+
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -164,8 +167,10 @@ class ScheduleActivity : AppCompatActivity() {
         // Initialize all views up front:
         scheduleTable            = findViewById(R.id.scheduleTable)
         workTable                = findViewById(R.id.scheduleTable)
-        multiColorTimelineView   = findViewById(R.id.multiColorTimelineView)
-        multiColorTimelineView2 = findViewById(R.id.multiColorTimelineView2)
+        timeline1 = findViewById(R.id.timelinePart1)
+        timeline2 = findViewById(R.id.timelinePart2)
+        markerOverlay1 = findViewById(R.id.markerOverlayPart1)
+        markerOverlay2 = findViewById(R.id.markerOverlayPart2)
 
         // 0) init your MQTT managers *before* you ever call enterOnlineMode()/fetchConfig()
         mqttManagerConfig = MqttManager(
@@ -385,14 +390,15 @@ class ScheduleActivity : AppCompatActivity() {
         binding.scheduleTable.visibility = View.VISIBLE
         binding.startRouteButton.visibility = View.VISIBLE
         binding.testStartRouteButton.visibility = View.VISIBLE
-        binding.multiColorTimelineView.visibility = View.VISIBLE
-        binding.multiColorTimelineView2.visibility = View.VISIBLE
+        timeline1.visibility = View.VISIBLE
+        timeline2.visibility = View.VISIBLE
+        markerOverlay1.visibility = View.VISIBLE
+        markerOverlay2.visibility = View.VISIBLE
         workTable.visibility             = View.VISIBLE
 
         loadBusDataFromCache()
         loadScheduleDataFromCache()
 
-        multiColorTimelineView.setTimelineRange(timelineRange.first, timelineRange.second)
         updateTimeline()
     }
 
@@ -413,8 +419,8 @@ class ScheduleActivity : AppCompatActivity() {
         binding.scheduleTable.visibility = View.GONE
         binding.startRouteButton.visibility = View.GONE
         binding.testStartRouteButton.visibility = View.GONE
-        binding.multiColorTimelineView.visibility = View.GONE
-        binding.multiColorTimelineView2.visibility = View.GONE
+        timeline1.visibility = View.GONE
+        timeline2.visibility = View.GONE
         workTable.visibility             = View.GONE
 
         findViewById<ProgressBar>(R.id.progressBar).visibility = View.VISIBLE
@@ -604,10 +610,11 @@ class ScheduleActivity : AppCompatActivity() {
     /**
      * Extracts work intervals from the schedule table and updates the timeline view.
      */
+    @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     private fun updateTimeline() {
-        if (!::workTable.isInitialized || !::multiColorTimelineView.isInitialized) {
-            Log.e("ScheduleActivity updateTimeline", "WorkTable or MultiColorTimelineView is not initialized!")
+        if (!::workTable.isInitialized) {
+            Log.e("ScheduleActivity updateTimeline", "WorkTable is not initialized!")
             return
         }
 
@@ -615,31 +622,29 @@ class ScheduleActivity : AppCompatActivity() {
         Log.d("ScheduleActivity updateTimeline", "Work intervals extracted: $workIntervals")
 
         if (workIntervals.isNotEmpty()) {
-            val halfSize = workIntervals.size / 2
+            val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
 
-            val firstHalfIntervals = workIntervals.take(halfSize)
-            val secondHalfIntervals = workIntervals.drop(halfSize)
+            val mid = workIntervals.size / 2
+            val intervals1 = workIntervals.subList(0, mid)
+            val intervals2 = workIntervals.subList(mid, workIntervals.size)
+            val names1 = dutyNames.subList(0, mid)
+            val names2 = dutyNames.subList(mid, dutyNames.size)
 
-            val firstHalfDutyNames = dutyNames.take(halfSize)
-            val secondHalfDutyNames = dutyNames.drop(halfSize)
+            timeline1.setTimelineData(intervals1, names1)
+            timeline2.setTimelineData(intervals2, names2)
 
-            val minStartMinutesFirst = firstHalfIntervals.minOf { convertToMinutes(it.first) }
-            val maxEndMinutesFirst = firstHalfIntervals.maxOf { convertToMinutes(it.second) }
-            val minStartTimeFirst = String.format("%02d:%02d", minStartMinutesFirst / 60, minStartMinutesFirst % 60)
-            val maxEndTimeFirst = String.format("%02d:%02d", maxEndMinutesFirst / 60, maxEndMinutesFirst % 60)
+            val allBusStops = extractBusStops()
+            val midStop = allBusStops.size / 2
+            val busStopsPart1 = allBusStops.subList(0, midStop)
+            val busStopsPart2 = allBusStops.subList(midStop, allBusStops.size)
 
-            val minStartMinutesSecond = maxEndMinutesFirst
-            val maxEndMinutesSecond = secondHalfIntervals.maxOf { convertToMinutes(it.second) }
-            val minStartTimeSecond = String.format("%02d:%02d", minStartMinutesSecond / 60, minStartMinutesSecond % 60)
-            val maxEndTimeSecond = String.format("%02d:%02d", maxEndMinutesSecond / 60, maxEndMinutesSecond % 60)
-
-            multiColorTimelineView.setTimelineRange(minStartTimeFirst, maxEndTimeFirst)
-            multiColorTimelineView.setTimeIntervals(firstHalfIntervals, minStartTimeFirst, maxEndTimeFirst, firstHalfDutyNames, true)
-            multiColorTimelineView.setBusStops(extractBusStops()) // ✅ ADDED
-
-            multiColorTimelineView2.setTimelineRange(minStartTimeSecond, maxEndTimeSecond)
-            multiColorTimelineView2.setTimeIntervals(secondHalfIntervals, minStartTimeSecond, maxEndTimeSecond, secondHalfDutyNames, false)
-            multiColorTimelineView2.setBusStops(extractBusStops()) // ✅ ADDED
+// ✅ Set marker overlay data (IMPORTANT)
+            if (intervals1.isNotEmpty()) {
+                markerOverlay1.setData(busStopsPart1, intervals1.first().first, intervals1.last().second)
+            }
+            if (intervals2.isNotEmpty()) {
+                markerOverlay2.setData(busStopsPart2, intervals2.first().first, intervals2.last().second)
+            }
         }
     }
 
