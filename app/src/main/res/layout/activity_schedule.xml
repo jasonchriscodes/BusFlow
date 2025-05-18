@@ -140,7 +140,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingTop="8dp"
+        android:paddingTop="0dp"
         app:layout_constraintTop_toBottomOf="@id/scheduleTable"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
@@ -164,7 +164,7 @@
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp">
+            android:layout_marginTop="0dp">
 
             <com.jason.publisher.main.StyledMultiColorTimeline
                 android:id="@+id/timelinePart2"

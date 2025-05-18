@@ -86,19 +86,62 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
             val weight = workDuration.toFloat() / totalDuration
 
             // Create the work (duty) box
-            val dutyBox = TextView(context).apply {
-                text = dutyNames.getOrNull(i) ?: "Duty"
-                setTextColor(Color.WHITE)
-                textSize = 18f
-                gravity = Gravity.CENTER
-                setPadding(24, 12, 24, 12)
-                background = ContextCompat.getDrawable(context, R.drawable.route_rounded_style)
+            val dutyName = dutyNames.getOrNull(i) ?: "Duty"
+            val isRep = dutyName.equals("REP", ignoreCase = true)
+            val isBreak = dutyName.equals("Break", ignoreCase = true)
 
-                val params = LayoutParams(0, LayoutParams.WRAP_CONTENT, weight)
-                params.marginStart = if (i > 0) 8 else 0
-                layoutParams = params
+            val dutyView: View = if (isBreak || isRep) {
+                val box = LinearLayout(context).apply {
+                    orientation = VERTICAL
+                    gravity = Gravity.CENTER
+                    setPadding(8, 8, 8, 8)
+                    background = ContextCompat.getDrawable(
+                        context,
+                        if (isBreak) R.drawable.break_vertical_style else R.drawable.rep_vertical_style
+                    )
+                }
+
+                // Add icon or label
+                if (isBreak) {
+                    val icon = ImageView(context).apply {
+                        setImageResource(R.drawable.cup_break)
+                        layoutParams = LinearLayout.LayoutParams(32, 32)
+                    }
+                    box.addView(icon)
+                } else if (isRep) {
+                    val label = TextView(context).apply {
+                        text = "R\nE\nP"
+                        setTextColor(Color.WHITE)
+                        textSize = 16f
+                        gravity = Gravity.CENTER
+                    }
+                    box.addView(label)
+                }
+
+                // ⬅ Match restBox width logic
+                val minPx = (40 * context.resources.displayMetrics.density).toInt()
+                val boxWidthPx = (weight * width).toInt().coerceAtLeast(minPx)
+                box.layoutParams = LayoutParams(boxWidthPx, LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = if (i > 0) 8 else 0
+                }
+
+                box
+            }else {
+                // Standard horizontal green box
+                TextView(context).apply {
+                    text = dutyName
+                    setTextColor(Color.WHITE)
+                    textSize = 18f
+                    gravity = Gravity.CENTER
+                    setPadding(24, 12, 24, 12)
+                    background = ContextCompat.getDrawable(context, R.drawable.route_rounded_style)
+
+                    val params = LayoutParams(0, LayoutParams.WRAP_CONTENT, weight)
+                    params.marginStart = if (i > 0) 8 else 0
+                    layoutParams = params
+                }
             }
-            addView(dutyBox)
+            addView(dutyView)
 
             // Add break after this duty
             if (i < workIntervals.size - 1) {
@@ -106,7 +149,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                 val breakWeight = breakDuration.toFloat() / totalDuration
                 val delta = "${breakDuration} min"
 
-                val breakBox = LinearLayout(context).apply {
+                val restBox = LinearLayout(context).apply {
                     orientation = VERTICAL
                     gravity = Gravity.CENTER
                     setBackgroundResource(R.drawable.break_rounded_style)
@@ -119,9 +162,9 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                     }
                 }
 
-                val cupIcon = ImageView(context).apply {
-                    setImageResource(R.drawable.cup_break)
-                    layoutParams = LinearLayout.LayoutParams(48, 48).apply {
+                val busIcon = ImageView(context).apply {
+                    setImageResource(R.drawable.bus_timeline)
+                    layoutParams = LinearLayout.LayoutParams(32, 32).apply {
                         gravity = Gravity.CENTER_HORIZONTAL
                     }
                 }
@@ -133,9 +176,9 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                     gravity = Gravity.CENTER
                 }
 
-                breakBox.addView(cupIcon)
-                breakBox.addView(deltaText)
-                addView(breakBox)
+                restBox.addView(busIcon)
+                restBox.addView(deltaText)
+                addView(restBox)
             }
         }
 
