@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.os.Build
+import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.Log
 import android.view.Gravity
@@ -13,6 +14,7 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.jason.publisher.R
 import com.jason.publisher.main.model.BusScheduleInfo
+import com.jason.publisher.main.model.ScheduleItem
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -29,6 +31,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
     private var workIntervals: List<Pair<String, String>> = emptyList()
     private var dutyNames: List<String> = emptyList()
     private var busStops: List<BusScheduleInfo> = emptyList()
+    private var allScheduleItems: List<ScheduleItem> = emptyList()
 
     init {
         orientation = HORIZONTAL
@@ -161,18 +164,23 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
             if (i < workIntervals.size - 1) {
                 val breakDuration = breakDurations[i]
                 val breakWeight = breakDuration.toFloat() / totalDuration
-                val delta = "${breakDuration} min"
+                val previousRouteIndex = i
+                val lastBusStopAbbreviation = if (previousRouteIndex < busStops.size) {
+                    // Try to find the last bus stop for the previous duty segment
+                    allScheduleItems.getOrNull(previousRouteIndex)?.busStops?.lastOrNull()?.abbreviation ?: "?"
+                } else {
+                    "?"
+                }
 
                 val restBox = LinearLayout(context).apply {
                     orientation = VERTICAL
                     gravity = Gravity.CENTER
                     setBackgroundResource(R.drawable.break_rounded_style)
-                    setPadding(8, 8, 8, 8)
+                    setPadding(1, 1, 1, 1)
 
-                    val minPx = (40 * context.resources.displayMetrics.density).toInt()
-                    val breakWidthPx = (breakWeight * width).toInt().coerceAtLeast(minPx)
-                    layoutParams = LayoutParams(breakWidthPx, LayoutParams.WRAP_CONTENT).apply {
-                        marginStart = 8
+                    val thinWidthPx = (48 * context.resources.displayMetrics.density).toInt()
+                    layoutParams = LayoutParams(thinWidthPx, LayoutParams.WRAP_CONTENT).apply {
+                        marginStart = 6 // slightly tighter margin
                     }
                 }
 
@@ -183,55 +191,34 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                     }
                 }
 
-                val deltaText = TextView(context).apply {
-                    text = delta
+                val abbrevText = TextView(context).apply {
+                    text = lastBusStopAbbreviation
                     setTextColor(Color.WHITE)
                     textSize = 14f
                     gravity = Gravity.CENTER
+                    maxLines = 1
+                    isSingleLine = true
+                    setPadding(8, 0, 8, 0) // ← wider padding
+
+                    // ✅ Increase min width slightly to fit 3-letter abbreviations comfortably
+                    val minWidthPx = (60 * context.resources.displayMetrics.density).toInt()
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        width = minWidthPx
+                    }
                 }
 
                 restBox.addView(busIcon)
-                restBox.addView(deltaText)
+                restBox.addView(abbrevText)
                 addView(restBox)
             }
         }
+    }
 
-        // Insert bus stop markers dynamically along the timeline
-        if (busStops.isNotEmpty()) {
-            val totalStart = convertToMinutes(workIntervals.first().first)
-            val totalEnd = convertToMinutes(workIntervals.last().second)
-
-            for (stop in busStops) {
-                val stopMinute = convertToMinutes(stop.time)
-                val relativePosition = (stopMinute - totalStart).toFloat() / (totalEnd - totalStart)
-
-                val marker = LinearLayout(context).apply {
-                    orientation = VERTICAL
-                    gravity = Gravity.CENTER
-                }
-
-                val abbrev = TextView(context).apply {
-                    text = stop.abbreviation
-                    setTextColor(Color.WHITE)
-                    textSize = 12f
-                    gravity = Gravity.CENTER
-                }
-
-                val delta = TextView(context).apply {
-                    val mins = stopMinute - totalStart
-                    text = if (mins >= 60) "${mins / 60}:${String.format("%02d", mins % 60)}" else "$mins"
-                    setTextColor(Color.WHITE)
-                    textSize = 12f
-                    gravity = Gravity.CENTER
-                }
-
-                marker.addView(abbrev)
-                marker.addView(delta)
-
-                val insertionIndex = (childCount * relativePosition).toInt().coerceIn(0, childCount)
-                addView(marker, insertionIndex)
-            }
-        }
+    fun setScheduleData(scheduleItems: List<ScheduleItem>) {
+        this.allScheduleItems = scheduleItems
     }
 
     private fun convertToMinutes(time: String): Int {

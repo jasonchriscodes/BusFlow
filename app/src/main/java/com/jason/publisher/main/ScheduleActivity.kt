@@ -658,13 +658,18 @@ class ScheduleActivity : AppCompatActivity() {
             val names1 = dutyNames.subList(0, mid)
             val names2 = dutyNames.subList(mid, dutyNames.size)
 
-            timeline1.setTimelineData(intervals1, names1)
-            timeline2.setTimelineData(intervals2, names2)
-
             val allBusStops = extractBusStops()
             val midStop = allBusStops.size / 2
             val busStopsPart1 = allBusStops.subList(0, midStop)
             val busStopsPart2 = allBusStops.subList(midStop, allBusStops.size)
+
+            timeline1.setTimelineData(intervals1, names1)
+            timeline1.setBusStops(busStopsPart1)
+            timeline1.setScheduleData(scheduleData.subList(0, mid)) // Add this line
+
+            timeline2.setTimelineData(intervals2, names2)
+            timeline2.setBusStops(busStopsPart2)
+            timeline2.setScheduleData(scheduleData.subList(mid, scheduleData.size)) // Add this too
         }
     }
 
