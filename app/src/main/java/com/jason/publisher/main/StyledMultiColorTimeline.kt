@@ -95,31 +95,43 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
 
             val dutyView: View = when {
                 isRep -> {
-                    val box = LinearLayout(context).apply {
+                    val firstBusStopAbbreviation = allScheduleItems.getOrNull(i)?.busStops?.firstOrNull()?.abbreviation ?: "?"
+
+                    val repBox = LinearLayout(context).apply {
                         orientation = VERTICAL
                         gravity = Gravity.CENTER
-                        setPadding(8, 8, 8, 8)
+                        setPadding(12, 8, 12, 8)
                         background = ContextCompat.getDrawable(context, R.drawable.rep_vertical_style)
 
-                        val repText = TextView(context).apply {
-                            text = "R\nE\nP"
+                        val repLabel = TextView(context).apply {
+                            text = "REP"
                             setTextColor(Color.WHITE)
                             textSize = 16f
                             gravity = Gravity.CENTER
                         }
 
-                        addView(repText)
+                        val stopAbbrev = TextView(context).apply {
+                            text = firstBusStopAbbreviation
+                            setTextColor(Color.WHITE)
+                            textSize = 14f
+                            gravity = Gravity.CENTER
+                        }
+
+                        addView(repLabel)
+                        addView(stopAbbrev)
                     }
 
-                    val fixedWidthPx = (40 * context.resources.displayMetrics.density).toInt()
-                    box.layoutParams = LayoutParams(fixedWidthPx, LayoutParams.MATCH_PARENT).apply {
+                    repBox.layoutParams = LayoutParams(
+                        (64 * context.resources.displayMetrics.density).toInt(), // fixed width in dp
+                        LayoutParams.WRAP_CONTENT
+                    ).apply {
                         marginStart = if (i > 0) 8 else 0
                     }
-
-                    box
+                    repBox
                 }
 
                 isBreak -> {
+                    val firstBusStopAbbreviation = allScheduleItems.getOrNull(i)?.busStops?.firstOrNull()?.abbreviation ?: "?"
                     val box = LinearLayout(context).apply {
                         orientation = HORIZONTAL
                         gravity = Gravity.CENTER
@@ -131,25 +143,29 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                             layoutParams = LinearLayout.LayoutParams(32, 32)
                         }
 
+                        val abbrev = TextView(context).apply {
+                            text = "→ $firstBusStopAbbreviation"
+                            setTextColor(Color.WHITE)
+                            textSize = 16f
+                            gravity = Gravity.CENTER
+                            setPadding(8, 0, 0, 0)
+                        }
+
                         addView(icon)
+                        addView(abbrev)
                     }
-
-                    val fixedWidthPx = (120 * context.resources.displayMetrics.density).toInt()
-                    box.layoutParams = LayoutParams(fixedWidthPx, LayoutParams.WRAP_CONTENT).apply {
-                        marginStart = if (i > 0) 8 else 0
-                    }
-
                     box
                 }
 
                 else -> {
                     val firstBusStopAbbreviation = allScheduleItems.getOrNull(i)?.busStops?.firstOrNull()?.abbreviation ?: "?"
-                    val displayText = "$dutyName → $firstBusStopAbbreviation"
+                    val displayText = if (isRep) "REP → $firstBusStopAbbreviation" else "$dutyName → $firstBusStopAbbreviation"
 
                     LinearLayout(context).apply {
                         orientation = VERTICAL
                         gravity = Gravity.CENTER
-                        background = ContextCompat.getDrawable(context, R.drawable.route_rounded_style)
+                        background = ContextCompat.getDrawable(context,
+                            if (isRep) R.drawable.rep_vertical_style else R.drawable.route_rounded_style)
                         setPadding(12, 8, 12, 8)
 
                         val label = TextView(context).apply {
@@ -162,7 +178,6 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                         }
 
                         addView(label)
-
                         layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, weight).apply {
                             marginStart = if (i > 0) 8 else 0
                         }
@@ -177,12 +192,11 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                 val breakDuration = breakDurations[i]
                 val breakWeight = breakDuration.toFloat() / totalDuration
                 val previousRouteIndex = i
-                val lastBusStopAbbreviation = if (previousRouteIndex < busStops.size) {
-                    // Try to find the last bus stop for the previous duty segment
-                    allScheduleItems.getOrNull(previousRouteIndex)?.busStops?.lastOrNull()?.abbreviation ?: "?"
-                } else {
-                    "?"
-                }
+                val lastBusStopAbbreviation = allScheduleItems
+                    .getOrNull(previousRouteIndex)
+                    ?.busStops
+                    ?.lastOrNull()
+                    ?.abbreviation ?: "?"
 
                 val restBox = LinearLayout(context).apply {
                     orientation = VERTICAL
