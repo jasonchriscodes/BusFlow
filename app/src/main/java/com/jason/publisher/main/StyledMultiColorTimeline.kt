@@ -90,57 +90,71 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
             val isRep = dutyName.equals("REP", ignoreCase = true)
             val isBreak = dutyName.equals("Break", ignoreCase = true)
 
-            val dutyView: View = if (isBreak || isRep) {
-                val box = LinearLayout(context).apply {
-                    orientation = VERTICAL
-                    gravity = Gravity.CENTER
-                    setPadding(8, 8, 8, 8)
-                    background = ContextCompat.getDrawable(
-                        context,
-                        if (isBreak) R.drawable.break_vertical_style else R.drawable.rep_vertical_style
-                    )
-                }
-
-                // Add icon or label
-                if (isBreak) {
-                    val icon = ImageView(context).apply {
-                        setImageResource(R.drawable.cup_break)
-                        layoutParams = LinearLayout.LayoutParams(32, 32)
-                    }
-                    box.addView(icon)
-                } else if (isRep) {
-                    val label = TextView(context).apply {
-                        text = "R\nE\nP"
-                        setTextColor(Color.WHITE)
-                        textSize = 16f
+            val dutyView: View = when {
+                isRep -> {
+                    val box = LinearLayout(context).apply {
+                        orientation = VERTICAL
                         gravity = Gravity.CENTER
+                        setPadding(8, 8, 8, 8)
+                        background = ContextCompat.getDrawable(context, R.drawable.rep_vertical_style)
+
+                        val repText = TextView(context).apply {
+                            text = "R\nE\nP"
+                            setTextColor(Color.WHITE)
+                            textSize = 16f
+                            gravity = Gravity.CENTER
+                        }
+
+                        addView(repText)
                     }
-                    box.addView(label)
+
+                    val fixedWidthPx = (40 * context.resources.displayMetrics.density).toInt()
+                    box.layoutParams = LayoutParams(fixedWidthPx, LayoutParams.MATCH_PARENT).apply {
+                        marginStart = if (i > 0) 8 else 0
+                    }
+
+                    box
                 }
 
-                // ⬅ Match restBox width logic
-                val minPx = (40 * context.resources.displayMetrics.density).toInt()
-                val boxWidthPx = (weight * width).toInt().coerceAtLeast(minPx)
-                box.layoutParams = LayoutParams(boxWidthPx, LayoutParams.WRAP_CONTENT).apply {
-                    marginStart = if (i > 0) 8 else 0
+                isBreak -> {
+                    val box = LinearLayout(context).apply {
+                        orientation = HORIZONTAL
+                        gravity = Gravity.CENTER
+                        setPadding(8, 8, 8, 8)
+                        background = ContextCompat.getDrawable(context, R.drawable.break_horizontal_style)
+
+                        val icon = ImageView(context).apply {
+                            setImageResource(R.drawable.cup_break)
+                            layoutParams = LinearLayout.LayoutParams(32, 32)
+                        }
+
+                        addView(icon)
+                    }
+
+                    val fixedWidthPx = (120 * context.resources.displayMetrics.density).toInt()
+                    box.layoutParams = LayoutParams(fixedWidthPx, LayoutParams.WRAP_CONTENT).apply {
+                        marginStart = if (i > 0) 8 else 0
+                    }
+
+                    box
                 }
 
-                box
-            }else {
-                // Standard horizontal green box
-                TextView(context).apply {
-                    text = dutyName
-                    setTextColor(Color.WHITE)
-                    textSize = 18f
-                    gravity = Gravity.CENTER
-                    setPadding(24, 12, 24, 12)
-                    background = ContextCompat.getDrawable(context, R.drawable.route_rounded_style)
+                else -> {
+                    TextView(context).apply {
+                        text = dutyName
+                        setTextColor(Color.WHITE)
+                        textSize = 18f
+                        gravity = Gravity.CENTER
+                        setPadding(24, 12, 24, 12)
+                        background = ContextCompat.getDrawable(context, R.drawable.route_rounded_style)
 
-                    val params = LayoutParams(0, LayoutParams.WRAP_CONTENT, weight)
-                    params.marginStart = if (i > 0) 8 else 0
-                    layoutParams = params
+                        val params = LayoutParams(0, LayoutParams.WRAP_CONTENT, weight)
+                        params.marginStart = if (i > 0) 8 else 0
+                        layoutParams = params
+                    }
                 }
             }
+
             addView(dutyView)
 
             // Add break after this duty

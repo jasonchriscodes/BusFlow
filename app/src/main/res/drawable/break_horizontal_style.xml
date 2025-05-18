@@ -1,0 +1,7 @@
+<!-- res/drawable/break_horizontal_style.xml -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#C57016"/>
+    <corners android:radius="8dp"/>
+    <stroke android:width="2dp" android:color="#000000"/>
+    <size android:width="120dp" android:height="40dp"/> <!-- wider fixed width -->
+</shape>
