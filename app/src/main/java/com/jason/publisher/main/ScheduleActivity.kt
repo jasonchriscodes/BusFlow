@@ -91,9 +91,6 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
     private val loadingBarHandler = Handler(Looper.getMainLooper())
-    private lateinit var markerOverlay1: OverlayBusStopMarkerView
-    private lateinit var markerOverlay2: OverlayBusStopMarkerView
-
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -169,8 +166,6 @@ class ScheduleActivity : AppCompatActivity() {
         workTable                = findViewById(R.id.scheduleTable)
         timeline1 = findViewById(R.id.timelinePart1)
         timeline2 = findViewById(R.id.timelinePart2)
-        markerOverlay1 = findViewById(R.id.markerOverlayPart1)
-        markerOverlay2 = findViewById(R.id.markerOverlayPart2)
 
         // 0) init your MQTT managers *before* you ever call enterOnlineMode()/fetchConfig()
         mqttManagerConfig = MqttManager(
@@ -392,9 +387,7 @@ class ScheduleActivity : AppCompatActivity() {
         binding.testStartRouteButton.visibility = View.VISIBLE
         timeline1.visibility = View.VISIBLE
         timeline2.visibility = View.VISIBLE
-        markerOverlay1.visibility = View.VISIBLE
-        markerOverlay2.visibility = View.VISIBLE
-        workTable.visibility             = View.VISIBLE
+        workTable.visibility = View.VISIBLE
 
         loadBusDataFromCache()
         loadScheduleDataFromCache()
@@ -637,14 +630,6 @@ class ScheduleActivity : AppCompatActivity() {
             val midStop = allBusStops.size / 2
             val busStopsPart1 = allBusStops.subList(0, midStop)
             val busStopsPart2 = allBusStops.subList(midStop, allBusStops.size)
-
-// ✅ Set marker overlay data (IMPORTANT)
-            if (intervals1.isNotEmpty()) {
-                markerOverlay1.setData(busStopsPart1, intervals1.first().first, intervals1.last().second)
-            }
-            if (intervals2.isNotEmpty()) {
-                markerOverlay2.setData(busStopsPart2, intervals2.first().first, intervals2.last().second)
-            }
         }
     }
 

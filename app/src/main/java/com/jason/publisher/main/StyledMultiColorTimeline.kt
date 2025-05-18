@@ -160,11 +160,6 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                     gravity = Gravity.CENTER
                 }
 
-                val line = View(context).apply {
-                    layoutParams = LinearLayout.LayoutParams(4, 60)
-                    setBackgroundColor(Color.WHITE)
-                }
-
                 val delta = TextView(context).apply {
                     val mins = stopMinute - totalStart
                     text = if (mins >= 60) "${mins / 60}:${String.format("%02d", mins % 60)}" else "$mins"
@@ -174,7 +169,6 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                 }
 
                 marker.addView(abbrev)
-                marker.addView(line)
                 marker.addView(delta)
 
                 val insertionIndex = (childCount * relativePosition).toInt().coerceIn(0, childCount)

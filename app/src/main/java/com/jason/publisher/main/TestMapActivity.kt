@@ -894,17 +894,17 @@ class TestMapActivity : AppCompatActivity() {
         return calendar.time
     }
 
-    /**
-     * Converts seconds to mm:ss format.
-     */
-    private fun formatSecondsAsTime(seconds: Int): String {
-        val sign = if (seconds < 0) "-" else ""
-        val absSeconds = Math.abs(seconds)
-        val hours = absSeconds / 3600
-        val minutes = (absSeconds % 3600) / 60
-        val secs = absSeconds % 60
-        return String.format("%s%02d:%02d:%02d", sign, hours, minutes, secs)
-    }
+//    /**
+//     * Converts seconds to mm:ss format.
+//     */
+//    private fun formatSecondsAsTime(seconds: Int): String {
+//        val sign = if (seconds < 0) "-" else ""
+//        val absSeconds = Math.abs(seconds)
+//        val hours = absSeconds / 3600
+//        val minutes = (absSeconds % 3600) / 60
+//        val secs = absSeconds % 60
+//        return String.format("%s%02d:%02d:%02d", sign, hours, minutes, secs)
+//    }
 
 //    /** Interpolates movement between two points with dynamic bearing and speed updates */
 //    private fun simulateMovement(startLat: Double, startLon: Double, endLat: Double, endLon: Double, steps: Int) {
@@ -1217,38 +1217,38 @@ class TestMapActivity : AppCompatActivity() {
         return null
     }
 
-    /**
-     * Checks whether the given bus stop address appears in the scheduleList.
-     */
-    private fun isBusStopInScheduleList(address: String?, scheduleList: List<ScheduleItem>): Boolean {
-        if (address == null || scheduleList.isEmpty()) return false
-        val busStops = scheduleList.first().busStops
-        return busStops.any { it.address.equals(address, ignoreCase = true) }
-    }
+//    /**
+//     * Checks whether the given bus stop address appears in the scheduleList.
+//     */
+//    private fun isBusStopInScheduleList(address: String?, scheduleList: List<ScheduleItem>): Boolean {
+//        if (address == null || scheduleList.isEmpty()) return false
+//        val busStops = scheduleList.first().busStops
+//        return busStops.any { it.address.equals(address, ignoreCase = true) }
+//    }
 
-    /**
-     * From the timingList, returns the smallest index greater than [currentIndex]
-     * whose bus stop address is found in the scheduleList.
-     * Returns null if none exists.
-     */
-    private fun nextBusStopIndexInScheduleList(
-        timingList: List<BusStopWithTimingPoint>,
-        scheduleList: List<ScheduleItem>,
-        currentIndex: Int
-    ): Int? {
-        if (scheduleList.isEmpty()) return null
-        val busStops = scheduleList.first().busStops.map { it.address }
-        // Get all indices in timingList that are scheduled (i.e. address in busStops)
-        val scheduledIndices = timingList.withIndex()
-            .filter { entry ->
-                entry.value.address?.let { addr ->
-                    busStops.any { it.equals(addr, ignoreCase = true) }
-                } ?: false
-            }
-            .map { it.index }
-        // Find the first scheduled index greater than currentIndex
-        return scheduledIndices.firstOrNull { it > currentIndex }
-    }
+//    /**
+//     * From the timingList, returns the smallest index greater than [currentIndex]
+//     * whose bus stop address is found in the scheduleList.
+//     * Returns null if none exists.
+//     */
+//    private fun nextBusStopIndexInScheduleList(
+//        timingList: List<BusStopWithTimingPoint>,
+//        scheduleList: List<ScheduleItem>,
+//        currentIndex: Int
+//    ): Int? {
+//        if (scheduleList.isEmpty()) return null
+//        val busStops = scheduleList.first().busStops.map { it.address }
+//        // Get all indices in timingList that are scheduled (i.e. address in busStops)
+//        val scheduledIndices = timingList.withIndex()
+//            .filter { entry ->
+//                entry.value.address?.let { addr ->
+//                    busStops.any { it.equals(addr, ignoreCase = true) }
+//                } ?: false
+//            }
+//            .map { it.index }
+//        // Find the first scheduled index greater than currentIndex
+//        return scheduledIndices.firstOrNull { it > currentIndex }
+//    }
 
     /** Updates timing point based on current bus location */
     @SuppressLint("LongLogTag")
