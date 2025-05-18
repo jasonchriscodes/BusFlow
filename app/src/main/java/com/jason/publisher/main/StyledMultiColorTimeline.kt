@@ -32,6 +32,8 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
     private var dutyNames: List<String> = emptyList()
     private var busStops: List<BusScheduleInfo> = emptyList()
     private var allScheduleItems: List<ScheduleItem> = emptyList()
+    private val repBoxWidthPx = (80 * context.resources.displayMetrics.density).toInt()
+    private val dutyBoxMinWidthPx = (100 * context.resources.displayMetrics.density).toInt()
 
     init {
         orientation = HORIZONTAL
@@ -70,7 +72,6 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
 
         if (workIntervals.isEmpty()) return
 
-        // Calculate duration in minutes for duties and breaks
         val segmentDurations = mutableListOf<Long>()
         val breakDurations = mutableListOf<Long>()
 
@@ -83,120 +84,100 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
 
         val totalDuration = segmentDurations.sum() + breakDurations.sum()
 
-        // Add views proportionally
         for (i in workIntervals.indices) {
-            val workDuration = segmentDurations[i]
-            val weight = workDuration.toFloat() / totalDuration
-
-            // Create the work (duty) box
+            val item = allScheduleItems.getOrNull(i)
             val dutyName = dutyNames.getOrNull(i) ?: "Duty"
             val isRep = dutyName.equals("REP", ignoreCase = true)
             val isBreak = dutyName.equals("Break", ignoreCase = true)
+            val startTime = workIntervals[i].first
+            val firstStopAbbr = item?.busStops?.firstOrNull()?.abbreviation ?: "?"
 
-            val dutyView: View = when {
-                isRep -> {
-                    val firstBusStopAbbreviation = allScheduleItems.getOrNull(i)?.busStops?.firstOrNull()?.abbreviation ?: "?"
-
-                    val repBox = LinearLayout(context).apply {
-                        orientation = VERTICAL
-                        gravity = Gravity.CENTER
-                        setPadding(12, 8, 12, 8)
-                        background = ContextCompat.getDrawable(context, R.drawable.rep_vertical_style)
-
-                        val repLabel = TextView(context).apply {
-                            text = "REP"
-                            setTextColor(Color.WHITE)
-                            textSize = 16f
-                            gravity = Gravity.CENTER
-                        }
-
-                        val stopAbbrev = TextView(context).apply {
-                            text = firstBusStopAbbreviation
-                            setTextColor(Color.WHITE)
-                            textSize = 14f
-                            gravity = Gravity.CENTER
-                        }
-
-                        addView(repLabel)
-                        addView(stopAbbrev)
+            val box = LinearLayout(context).apply {
+                orientation = VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(12, 8, 12, 8)
+                background = ContextCompat.getDrawable(context,
+                    when {
+                        isRep -> R.drawable.rep_vertical_style
+                        isBreak -> R.drawable.break_horizontal_style
+                        else -> R.drawable.route_rounded_style
                     }
+                )
 
-                    repBox.layoutParams = LayoutParams(
-                        (64 * context.resources.displayMetrics.density).toInt(), // fixed width in dp
-                        LayoutParams.WRAP_CONTENT
-                    ).apply {
-                        marginStart = if (i > 0) 8 else 0
-                    }
-                    repBox
+                val timeLabel = TextView(context).apply {
+                    text = startTime
+                    setTextColor(Color.WHITE)
+                    textSize = 12f
+                    gravity = Gravity.CENTER
                 }
 
-                isBreak -> {
-                    val firstBusStopAbbreviation = allScheduleItems.getOrNull(i)?.busStops?.firstOrNull()?.abbreviation ?: "?"
-                    val box = LinearLayout(context).apply {
-                        orientation = HORIZONTAL
+                addView(timeLabel)
+
+                if (isRep) {
+                    val repLabel = TextView(context).apply {
+                        text = "REP"
+                        setTextColor(Color.WHITE)
+                        textSize = 16f
                         gravity = Gravity.CENTER
-                        setPadding(8, 8, 8, 8)
-                        background = ContextCompat.getDrawable(context, R.drawable.break_horizontal_style)
-
-                        val icon = ImageView(context).apply {
-                            setImageResource(R.drawable.cup_break)
-                            layoutParams = LinearLayout.LayoutParams(32, 32)
-                        }
-
-                        val abbrev = TextView(context).apply {
-                            text = "→ $firstBusStopAbbreviation"
-                            setTextColor(Color.WHITE)
-                            textSize = 16f
-                            gravity = Gravity.CENTER
-                            setPadding(8, 0, 0, 0)
-                        }
-
-                        addView(icon)
-                        addView(abbrev)
                     }
-                    box
-                }
 
-                else -> {
-                    val firstBusStopAbbreviation = allScheduleItems.getOrNull(i)?.busStops?.firstOrNull()?.abbreviation ?: "?"
-                    val displayText = if (isRep) "REP → $firstBusStopAbbreviation" else "$dutyName → $firstBusStopAbbreviation"
-
-                    LinearLayout(context).apply {
-                        orientation = VERTICAL
+                    val stopLabel = TextView(context).apply {
+                        text = firstStopAbbr
+                        setTextColor(Color.WHITE)
+                        textSize = 14f
                         gravity = Gravity.CENTER
-                        background = ContextCompat.getDrawable(context,
-                            if (isRep) R.drawable.rep_vertical_style else R.drawable.route_rounded_style)
-                        setPadding(12, 8, 12, 8)
+                    }
 
-                        val label = TextView(context).apply {
-                            text = displayText
-                            setTextColor(Color.WHITE)
-                            textSize = 16f
-                            gravity = Gravity.CENTER
-                            maxLines = 1
-                            ellipsize = TextUtils.TruncateAt.END
-                        }
+                    addView(repLabel)
+                    addView(stopLabel)
 
-                        addView(label)
-                        layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, weight).apply {
-                            marginStart = if (i > 0) 8 else 0
+                } else if (isBreak) {
+                    val icon = ImageView(context).apply {
+                        setImageResource(R.drawable.cup_break)
+                        layoutParams = LinearLayout.LayoutParams(32, 32).apply {
+                            gravity = Gravity.CENTER_HORIZONTAL
                         }
                     }
+
+                    val stopLabel = TextView(context).apply {
+                        text = firstStopAbbr
+                        setTextColor(Color.WHITE)
+                        textSize = 14f
+                        gravity = Gravity.CENTER
+                    }
+
+                    addView(icon)
+                    addView(stopLabel)
+
+                } else {
+                    val label = TextView(context).apply {
+                        text = "$dutyName → $firstStopAbbr"
+                        setTextColor(Color.WHITE)
+                        textSize = 16f
+                        gravity = Gravity.CENTER
+                        maxLines = 1
+                        ellipsize = TextUtils.TruncateAt.END
+                    }
+
+                    addView(label)
                 }
             }
 
-            addView(dutyView)
+            val fixedBoxWidth = (64 * context.resources.displayMetrics.density).toInt()
+            box.layoutParams = LayoutParams(
+                if (isRep || isBreak) fixedBoxWidth else 0,
+                LayoutParams.WRAP_CONTENT,
+                if (isRep || isBreak) 0f else segmentDurations[i].toFloat() / totalDuration
+            ).apply {
+                marginStart = if (i > 0) 8 else 0
+            }
 
-            // Add break after this duty
+            addView(box)
+
             if (i < workIntervals.size - 1) {
-                val breakDuration = breakDurations[i]
-                val breakWeight = breakDuration.toFloat() / totalDuration
-                val previousRouteIndex = i
-                val lastBusStopAbbreviation = allScheduleItems
-                    .getOrNull(previousRouteIndex)
-                    ?.busStops
-                    ?.lastOrNull()
-                    ?.abbreviation ?: "?"
+                val lastStopOfCurrent = item?.busStops?.lastOrNull()?.abbreviation ?: "?"
+                val nextItem = allScheduleItems.getOrNull(i + 1)
+                val breakAbbr = nextItem?.busStops?.firstOrNull()?.abbreviation ?: "?"
 
                 val restBox = LinearLayout(context).apply {
                     orientation = VERTICAL
@@ -204,40 +185,28 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                     setBackgroundResource(R.drawable.break_rounded_style)
                     setPadding(1, 1, 1, 1)
 
-                    val thinWidthPx = (48 * context.resources.displayMetrics.density).toInt()
-                    layoutParams = LayoutParams(thinWidthPx, LayoutParams.WRAP_CONTENT).apply {
-                        marginStart = 6 // slightly tighter margin
+                    val busIcon = ImageView(context).apply {
+                        setImageResource(R.drawable.bus_timeline)
+                        layoutParams = LinearLayout.LayoutParams(32, 32)
                     }
+
+                    val restAbbr = TextView(context).apply {
+                        text = lastStopOfCurrent
+                        setTextColor(Color.WHITE)
+                        textSize = 14f
+                        gravity = Gravity.CENTER
+                        setPadding(8, 0, 8, 0)
+                    }
+
+                    addView(busIcon)
+                    addView(restAbbr)
                 }
 
-                val busIcon = ImageView(context).apply {
-                    setImageResource(R.drawable.bus_timeline)
-                    layoutParams = LinearLayout.LayoutParams(32, 32).apply {
-                        gravity = Gravity.CENTER_HORIZONTAL
-                    }
+                val thinWidthPx = (48 * context.resources.displayMetrics.density).toInt()
+                restBox.layoutParams = LayoutParams(thinWidthPx, LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = 6
                 }
 
-                val abbrevText = TextView(context).apply {
-                    text = lastBusStopAbbreviation
-                    setTextColor(Color.WHITE)
-                    textSize = 14f
-                    gravity = Gravity.CENTER
-                    maxLines = 1
-                    isSingleLine = true
-                    setPadding(8, 0, 8, 0) // ← wider padding
-
-                    // ✅ Increase min width slightly to fit 3-letter abbreviations comfortably
-                    val minWidthPx = (60 * context.resources.displayMetrics.density).toInt()
-                    layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                    ).apply {
-                        width = minWidthPx
-                    }
-                }
-
-                restBox.addView(busIcon)
-                restBox.addView(abbrevText)
                 addView(restBox)
             }
         }
