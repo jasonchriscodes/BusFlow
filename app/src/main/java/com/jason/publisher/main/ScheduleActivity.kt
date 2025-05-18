@@ -91,6 +91,8 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
     private val loadingBarHandler = Handler(Looper.getMainLooper())
+    private var isTabulatedView: Boolean = false
+    private lateinit var changeModeButton: Button
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -162,10 +164,17 @@ class ScheduleActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Initialize all views up front:
-        scheduleTable            = findViewById(R.id.scheduleTable)
-        workTable                = findViewById(R.id.scheduleTable)
+        scheduleTable = binding.scheduleTable
+        scheduleTable.visibility = View.GONE
+        workTable = scheduleTable
         timeline1 = findViewById(R.id.timelinePart1)
         timeline2 = findViewById(R.id.timelinePart2)
+        changeModeButton = findViewById(R.id.changeModeButton)
+        findViewById<View>(R.id.markerOverlayPart1).isClickable = false
+        findViewById<View>(R.id.markerOverlayPart1).isFocusable = false
+        findViewById<View>(R.id.markerOverlayPart2).isClickable = false
+        findViewById<View>(R.id.markerOverlayPart2).isFocusable = false
+
 
         // 0) init your MQTT managers *before* you ever call enterOnlineMode()/fetchConfig()
         mqttManagerConfig = MqttManager(
@@ -241,6 +250,8 @@ class ScheduleActivity : AppCompatActivity() {
 
         // 2. Find the hidden MapView
         val preloadMap: MapView = findViewById(R.id.preloadMapView)
+        preloadMap.isClickable = false
+        preloadMap.isFocusable = false
 
         // 3. Create tile cache
         val cache = AndroidUtil.createTileCache(
@@ -256,32 +267,49 @@ class ScheduleActivity : AppCompatActivity() {
         val mapFile = File(getHiddenFolder(), "new-zealand-2.map")
 
         if (!mapFile.exists() || mapFile.length() != expectedMapFileSize) {
-//            Toast.makeText(this, "Map file missing or corrupted. Please re-download or connect to internet.", Toast.LENGTH_LONG).show()
-//            Log.e("ScheduleActivity", "Invalid or missing map file. Exists: ${mapFile.exists()}, Size: ${mapFile.length()}")
-            return
+            Log.e("ScheduleActivity", "❌ Skipping map load. Map file missing or invalid. Exists: ${mapFile.exists()}, Size: ${mapFile.length()}")
+            Toast.makeText(this, "Offline map unavailable. Other features will still work.", Toast.LENGTH_SHORT).show()
+        } else {
+            try {
+                val mapStore = MapFile(mapFile)
+                val renderer = TileRendererLayer(
+                    cache,
+                    mapStore,
+                    preloadMap.model.mapViewPosition,
+                    AndroidGraphicFactory.INSTANCE
+                ).apply {
+                    setXmlRenderTheme(InternalRenderTheme.DEFAULT)
+                }
+
+                preloadMap.layerManager.layers.add(renderer)
+
+                preloadMap.post {
+                    preloadMap.model.mapViewPosition.setZoomLevel(16)
+                    preloadMap.model.mapViewPosition.setCenter(LatLong(-36.855647, 174.765249))
+                    preloadMap.invalidate()
+                }
+            } catch (e: Exception) {
+                Log.e("ScheduleActivity", "❌ Map file failed to load: ${e.message}")
+                Toast.makeText(this, "Map rendering failed. You can still use the app.", Toast.LENGTH_SHORT).show()
+            }
         }
 
-        // Now safe to use
-        val mapStore = MapFile(mapFile)
+        changeModeButton.setOnClickListener {
+//            Log.d("ChangeModeButton", "Clicked")
+//            Toast.makeText(this, "Clicked!", Toast.LENGTH_SHORT).show()
 
-
-        // 5. Create renderer and add to the hidden MapView
-        val renderer = TileRendererLayer(
-            cache,
-            mapStore,
-            preloadMap.model.mapViewPosition,
-            AndroidGraphicFactory.INSTANCE
-        ).apply {
-            setXmlRenderTheme(InternalRenderTheme.DEFAULT)
-        }
-
-        preloadMap.layerManager.layers.add(renderer)
-
-        // 6. Force one render cycle:
-        preloadMap.post {
-            preloadMap.model.mapViewPosition.setZoomLevel(16)
-            preloadMap.model.mapViewPosition.setCenter(LatLong(-36.855647, 174.765249))
-            preloadMap.invalidate()
+            if (!isTabulatedView) {
+                scheduleTable.visibility = View.VISIBLE
+                timeline1.visibility = View.GONE
+                timeline2.visibility = View.GONE
+                changeModeButton.text = "Tabulated View"
+            } else {
+                scheduleTable.visibility = View.GONE
+                timeline1.visibility = View.VISIBLE
+                timeline2.visibility = View.VISIBLE
+                changeModeButton.text = "Today's Overview"
+            }
+            isTabulatedView = !isTabulatedView
         }
 
         // Set up the "Start Route" button
@@ -382,12 +410,19 @@ class ScheduleActivity : AppCompatActivity() {
         // if you used a Handler in startLoadingBar(), cancel it:
         loadingBarHandler.removeCallbacksAndMessages(null)
 
-        binding.scheduleTable.visibility = View.VISIBLE
-        binding.startRouteButton.visibility = View.VISIBLE
-        binding.testStartRouteButton.visibility = View.VISIBLE
+        scheduleTable.visibility = View.GONE
         timeline1.visibility = View.VISIBLE
         timeline2.visibility = View.VISIBLE
-        workTable.visibility = View.VISIBLE
+        isTabulatedView = false
+        changeModeButton.text = "Today's Overview"
+
+        binding.startRouteButton.visibility = View.VISIBLE
+        binding.testStartRouteButton.visibility = View.VISIBLE
+        if (isTabulatedView) {
+            workTable.visibility = View.VISIBLE
+        } else {
+            workTable.visibility = View.GONE
+        }
 
         loadBusDataFromCache()
         loadScheduleDataFromCache()
@@ -409,7 +444,7 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     private fun enterOnlineMode() {
         Toast.makeText(this, "Online: fetching from ThingsBoard…", Toast.LENGTH_LONG).show()
-        binding.scheduleTable.visibility = View.GONE
+        scheduleTable.visibility = View.GONE
         binding.startRouteButton.visibility = View.GONE
         binding.testStartRouteButton.visibility = View.GONE
         timeline1.visibility = View.GONE
@@ -824,7 +859,7 @@ class ScheduleActivity : AppCompatActivity() {
                 Log.d("ScheduleActivity loadScheduleDataFromCache", "✅ Loaded cached schedule data: $scheduleData")
 
                 // Use the loaded schedule data
-                updateScheduleTable(scheduleData.take(3))
+                updateScheduleTable(scheduleData.take(8))
                 updateTimeline()
 
             } catch (e: Exception) {
