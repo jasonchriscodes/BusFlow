@@ -84,6 +84,7 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var dateTimeRunnable: Runnable
     private lateinit var timeline1: StyledMultiColorTimeline
     private lateinit var timeline2: StyledMultiColorTimeline
+    private lateinit var timeline3: StyledMultiColorTimeline
     private lateinit var workTable: TableLayout
     private val timelineRange = Pair("08:00", "11:10")
     private lateinit var scheduleTable: TableLayout
@@ -169,11 +170,8 @@ class ScheduleActivity : AppCompatActivity() {
         workTable = scheduleTable
         timeline1 = findViewById(R.id.timelinePart1)
         timeline2 = findViewById(R.id.timelinePart2)
+        timeline3 = findViewById(R.id.timelinePart3)
         changeModeButton = findViewById(R.id.changeModeButton)
-        findViewById<View>(R.id.markerOverlayPart1).isClickable = false
-        findViewById<View>(R.id.markerOverlayPart1).isFocusable = false
-        findViewById<View>(R.id.markerOverlayPart2).isClickable = false
-        findViewById<View>(R.id.markerOverlayPart2).isFocusable = false
 
 
         // 0) init your MQTT managers *before* you ever call enterOnlineMode()/fetchConfig()
@@ -302,11 +300,13 @@ class ScheduleActivity : AppCompatActivity() {
                 scheduleTable.visibility = View.VISIBLE
                 timeline1.visibility = View.GONE
                 timeline2.visibility = View.GONE
+                timeline3.visibility = View.GONE
                 changeModeButton.text = "Tabulated View"
             } else {
                 scheduleTable.visibility = View.GONE
                 timeline1.visibility = View.VISIBLE
                 timeline2.visibility = View.VISIBLE
+                timeline3.visibility = View.VISIBLE
                 changeModeButton.text = "Today's Overview"
             }
             isTabulatedView = !isTabulatedView
@@ -650,26 +650,34 @@ class ScheduleActivity : AppCompatActivity() {
         Log.d("ScheduleActivity updateTimeline", "Work intervals extracted: $workIntervals")
 
         if (workIntervals.isNotEmpty()) {
-            val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
+            val total = workIntervals.size
+            val partSize = total / 3
 
-            val mid = workIntervals.size / 2
-            val intervals1 = workIntervals.subList(0, mid)
-            val intervals2 = workIntervals.subList(mid, workIntervals.size)
-            val names1 = dutyNames.subList(0, mid)
-            val names2 = dutyNames.subList(mid, dutyNames.size)
+            val intervals1 = workIntervals.subList(0, partSize)
+            val intervals2 = workIntervals.subList(partSize, partSize * 2)
+            val intervals3 = workIntervals.subList(partSize * 2, total)
+
+            val names1 = dutyNames.subList(0, partSize)
+            val names2 = dutyNames.subList(partSize, partSize * 2)
+            val names3 = dutyNames.subList(partSize * 2, total)
 
             val allBusStops = extractBusStops()
-            val midStop = allBusStops.size / 2
-            val busStopsPart1 = allBusStops.subList(0, midStop)
-            val busStopsPart2 = allBusStops.subList(midStop, allBusStops.size)
+            val stopPartSize = allBusStops.size / 3
+            val busStops1 = allBusStops.subList(0, stopPartSize)
+            val busStops2 = allBusStops.subList(stopPartSize, stopPartSize * 2)
+            val busStops3 = allBusStops.subList(stopPartSize * 2, allBusStops.size)
 
             timeline1.setTimelineData(intervals1, names1)
-            timeline1.setBusStops(busStopsPart1)
-            timeline1.setScheduleData(scheduleData.subList(0, mid)) // Add this line
+            timeline1.setBusStops(busStops1)
+            timeline1.setScheduleData(scheduleData.subList(0, partSize))
 
             timeline2.setTimelineData(intervals2, names2)
-            timeline2.setBusStops(busStopsPart2)
-            timeline2.setScheduleData(scheduleData.subList(mid, scheduleData.size)) // Add this too
+            timeline2.setBusStops(busStops2)
+            timeline2.setScheduleData(scheduleData.subList(partSize, partSize * 2))
+
+            timeline3.setTimelineData(intervals3, names3)
+            timeline3.setBusStops(busStops3)
+            timeline3.setScheduleData(scheduleData.subList(partSize * 2, scheduleData.size))
         }
     }
 

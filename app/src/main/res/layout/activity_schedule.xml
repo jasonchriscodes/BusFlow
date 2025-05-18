@@ -147,37 +147,34 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
+        <!-- Timeline 1 -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
-
             <com.jason.publisher.main.StyledMultiColorTimeline
                 android:id="@+id/timelinePart1"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
-
-            <com.jason.publisher.main.OverlayBusStopMarkerView
-                android:id="@+id/markerOverlayPart1"
-                android:layout_width="match_parent"
-                android:layout_height="120dp" />
-
         </FrameLayout>
 
+        <!-- Timeline 2 -->
         <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="0dp">
-
+            android:layout_height="wrap_content">
             <com.jason.publisher.main.StyledMultiColorTimeline
                 android:id="@+id/timelinePart2"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
+        </FrameLayout>
 
-            <com.jason.publisher.main.OverlayBusStopMarkerView
-                android:id="@+id/markerOverlayPart2"
+        <!-- Timeline 3 -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <com.jason.publisher.main.StyledMultiColorTimeline
+                android:id="@+id/timelinePart3"
                 android:layout_width="match_parent"
-                android:layout_height="120dp" />
-
+                android:layout_height="wrap_content" />
         </FrameLayout>
     </LinearLayout>
 
