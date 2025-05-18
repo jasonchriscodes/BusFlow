@@ -143,17 +143,29 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                 }
 
                 else -> {
-                    TextView(context).apply {
-                        text = dutyName
-                        setTextColor(Color.WHITE)
-                        textSize = 18f
-                        gravity = Gravity.CENTER
-                        setPadding(24, 12, 24, 12)
-                        background = ContextCompat.getDrawable(context, R.drawable.route_rounded_style)
+                    val firstBusStopAbbreviation = allScheduleItems.getOrNull(i)?.busStops?.firstOrNull()?.abbreviation ?: "?"
+                    val displayText = "$dutyName → $firstBusStopAbbreviation"
 
-                        val params = LayoutParams(0, LayoutParams.WRAP_CONTENT, weight)
-                        params.marginStart = if (i > 0) 8 else 0
-                        layoutParams = params
+                    LinearLayout(context).apply {
+                        orientation = VERTICAL
+                        gravity = Gravity.CENTER
+                        background = ContextCompat.getDrawable(context, R.drawable.route_rounded_style)
+                        setPadding(12, 8, 12, 8)
+
+                        val label = TextView(context).apply {
+                            text = displayText
+                            setTextColor(Color.WHITE)
+                            textSize = 16f
+                            gravity = Gravity.CENTER
+                            maxLines = 1
+                            ellipsize = TextUtils.TruncateAt.END
+                        }
+
+                        addView(label)
+
+                        layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, weight).apply {
+                            marginStart = if (i > 0) 8 else 0
+                        }
                     }
                 }
             }
