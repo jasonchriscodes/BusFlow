@@ -21,6 +21,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.ProgressBar
+import android.widget.Switch
 import android.widget.TableLayout
 import android.widget.TableRow
 import android.widget.TextView
@@ -94,6 +95,8 @@ class ScheduleActivity : AppCompatActivity() {
     private val loadingBarHandler = Handler(Looper.getMainLooper())
     private var isTabulatedView: Boolean = false
     private lateinit var changeModeButton: Button
+    private lateinit var darkModeSwitch: Switch
+    private var isDarkMode = false
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -172,7 +175,20 @@ class ScheduleActivity : AppCompatActivity() {
         timeline2 = findViewById(R.id.timelinePart2)
         timeline3 = findViewById(R.id.timelinePart3)
         changeModeButton = findViewById(R.id.changeModeButton)
+        darkModeSwitch = findViewById(R.id.darkModeSwitch)
 
+        // Load dark mode preference BEFORE setting switch listener, but AFTER initializing buttons
+        val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
+        isDarkMode = prefs.getBoolean("dark_mode", false)
+        darkModeSwitch.isChecked = isDarkMode
+        applyThemeMode(isDarkMode)
+
+        // Save preference on toggle
+        darkModeSwitch.setOnCheckedChangeListener { _, isChecked ->
+            isDarkMode = isChecked
+            applyThemeMode(isDarkMode)
+            getSharedPreferences("prefs", MODE_PRIVATE).edit().putBoolean("dark_mode", isDarkMode).apply()
+        }
 
         // 0) init your MQTT managers *before* you ever call enterOnlineMode()/fetchConfig()
         mqttManagerConfig = MqttManager(
@@ -375,6 +391,43 @@ class ScheduleActivity : AppCompatActivity() {
                 Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    /**
+     * Function toggles the dark/light UI:
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun applyThemeMode(isDark: Boolean) {
+        val rootLayout = findViewById<View>(android.R.id.content)
+        rootLayout.setBackgroundColor(
+            if (isDark) Color.BLACK else ContextCompat.getColor(this, R.color.white)
+        )
+
+        // Change text colors
+        findViewById<TextView>(R.id.currentDateTimeTextView).setTextColor(
+            if (isDark) Color.LTGRAY else Color.WHITE
+        )
+        findViewById<TextView>(R.id.connectionStatusTextView).setTextColor(
+            if (isDark) Color.LTGRAY else ContextCompat.getColor(this, R.color.whatsapp_green)
+        )
+        changeModeButton.setTextColor(if (isDark) Color.LTGRAY else Color.WHITE)
+        darkModeSwitch.setTextColor(if (isDark) Color.LTGRAY else Color.WHITE)
+
+        // Change button colors
+        val startBtn = findViewById<Button>(R.id.startRouteButton)
+        val testBtn = findViewById<Button>(R.id.testStartRouteButton)
+        val backgroundTint = if (isDark) R.color.teal_700 else R.color.purple_400
+
+        startBtn.setBackgroundTintList(ContextCompat.getColorStateList(this, backgroundTint))
+        testBtn.setBackgroundTintList(ContextCompat.getColorStateList(this, backgroundTint))
+
+        // Change table background
+        scheduleTable.setBackgroundColor(if (isDark) Color.DKGRAY else Color.WHITE)
+
+        // ✅ Apply dark mode to custom timeline views
+        timeline1.setDarkMode(isDark)
+        timeline2.setDarkMode(isDark)
+        timeline3.setDarkMode(isDark)
     }
 
     /** Copies a file from assets to the device's file system and returns the File object. */

@@ -34,6 +34,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
     private var allScheduleItems: List<ScheduleItem> = emptyList()
     private val repBoxWidthPx = (80 * context.resources.displayMetrics.density).toInt()
     private val dutyBoxMinWidthPx = (100 * context.resources.displayMetrics.density).toInt()
+    private var isDarkMode = false
 
     init {
         orientation = HORIZONTAL
@@ -45,6 +46,12 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
     fun setBusStops(busStops: List<BusScheduleInfo>) {
         this.busStops = busStops
         renderTimeline() // Redraw with markers
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    fun setDarkMode(isDark: Boolean) {
+        isDarkMode = isDark
+        renderTimeline()
     }
 
     /**
@@ -106,7 +113,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
 
                 val timeLabel = TextView(context).apply {
                     text = startTime
-                    setTextColor(Color.WHITE)
+                    setTextColor(if (isDarkMode) Color.LTGRAY else Color.WHITE)
                     textSize = 12f
                     gravity = Gravity.CENTER
                 }
@@ -116,14 +123,14 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                 if (isRep) {
                     val repLabel = TextView(context).apply {
                         text = "REP"
-                        setTextColor(Color.WHITE)
+                        setTextColor(if (isDarkMode) Color.LTGRAY else Color.WHITE)
                         textSize = 16f
                         gravity = Gravity.CENTER
                     }
 
                     val stopLabel = TextView(context).apply {
                         text = firstStopAbbr
-                        setTextColor(Color.WHITE)
+                        setTextColor(if (isDarkMode) Color.LTGRAY else Color.WHITE)
                         textSize = 14f
                         gravity = Gravity.CENTER
                     }
@@ -141,7 +148,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
 
                     val stopLabel = TextView(context).apply {
                         text = firstStopAbbr
-                        setTextColor(Color.WHITE)
+                        setTextColor(if (isDarkMode) Color.LTGRAY else Color.WHITE)
                         textSize = 14f
                         gravity = Gravity.CENTER
                     }
@@ -152,7 +159,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                 } else {
                     val label = TextView(context).apply {
                         text = "$dutyName → $firstStopAbbr"
-                        setTextColor(Color.WHITE)
+                        setTextColor(if (isDarkMode) Color.LTGRAY else Color.WHITE)
                         textSize = 16f
                         gravity = Gravity.CENTER
                         maxLines = 1
@@ -192,7 +199,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
 
                     val restAbbr = TextView(context).apply {
                         text = lastStopOfCurrent
-                        setTextColor(Color.WHITE)
+                        setTextColor(if (isDarkMode) Color.LTGRAY else Color.WHITE)
                         textSize = 14f
                         gravity = Gravity.CENTER
                         setPadding(8, 0, 8, 0)
