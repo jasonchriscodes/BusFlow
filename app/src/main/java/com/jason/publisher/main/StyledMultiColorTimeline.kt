@@ -157,8 +157,9 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                     addView(stopLabel)
 
                 } else {
+                    val lastStopAbbr = item?.busStops?.lastOrNull()?.abbreviation ?: "?"
                     val label = TextView(context).apply {
-                        text = "$dutyName → $firstStopAbbr"
+                        text = "$dutyName $firstStopAbbr → $lastStopAbbr"
                         setTextColor(if (isDarkMode) Color.LTGRAY else Color.WHITE)
                         textSize = 16f
                         gravity = Gravity.CENTER
