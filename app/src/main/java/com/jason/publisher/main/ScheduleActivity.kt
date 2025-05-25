@@ -20,6 +20,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.Switch
 import android.widget.TableLayout
@@ -97,6 +98,11 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var changeModeButton: Button
     private lateinit var darkModeSwitch: Switch
     private var isDarkMode = false
+    private lateinit var paginationLayout: LinearLayout
+    private var currentPage = 0
+    private val maxRowsPerPage = 7
+    private lateinit var btnPrevious: ImageButton
+    private lateinit var btnNext: ImageButton
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -176,6 +182,10 @@ class ScheduleActivity : AppCompatActivity() {
         timeline3 = findViewById(R.id.timelinePart3)
         changeModeButton = findViewById(R.id.changeModeButton)
         darkModeSwitch = findViewById(R.id.darkModeSwitch)
+        paginationLayout = findViewById(R.id.paginationLayout)
+        paginationLayout.visibility = View.GONE
+        btnPrevious = findViewById(R.id.btnPrevious)
+        btnNext = findViewById(R.id.btnNext)
 
         // Load dark mode preference BEFORE setting switch listener, but AFTER initializing buttons
         val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
@@ -314,18 +324,39 @@ class ScheduleActivity : AppCompatActivity() {
 
             if (!isTabulatedView) {
                 scheduleTable.visibility = View.VISIBLE
+                paginationLayout.visibility = View.VISIBLE
+                btnPrevious.visibility = View.VISIBLE
+                btnNext.visibility = View.VISIBLE
                 timeline1.visibility = View.GONE
                 timeline2.visibility = View.GONE
                 timeline3.visibility = View.GONE
                 changeModeButton.text = "Tabulated View"
             } else {
                 scheduleTable.visibility = View.GONE
+                paginationLayout.visibility = View.GONE
+                btnPrevious.visibility = View.GONE
+                btnNext.visibility = View.GONE
                 timeline1.visibility = View.VISIBLE
                 timeline2.visibility = View.VISIBLE
                 timeline3.visibility = View.VISIBLE
                 changeModeButton.text = "Today's Overview"
             }
             isTabulatedView = !isTabulatedView
+        }
+
+        btnPrevious.setOnClickListener {
+            if (currentPage > 0) {
+                currentPage--
+                updateScheduleTablePaged()
+            }
+        }
+
+        btnNext.setOnClickListener {
+            val totalPages = (scheduleData.size + maxRowsPerPage - 1) / maxRowsPerPage
+            if (currentPage < totalPages - 1) {
+                currentPage++
+                updateScheduleTablePaged()
+            }
         }
 
         // Set up the "Start Route" button
@@ -337,7 +368,7 @@ class ScheduleActivity : AppCompatActivity() {
 
                 // ✅ Actually remove the first item
                 scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
-                updateScheduleTable(scheduleData.take(3))
+                updateScheduleTablePaged()
                 updateTimeline()
                 rewriteOfflineScheduleData()
 
@@ -369,7 +400,7 @@ class ScheduleActivity : AppCompatActivity() {
 
                 // ✅ Actually remove the first item
                 scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
-                updateScheduleTable(scheduleData.take(3))
+                updateScheduleTablePaged()
                 updateTimeline()
                 rewriteOfflineScheduleData()
 
@@ -398,31 +429,29 @@ class ScheduleActivity : AppCompatActivity() {
      */
     @RequiresApi(Build.VERSION_CODES.M)
     private fun applyThemeMode(isDark: Boolean) {
-        val rootLayout = findViewById<View>(android.R.id.content)
-        rootLayout.setBackgroundColor(
-            if (isDark) Color.BLACK else ContextCompat.getColor(this, R.color.white)
-        )
+        val rootLayout = findViewById<View>(R.id.rootLayout)
+        val backgroundRes = if (isDark) R.drawable.dark_gradient_background else R.drawable.gradient_background
+        rootLayout.background = ContextCompat.getDrawable(this, backgroundRes)
 
-        // Change text colors
-        findViewById<TextView>(R.id.currentDateTimeTextView).setTextColor(
-            if (isDark) Color.LTGRAY else Color.WHITE
-        )
-        findViewById<TextView>(R.id.connectionStatusTextView).setTextColor(
-            if (isDark) Color.LTGRAY else ContextCompat.getColor(this, R.color.whatsapp_green)
-        )
-        changeModeButton.setTextColor(if (isDark) Color.LTGRAY else Color.WHITE)
-        darkModeSwitch.setTextColor(if (isDark) Color.LTGRAY else Color.WHITE)
+        // ✅ Update text of darkModeSwitch
+        val darkModeSwitch = findViewById<Switch>(R.id.darkModeSwitch)
+        darkModeSwitch.text = if (isDark) "Dark Mode" else "Light Mode"
 
-        // Change button colors
+        // ✅ Apply dark mode color to currentDateTimeTextView
+        val currentDateTimeTextView = findViewById<TextView>(R.id.currentDateTimeTextView)
+        val backgroundColorRes = if (isDark) R.color.colorAccent else R.color.purple_500
+        currentDateTimeTextView.setBackgroundColor(ContextCompat.getColor(this, backgroundColorRes))
+
+// Apply same background color as tint to changeModeButton
+        changeModeButton.backgroundTintList = ContextCompat.getColorStateList(this, backgroundColorRes)
+
+        // ✅ Change background colors of Start/Test buttons
         val startBtn = findViewById<Button>(R.id.startRouteButton)
         val testBtn = findViewById<Button>(R.id.testStartRouteButton)
-        val backgroundTint = if (isDark) R.color.teal_700 else R.color.purple_400
+        val buttonBackgroundTint = if (isDark) R.color.purple_700 else R.color.purple_400
 
-        startBtn.setBackgroundTintList(ContextCompat.getColorStateList(this, backgroundTint))
-        testBtn.setBackgroundTintList(ContextCompat.getColorStateList(this, backgroundTint))
-
-        // Change table background
-        scheduleTable.setBackgroundColor(if (isDark) Color.DKGRAY else Color.WHITE)
+        startBtn.setBackgroundTintList(ContextCompat.getColorStateList(this, buttonBackgroundTint))
+        testBtn.setBackgroundTintList(ContextCompat.getColorStateList(this, buttonBackgroundTint))
 
         // ✅ Apply dark mode to custom timeline views
         timeline1.setDarkMode(isDark)
@@ -623,31 +652,26 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /**
-     * Modify the table dynamically to show only the first three schedule items.
+     * Updates the schedule table with paginated rows.
+     * Shows only maxRowsPerPage items for the currentPage.
+     * Also triggers pagination button rendering.
      */
     @RequiresApi(Build.VERSION_CODES.M)
-    private fun updateScheduleTable(scheduleItems: List<ScheduleItem>) {
+    private fun updateScheduleTablePaged() {
         scheduleTable.removeViews(2, scheduleTable.childCount - 2) // Keep header + separator
 
-        for (item in scheduleItems) {
-            val row = TableRow(this).apply {
-                layoutParams = TableLayout.LayoutParams(
-                    TableLayout.LayoutParams.MATCH_PARENT,
-                    TableLayout.LayoutParams.WRAP_CONTENT
-                )
-            }
+        val totalPages = (scheduleData.size + maxRowsPerPage - 1) / maxRowsPerPage
+        val startIndex = currentPage * maxRowsPerPage
+        val endIndex = minOf(startIndex + maxRowsPerPage, scheduleData.size)
+        val pageItems = scheduleData.subList(startIndex, endIndex)
 
-            val routeTextView = createStyledCell(item.routeNo, Gravity.START)
-            val startTimeView = createStyledCell(item.startTime, Gravity.CENTER)
-            val endTimeView = createStyledCell(item.endTime, Gravity.END)
-
-            row.addView(routeTextView)
-            row.addView(startTimeView)
-            row.addView(endTimeView)
-
+        for (item in pageItems) {
+            val row = TableRow(this)
+            row.addView(createStyledCell(item.routeNo, Gravity.START))
+            row.addView(createStyledCell(item.startTime, Gravity.CENTER))
+            row.addView(createStyledCell(item.endTime, Gravity.END))
             scheduleTable.addView(row)
 
-            // Add separator line after each row
             val separator = View(this).apply {
                 layoutParams = TableLayout.LayoutParams(
                     TableLayout.LayoutParams.MATCH_PARENT, 1
@@ -655,6 +679,38 @@ class ScheduleActivity : AppCompatActivity() {
                 setBackgroundColor(Color.BLACK)
             }
             scheduleTable.addView(separator)
+        }
+        renderPagination(totalPages)
+    }
+
+    /**
+     * Dynamically renders pagination buttons below the table.
+     * Clicking a button updates currentPage and redraws the table.
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun renderPagination(totalPages: Int) {
+        // Only remove dynamically added page buttons, not btnPrevious/btnNext
+        // Keep children 0 (btnPrevious) and last (btnNext)
+        val childCount = paginationLayout.childCount
+        if (childCount > 2) {
+            paginationLayout.removeViews(1, childCount - 2)
+        }
+
+        if (isTabulatedView) {
+            paginationLayout.visibility = View.VISIBLE
+        }
+
+        for (page in 0 until totalPages) {
+            val button = Button(this).apply {
+                text = (page + 1).toString()
+                textSize = 14f
+                setPadding(8, 4, 8, 4)
+                setOnClickListener {
+                    currentPage = page
+                    updateScheduleTablePaged()
+                }
+            }
+            paginationLayout.addView(button, paginationLayout.childCount - 1) // insert before btnNext
         }
     }
 
@@ -665,7 +721,7 @@ class ScheduleActivity : AppCompatActivity() {
         return TextView(this).apply {
             this.text = text
             textSize = 18f // smaller text
-            setTextColor(Color.BLACK)
+            setTextColor(Color.WHITE)
             setPadding(4, 4, 4, 4) // smaller padding
             this.gravity = gravity
             layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f)
@@ -925,7 +981,7 @@ class ScheduleActivity : AppCompatActivity() {
                 Log.d("ScheduleActivity loadScheduleDataFromCache", "✅ Loaded cached schedule data: $scheduleData")
 
                 // Use the loaded schedule data
-                updateScheduleTable(scheduleData.take(8))
+                updateScheduleTablePaged()
                 updateTimeline()
 
             } catch (e: Exception) {

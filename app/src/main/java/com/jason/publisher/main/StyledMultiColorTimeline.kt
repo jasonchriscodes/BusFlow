@@ -105,17 +105,17 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                 setPadding(12, 8, 12, 8)
                 background = ContextCompat.getDrawable(context,
                     when {
-                        isRep -> R.drawable.rep_vertical_style
-                        isBreak -> R.drawable.break_horizontal_style
-                        else -> R.drawable.route_rounded_style
+                        isRep -> if (isDarkMode) R.drawable.dark_rep_vertical_style else R.drawable.rep_vertical_style
+                        isBreak -> if (isDarkMode) R.drawable.dark_break_horizontal_style else R.drawable.break_horizontal_style
+                        else -> if (isDarkMode) R.drawable.dark_route_rounded_style else R.drawable.route_rounded_style
                     }
                 )
 
                 val timeLabel = TextView(context).apply {
                     text = startTime
-                    setTextColor(if (isDarkMode) Color.LTGRAY else Color.WHITE)
                     textSize = 12f
                     gravity = Gravity.CENTER
+                    setTextColor(Color.WHITE)
                 }
 
                 addView(timeLabel)
@@ -123,16 +123,16 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                 if (isRep) {
                     val repLabel = TextView(context).apply {
                         text = "REP"
-                        setTextColor(if (isDarkMode) Color.LTGRAY else Color.WHITE)
                         textSize = 16f
                         gravity = Gravity.CENTER
+                        setTextColor(Color.WHITE)
                     }
 
                     val stopLabel = TextView(context).apply {
                         text = firstStopAbbr
-                        setTextColor(if (isDarkMode) Color.LTGRAY else Color.WHITE)
                         textSize = 14f
                         gravity = Gravity.CENTER
+                        setTextColor(Color.WHITE)
                     }
 
                     addView(repLabel)
@@ -148,9 +148,9 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
 
                     val stopLabel = TextView(context).apply {
                         text = firstStopAbbr
-                        setTextColor(if (isDarkMode) Color.LTGRAY else Color.WHITE)
                         textSize = 14f
                         gravity = Gravity.CENTER
+                        setTextColor(Color.WHITE)
                     }
 
                     addView(icon)
@@ -160,11 +160,11 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                     val lastStopAbbr = item?.busStops?.lastOrNull()?.abbreviation ?: "?"
                     val label = TextView(context).apply {
                         text = "$dutyName $firstStopAbbr → $lastStopAbbr"
-                        setTextColor(if (isDarkMode) Color.LTGRAY else Color.WHITE)
                         textSize = 16f
                         gravity = Gravity.CENTER
                         maxLines = 1
                         ellipsize = TextUtils.TruncateAt.END
+                        setTextColor(Color.WHITE)
                     }
 
                     addView(label)
@@ -190,7 +190,10 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                 val restBox = LinearLayout(context).apply {
                     orientation = VERTICAL
                     gravity = Gravity.CENTER
-                    setBackgroundResource(R.drawable.break_rounded_style)
+                    setBackgroundResource(
+                        if (isDarkMode) R.drawable.dark_break_rounded_style else R.drawable.break_rounded_style
+                    )
+
                     setPadding(1, 1, 1, 1)
 
                     val busIcon = ImageView(context).apply {
@@ -200,10 +203,10 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
 
                     val restAbbr = TextView(context).apply {
                         text = lastStopOfCurrent
-                        setTextColor(if (isDarkMode) Color.LTGRAY else Color.WHITE)
                         textSize = 14f
                         gravity = Gravity.CENTER
                         setPadding(8, 0, 8, 0)
+                        setTextColor(Color.WHITE)
                     }
 
                     addView(busIcon)
