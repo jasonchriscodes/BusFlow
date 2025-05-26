@@ -103,6 +103,7 @@ class ScheduleActivity : AppCompatActivity() {
     private val maxRowsPerPage = 7
     private lateinit var btnPrevious: ImageButton
     private lateinit var btnNext: ImageButton
+    private var isScheduleUpdatedFromServer = false
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -495,6 +496,7 @@ class ScheduleActivity : AppCompatActivity() {
         scheduleTable.visibility = View.GONE
         timeline1.visibility = View.VISIBLE
         timeline2.visibility = View.VISIBLE
+        timeline3.visibility = View.VISIBLE
         isTabulatedView = false
         changeModeButton.text = "Today's Overview"
 
@@ -531,7 +533,11 @@ class ScheduleActivity : AppCompatActivity() {
         binding.testStartRouteButton.visibility = View.GONE
         timeline1.visibility = View.GONE
         timeline2.visibility = View.GONE
+        timeline3.visibility = View.GONE
         workTable.visibility             = View.GONE
+        binding.startRouteButton.visibility = View.GONE
+        binding.testStartRouteButton.visibility = View.GONE
+        paginationLayout.visibility = View.GONE
 
         findViewById<ProgressBar>(R.id.progressBar).visibility = View.VISIBLE
         startLoadingBar()
@@ -589,15 +595,32 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /**
-     * a pop-up dialog that appears after the progress reaches 100%
+     * a pop-up dialog that appears after the progress reaches 100% and triggers final UI updates.
      */
+    @RequiresApi(Build.VERSION_CODES.M)
     private fun showCacheCompleteDialog() {
         AlertDialog.Builder(this)
             .setTitle("Cache Complete")
-            .setMessage("All data has been cached successfully. Please turn off your Wi-Fi to switch to online mode.")
+            .setMessage("All data has been cached successfully. Please turn click OK to view the schedule.")
             .setCancelable(false)
             .setPositiveButton("OK") { dialog, _ ->
                 dialog.dismiss()
+
+                // ✅ After dialog is dismissed, hide progress bar and show timeline views
+                findViewById<ProgressBar>(R.id.progressBar).visibility = View.GONE
+
+                // ✅ Show the timelines
+                timeline1.visibility = View.VISIBLE
+                timeline2.visibility = View.VISIBLE
+                timeline3.visibility = View.VISIBLE
+
+                // ✅ Update timelines with the newly fetched schedule data
+                updateScheduleTablePaged()
+                updateTimeline()
+
+                // ✅ Show start and test buttons now
+                binding.startRouteButton.visibility = View.VISIBLE
+                binding.testStartRouteButton.visibility = View.VISIBLE
             }
             .show()
     }
@@ -1104,6 +1127,15 @@ class ScheduleActivity : AppCompatActivity() {
                     scheduleData = data.shared?.scheduleData1 ?: emptyList()
                     Log.d("MainActivity subscribeSharedData", "scheduleData: $scheduleData")
 
+                    if (config != null && scheduleData.isNotEmpty()) {
+                        // Save the updated schedule data and bus data immediately
+                        saveBusDataToCache()
+                        saveScheduleDataToCache()
+
+                        // ✅ Mark as updated so offline mode does not reload cache unnecessarily
+                        isScheduleUpdatedFromServer = true
+                    }
+
                     // **Rewrite cache when online**
                     if (NetworkStatusHelper.isNetworkAvailable(this@ScheduleActivity)) {
                         // Save data **only after all values are updated**
@@ -1189,44 +1221,23 @@ class ScheduleActivity : AppCompatActivity() {
     private var isScheduleCacheUpdated = false // Flag to ensure cache is updated only once
     @SuppressLint("LongLogTag")
     private fun saveScheduleDataToCache() {
-        if (!NetworkStatusHelper.isNetworkAvailable(this)) {
-            Log.d("ScheduleActivity saveScheduleDataToCache", "❌ No internet connection. Skipping cache update.")
-            return
-        }
-
-        // ✅ Check if cache has already been updated
-        if (isScheduleCacheUpdated) {
-            Log.d("ScheduleActivity saveScheduleDataToCache", "🚫 Skipping cache update (already updated).")
-            return
-        }
-
         val cacheFile = File(getHiddenFolder(), "scheduleDataCache.txt")
 
-        // ✅ Ensure the file exists before reading or writing
         try {
             if (!cacheFile.exists()) {
                 cacheFile.createNewFile()
                 Log.d("ScheduleActivity saveScheduleDataToCache", "✅ File created successfully: ${cacheFile.absolutePath}")
-            } else {
-                Log.d("ScheduleActivity saveScheduleDataToCache", "✅ File already exists.")
             }
 
-            Log.d("ScheduleActivity saveScheduleDataToCache before", "scheduleDataCache.txt content before saving: ${cacheFile.readText()}")
-
-            // ✅ Save schedule data
             val jsonStringScheduleData = Gson().toJson(scheduleData)
             cacheFile.writeText(jsonStringScheduleData)
 
-            Log.d("ScheduleActivity saveScheduleDataToCache after", "scheduleDataCache.txt content after saving: ${cacheFile.readText()}")
             Log.d("ScheduleActivity saveScheduleDataToCache", "✅ Schedule data cache updated successfully.")
-
             Toast.makeText(this, "Schedule data cache updated successfully.", Toast.LENGTH_SHORT).show()
             isScheduleCacheUpdated = true
 
-        } catch (e: IOException) {
-            Log.e("ScheduleActivity saveScheduleDataToCache", "❌ Error creating or accessing schedule data cache: ${e.message}")
         } catch (e: Exception) {
-            Log.e("ScheduleActivity saveScheduleDataToCache", "❌ Unexpected error: ${e.message}")
+            Log.e("ScheduleActivity saveScheduleDataToCache", "❌ Error saving schedule data cache: ${e.message}")
         }
     }
 
