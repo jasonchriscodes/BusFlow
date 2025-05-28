@@ -217,7 +217,9 @@ class TestMapActivity : AppCompatActivity() {
         })
 
         // Load offline map first
-        openMapFromAssets()
+        Handler(Looper.getMainLooper()).post {
+            openMapFromAssets()
+        }
 
         // Start tracking the location and updating the marker
 //        startLocationUpdate()
@@ -1788,7 +1790,7 @@ class TestMapActivity : AppCompatActivity() {
             binding.map.model.frameBufferModel.overdrawFactor
         )
 
-        val mapFile = copyAssetToFile("new-zealand-2.map")
+        val mapFile = copyAssetToFile("new-zealand.map")
         val mapStore = MapFile(mapFile)
 
         val renderLayer = TileRendererLayer(

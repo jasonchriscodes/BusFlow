@@ -2633,7 +2633,7 @@ class MapActivity : AppCompatActivity() {
             binding.map.model.frameBufferModel.overdrawFactor
         )
 
-        val mapFile = copyAssetToFile("new-zealand-2.map")
+        val mapFile = copyAssetToFile("new-zealand.map")
         val mapStore = MapFile(mapFile)
 
         val renderLayer = TileRendererLayer(

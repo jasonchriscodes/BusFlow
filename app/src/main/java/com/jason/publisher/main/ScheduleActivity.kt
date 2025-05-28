@@ -289,7 +289,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         // 4. Open the .map file
         val expectedMapFileSize = 363837457L
-        val mapFile = File(getHiddenFolder(), "new-zealand-2.map")
+        val mapFile = File(getHiddenFolder(), "new-zealand.map")
 
         if (!mapFile.exists() || mapFile.length() != expectedMapFileSize) {
             Log.e("ScheduleActivity", "❌ Skipping map load. Map file missing or invalid. Exists: ${mapFile.exists()}, Size: ${mapFile.length()}")
@@ -373,6 +373,8 @@ class ScheduleActivity : AppCompatActivity() {
                 updateTimeline()
                 rewriteOfflineScheduleData()
 
+                jsonString = Gson().toJson(busRouteData)
+
                 Log.d("ScheduleActivity startRouteButton after", scheduleData.toString())
 
                 val intent = Intent(this, MapActivity::class.java).apply {
@@ -400,10 +402,12 @@ class ScheduleActivity : AppCompatActivity() {
                 Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
 
                 // ✅ Actually remove the first item
-                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+//                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
                 updateScheduleTablePaged()
                 updateTimeline()
                 rewriteOfflineScheduleData()
+
+                jsonString = Gson().toJson(busRouteData)
 
                 Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
 
@@ -561,6 +565,7 @@ class ScheduleActivity : AppCompatActivity() {
     /**
      * function to start loading bar from 0% to 100% with color transitioning from red to green
      */
+    @RequiresApi(Build.VERSION_CODES.M)
     private fun startLoadingBar() {
         val progressBar = findViewById<ProgressBar>(R.id.progressBar)
         progressBar.visibility = View.VISIBLE
