@@ -307,6 +307,11 @@ class TestMapActivity : AppCompatActivity() {
             val firstSchedule = scheduleList.first()
             Log.d("TestMapActivity extractRedBusStops firstSchedule", "$firstSchedule")
 
+            // take the first ScheduleItem’s busStops and turn each into a "lat,lon" string
+            scheduleList.firstOrNull()?.busStops
+                ?.map { "${it.latitude},${it.longitude}" }
+                ?.let { redBusStops.addAll(it) }
+
             val stops = firstSchedule.busStops.mapNotNull { it.address }
             redBusStops.addAll(stops)
             Log.d("TestMapActivity extractRedBusStops stops", "$stops")
@@ -970,6 +975,13 @@ class TestMapActivity : AppCompatActivity() {
     private fun simulateMovement(startLat: Double, startLon: Double, endLat: Double, endLon: Double) {
         // Calculate the total distance for the segment.
         val totalDistance = calculateDistance(startLat, startLon, endLat, endLon)
+
+        if (totalDistance <= 0.0 || totalDistance.isNaN()) {
+            // nothing to move — jump straight to end of segment
+            onSegmentComplete()
+            return
+        }
+
         var distanceTravelled = 0.0
         var lastUpdateTime = System.currentTimeMillis()
 
@@ -1853,12 +1865,18 @@ class TestMapActivity : AppCompatActivity() {
         val totalStops = busStops.size
 
         busStops.forEachIndexed { index, stop ->
-            val stopAddress = stop.address ?: ""
-            val isRed = redBusStops.any { it.equals(stopAddress, ignoreCase = true) }
-            Log.d("TestMapActivity addBusStopMarkers", "Checking stop address: $stopAddress, isRed: $isRed")
+            // build the same "lat,lon" key
+            val coordKey = "${stop.latitude},${stop.longitude}"
+            val isRed    = redBusStops.contains(coordKey)
 
-            val busStopSymbol =
-                Helper.createBusStopSymbol(applicationContext, index, totalStops, isRed)
+            Log.d("TestMapActivity addBusStopMarkers", "Checking $coordKey, isRed=$isRed")
+
+            val busStopSymbol = Helper.createBusStopSymbol(
+                applicationContext,
+                index,
+                totalStops,
+                isRed
+            )
             val markerBitmap = AndroidGraphicFactory.convertToBitmap(busStopSymbol)
 
             val marker = org.mapsforge.map.layer.overlay.Marker(
@@ -1867,7 +1885,6 @@ class TestMapActivity : AppCompatActivity() {
                 0,
                 0
             )
-
             binding.map.layerManager.layers.add(marker)
         }
         binding.map.invalidate()
