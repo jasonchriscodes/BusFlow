@@ -368,7 +368,7 @@ class ScheduleActivity : AppCompatActivity() {
                 Log.d("ScheduleActivity startRouteButton before", scheduleData.toString())
 
                 // ✅ Actually remove the first item
-                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+//                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
                 updateScheduleTablePaged()
                 updateTimeline()
                 rewriteOfflineScheduleData()

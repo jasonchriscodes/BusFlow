@@ -58,6 +58,16 @@ import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
 import java.lang.Math.abs
+import com.jason.publisher.main.services.MqttManager
+import com.jason.publisher.main.services.ApiService
+import com.jason.publisher.main.services.ApiServiceBuilder
+import com.jason.publisher.main.services.ClientAttributesResponse
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MapActivity : AppCompatActivity() {
 
@@ -144,6 +154,10 @@ class MapActivity : AppCompatActivity() {
     private var smoothedSpeed: Float = 0f
     // Choose an alpha value between 0 and 1: smaller alpha means slower adjustment (more smoothing)
     private val smoothingAlpha = 0.2f
+    private lateinit var mqttManager: MqttManager
+    private lateinit var apiService: ApiService
+    private val clientKeys = "latitude,longitude,bearing"
+    private val REQUEST_ATTRIBUTES_PERIOD = 3000L
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -201,6 +215,41 @@ class MapActivity : AppCompatActivity() {
         FileLogger.d("MapActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
         FileLogger.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
         FileLogger.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
+
+        // 2a) Init Retrofit ApiService
+        apiService = ApiServiceBuilder.buildService(ApiService::class.java)
+
+        // 2b) Grab "CONFIG" & "AID" from the Intent
+        aid = intent.getStringExtra("AID") ?: "Unknown"
+        // Find this device’s token:
+        for (bus in config!!) {
+            if (bus.aid == aid) {
+                token = bus.accessToken
+                break
+            }
+        }
+        // Build arrBusData = other buses:
+        arrBusData = config!!.filter { it.aid != aid }
+
+        // 2c) Init MQTT with this device’s token:
+        mqttManager = MqttManager(
+            serverUri = MapActivity.SERVER_URI,
+            clientId  = MapActivity.CLIENT_ID,
+            username  = token
+        )
+        mqttManager.connect { isConnected ->
+            if (isConnected) {
+                Log.d("MapActivity", "✓ MQTT connected as $token")
+            } else {
+                Log.e("MapActivity", "✗ MQTT failed to connect")
+            }
+        }
+
+        // 2d) Initialize “other buses” markers on the map:
+        getDefaultConfigValue()    // we’ll override your old getDefaultConfigValue() method
+
+        // 2e) Start polling other buses’ attributes:
+        startPollingOtherBusAttributes()
 
         extractRedBusStops()
 
@@ -358,6 +407,57 @@ class MapActivity : AppCompatActivity() {
         binding.arriveButton.setOnClickListener {
             confirmArrival()
         }
+    }
+
+    /**
+     * Kick off a recurring Handler r/ self. Every REQUEST_ATTRIBUTES_PERIOD ms,
+     * we request latitude, longitude, bearing for each “other bus” accessToken.
+     */
+    private fun startPollingOtherBusAttributes() {
+        val handler = Handler(Looper.getMainLooper())
+        handler.post(object : Runnable {
+            override fun run() {
+                for (bus in arrBusData) {
+                    getOtherBusAttributes(bus.accessToken)
+                }
+                handler.postDelayed(this, REQUEST_ATTRIBUTES_PERIOD)
+            }
+        })
+    }
+
+    /**
+     * Uses Retrofit to GET /api/<token>/attributes?clientKeys=latitude,longitude,bearing
+     * Then moves that bus’s marker (in markerBus[accessToken]) to the new lat/lon.
+     */
+    private fun getOtherBusAttributes(accessToken: String) {
+        val url = "${ApiService.BASE_URL}$accessToken/attributes?clientKeys=$clientKeys"
+        val call = apiService.getAttributes(url, "application/json", clientKeys)
+        call.enqueue(object : Callback<ClientAttributesResponse> {
+            override fun onResponse(
+                call: Call<ClientAttributesResponse>,
+                response: Response<ClientAttributesResponse>
+            ) {
+                if (!response.isSuccessful) return
+
+                val clientAttrs = response.body()?.client ?: return
+                val lat = clientAttrs.latitude ?: return
+                val lon = clientAttrs.longitude ?: return
+                val ber = clientAttrs.bearing ?: 0f
+
+                // Move that bus’s marker on the map to (lat,lon)
+                markerBus[accessToken]?.let { marker ->
+                    marker.setLatLong(LatLong(lat, lon))
+                    // (If you also want to rotate it by `ber`, recreate its rotated bitmap here)
+                    runOnUiThread {
+                        binding.map.invalidate()
+                    }
+                }
+            }
+
+            override fun onFailure(call: Call<ClientAttributesResponse>, t: Throwable) {
+                Log.e("MapActivity", "❌ Error fetching attributes for $accessToken: ${t.message}")
+            }
+        })
     }
 
     /**
@@ -2082,6 +2182,8 @@ class MapActivity : AppCompatActivity() {
                         bearing = location.bearing
                     }
 
+                    publishTelemetryToThingsBoard(latitude, longitude, bearing, speed)
+
                     // Find the nearest route point
                     val nearestIndex = findNearestBusRoutePoint(latitude, longitude)
 
@@ -2186,6 +2288,26 @@ class MapActivity : AppCompatActivity() {
             }
 
         Toast.makeText(this, "Live location updates started", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Helper: build a small JSON and send it to v1/devices/me/telemetry every GPS fix.
+     */
+    private fun publishTelemetryToThingsBoard(
+        lat: Double,
+        lon: Double,
+        bearing: Float,
+        speedKmh: Float
+    ) {
+        val jsonObject = JSONObject().apply {
+            put("latitude", lat)
+            put("longitude", lon)
+            put("bearing", bearing)
+            put("speed", speedKmh)
+            put("aid", aid)
+        }
+        val payload = jsonObject.toString()
+        mqttManager.publish(MapActivity.PUB_POS_TOPIC, payload)
     }
 
     /**
