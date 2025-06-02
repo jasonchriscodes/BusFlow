@@ -288,11 +288,11 @@ class ScheduleActivity : AppCompatActivity() {
         )
 
         // 4. Open the .map file
-        val expectedMapFileSize = 363837457L
-        val mapFile = File(getHiddenFolder(), "new-zealand.map")
+        // UPDATED: Just check `exists()`, drop the fixed‐size comparison
+        val mapFile = File(getHiddenFolder(), "new-zealand-2.map")
 
-        if (!mapFile.exists() || mapFile.length() != expectedMapFileSize) {
-            Log.e("ScheduleActivity", "❌ Skipping map load. Map file missing or invalid. Exists: ${mapFile.exists()}, Size: ${mapFile.length()}")
+        if (!mapFile.exists()) {
+            Log.e("ScheduleActivity", "❌ Skipping map load. Map file not found at: ${mapFile.absolutePath}")
             Toast.makeText(this, "Offline map unavailable. Other features will still work.", Toast.LENGTH_SHORT).show()
         } else {
             try {

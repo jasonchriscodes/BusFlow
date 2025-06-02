@@ -68,6 +68,7 @@ import retrofit2.Response
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.concurrent.Executors
 
 class MapActivity : AppCompatActivity() {
 
@@ -307,6 +308,12 @@ class MapActivity : AppCompatActivity() {
                 // Update UI components with the current location
 //                latitudeTextView.text = "Latitude: $latitude"
 //                longitudeTextView.text = "Longitude: $longitude"
+                // Now that lat/lon are nonzero, center the map and place the marker:
+                runOnUiThread {
+                    binding.map.setCenter(LatLong(latitude, longitude))
+                    addBusMarker(latitude, longitude)
+                    binding.map.invalidate()
+                }
             }
         })
 
@@ -2746,25 +2753,37 @@ class MapActivity : AppCompatActivity() {
      * Loads the offline map from assets and configures the map.
      * Prevents adding duplicate layers.
      */
-    @SuppressLint("LongLogTag")
     private fun openMapFromAssets() {
+        // Enable built-in zoom controls, scale bar, etc.
         binding.map.mapScaleBar.isVisible = true
         binding.map.setBuiltInZoomControls(true)
 
-        // Instead of creating “mycache”, open the existing “preloadCache”:
-        val cache = AndroidUtil.createTileCache(
+        // Copy “new-zealand.map” out of assets to a File, then initialize MapsForge with it:
+        copyMapAssetAsync("new-zealand.map") { mapFile ->
+            initializeMapWithFile(mapFile)
+        }
+    }
+
+    /**
+     * This runs on the main thread once the map asset has been copied to cacheDir.
+     * Here we create the actual MapFile and TileRendererLayer.
+     */
+    private fun initializeMapWithFile(mapFile: File) {
+        // 1) Create a TileCache (using the same “preloadCache” name you used before)
+        val tileCache = AndroidUtil.createTileCache(
             this,
-            "preloadCache",                    // same name!
+            "preloadCache",
             binding.map.model.displayModel.tileSize,
             1f,
             binding.map.model.frameBufferModel.overdrawFactor
         )
 
-        val mapFile = copyAssetToFile("new-zealand.map")
+        // 2) Construct a MapsForge MapFile from that File
         val mapStore = MapFile(mapFile)
 
+        // 3) Build a TileRendererLayer for offline rendering
         val renderLayer = TileRendererLayer(
-            cache,
+            tileCache,
             mapStore,
             binding.map.model.mapViewPosition,
             AndroidGraphicFactory.INSTANCE
@@ -2772,27 +2791,48 @@ class MapActivity : AppCompatActivity() {
             setXmlRenderTheme(InternalRenderTheme.DEFAULT)
         }
 
-        // **Check if layer already exists before adding**
+        // 4) Add the layer only if it isn’t already in the layer manager
         if (!binding.map.layerManager.layers.contains(renderLayer)) {
             binding.map.layerManager.layers.add(renderLayer)
-            Log.d("MapActivity openMapFromAssets", "✅ Offline map added successfully.")
-        } else {
-            Log.d("MapActivity openMapFromAssets", "⚠️ Offline map layer already exists. Skipping duplicate addition.")
         }
 
-        binding.map.setCenter(LatLong(latitude, longitude)) // Set the default location to center the bus marker
-//        binding.map.setCenter(LatLong(-36.855647, 174.765249)) // Airedale
-//        binding.map.setCenter(LatLong(-36.8485, 174.7633)) // Auckland, NZ
-        binding.map.setZoomLevel(16) // Set default zoom level
-//        binding.map.setZoomLevel(11) // Set default zoom level
+        // 5) Center & zoom however you like (for example, at your last known lat/lon)
+        //    If latitude/longitude are both still “0.0,” pick a sane default:
+        val centerPoint = if (latitude != 0.0 && longitude != 0.0) {
+            org.mapsforge.core.model.LatLong(latitude, longitude)
+        } else {
+            // fallback to some NZ coordinate if you need a default
+            org.mapsforge.core.model.LatLong(-36.8485, 174.7633)
+        }
+        binding.map.setCenter(centerPoint)
+        binding.map.setZoomLevel(16)
 
-        // **Ensure the map is fully loaded before drawing the polyline**
+        // 6) Once the map is fully loaded, you can draw polylines, markers, etc.
         binding.map.post {
-            Log.d("MapActivity", "Map is fully initialized. Drawing polyline and markers now.")
-            drawDetectionZones(stops)   // Draw detection zones first
-            drawPolyline()              // Then draw Polyline on top
-            addBusStopMarkers(stops)    // Bus stop markers as the final element
+            Log.d("MapActivity DEBUG", "About to addBusMarker at lat=$latitude, lon=$longitude")
+            drawDetectionZones(stops)
+            drawPolyline()
+            addBusStopMarkers(stops)
             addBusMarker(latitude, longitude)
+        }
+    }
+
+    /** Copies a single file out of assets into cacheDir, then calls onComplete(File) on the main thread. */
+    private fun copyMapAssetAsync(assetName: String, onComplete: (File) -> Unit) {
+        val executor = Executors.newSingleThreadExecutor()
+        val handler = Handler(Looper.getMainLooper())
+        executor.execute {
+            val dstFile = File(cacheDir, assetName)
+            if (!dstFile.exists()) {
+                assets.open(assetName).use { input ->
+                    dstFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+            handler.post {
+                onComplete(dstFile)
+            }
         }
     }
 
