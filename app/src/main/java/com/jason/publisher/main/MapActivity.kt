@@ -58,6 +58,7 @@ import com.google.android.gms.location.*
 import com.jason.publisher.LocationListener
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
+import com.jason.publisher.main.model.TelemetryEntry
 import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
 import java.lang.Math.abs
 import com.jason.publisher.main.services.MqttManager
@@ -70,6 +71,7 @@ import retrofit2.Response
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.mapsforge.map.layer.overlay.Marker
 import java.util.concurrent.Executors
 
 class MapActivity : AppCompatActivity() {
@@ -160,7 +162,8 @@ class MapActivity : AppCompatActivity() {
     private lateinit var mqttManager: MqttManager
     private lateinit var apiService: ApiService
     private val clientKeys = "latitude,longitude,bearing"
-    private val REQUEST_ATTRIBUTES_PERIOD = 3000L
+    private val REQUEST_ATTRIBUTES_PERIOD = 1000L
+    private lateinit var tokenToAid: Map<String, String>
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -232,6 +235,10 @@ class MapActivity : AppCompatActivity() {
                 break
             }
         }
+
+        // in onCreate():
+        tokenToAid = config!!.associate { it.accessToken to it.aid }
+
         // Build arrBusData = other buses:
         arrBusData = config!!.filter { it.aid != aid }
 
@@ -287,7 +294,7 @@ class MapActivity : AppCompatActivity() {
 //                getAccessToken()
         Log.d("MapActivity onCreate Token", token)
 //                mqttManager = MqttManager(serverUri = TimeTableActivity.SERVER_URI, clientId = TimeTableActivity.CLIENT_ID, username = token)
-        getDefaultConfigValue()
+//        getDefaultConfigValue()
 //                requestAdminMessage()
 //                connectAndSubscribe()
 //                Log.d("MapActivity oncreate fetchConfig config", config.toString())
@@ -321,27 +328,31 @@ class MapActivity : AppCompatActivity() {
             }
         })
 
-        // Load offline map first
+        // … load `config` from Intent extras …
+        arrBusData = config!!.filter { it.aid != aid }
+
+        // 1. Initialize the offline map:
         openMapFromAssets()
 
-        // 1. First check:
+        // 2. Ask location permission (if not granted, onRequestPermissionsResult() will fire):
         val hasPermission = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_FINE_LOCATION
+            this, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
         if (!hasPermission) {
-            // 2. Ask the user:
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
                 LOCATION_PERMISSION_REQUEST_CODE
             )
-            return
+        } else {
+            startLocationUpdate()
         }
 
-        // Start tracking the location and updating the marker
-        startLocationUpdate()
+        // 3. **Right after** the map is up (post‐layout), add “other bus” placeholders:
+        binding.map.post {
+            getDefaultConfigValue()
+        }
 
         // Mock data to check scheduleStatusValueTextView
         if (forceAheadStatus == true) {
@@ -446,7 +457,6 @@ class MapActivity : AppCompatActivity() {
             grantResults.isNotEmpty() &&
             grantResults[0] == PackageManager.PERMISSION_GRANTED
         ) {
-            // User just granted location—now you can start GPS
             startLocationUpdate()
         } else {
             Toast.makeText(this, "Location permission is required to track the bus", Toast.LENGTH_LONG).show()
@@ -462,44 +472,9 @@ class MapActivity : AppCompatActivity() {
         handler.post(object : Runnable {
             override fun run() {
                 for (bus in arrBusData) {
-                    getOtherBusAttributes(bus.accessToken)
+                    getOtherBusTelemetry(bus.accessToken)
                 }
                 handler.postDelayed(this, REQUEST_ATTRIBUTES_PERIOD)
-            }
-        })
-    }
-
-    /**
-     * Uses Retrofit to GET /api/<token>/attributes?clientKeys=latitude,longitude,bearing
-     * Then moves that bus’s marker (in markerBus[accessToken]) to the new lat/lon.
-     */
-    private fun getOtherBusAttributes(accessToken: String) {
-        val url = "${ApiService.BASE_URL}$accessToken/attributes?clientKeys=$clientKeys"
-        val call = apiService.getAttributes(url, "application/json", clientKeys)
-        call.enqueue(object : Callback<ClientAttributesResponse> {
-            override fun onResponse(
-                call: Call<ClientAttributesResponse>,
-                response: Response<ClientAttributesResponse>
-            ) {
-                if (!response.isSuccessful) return
-
-                val clientAttrs = response.body()?.client ?: return
-                val lat = clientAttrs.latitude ?: return
-                val lon = clientAttrs.longitude ?: return
-                val ber = clientAttrs.bearing ?: 0f
-
-                // Move that bus’s marker on the map to (lat,lon)
-                markerBus[accessToken]?.let { marker ->
-                    marker.setLatLong(LatLong(lat, lon))
-                    // (If you also want to rotate it by `ber`, recreate its rotated bitmap here)
-                    runOnUiThread {
-                        binding.map.invalidate()
-                    }
-                }
-            }
-
-            override fun onFailure(call: Call<ClientAttributesResponse>, t: Throwable) {
-                Log.e("MapActivity", "❌ Error fetching attributes for $accessToken: ${t.message}")
             }
         })
     }
@@ -2226,7 +2201,21 @@ class MapActivity : AppCompatActivity() {
                         bearing = location.bearing
                     }
                     Log.d("MapActivity-LOCATION", "[onLocationResult] → lat=$latitude, lon=$longitude, speed=${"%.1f".format(speed)}, bearing=${"%.1f".format(bearing)}")
-                    // …rest of your code (update marker, check stops, etc.)…
+
+                    runOnUiThread {
+                        if (busMarker == null) {
+                            // First time: create our own bus marker in blue:
+                            val drawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)!!
+                            val bmp = AndroidGraphicFactory.convertToBitmap(drawable)
+                            busMarker = Marker(LatLong(latitude, longitude), bmp, 0, 0)
+                            binding.map.layerManager.layers.add(busMarker)
+                            binding.map.setCenter(LatLong(latitude, longitude))
+                        } else {
+                            // Move & rotate the existing marker:
+                            updateBusMarkerPosition(latitude, longitude, bearing)
+                        }
+                        binding.map.invalidate()
+                    }
 
                     publishTelemetryToThingsBoard(latitude, longitude, bearing, speed)
 
@@ -2523,35 +2512,29 @@ class MapActivity : AppCompatActivity() {
 
     /** Move the bus marker dynamically with updated bearing */
     private fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float) {
-        val newPosition = LatLong(lat, lon)
+        val newPos = LatLong(lat, lon)
+        val drawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)!!
+        val androidBmp = android.graphics.Bitmap.createBitmap(
+            drawable.intrinsicWidth,
+            drawable.intrinsicHeight,
+            android.graphics.Bitmap.Config.ARGB_8888
+        )
+        val canvas = android.graphics.Canvas(androidBmp)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        val matrix = android.graphics.Matrix().apply { postRotate(bearing) }
+        val rotated = android.graphics.Bitmap.createBitmap(
+            androidBmp, 0, 0, androidBmp.width, androidBmp.height, matrix, true
+        )
+        val mapsforgeBmp = AndroidBitmap(rotated)
 
-        // Convert Drawable to Bitmap and rotate it
-        val rotatedBitmap = rotateDrawable(bearing)
-
-        // Remove old marker if it exists
         busMarker?.let {
             binding.map.layerManager.layers.remove(it)
         }
-
-        // Create a new rotated marker at the updated position
-        busMarker = org.mapsforge.map.layer.overlay.Marker(
-            newPosition, rotatedBitmap, 0, 0
-        )
+        busMarker = Marker(newPos, mapsforgeBmp, 0, 0)
         binding.map.layerManager.layers.add(busMarker)
-
-        // Apply map rotation
-        binding.map.setRotation(-bearing) // Negative to align with compass movement
-
-        // Scale the map to prevent cropping
-        binding.map.scaleX = 1f  // Adjust scaling factor
-        binding.map.scaleY = 1f
-
-        // Keep the map centered on the bus location
-        binding.map.setCenter(newPosition)
-        binding.map.invalidate() // Force redraw
-
-        // Call our new listener function to check/update upcoming bus stop details
-        onBusMarkerUpdated()
+        binding.map.setCenter(newPos)
+        binding.map.invalidate()
     }
 
     /**
@@ -2734,37 +2717,133 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * Retrieves default configuration values for the activity, such as latitude, longitude, bearing, and more.
+     * Place a “blank” invisible marker for each other bus, using ic_bus_symbol2.
+     * When we later get telemetry back, we’ll show & move them from this HashMap.
+     */
+    private fun getDefaultConfigValue() {
+        arrBusData.forEach { bus ->
+            val drawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol2, null)
+                ?: throw IllegalStateException("ic_bus_symbol2 not found in resources")
+            val bmp = AndroidGraphicFactory.convertToBitmap(drawable)
+
+            // Create the placeholder marker at (0,0) and hide it initially:
+            val placeholder = Marker(LatLong(0.0, 0.0), bmp, 0, 0).apply {
+                isVisible = false
+            }
+
+            binding.map.layerManager.layers.add(placeholder)
+            markerBus[bus.accessToken] = placeholder
+        }
+        binding.map.invalidate()
+    }
+
+    /**
+     * After we connect to MQTT/REST and get “other bus” latest telemetry,
+     * move each marker into place and make it visible.
      */
     @SuppressLint("LongLogTag")
-    private fun getDefaultConfigValue() {
-//        busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
-//        Toast.makeText(this, "arrBusDataOnline1: ${arrBusData}", Toast.LENGTH_SHORT).show()
-        Log.d("MapActivity getDefaultConfigValue busConfig", arrBusData.toString())
-        Log.d("MapActivity getDefaultConfigValue arrBusDataOnline1", arrBusData.toString())
-        Log.d("MapActivity getDefaultConfigValue config", config.toString())
-        arrBusData = config!!
-        arrBusData = arrBusData.filter { it.aid != aid }
-//        Toast.makeText(this, "getDefaultConfigValue arrBusDataOnline2: ${arrBusData}", Toast.LENGTH_SHORT).show()
-        Log.d("MapActivity getDefaultConfigValue arrBusDataOnline2", arrBusData.toString())
-        for (bus in arrBusData) {
-            val busPosition = LatLong(latitude, longitude)
-            val markerDrawable = AndroidGraphicFactory.convertToBitmap(
-                ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol2, null)
-            )
-            // Create a Mapsforge marker
-            val marker = org.mapsforge.map.layer.overlay.Marker(
-                busPosition, // LatLong position
-                markerDrawable, // Marker icon
-                0, // Horizontal offset
-                0 // Vertical offset
-            )
-            // Add marker to Mapsforge Layer Manager
-            binding.map.layerManager.layers.add(marker)
-            // Store it in markerBus HashMap
-            markerBus[bus.accessToken] = marker
-            Log.d("MapActivity getDefaultConfigValue MarkerDrawable", "Bus symbol drawable applied")
-        }
+    private fun getOtherBusTelemetry(accessToken: String) {
+        // 1) Look up which AID corresponds to this accessToken:
+        val busAid = tokenToAid[accessToken]    // e.g. “8d34bdc9a5c78c42”
+
+        // 2) Ask ThingsBoard for the **latest telemetry** (latitude,longitude,bearing):
+        apiService.getLatestTelemetry(
+            accessToken,
+            keys = "latitude,longitude,bearing"
+        )
+
+            .enqueue(object : Callback<Map<String, List<TelemetryEntry>>> {
+                override fun onResponse(
+                    call: Call<Map<String, List<TelemetryEntry>>>,
+                    response: Response<Map<String, List<TelemetryEntry>>>
+                ) {
+                    if (!response.isSuccessful || response.body() == null) {
+                        Log.w("MapActivity getOtherBusTelemetry",
+                            "aid=$busAid, token=$accessToken → telemetry fetch failed (HTTP ${response.code()}). Hiding marker.")
+                        runOnUiThread {
+                            markerBus[accessToken]?.isVisible = false
+                            binding.map.invalidate()
+                        }
+                        return
+                    }
+
+                    // 3) Parse out lat/lon/bearing from the JSON
+                    val telemetryMap = response.body()!!
+
+                    val latEntry    = telemetryMap["latitude"]?.firstOrNull()?.value
+                    val lonEntry    = telemetryMap["longitude"]?.firstOrNull()?.value
+                    val brgEntry    = telemetryMap["bearing"]?.firstOrNull()?.value
+
+                    val lat = when (latEntry) {
+                        is Number -> latEntry.toDouble()
+                        is String -> latEntry.toDoubleOrNull()
+                        else      -> null
+                    }
+                    val lon = when (lonEntry) {
+                        is Number -> lonEntry.toDouble()
+                        is String -> lonEntry.toDoubleOrNull()
+                        else      -> null
+                    }
+                    val brg = when (brgEntry) {
+                        is Number -> brgEntry.toFloat()
+                        is String -> brgEntry.toFloatOrNull()
+                        else      -> null
+                    }
+
+                    Log.d("MapActivity getOtherBusTelemetry",
+                        "aid=$busAid, token=$accessToken → telemetry lat=$lat, lon=$lon, bearing=$brg")
+
+                    runOnUiThread {
+                        val marker = markerBus[accessToken]
+                        if (lat != null && lon != null) {
+                            // 4) Build a rotated icon from ic_bus_symbol2
+                            val drawable = ResourcesCompat.getDrawable(
+                                resources,
+                                R.drawable.ic_bus_symbol2,
+                                null
+                            ) ?: throw IllegalStateException("ic_bus_symbol2 not found")
+
+                            // Convert Drawable → Android Bitmap
+                            val androidBmp = Bitmap.createBitmap(
+                                drawable.intrinsicWidth,
+                                drawable.intrinsicHeight,
+                                Bitmap.Config.ARGB_8888
+                            )
+                            val canvas = android.graphics.Canvas(androidBmp)
+                            drawable.setBounds(0, 0, canvas.width, canvas.height)
+                            drawable.draw(canvas)
+
+                            // If bearing is provided, rotate by that angle; otherwise 0f
+                            val angle = brg ?: 0f
+                            val matrix = android.graphics.Matrix().apply { postRotate(angle) }
+                            val rotatedAndroidBmp = Bitmap.createBitmap(
+                                androidBmp, 0, 0, androidBmp.width, androidBmp.height, matrix, true
+                            )
+                            val mapsforgeBmp = AndroidBitmap(rotatedAndroidBmp)
+
+                            // 5) Now move & rotate the placeholder marker
+                            marker?.let {
+                                it.bitmap = mapsforgeBmp
+                                it.setLatLong(LatLong(lat, lon))
+                                it.isVisible = true
+                            }
+                        } else {
+                            // If latitude or longitude is missing, hide this marker
+                            marker?.isVisible = false
+                        }
+                        binding.map.invalidate()
+                    }
+                }
+
+                override fun onFailure(call: Call<Map<String, List<TelemetryEntry>>>, t: Throwable) {
+                    Log.e("MapActivity getOtherBusTelemetry",
+                        "aid=$busAid, token=$accessToken → network error: ${t.localizedMessage}")
+                    runOnUiThread {
+                        markerBus[accessToken]?.isVisible = false
+                        binding.map.invalidate()
+                    }
+                }
+            })
     }
 
 //    /**
