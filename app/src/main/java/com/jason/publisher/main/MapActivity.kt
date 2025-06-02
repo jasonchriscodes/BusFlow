@@ -3,6 +3,7 @@ package com.jason.publisher.main
 import FileLogger
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -27,6 +28,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.jason.publisher.main.model.BusItem
@@ -171,6 +173,7 @@ class MapActivity : AppCompatActivity() {
         private const val LAST_MSG_KEY = "lastMessageKey"
         private const val MSG_KEY = "messageKey"
         private const val SOUND_FILE_NAME = "notif.wav"
+        private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
     }
 
     @SuppressLint("LongLogTag")
@@ -304,6 +307,7 @@ class MapActivity : AppCompatActivity() {
                 longitude = location.longitude
                 Log.d("MapActivity onCreate Latitude", latitude.toString())
                 Log.d("MapActivity onCreate Longitude", longitude.toString())
+                Log.d("MapActivity-LOCATION", "[getCurrentLocation] → lat=$latitude, lon=$longitude")
 
                 // Update UI components with the current location
 //                latitudeTextView.text = "Latitude: $latitude"
@@ -319,6 +323,22 @@ class MapActivity : AppCompatActivity() {
 
         // Load offline map first
         openMapFromAssets()
+
+        // 1. First check:
+        val hasPermission = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasPermission) {
+            // 2. Ask the user:
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                LOCATION_PERMISSION_REQUEST_CODE
+            )
+            return
+        }
 
         // Start tracking the location and updating the marker
         startLocationUpdate()
@@ -413,6 +433,23 @@ class MapActivity : AppCompatActivity() {
 //        binding.arriveButton.visibility = View.GONE
         binding.arriveButton.setOnClickListener {
             confirmArrival()
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE &&
+            grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        ) {
+            // User just granted location—now you can start GPS
+            startLocationUpdate()
+        } else {
+            Toast.makeText(this, "Location permission is required to track the bus", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -2188,6 +2225,8 @@ class MapActivity : AppCompatActivity() {
                         updateSpeed(location.speed * 3.6f)
                         bearing = location.bearing
                     }
+                    Log.d("MapActivity-LOCATION", "[onLocationResult] → lat=$latitude, lon=$longitude, speed=${"%.1f".format(speed)}, bearing=${"%.1f".format(bearing)}")
+                    // …rest of your code (update marker, check stops, etc.)…
 
                     publishTelemetryToThingsBoard(latitude, longitude, bearing, speed)
 
