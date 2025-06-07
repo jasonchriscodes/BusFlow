@@ -3,7 +3,6 @@ package com.jason.publisher.main
 import FileLogger
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,7 +10,6 @@ import android.util.Log
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.jason.publisher.main.model.BusRoute
-import org.osmdroid.views.MapController
 import java.text.SimpleDateFormat
 import java.util.*
 import android.content.Intent
@@ -28,7 +26,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.annotation.RequiresApi
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.jason.publisher.main.model.BusItem
@@ -55,24 +52,26 @@ import java.lang.Math.cos
 import java.lang.Math.sin
 import java.lang.Math.sqrt
 import com.google.android.gms.location.*
+import com.google.gson.Gson
 import com.jason.publisher.LocationListener
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
-import com.jason.publisher.main.model.TelemetryEntry
-import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
-import java.lang.Math.abs
-import com.jason.publisher.main.services.MqttManager
-import com.jason.publisher.main.services.ApiService
+import com.jason.publisher.main.model.AttributesData
+import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.services.ApiServiceBuilder
-import com.jason.publisher.main.services.ClientAttributesResponse
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Response
+import com.jason.publisher.main.services.MqttManager
+import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
+import com.jason.publisher.services.ApiService
+import com.jason.publisher.services.ClientAttributesResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.mapsforge.map.layer.overlay.Marker
-import java.util.concurrent.Executors
+import org.mapsforge.core.util.Utils
+import org.osmdroid.views.MapController
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import java.lang.Math.abs
 
 class MapActivity : AppCompatActivity() {
 
@@ -159,11 +158,11 @@ class MapActivity : AppCompatActivity() {
     private var smoothedSpeed: Float = 0f
     // Choose an alpha value between 0 and 1: smaller alpha means slower adjustment (more smoothing)
     private val smoothingAlpha = 0.2f
+    private lateinit var mqttManagerConfig: MqttManager
     private lateinit var mqttManager: MqttManager
-    private lateinit var apiService: ApiService
-    private val clientKeys = "latitude,longitude,bearing"
-    private val REQUEST_ATTRIBUTES_PERIOD = 1000L
-    private lateinit var tokenToAid: Map<String, String>
+    private var tokenConfigData = "oRSsbeuqDMSckyckcMyE"
+    private var apiService = ApiServiceBuilder.buildService(ApiService::class.java)
+    private var clientKeys = "latitude,longitude,bearing,speed,direction"
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -176,7 +175,6 @@ class MapActivity : AppCompatActivity() {
         private const val LAST_MSG_KEY = "lastMessageKey"
         private const val MSG_KEY = "messageKey"
         private const val SOUND_FILE_NAME = "notif.wav"
-        private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
     }
 
     @SuppressLint("LongLogTag")
@@ -191,6 +189,9 @@ class MapActivity : AppCompatActivity() {
 
         // Initialize managers before using them
         initializeManagers()
+
+        // Initialize mqttManager before using it
+        mqttManagerConfig = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = tokenConfigData)
 
         // Retrieve data passed from TimeTableActivity
         aid = intent.getStringExtra("AID") ?: "Unknown"
@@ -223,45 +224,6 @@ class MapActivity : AppCompatActivity() {
         FileLogger.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
         FileLogger.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
 
-        // 2a) Init Retrofit ApiService
-        apiService = ApiServiceBuilder.buildService(ApiService::class.java)
-
-        // 2b) Grab "CONFIG" & "AID" from the Intent
-        aid = intent.getStringExtra("AID") ?: "Unknown"
-        // Find this device’s token:
-        for (bus in config!!) {
-            if (bus.aid == aid) {
-                token = bus.accessToken
-                break
-            }
-        }
-
-        // in onCreate():
-        tokenToAid = config!!.associate { it.accessToken to it.aid }
-
-        // Build arrBusData = other buses:
-        arrBusData = config!!.filter { it.aid != aid }
-
-        // 2c) Init MQTT with this device’s token:
-        mqttManager = MqttManager(
-            serverUri = MapActivity.SERVER_URI,
-            clientId  = MapActivity.CLIENT_ID,
-            username  = token
-        )
-        mqttManager.connect { isConnected ->
-            if (isConnected) {
-                Log.d("MapActivity", "✓ MQTT connected as $token")
-            } else {
-                Log.e("MapActivity", "✗ MQTT failed to connect")
-            }
-        }
-
-        // 2d) Initialize “other buses” markers on the map:
-        getDefaultConfigValue()    // we’ll override your old getDefaultConfigValue() method
-
-        // 2e) Start polling other buses’ attributes:
-        startPollingOtherBusAttributes()
-
         extractRedBusStops()
 
         // Initialize UI components
@@ -289,21 +251,27 @@ class MapActivity : AppCompatActivity() {
         // Initialize the date/time updater
 //        startDateTimeUpdater()
 
-//        fetchConfig { success ->
-//            if (success) {
-//                getAccessToken()
-        Log.d("MapActivity onCreate Token", token)
-//                mqttManager = MqttManager(serverUri = TimeTableActivity.SERVER_URI, clientId = TimeTableActivity.CLIENT_ID, username = token)
-//        getDefaultConfigValue()
-//                requestAdminMessage()
-//                connectAndSubscribe()
-//                Log.d("MapActivity oncreate fetchConfig config", config.toString())
-//                Log.d("MapActivity oncreate fetchConfig busRoute", route.toString())
-//                Log.d("MapActivity oncreate fetchConfig busStop", stops.toString())
-//            } else {
-//                Log.e("MapActivity onCreate", "Failed to fetch config, running in offline mode.")
-//            }
-//        }
+        // 2) Now fetch the shared config from your server (ThingsBoard)
+        fetchConfig { success ->
+            if (success) {
+                getAccessToken()
+                Log.d("MapActivity onCreate Token", token)
+                mqttManager = MqttManager(serverUri = MapActivity.SERVER_URI, clientId = MapActivity.CLIENT_ID, username = token)
+                // 3) Build all remote‐bus markers BEFORE polling attributes:
+                getDefaultConfigValue()   // ← this populates markerBus[accessToken] for every bus
+
+                requestAdminMessage()
+                connectAndSubscribe()
+
+                // 4) Only now do we start polling attributes every 3 seconds
+                sendRequestAttributes()
+                Log.d("MapActivity oncreate fetchConfig config", config.toString())
+                Log.d("MapActivity oncreate fetchConfig busRoute", route.toString())
+                Log.d("MapActivity oncreate fetchConfig busStop", stops.toString())
+            } else {
+                Log.e("MapActivity onCreate", "Failed to fetch config, running in offline mode.")
+            }
+        }
 
         updateBusNameFromConfig()
 
@@ -314,45 +282,18 @@ class MapActivity : AppCompatActivity() {
                 longitude = location.longitude
                 Log.d("MapActivity onCreate Latitude", latitude.toString())
                 Log.d("MapActivity onCreate Longitude", longitude.toString())
-                Log.d("MapActivity-LOCATION", "[getCurrentLocation] → lat=$latitude, lon=$longitude")
 
                 // Update UI components with the current location
 //                latitudeTextView.text = "Latitude: $latitude"
 //                longitudeTextView.text = "Longitude: $longitude"
-                // Now that lat/lon are nonzero, center the map and place the marker:
-                runOnUiThread {
-                    binding.map.setCenter(LatLong(latitude, longitude))
-                    addBusMarker(latitude, longitude)
-                    binding.map.invalidate()
-                }
             }
         })
 
-        // … load `config` from Intent extras …
-        arrBusData = config!!.filter { it.aid != aid }
-
-        // 1. Initialize the offline map:
+        // Load offline map first
         openMapFromAssets()
 
-        // 2. Ask location permission (if not granted, onRequestPermissionsResult() will fire):
-        val hasPermission = ContextCompat.checkSelfPermission(
-            this, Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (!hasPermission) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                LOCATION_PERMISSION_REQUEST_CODE
-            )
-        } else {
-            startLocationUpdate()
-        }
-
-        // 3. **Right after** the map is up (post‐layout), add “other bus” placeholders:
-        binding.map.post {
-            getDefaultConfigValue()
-        }
+        // Start tracking the location and updating the marker
+        startLocationUpdate()
 
         // Mock data to check scheduleStatusValueTextView
         if (forceAheadStatus == true) {
@@ -447,36 +388,219 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE &&
-            grantResults.isNotEmpty() &&
-            grantResults[0] == PackageManager.PERMISSION_GRANTED
-        ) {
-            startLocationUpdate()
-        } else {
-            Toast.makeText(this, "Location permission is required to track the bus", Toast.LENGTH_LONG).show()
+    /**
+     * Connects to the MQTT broker and subscribes to the shared data topic upon successful connection.
+     */
+    private fun connectAndSubscribe() {
+        mqttManager.connect { isConnected ->
+            if (isConnected) {
+                Log.d("MapActivity", "Connected to MQTT broker")
+                subscribeSharedData()
+            } else {
+                Log.e("MapActivity", "Failed to connect to MQTT broker")
+//                Toast.makeText(this, "Failed to connect to MQTT broker", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
     /**
-     * Kick off a recurring Handler r/ self. Every REQUEST_ATTRIBUTES_PERIOD ms,
-     * we request latitude, longitude, bearing for each “other bus” accessToken.
+     * Subscribes to shared data from the server.
+     * Checks if the configuration is null or empty, and if the `aid` from ThingsBoard matches the tablet's `aid`.
+     * If either check fails, it returns and runs on the UI thread.
      */
-    private fun startPollingOtherBusAttributes() {
+    private fun subscribeSharedData() {
+        mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
+            runOnUiThread {
+                val gson = Gson()
+                val data = gson.fromJson(message, Bus::class.java)
+
+                config = data.shared?.config?.busConfig
+                arrBusData = config.orEmpty() // Ensure arrBusData is assigned
+                Log.d("subscribeSharedData config", config.toString())
+                Log.d("subscribeSharedData arrBusData", arrBusData.toString())
+
+                if (config.isNullOrEmpty()) {
+                    Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
+                    clearBusData()
+                    return@runOnUiThread
+                }
+
+                val matchingAid = config!!.any { it.aid == aid }
+
+                if (!matchingAid) {
+                    Toast.makeText(this, "AID does not match.", Toast.LENGTH_SHORT).show()
+                    clearBusData()
+                    return@runOnUiThread
+                }
+            }
+        }
+    }
+
+    /**
+     * Clears any existing bus data from the map and other UI elements.
+     */
+    private fun clearBusData() {
+        binding.map.invalidate()
+        markerBus.clear()
+    }
+
+    /**
+     * Sends data attributes to the server.
+     */
+    private fun sendRequestAttributes() {
         val handler = Handler(Looper.getMainLooper())
-        handler.post(object : Runnable {
+        handler.postDelayed(object : Runnable {
             override fun run() {
                 for (bus in arrBusData) {
-                    getOtherBusTelemetry(bus.accessToken)
+                    // Only fetch attributes if we have a marker to update:
+                    if (markerBus.containsKey(bus.accessToken)) {
+                        getAttributes(apiService, bus.accessToken, clientKeys)
+                    } else {
+                        Log.w("MapActivity sendRequestAttributes", "Skipping getAttributes for ${bus.accessToken} because no marker exists yet.")
+                    }
                 }
-                handler.postDelayed(this, REQUEST_ATTRIBUTES_PERIOD)
+                handler.postDelayed(this, 1000)
+            }
+        }, 0)
+    }
+
+    /**
+     * Retrieves attributes data for each bus from the server,
+     * and moves the existing Mapsforge Marker to the new LatLong.
+     *
+     * @param apiService   The API service instance.
+     * @param token        The access token for authentication.
+     * @param clientKeys   The keys to request attributes for.
+     */
+    private fun getAttributes(
+        apiService: ApiService,
+        token: String,
+        clientKeys: String
+    ) {
+        val call = apiService.getAttributes(
+            "${ApiService.BASE_URL}$token/attributes",
+            "application/json",
+            clientKeys
+        )
+        call.enqueue(object : Callback<ClientAttributesResponse> {
+            override fun onResponse(
+                call: Call<ClientAttributesResponse>,
+                response: Response<ClientAttributesResponse>
+            ) {
+                    if (!response.isSuccessful) {
+                        Log.e("MapActivity getAttributes", "HTTP ${response.code()} → ${response.errorBody()?.string()}")
+                        return
+                    }
+
+                    val client = response.body()?.client ?: return
+
+                    // if both lat and lon are exactly zero, skip this update
+                    if (client.latitude == 0.0 && client.longitude == 0.0) {
+                        Log.w("MapActivity", "Skipping empty attributes (0.0,0.0)")
+                        return
+                    }
+
+                    // Turn the response into a JSON string (Gson will produce "{}" if body().client == null)
+                    val gson = Gson()
+                    val jsonBody = gson.toJson(response.body() ?: ClientAttributesResponse())
+
+                    // If it's exactly "{}", skip everything
+                    if (jsonBody == "{}") {
+                        // no real attributes to show—ignore
+                        return
+                    }
+
+                    // At this point we know body() had something other than "{}"
+                    Log.d("MapActivity getAttributes", "JSON from body() = $jsonBody")
+
+                    val clientAttrs = response.body()?.client
+                    if (clientAttrs == null) {
+                        // Shouldn't happen if jsonBody != "{}", but guard anyway
+                        return
+                    }
+
+                    val lat = clientAttrs.latitude
+                    val lon = clientAttrs.longitude
+                    val ber = clientAttrs.bearing
+
+                    if (lat == null || lon == null || ber == null) {
+                        Log.e("MapActivity getAttributes", "Received null lat/lon/bearing inside client")
+                        return
+                    }
+
+                Log.d("MapActivity getAttributes",
+                    "clientAttributes: lat=$lat, lon=$lon")
+
+                    val marker = markerBus[token]
+                    if (marker != null) {
+                        marker.latLong = LatLong(lat, lon)
+                    } else {
+                        Log.e("MapActivity getAttributes",
+                            "Marker for token '$token' is null. Current keys = ${markerBus.keys}")
+                    }
+                }
+
+                override fun onFailure(call: Call<ClientAttributesResponse>, t: Throwable) {
+                Log.e("MapActivity getAttributes", "Network error: ${t.message}")
             }
         })
+    }
+
+    /**
+     * Retrieves the access token for the current device's Android ID from the configuration list.
+     */
+    @SuppressLint("HardwareIds")
+    private fun getAccessToken() {
+        val listConfig = config
+        Log.d("getAccessToken config", config.toString())
+        for (configItem in listConfig.orEmpty()) {
+            if (configItem.aid == aid) {
+                token = configItem.accessToken
+                break
+            }
+        }
+    }
+
+    /**
+     * Requests admin messages periodically.
+     */
+    private fun requestAdminMessage() {
+        val jsonObject = JSONObject()
+        jsonObject.put("sharedKeys","message,busRoute,busStop,config")
+        val jsonString = jsonObject.toString()
+        val handler = Handler(Looper.getMainLooper())
+        mqttManager.publish(PUB_MSG_TOPIC, jsonString)
+        handler.post(object : Runnable {
+            override fun run() {
+                mqttManager.publish(PUB_MSG_TOPIC, jsonString)
+                handler.postDelayed(this, REQUEST_PERIODIC_TIME)
+            }
+        })
+    }
+
+    /**
+     * Fetches the configuration data and initializes the config variable.
+     * Calls the provided callback with true if successful, false otherwise.
+     */
+    private fun fetchConfig(callback: (Boolean) -> Unit) {
+        Log.d("MapActivity fetchConfig", "Fetching config...")
+        mqttManagerConfig.fetchSharedAttributes(tokenConfigData) { listConfig ->
+            if (listConfig.isNotEmpty()) {
+                config = listConfig
+                Log.d("MapActivity fetchConfig", "Config received: $config")
+//                runOnUiThread {
+//                    Toast.makeText(this, "Config initialized successfully", Toast.LENGTH_SHORT).show()
+//                }
+                callback(true)
+            } else {
+                config = emptyList()
+                Log.e("MapActivity fetchConfig", "Failed to initialize config. No bus information available.")
+//                runOnUiThread {
+//                    Toast.makeText(this, "Failed to initialize config. No bus information available.", Toast.LENGTH_SHORT).show()
+//                }
+                callback(false)
+            }
+        }
     }
 
     /**
@@ -2200,24 +2324,6 @@ class MapActivity : AppCompatActivity() {
                         updateSpeed(location.speed * 3.6f)
                         bearing = location.bearing
                     }
-                    Log.d("MapActivity-LOCATION", "[onLocationResult] → lat=$latitude, lon=$longitude, speed=${"%.1f".format(speed)}, bearing=${"%.1f".format(bearing)}")
-
-                    runOnUiThread {
-                        if (busMarker == null) {
-                            // First time: create our own bus marker in blue:
-                            val drawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)!!
-                            val bmp = AndroidGraphicFactory.convertToBitmap(drawable)
-                            busMarker = Marker(LatLong(latitude, longitude), bmp, 0, 0)
-                            binding.map.layerManager.layers.add(busMarker)
-                            binding.map.setCenter(LatLong(latitude, longitude))
-                        } else {
-                            // Move & rotate the existing marker:
-                            updateBusMarkerPosition(latitude, longitude, bearing)
-                        }
-                        binding.map.invalidate()
-                    }
-
-                    publishTelemetryToThingsBoard(latitude, longitude, bearing, speed)
 
                     // Find the nearest route point
                     val nearestIndex = findNearestBusRoutePoint(latitude, longitude)
@@ -2289,7 +2395,6 @@ class MapActivity : AppCompatActivity() {
                     runOnUiThread {
                         speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
                         updateBusMarkerPosition(latitude, longitude, bearing)
-                        updateBusMarkerPosition(latitude, longitude, bearing)
                         checkPassedStops(latitude, longitude)
                         updateTimingPointBasedOnLocation(latitude, longitude)
                         scheduleStatusValueTextView.text = "Calculating..."
@@ -2323,26 +2428,6 @@ class MapActivity : AppCompatActivity() {
             }
 
         Toast.makeText(this, "Live location updates started", Toast.LENGTH_SHORT).show()
-    }
-
-    /**
-     * Helper: build a small JSON and send it to v1/devices/me/telemetry every GPS fix.
-     */
-    private fun publishTelemetryToThingsBoard(
-        lat: Double,
-        lon: Double,
-        bearing: Float,
-        speedKmh: Float
-    ) {
-        val jsonObject = JSONObject().apply {
-            put("latitude", lat)
-            put("longitude", lon)
-            put("bearing", bearing)
-            put("speed", speedKmh)
-            put("aid", aid)
-        }
-        val payload = jsonObject.toString()
-        mqttManager.publish(MapActivity.PUB_POS_TOPIC, payload)
     }
 
     /**
@@ -2512,29 +2597,129 @@ class MapActivity : AppCompatActivity() {
 
     /** Move the bus marker dynamically with updated bearing */
     private fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float) {
-        val newPos = LatLong(lat, lon)
-        val drawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)!!
-        val androidBmp = android.graphics.Bitmap.createBitmap(
-            drawable.intrinsicWidth,
-            drawable.intrinsicHeight,
-            android.graphics.Bitmap.Config.ARGB_8888
-        )
-        val canvas = android.graphics.Canvas(androidBmp)
-        drawable.setBounds(0, 0, canvas.width, canvas.height)
-        drawable.draw(canvas)
-        val matrix = android.graphics.Matrix().apply { postRotate(bearing) }
-        val rotated = android.graphics.Bitmap.createBitmap(
-            androidBmp, 0, 0, androidBmp.width, androidBmp.height, matrix, true
-        )
-        val mapsforgeBmp = AndroidBitmap(rotated)
+        val newPosition = LatLong(lat, lon)
 
+        publishTelemetryData()
+        updateClientAttributes()
+
+        // Convert Drawable to Bitmap and rotate it
+        val rotatedBitmap = rotateDrawable(bearing)
+
+        // Remove old marker if it exists
         busMarker?.let {
             binding.map.layerManager.layers.remove(it)
         }
-        busMarker = Marker(newPos, mapsforgeBmp, 0, 0)
+
+        // Create a new rotated marker at the updated position
+        busMarker = org.mapsforge.map.layer.overlay.Marker(
+            newPosition, rotatedBitmap, 0, 0
+        )
         binding.map.layerManager.layers.add(busMarker)
-        binding.map.setCenter(newPos)
-        binding.map.invalidate()
+
+        // Apply map rotation
+        binding.map.setRotation(-bearing) // Negative to align with compass movement
+
+        // Scale the map to prevent cropping
+        binding.map.scaleX = 1f  // Adjust scaling factor
+        binding.map.scaleY = 1f
+
+        Log.d("MapActivity updateBusMarkerPosition", "Recentering map on bus at lat=$lat, lon=$lon")
+
+        // Keep the map centered on the bus location
+        binding.map.setCenter(newPosition)
+        binding.map.invalidate() // Force redraw
+
+        // Call our new listener function to check/update upcoming bus stop details
+        onBusMarkerUpdated()
+    }
+
+    /**
+     * Updates the client attributes by posting the current location, bearing, speed, and direction data to the server.
+     */
+    private fun updateClientAttributes() {
+        val url = ApiService.BASE_URL + "$token/attributes"
+        val attributesData = AttributesData(latitude, longitude, bearing, null,speed, direction)
+        val call = apiService.postAttributes(
+            url = url,
+            "application/json",
+            requestBody = attributesData
+        )
+        call.enqueue(object : Callback<Void> {
+            override fun onResponse(call: Call<Void>, response: Response<Void>) {
+//                Log.d("Client Attributes", response.message().toString())
+//                Log.d("Client Attributes", response.code().toString())
+//                Log.d("Client Attributes", response.errorBody().toString())
+                if (response.isSuccessful) {
+//                    Log.d("Client Attributes", "Successfull")
+                } else {
+//                    Log.d("Client Attributes", "Fail")
+                }
+            }
+            override fun onFailure(call: Call<Void>, t: Throwable) {
+//                Log.d("Client Attributes", t.message.toString())
+            }
+        })
+    }
+
+    /**
+     * Publishes telemetry data including latitude, longitude, bearing, speed, direction, and other relevant information.
+     */
+    private fun publishTelemetryData() {
+        val jsonObject = JSONObject()
+//        busname = Utils.findBusNameByAid(aid) ?: ""
+        jsonObject.put("latitude", latitude)
+        jsonObject.put("longitude", longitude)
+        jsonObject.put("bearing", bearing)
+        jsonObject.put("direction", direction)
+        jsonObject.put("speed", speed)
+//        jsonObject.put("showDepartureTime", showDepartureTime)
+//        jsonObject.put("departureTime", departureTime)
+//        jsonObject.put("bus", busname)
+        jsonObject.put("aid", aid)
+//        Log.d("BusConfig", busConfig)
+//        Log.d("aid", aid)
+
+        // To publish the closest bus stop to the publisher device.
+//        closestBusStopToPubDevice = BusStopProximityManager.getTheClosestBusStopToPubDevice(
+//            latitude,
+//            longitude,
+//            closestBusStopToPubDevice
+//        );
+//        jsonObject.put("closestBusStopToPubDevice", closestBusStopToPubDevice)
+
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+//                val nextBusStopInSequence =
+//                    BusStopProximityManager.getNextBusStopInSequence(closestBusStopToPubDevice)
+//                if (nextBusStopInSequence != null) {
+
+                    // Note: uncomment below lines of code to use TomTom API.
+//                    val etaToNextBStop = TomTomService.getEstimateTimeFromPointToPoint(
+//                        latitude, longitude,
+//                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
+//                    )
+
+//                    etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
+//                        latitude, longitude,
+//                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
+//                    )
+//
+//                    jsonObject.put("ETAtoNextBStop", etaToNextBStop)
+//                }
+
+                val jsonString = jsonObject.toString()
+                mqttManager.publish(MapActivity.PUB_POS_TOPIC, jsonString, 1)
+//                notificationManager.showNotification(
+//                    channelId = "channel1",
+//                    notificationId = 1,
+//                    title = "Connected",
+//                    message = "Lat: $latitude, Long: $longitude, Direction: $direction",
+//                    false
+//                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     /**
@@ -2717,133 +2902,37 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * Place a “blank” invisible marker for each other bus, using ic_bus_symbol2.
-     * When we later get telemetry back, we’ll show & move them from this HashMap.
-     */
-    private fun getDefaultConfigValue() {
-        arrBusData.forEach { bus ->
-            val drawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol2, null)
-                ?: throw IllegalStateException("ic_bus_symbol2 not found in resources")
-            val bmp = AndroidGraphicFactory.convertToBitmap(drawable)
-
-            // Create the placeholder marker at (0,0) and hide it initially:
-            val placeholder = Marker(LatLong(0.0, 0.0), bmp, 0, 0).apply {
-                isVisible = false
-            }
-
-            binding.map.layerManager.layers.add(placeholder)
-            markerBus[bus.accessToken] = placeholder
-        }
-        binding.map.invalidate()
-    }
-
-    /**
-     * After we connect to MQTT/REST and get “other bus” latest telemetry,
-     * move each marker into place and make it visible.
+     * Retrieves default configuration values for the activity, such as latitude, longitude, bearing, and more.
      */
     @SuppressLint("LongLogTag")
-    private fun getOtherBusTelemetry(accessToken: String) {
-        // 1) Look up which AID corresponds to this accessToken:
-        val busAid = tokenToAid[accessToken]    // e.g. “8d34bdc9a5c78c42”
-
-        // 2) Ask ThingsBoard for the **latest telemetry** (latitude,longitude,bearing):
-        apiService.getLatestTelemetry(
-            accessToken,
-            keys = "latitude,longitude,bearing"
-        )
-
-            .enqueue(object : Callback<Map<String, List<TelemetryEntry>>> {
-                override fun onResponse(
-                    call: Call<Map<String, List<TelemetryEntry>>>,
-                    response: Response<Map<String, List<TelemetryEntry>>>
-                ) {
-                    if (!response.isSuccessful || response.body() == null) {
-                        Log.w("MapActivity getOtherBusTelemetry",
-                            "aid=$busAid, token=$accessToken → telemetry fetch failed (HTTP ${response.code()}). Hiding marker.")
-                        runOnUiThread {
-                            markerBus[accessToken]?.isVisible = false
-                            binding.map.invalidate()
-                        }
-                        return
-                    }
-
-                    // 3) Parse out lat/lon/bearing from the JSON
-                    val telemetryMap = response.body()!!
-
-                    val latEntry    = telemetryMap["latitude"]?.firstOrNull()?.value
-                    val lonEntry    = telemetryMap["longitude"]?.firstOrNull()?.value
-                    val brgEntry    = telemetryMap["bearing"]?.firstOrNull()?.value
-
-                    val lat = when (latEntry) {
-                        is Number -> latEntry.toDouble()
-                        is String -> latEntry.toDoubleOrNull()
-                        else      -> null
-                    }
-                    val lon = when (lonEntry) {
-                        is Number -> lonEntry.toDouble()
-                        is String -> lonEntry.toDoubleOrNull()
-                        else      -> null
-                    }
-                    val brg = when (brgEntry) {
-                        is Number -> brgEntry.toFloat()
-                        is String -> brgEntry.toFloatOrNull()
-                        else      -> null
-                    }
-
-                    Log.d("MapActivity getOtherBusTelemetry",
-                        "aid=$busAid, token=$accessToken → telemetry lat=$lat, lon=$lon, bearing=$brg")
-
-                    runOnUiThread {
-                        val marker = markerBus[accessToken]
-                        if (lat != null && lon != null) {
-                            // 4) Build a rotated icon from ic_bus_symbol2
-                            val drawable = ResourcesCompat.getDrawable(
-                                resources,
-                                R.drawable.ic_bus_symbol2,
-                                null
-                            ) ?: throw IllegalStateException("ic_bus_symbol2 not found")
-
-                            // Convert Drawable → Android Bitmap
-                            val androidBmp = Bitmap.createBitmap(
-                                drawable.intrinsicWidth,
-                                drawable.intrinsicHeight,
-                                Bitmap.Config.ARGB_8888
-                            )
-                            val canvas = android.graphics.Canvas(androidBmp)
-                            drawable.setBounds(0, 0, canvas.width, canvas.height)
-                            drawable.draw(canvas)
-
-                            // If bearing is provided, rotate by that angle; otherwise 0f
-                            val angle = brg ?: 0f
-                            val matrix = android.graphics.Matrix().apply { postRotate(angle) }
-                            val rotatedAndroidBmp = Bitmap.createBitmap(
-                                androidBmp, 0, 0, androidBmp.width, androidBmp.height, matrix, true
-                            )
-                            val mapsforgeBmp = AndroidBitmap(rotatedAndroidBmp)
-
-                            // 5) Now move & rotate the placeholder marker
-                            marker?.let {
-                                it.bitmap = mapsforgeBmp
-                                it.setLatLong(LatLong(lat, lon))
-                                it.isVisible = true
-                            }
-                        } else {
-                            // If latitude or longitude is missing, hide this marker
-                            marker?.isVisible = false
-                        }
-                        binding.map.invalidate()
-                    }
-                }
-
-                override fun onFailure(call: Call<Map<String, List<TelemetryEntry>>>, t: Throwable) {
-                    Log.e("MapActivity getOtherBusTelemetry",
-                        "aid=$busAid, token=$accessToken → network error: ${t.localizedMessage}")
-                    runOnUiThread {
-                        markerBus[accessToken]?.isVisible = false
-                        binding.map.invalidate()
-                    }
-                }
-            })
+    private fun getDefaultConfigValue() {
+//        busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
+//        Toast.makeText(this, "arrBusDataOnline1: ${arrBusData}", Toast.LENGTH_SHORT).show()
+        Log.d("MapActivity getDefaultConfigValue busConfig", arrBusData.toString())
+        Log.d("MapActivity getDefaultConfigValue arrBusDataOnline1", arrBusData.toString())
+        Log.d("MapActivity getDefaultConfigValue config", config.toString())
+        arrBusData = config!!
+        arrBusData = arrBusData.filter { it.aid != aid }
+//        Toast.makeText(this, "getDefaultConfigValue arrBusDataOnline2: ${arrBusData}", Toast.LENGTH_SHORT).show()
+        Log.d("MapActivity getDefaultConfigValue arrBusDataOnline2", arrBusData.toString())
+        for (bus in arrBusData) {
+            val busPosition = LatLong(latitude, longitude)
+            val markerDrawable = AndroidGraphicFactory.convertToBitmap(
+                ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol2, null)
+            )
+            // Create a Mapsforge marker
+            val marker = org.mapsforge.map.layer.overlay.Marker(
+                busPosition, // LatLong position
+                markerDrawable, // Marker icon
+                0, // Horizontal offset
+                0 // Vertical offset
+            )
+            // Add marker to Mapsforge Layer Manager
+            binding.map.layerManager.layers.add(marker)
+            // Store it in markerBus HashMap
+            markerBus[bus.accessToken] = marker
+            Log.d("MapActivity getDefaultConfigValue MarkerDrawable", "Bus symbol drawable applied")
+        }
     }
 
 //    /**
@@ -2871,37 +2960,25 @@ class MapActivity : AppCompatActivity() {
      * Loads the offline map from assets and configures the map.
      * Prevents adding duplicate layers.
      */
+    @SuppressLint("LongLogTag")
     private fun openMapFromAssets() {
-        // Enable built-in zoom controls, scale bar, etc.
         binding.map.mapScaleBar.isVisible = true
         binding.map.setBuiltInZoomControls(true)
 
-        // Copy “new-zealand.map” out of assets to a File, then initialize MapsForge with it:
-        copyMapAssetAsync("new-zealand.map") { mapFile ->
-            initializeMapWithFile(mapFile)
-        }
-    }
-
-    /**
-     * This runs on the main thread once the map asset has been copied to cacheDir.
-     * Here we create the actual MapFile and TileRendererLayer.
-     */
-    private fun initializeMapWithFile(mapFile: File) {
-        // 1) Create a TileCache (using the same “preloadCache” name you used before)
-        val tileCache = AndroidUtil.createTileCache(
+        // Instead of creating “mycache”, open the existing “preloadCache”:
+        val cache = AndroidUtil.createTileCache(
             this,
-            "preloadCache",
+            "preloadCache",                    // same name!
             binding.map.model.displayModel.tileSize,
             1f,
             binding.map.model.frameBufferModel.overdrawFactor
         )
 
-        // 2) Construct a MapsForge MapFile from that File
+        val mapFile = copyAssetToFile("new-zealand.map")
         val mapStore = MapFile(mapFile)
 
-        // 3) Build a TileRendererLayer for offline rendering
         val renderLayer = TileRendererLayer(
-            tileCache,
+            cache,
             mapStore,
             binding.map.model.mapViewPosition,
             AndroidGraphicFactory.INSTANCE
@@ -2909,48 +2986,27 @@ class MapActivity : AppCompatActivity() {
             setXmlRenderTheme(InternalRenderTheme.DEFAULT)
         }
 
-        // 4) Add the layer only if it isn’t already in the layer manager
+        // **Check if layer already exists before adding**
         if (!binding.map.layerManager.layers.contains(renderLayer)) {
             binding.map.layerManager.layers.add(renderLayer)
-        }
-
-        // 5) Center & zoom however you like (for example, at your last known lat/lon)
-        //    If latitude/longitude are both still “0.0,” pick a sane default:
-        val centerPoint = if (latitude != 0.0 && longitude != 0.0) {
-            org.mapsforge.core.model.LatLong(latitude, longitude)
+            Log.d("MapActivity openMapFromAssets", "✅ Offline map added successfully.")
         } else {
-            // fallback to some NZ coordinate if you need a default
-            org.mapsforge.core.model.LatLong(-36.8485, 174.7633)
+            Log.d("MapActivity openMapFromAssets", "⚠️ Offline map layer already exists. Skipping duplicate addition.")
         }
-        binding.map.setCenter(centerPoint)
-        binding.map.setZoomLevel(16)
 
-        // 6) Once the map is fully loaded, you can draw polylines, markers, etc.
+        binding.map.setCenter(LatLong(latitude, longitude)) // Set the default location to center the bus marker
+//        binding.map.setCenter(LatLong(-36.855647, 174.765249)) // Airedale
+//        binding.map.setCenter(LatLong(-36.8485, 174.7633)) // Auckland, NZ
+        binding.map.setZoomLevel(16) // Set default zoom level
+//        binding.map.setZoomLevel(11) // Set default zoom level
+
+        // **Ensure the map is fully loaded before drawing the polyline**
         binding.map.post {
-            Log.d("MapActivity DEBUG", "About to addBusMarker at lat=$latitude, lon=$longitude")
-            drawDetectionZones(stops)
-            drawPolyline()
-            addBusStopMarkers(stops)
+            Log.d("MapActivity", "Map is fully initialized. Drawing polyline and markers now.")
+            drawDetectionZones(stops)   // Draw detection zones first
+            drawPolyline()              // Then draw Polyline on top
+            addBusStopMarkers(stops)    // Bus stop markers as the final element
             addBusMarker(latitude, longitude)
-        }
-    }
-
-    /** Copies a single file out of assets into cacheDir, then calls onComplete(File) on the main thread. */
-    private fun copyMapAssetAsync(assetName: String, onComplete: (File) -> Unit) {
-        val executor = Executors.newSingleThreadExecutor()
-        val handler = Handler(Looper.getMainLooper())
-        executor.execute {
-            val dstFile = File(cacheDir, assetName)
-            if (!dstFile.exists()) {
-                assets.open(assetName).use { input ->
-                    dstFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            }
-            handler.post {
-                onComplete(dstFile)
-            }
         }
     }
 
