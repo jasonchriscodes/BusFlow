@@ -1,8 +1,10 @@
 package com.jason.publisher.main
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.ConnectivityManager
 import android.net.Network
@@ -30,6 +32,7 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.gson.Gson
 import com.jason.publisher.R
@@ -116,6 +119,7 @@ class ScheduleActivity : AppCompatActivity() {
         private const val LAST_MSG_KEY = "lastMessageKey"
         private const val MSG_KEY = "messageKey"
         private const val SOUND_FILE_NAME = "notif.wav"
+        private const val LOCATION_PERMISSION_REQUEST = 1234
     }
 
 //    private val dummyScheduleData = listOf(
@@ -360,38 +364,19 @@ class ScheduleActivity : AppCompatActivity() {
             }
         }
 
+        // ➊ Immediately ask for location permission on startup
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                LOCATION_PERMISSION_REQUEST
+            )
+        }
+
         // Set up the "Start Route" button
         binding.startRouteButton.setOnClickListener {
-            if (scheduleData.isNotEmpty()) {
-                val firstScheduleItem = scheduleData.first() // ✅ Store first schedule item
-                Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
-                Log.d("ScheduleActivity startRouteButton before", scheduleData.toString())
-
-                // ✅ Actually remove the first item
-//                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
-                updateScheduleTablePaged()
-                updateTimeline()
-                rewriteOfflineScheduleData()
-
-                jsonString = Gson().toJson(busRouteData)
-
-                Log.d("ScheduleActivity startRouteButton after", scheduleData.toString())
-
-                val intent = Intent(this, MapActivity::class.java).apply {
-                    putExtra("AID", aid)
-                    putExtra("CONFIG", ArrayList(config))
-                    putExtra("JSON_STRING", jsonString)
-                    putExtra("ROUTE", ArrayList(route))
-                    putExtra("STOPS", ArrayList(stops))
-                    putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
-                    putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
-                    putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
-                    putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
-                }
-                startActivity(intent)
-            } else {
-                Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
-            }
+            launchMapActivity()
         }
 
 // Set up the "Test Start Route" button
@@ -426,6 +411,60 @@ class ScheduleActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    // ➌ Handle the user’s response to your initial permission request
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == LOCATION_PERMISSION_REQUEST) {
+            if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
+                Toast.makeText(this, "Location permission granted", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Location permission is required to show the map", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /**
+     * Start MapActivity, carrying over any required extras.
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
+    @SuppressLint("LongLogTag")
+    private fun launchMapActivity() {
+        if (scheduleData.isNotEmpty()) {
+            val firstScheduleItem = scheduleData.first() // ✅ Store first schedule item
+            Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
+            Log.d("ScheduleActivity startRouteButton before", scheduleData.toString())
+
+            // ✅ Actually remove the first item
+//                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+            updateScheduleTablePaged()
+            updateTimeline()
+            rewriteOfflineScheduleData()
+
+            jsonString = Gson().toJson(busRouteData)
+
+            Log.d("ScheduleActivity startRouteButton after", scheduleData.toString())
+
+            val intent = Intent(this, MapActivity::class.java).apply {
+                putExtra("AID", aid)
+                putExtra("CONFIG", ArrayList(config))
+                putExtra("JSON_STRING", jsonString)
+                putExtra("ROUTE", ArrayList(route))
+                putExtra("STOPS", ArrayList(stops))
+                putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
+                putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+                putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+                putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+            }
+            startActivity(intent)
+        } else {
+            Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
         }
     }
 

@@ -221,9 +221,6 @@ class TestMapActivity : AppCompatActivity() {
             openMapFromAssets()
         }
 
-        // Start tracking the location and updating the marker
-//        startLocationUpdate()
-
         binding.startSimulationButton.setOnClickListener {
             startSimulation()
         }
