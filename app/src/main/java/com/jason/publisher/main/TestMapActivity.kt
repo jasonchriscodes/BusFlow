@@ -36,6 +36,11 @@ import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.LocationManager
 import com.jason.publisher.main.utils.NetworkStatusHelper
 import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidBitmap
@@ -126,6 +131,7 @@ class TestMapActivity : AppCompatActivity() {
     // A time-based filter for computed t₁ values (in seconds) with a 30-second window.
     private val t1Filter = TimeBasedMovingAverageFilterDouble(windowMillis = 30000)
     private var lastValidT1: Double = 0.0
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -1792,46 +1798,53 @@ class TestMapActivity : AppCompatActivity() {
         binding.map.setBuiltInZoomControls(true)
 
         val cache = AndroidUtil.createTileCache(
-            this,
-            "mycache",
+            this, "preloadCache",
             binding.map.model.displayModel.tileSize,
             1f,
             binding.map.model.frameBufferModel.overdrawFactor
         )
 
         val mapFile = copyAssetToFile("new-zealand.map")
-        val mapStore = MapFile(mapFile)
-
-        val renderLayer = TileRendererLayer(
-            cache,
-            mapStore,
-            binding.map.model.mapViewPosition,
-            AndroidGraphicFactory.INSTANCE
-        ).apply {
-            setXmlRenderTheme(InternalRenderTheme.DEFAULT)
+        if (!mapFile.exists()) {
+            Toast.makeText(this, "Offline map missing", Toast.LENGTH_SHORT).show()
+            return
         }
 
-        // **Check if layer already exists before adding**
-        if (!binding.map.layerManager.layers.contains(renderLayer)) {
-            binding.map.layerManager.layers.add(renderLayer)
-            Log.d("TestMapActivity openMapFromAssets", "✅ Offline map added successfully.")
-        } else {
-            Log.d("TestMapActivity openMapFromAssets", "⚠️ Offline map layer already exists. Skipping duplicate addition.")
-        }
+        // off-thread mapStore + renderer creation
+        ioScope.launch {
+            val mapStore = try {
+                MapFile(mapFile)
+            } catch (e: Exception) {
+                Log.e("MapActivity", "MapFile open failed: ${e.message}")
+                return@launch
+            }
 
-        binding.map.setCenter(LatLong(latitude, longitude)) // Set the default location to center the bus marker
-//        binding.map.setCenter(LatLong(-36.855647, 174.765249)) // Airedale
-//        binding.map.setCenter(LatLong(-36.8485, 174.7633)) // Auckland, NZ
-        binding.map.setZoomLevel(16) // Set default zoom level
-//        binding.map.setZoomLevel(11) // Set default zoom level
+            val renderLayer = TileRendererLayer(
+                cache,
+                mapStore,
+                binding.map.model.mapViewPosition,
+                AndroidGraphicFactory.INSTANCE
+            ).apply {
+                setXmlRenderTheme(InternalRenderTheme.DEFAULT)
+            }
 
-        // **Initialize the bus marker and ma**
-        binding.map.post {
-            drawPolyline()  // Draw polyline first
-            addBusStopMarkers(stops)
-            addBusMarker(latitude, longitude) // 🔁 Move marker here so it is on top
+            // back on UI thread to add layer & center/map.invalidate
+            withContext(Dispatchers.Main) {
+                if (!binding.map.layerManager.layers.contains(renderLayer)) {
+                    binding.map.layerManager.layers.add(renderLayer)
+                }
+                binding.map.post {
+                    binding.map.model.mapViewPosition.setZoomLevel(16)
+                    binding.map.model.mapViewPosition.setCenter(LatLong(latitude, longitude))
+                    drawPolyline()
+                    addBusStopMarkers(stops)
+                    addBusMarker(latitude, longitude)
+                    binding.map.invalidate()
+                }
+            }
         }
     }
+
 
     /**
      * Place the bus marker at a given latitude and longitude

@@ -84,60 +84,17 @@
         app:layout_constraintEnd_toEndOf="parent"/>
 
     <!-- Table Layout for Schedule -->
-    <TableLayout
-        android:id="@+id/scheduleTable"
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/scheduleRecycler"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
-        android:padding="8dp"
         android:visibility="gone"
-        android:background="@drawable/rounded_corners"
         app:layout_constraintTop_toBottomOf="@id/changeModeButton"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-    <!-- Table Header -->
-        <TableRow>
-            <TextView
-                android:text="Route No."
-                android:textSize="18sp"
-                android:textColor="#000"
-                android:textStyle="bold"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="start" />
-
-            <TextView
-                android:text="Start Time"
-                android:textSize="18sp"
-                android:textColor="#000"
-                android:textStyle="bold"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="center" />
-
-            <TextView
-                android:text="End Time"
-                android:textSize="18sp"
-                android:textColor="#000"
-                android:textStyle="bold"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="end" />
-        </TableRow>
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="#000" />
-
-        <!-- Data rows will be added dynamically -->
-    </TableLayout>
+        app:layout_constraintEnd_toEndOf="parent"/>
 
         <LinearLayout
         android:id="@+id/paginationLayout"
@@ -147,7 +104,7 @@
         android:gravity="center"
         android:visibility="gone"
         android:layout_marginTop="12dp"
-        app:layout_constraintTop_toBottomOf="@id/scheduleTable"
+        app:layout_constraintTop_toBottomOf="@id/scheduleRecycler"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 

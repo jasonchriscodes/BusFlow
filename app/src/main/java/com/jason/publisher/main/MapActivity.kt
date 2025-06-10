@@ -65,7 +65,9 @@ import com.jason.publisher.services.ApiService
 import com.jason.publisher.services.ClientAttributesResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.mapsforge.core.util.Utils
 import org.osmdroid.views.MapController
 import retrofit2.Call
@@ -163,6 +165,7 @@ class MapActivity : AppCompatActivity() {
     private var tokenConfigData = "oRSsbeuqDMSckyckcMyE"
     private var apiService = ApiServiceBuilder.buildService(ApiService::class.java)
     private var clientKeys = "latitude,longitude,bearing,speed,direction"
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -487,60 +490,38 @@ class MapActivity : AppCompatActivity() {
                 call: Call<ClientAttributesResponse>,
                 response: Response<ClientAttributesResponse>
             ) {
-                    if (!response.isSuccessful) {
-                        Log.e("MapActivity getAttributes", "HTTP ${response.code()} → ${response.errorBody()?.string()}")
-                        return
-                    }
+                if (!response.isSuccessful) return
+                val client = response.body()?.client ?: return
 
-                    val client = response.body()?.client ?: return
+                // skip empty positions
+                if (client.latitude == 0.0 && client.longitude == 0.0) return
 
-                    // if both lat and lon are exactly zero, skip this update
-                    if (client.latitude == 0.0 && client.longitude == 0.0) {
-                        Log.w("MapActivity", "Skipping empty attributes (0.0,0.0)")
-                        return
-                    }
+                val lat = client.latitude
+                val lon = client.longitude
 
-                    // Turn the response into a JSON string (Gson will produce "{}" if body().client == null)
-                    val gson = Gson()
-                    val jsonBody = gson.toJson(response.body() ?: ClientAttributesResponse())
-
-                    // If it's exactly "{}", skip everything
-                    if (jsonBody == "{}") {
-                        // no real attributes to show—ignore
-                        return
-                    }
-
-                    // At this point we know body() had something other than "{}"
-                    Log.d("MapActivity getAttributes", "JSON from body() = $jsonBody")
-
-                    val clientAttrs = response.body()?.client
-                    if (clientAttrs == null) {
-                        // Shouldn't happen if jsonBody != "{}", but guard anyway
-                        return
-                    }
-
-                    val lat = clientAttrs.latitude
-                    val lon = clientAttrs.longitude
-                    val ber = clientAttrs.bearing
-
-                    if (lat == null || lon == null || ber == null) {
-                        Log.e("MapActivity getAttributes", "Received null lat/lon/bearing inside client")
-                        return
-                    }
-
-                Log.d("MapActivity getAttributes",
-                    "clientAttributes: lat=$lat, lon=$lon")
-
-                    val marker = markerBus[token]
-                    if (marker != null) {
-                        marker.latLong = LatLong(lat, lon)
-                    } else {
-                        Log.e("MapActivity getAttributes",
-                            "Marker for token '$token' is null. Current keys = ${markerBus.keys}")
-                    }
+                val existing = markerBus[token]
+                if (existing != null) {
+                    // Move the existing marker
+                    existing.latLong = LatLong(lat, lon)
+                } else {
+                    // 🎯 First time we get this bus’s position, create its marker
+                    val icon = AndroidGraphicFactory.convertToBitmap(
+                        ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol2, null)
+                            ?: error("ic_bus_symbol2 missing")
+                    )
+                    val newMarker = org.mapsforge.map.layer.overlay.Marker(
+                        LatLong(lat, lon),
+                        icon,
+                        0,
+                        0
+                    )
+                    binding.map.layerManager.layers.add(newMarker)
+                    markerBus[token] = newMarker
+                    Log.d("MapActivity getAttributes", "→ Added new bus‐marker for $token")
                 }
+            }
 
-                override fun onFailure(call: Call<ClientAttributesResponse>, t: Throwable) {
+            override fun onFailure(call: Call<ClientAttributesResponse>, t: Throwable) {
                 Log.e("MapActivity getAttributes", "Network error: ${t.message}")
             }
         })
@@ -2960,53 +2941,56 @@ class MapActivity : AppCompatActivity() {
      * Loads the offline map from assets and configures the map.
      * Prevents adding duplicate layers.
      */
-    @SuppressLint("LongLogTag")
     private fun openMapFromAssets() {
         binding.map.mapScaleBar.isVisible = true
         binding.map.setBuiltInZoomControls(true)
 
-        // Instead of creating “mycache”, open the existing “preloadCache”:
         val cache = AndroidUtil.createTileCache(
-            this,
-            "preloadCache",                    // same name!
+            this, "preloadCache",
             binding.map.model.displayModel.tileSize,
             1f,
             binding.map.model.frameBufferModel.overdrawFactor
         )
 
         val mapFile = copyAssetToFile("new-zealand.map")
-        val mapStore = MapFile(mapFile)
-
-        val renderLayer = TileRendererLayer(
-            cache,
-            mapStore,
-            binding.map.model.mapViewPosition,
-            AndroidGraphicFactory.INSTANCE
-        ).apply {
-            setXmlRenderTheme(InternalRenderTheme.DEFAULT)
+        if (!mapFile.exists()) {
+            Toast.makeText(this, "Offline map missing", Toast.LENGTH_SHORT).show()
+            return
         }
 
-        // **Check if layer already exists before adding**
-        if (!binding.map.layerManager.layers.contains(renderLayer)) {
-            binding.map.layerManager.layers.add(renderLayer)
-            Log.d("MapActivity openMapFromAssets", "✅ Offline map added successfully.")
-        } else {
-            Log.d("MapActivity openMapFromAssets", "⚠️ Offline map layer already exists. Skipping duplicate addition.")
-        }
+        // off-thread mapStore + renderer creation
+        ioScope.launch {
+            val mapStore = try {
+                MapFile(mapFile)
+            } catch (e: Exception) {
+                Log.e("MapActivity", "MapFile open failed: ${e.message}")
+                return@launch
+            }
 
-        binding.map.setCenter(LatLong(latitude, longitude)) // Set the default location to center the bus marker
-//        binding.map.setCenter(LatLong(-36.855647, 174.765249)) // Airedale
-//        binding.map.setCenter(LatLong(-36.8485, 174.7633)) // Auckland, NZ
-        binding.map.setZoomLevel(16) // Set default zoom level
-//        binding.map.setZoomLevel(11) // Set default zoom level
+            val renderLayer = TileRendererLayer(
+                cache,
+                mapStore,
+                binding.map.model.mapViewPosition,
+                AndroidGraphicFactory.INSTANCE
+            ).apply {
+                setXmlRenderTheme(InternalRenderTheme.DEFAULT)
+            }
 
-        // **Ensure the map is fully loaded before drawing the polyline**
-        binding.map.post {
-            Log.d("MapActivity", "Map is fully initialized. Drawing polyline and markers now.")
-            drawDetectionZones(stops)   // Draw detection zones first
-            drawPolyline()              // Then draw Polyline on top
-            addBusStopMarkers(stops)    // Bus stop markers as the final element
-            addBusMarker(latitude, longitude)
+            // back on UI thread to add layer & center/map.invalidate
+            withContext(Dispatchers.Main) {
+                if (!binding.map.layerManager.layers.contains(renderLayer)) {
+                    binding.map.layerManager.layers.add(renderLayer)
+                }
+                binding.map.post {
+                    binding.map.model.mapViewPosition.setZoomLevel(16)
+                    binding.map.model.mapViewPosition.setCenter(LatLong(latitude, longitude))
+                    drawDetectionZones(stops)
+                    drawPolyline()
+                    addBusStopMarkers(stops)
+                    addBusMarker(latitude, longitude)
+                    binding.map.invalidate()
+                }
+            }
         }
     }
 

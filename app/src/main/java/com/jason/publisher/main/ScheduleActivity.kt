@@ -1,11 +1,14 @@
 package com.jason.publisher.main
 
+import HeaderAdapter
+import ScheduleAdapter
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -18,7 +21,6 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
-import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
@@ -34,6 +36,9 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.DividerItemDecoration
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.gson.Gson
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityScheduleBinding
@@ -47,6 +52,11 @@ import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.MqttManager
 import com.jason.publisher.main.utils.NetworkStatusHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
@@ -57,7 +67,6 @@ import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.InternalRenderTheme
 import org.osmdroid.config.Configuration
 import java.io.File
-import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -90,9 +99,7 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var timeline1: StyledMultiColorTimeline
     private lateinit var timeline2: StyledMultiColorTimeline
     private lateinit var timeline3: StyledMultiColorTimeline
-    private lateinit var workTable: TableLayout
     private val timelineRange = Pair("08:00", "11:10")
-    private lateinit var scheduleTable: TableLayout
     private lateinit var networkStatusHelper: NetworkStatusHelper
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
@@ -103,10 +110,14 @@ class ScheduleActivity : AppCompatActivity() {
     private var isDarkMode = false
     private lateinit var paginationLayout: LinearLayout
     private var currentPage = 0
-    private val maxRowsPerPage = 7
+    private val maxRowsPerPage = 5
     private lateinit var btnPrevious: ImageButton
     private lateinit var btnNext: ImageButton
     private var isScheduleUpdatedFromServer = false
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private lateinit var scheduleAdapter: ScheduleAdapter
+    private lateinit var scheduleRecycler: RecyclerView
+
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -178,10 +189,18 @@ class ScheduleActivity : AppCompatActivity() {
         binding = ActivityScheduleBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // initialize RecyclerView adapter
+        scheduleAdapter = ScheduleAdapter(emptyList())
+        scheduleRecycler = binding.scheduleRecycler
+        scheduleRecycler.apply {
+            layoutManager = LinearLayoutManager(this@ScheduleActivity)
+            adapter       = scheduleAdapter
+            visibility    = View.GONE
+        }
+
         // Initialize all views up front:
-        scheduleTable = binding.scheduleTable
-        scheduleTable.visibility = View.GONE
-        workTable = scheduleTable
+        scheduleRecycler = binding.scheduleRecycler
+        scheduleRecycler.visibility = View.GONE
         timeline1 = findViewById(R.id.timelinePart1)
         timeline2 = findViewById(R.id.timelinePart2)
         timeline3 = findViewById(R.id.timelinePart3)
@@ -191,6 +210,26 @@ class ScheduleActivity : AppCompatActivity() {
         paginationLayout.visibility = View.GONE
         btnPrevious = findViewById(R.id.btnPrevious)
         btnNext = findViewById(R.id.btnNext)
+
+        // add a light gray 1dp divider without any XML
+        val divider = DividerItemDecoration(this, DividerItemDecoration.VERTICAL)
+        val oneDp = (resources.displayMetrics.density).toInt()
+
+// subclass ColorDrawable so we can override intrinsicHeight
+        val drawable = object : ColorDrawable(Color.parseColor("#DDDDDD")) {
+            override fun getIntrinsicHeight(): Int = oneDp
+        }
+        divider.setDrawable(drawable)
+
+        scheduleRecycler.addItemDecoration(divider)
+
+        scheduleAdapter     = ScheduleAdapter(emptyList())
+
+        binding.scheduleRecycler.apply {
+            layoutManager = LinearLayoutManager(this@ScheduleActivity)
+            adapter       = scheduleAdapter
+            visibility    = View.GONE
+        }
 
         // Load dark mode preference BEFORE setting switch listener, but AFTER initializing buttons
         val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
@@ -291,60 +330,61 @@ class ScheduleActivity : AppCompatActivity() {
             preloadMap.model.frameBufferModel.overdrawFactor
         )
 
-        // 4. Open the .map file
-        // UPDATED: Just check `exists()`, drop the fixed‐size comparison
+        // 4. Open the .map file off the main thread
         val mapFile = File(getHiddenFolder(), "new-zealand-2.map")
-
         if (!mapFile.exists()) {
-            Log.e("ScheduleActivity", "❌ Skipping map load. Map file not found at: ${mapFile.absolutePath}")
+            Log.e("ScheduleActivity", "Map file not found at: ${mapFile.absolutePath}")
             Toast.makeText(this, "Offline map unavailable. Other features will still work.", Toast.LENGTH_SHORT).show()
         } else {
-            try {
-                val mapStore = MapFile(mapFile)
-                val renderer = TileRendererLayer(
-                    cache,
-                    mapStore,
-                    preloadMap.model.mapViewPosition,
-                    AndroidGraphicFactory.INSTANCE
-                ).apply {
-                    setXmlRenderTheme(InternalRenderTheme.DEFAULT)
+            ioScope.launch {
+                // Open the .map file on IO
+                val mapStore = try {
+                    MapFile(mapFile)
+                } catch (e: Exception) {
+                    Log.e("ScheduleActivity", "Failed to open MapFile: ${e.message}")
+                    null
                 }
+                if (mapStore != null) {
+                    // Create the renderer off the main thread
+                    val renderer = TileRendererLayer(
+                        cache,
+                        mapStore,
+                        preloadMap.model.mapViewPosition,
+                        AndroidGraphicFactory.INSTANCE
+                    ).apply {
+                        setXmlRenderTheme(InternalRenderTheme.DEFAULT)
+                    }
 
-                preloadMap.layerManager.layers.add(renderer)
-
-                preloadMap.post {
-                    preloadMap.model.mapViewPosition.setZoomLevel(16)
-                    preloadMap.model.mapViewPosition.setCenter(LatLong(-36.855647, 174.765249))
-                    preloadMap.invalidate()
+                    // Switch back to UI thread to add the layer and center/map invalidate
+                    withContext(Dispatchers.Main) {
+                        preloadMap.layerManager.layers.add(renderer)
+                        preloadMap.post {
+                            preloadMap.model.mapViewPosition.setZoomLevel(16)
+                            preloadMap.model.mapViewPosition.setCenter(LatLong(-36.855647, 174.765249))
+                            preloadMap.invalidate()
+                        }
+                    }
                 }
-            } catch (e: Exception) {
-                Log.e("ScheduleActivity", "❌ Map file failed to load: ${e.message}")
-                Toast.makeText(this, "Map rendering failed. You can still use the app.", Toast.LENGTH_SHORT).show()
             }
         }
 
         changeModeButton.setOnClickListener {
 //            Log.d("ChangeModeButton", "Clicked")
 //            Toast.makeText(this, "Clicked!", Toast.LENGTH_SHORT).show()
-
             if (!isTabulatedView) {
-                scheduleTable.visibility = View.VISIBLE
+                scheduleRecycler.visibility = View.VISIBLE
                 paginationLayout.visibility = View.VISIBLE
-                btnPrevious.visibility = View.VISIBLE
-                btnNext.visibility = View.VISIBLE
                 timeline1.visibility = View.GONE
                 timeline2.visibility = View.GONE
                 timeline3.visibility = View.GONE
-                changeModeButton.text = "Tabulated View"
+                changeModeButton.text = "Timeline View"
             } else {
-                scheduleTable.visibility = View.GONE
+                scheduleRecycler.visibility = View.GONE
                 paginationLayout.visibility = View.GONE
-                btnPrevious.visibility = View.GONE
-                btnNext.visibility = View.GONE
                 timeline1.visibility = View.VISIBLE
                 timeline2.visibility = View.VISIBLE
                 timeline3.visibility = View.VISIBLE
-                changeModeButton.text = "Today's Overview"
+                changeModeButton.text = "Tabulated View"
             }
             isTabulatedView = !isTabulatedView
         }
@@ -536,7 +576,7 @@ class ScheduleActivity : AppCompatActivity() {
         // if you used a Handler in startLoadingBar(), cancel it:
         loadingBarHandler.removeCallbacksAndMessages(null)
 
-        scheduleTable.visibility = View.GONE
+        scheduleRecycler.visibility = View.GONE
         timeline1.visibility = View.VISIBLE
         timeline2.visibility = View.VISIBLE
         timeline3.visibility = View.VISIBLE
@@ -546,9 +586,11 @@ class ScheduleActivity : AppCompatActivity() {
         binding.startRouteButton.visibility = View.VISIBLE
         binding.testStartRouteButton.visibility = View.VISIBLE
         if (isTabulatedView) {
-            workTable.visibility = View.VISIBLE
+            scheduleRecycler.visibility = View.VISIBLE
+            paginationLayout.visibility  = View.VISIBLE
         } else {
-            workTable.visibility = View.GONE
+            scheduleRecycler.visibility = View.GONE
+            paginationLayout.visibility  = View.GONE
         }
 
         loadBusDataFromCache()
@@ -571,13 +613,13 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     private fun enterOnlineMode() {
         Toast.makeText(this, "Online: fetching from ThingsBoard…", Toast.LENGTH_LONG).show()
-        scheduleTable.visibility = View.GONE
+        scheduleRecycler.visibility = View.GONE
+        paginationLayout.visibility  = View.GONE
         binding.startRouteButton.visibility = View.GONE
         binding.testStartRouteButton.visibility = View.GONE
         timeline1.visibility = View.GONE
         timeline2.visibility = View.GONE
         timeline3.visibility = View.GONE
-        workTable.visibility             = View.GONE
         binding.startRouteButton.visibility = View.GONE
         binding.testStartRouteButton.visibility = View.GONE
         paginationLayout.visibility = View.GONE
@@ -725,28 +767,11 @@ class ScheduleActivity : AppCompatActivity() {
      */
     @RequiresApi(Build.VERSION_CODES.M)
     private fun updateScheduleTablePaged() {
-        scheduleTable.removeViews(2, scheduleTable.childCount - 2) // Keep header + separator
+        val start = currentPage * maxRowsPerPage
+        val end   = minOf(scheduleData.size, start + maxRowsPerPage)
+        scheduleAdapter.update(scheduleData.subList(start, end))
 
         val totalPages = (scheduleData.size + maxRowsPerPage - 1) / maxRowsPerPage
-        val startIndex = currentPage * maxRowsPerPage
-        val endIndex = minOf(startIndex + maxRowsPerPage, scheduleData.size)
-        val pageItems = scheduleData.subList(startIndex, endIndex)
-
-        for (item in pageItems) {
-            val row = TableRow(this)
-            row.addView(createStyledCell(item.routeNo, Gravity.START))
-            row.addView(createStyledCell(item.startTime, Gravity.CENTER))
-            row.addView(createStyledCell(item.endTime, Gravity.END))
-            scheduleTable.addView(row)
-
-            val separator = View(this).apply {
-                layoutParams = TableLayout.LayoutParams(
-                    TableLayout.LayoutParams.MATCH_PARENT, 1
-                )
-                setBackgroundColor(Color.BLACK)
-            }
-            scheduleTable.addView(separator)
-        }
         renderPagination(totalPages)
     }
 
@@ -817,16 +842,16 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     private fun updateTimeline() {
-        if (!::workTable.isInitialized) {
-            Log.e("ScheduleActivity updateTimeline", "WorkTable is not initialized!")
+        if (scheduleData.isEmpty()) {
+            Log.e("ScheduleActivity updateTimeline", "No scheduleData to draw!")
             return
         }
 
         val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
-        Log.d("ScheduleActivity updateTimeline", "Work intervals extracted: $workIntervals")
+        Log.d("ScheduleActivity updateTimeline", "Work intervals: $workIntervals")
 
         if (workIntervals.isNotEmpty()) {
-            val total = workIntervals.size
+            val total    = workIntervals.size
             val partSize = total / 3
 
             val intervals1 = workIntervals.subList(0, partSize)
@@ -838,10 +863,10 @@ class ScheduleActivity : AppCompatActivity() {
             val names3 = dutyNames.subList(partSize * 2, total)
 
             val allBusStops = extractBusStops()
-            val stopPartSize = allBusStops.size / 3
-            val busStops1 = allBusStops.subList(0, stopPartSize)
-            val busStops2 = allBusStops.subList(stopPartSize, stopPartSize * 2)
-            val busStops3 = allBusStops.subList(stopPartSize * 2, allBusStops.size)
+            val stopSize    = allBusStops.size / 3
+            val busStops1   = allBusStops.subList(0, stopSize)
+            val busStops2   = allBusStops.subList(stopSize, stopSize * 2)
+            val busStops3   = allBusStops.subList(stopSize * 2, allBusStops.size)
 
             timeline1.setTimelineData(intervals1, names1)
             timeline1.setBusStops(busStops1)
@@ -899,31 +924,6 @@ class ScheduleActivity : AppCompatActivity() {
     private fun convertToMinutes(time: String): Int {
         val parts = time.split(":").map { it.toInt() }
         return parts[0] * 60 + parts[1]
-    }
-
-    /**
-     * Extracts work intervals from the table.
-     * Reads each row's text, splits it into start and end times, and adds to the list.
-     */
-    @SuppressLint("LongLogTag")
-    private fun extractWorkIntervals(): List<Pair<String, String>> {
-        val workIntervals = mutableListOf<Pair<String, String>>()
-
-        for (i in 1 until workTable.childCount) { // Skip header row
-            val row = workTable.getChildAt(i) as? TableRow
-            val startTimeView = row?.getChildAt(2) as? TextView // Adjust index if needed
-            val endTimeView = row?.getChildAt(3) as? TextView // Adjust index if needed
-
-            if (startTimeView != null && endTimeView != null) {
-                val startTime = startTimeView.text.toString().trim()
-                val endTime = endTimeView.text.toString().trim()
-                if (startTime.isNotEmpty() && endTime.isNotEmpty()) {
-                    workIntervals.add(Pair(startTime, endTime))
-                }
-            }
-        }
-        Log.d("ScheduleActivity extractWorkIntervals", "✅ Extracted Work Intervals: $workIntervals")
-        return workIntervals
     }
 
     /** Starts a periodic task to update the current date and time in the UI. */
@@ -1036,26 +1036,38 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     private fun loadScheduleDataFromCache() {
-        val cacheFile = File(getHiddenFolder(), "scheduleDataCache.txt")
+        ioScope.launch {
+            val cacheFile = File(getHiddenFolder(), "scheduleDataCache.txt")
 
-        if (cacheFile.exists()) {
-            try {
-                val jsonContent = cacheFile.readText()
-                val cachedSchedule = Gson().fromJson(jsonContent, Array<ScheduleItem>::class.java).toList()
-                scheduleData = cachedSchedule
+            if (cacheFile.exists()) {
+                try {
+                    val jsonContent = cacheFile.readText()
+                    val cachedSchedule =
+                        Gson().fromJson(jsonContent, Array<ScheduleItem>::class.java).toList()
+                    scheduleData = cachedSchedule
 
 
-                Log.d("ScheduleActivity loadScheduleDataFromCache", "✅ Loaded cached schedule data: $scheduleData")
+                    Log.d(
+                        "ScheduleActivity loadScheduleDataFromCache",
+                        "✅ Loaded cached schedule data: $scheduleData"
+                    )
 
-                // Use the loaded schedule data
-                updateScheduleTablePaged()
-                updateTimeline()
+                    // Use the loaded schedule data
+                    updateScheduleTablePaged()
+                    updateTimeline()
 
-            } catch (e: Exception) {
-                Log.e("ScheduleActivity loadScheduleDataFromCache", "❌ Error reading schedule data cache: ${e.message}")
+                } catch (e: Exception) {
+                    Log.e(
+                        "ScheduleActivity loadScheduleDataFromCache",
+                        "❌ Error reading schedule data cache: ${e.message}"
+                    )
+                }
+            } else {
+                Log.e(
+                    "ScheduleActivity loadScheduleDataFromCache",
+                    "❌ No cached schedule data found."
+                )
             }
-        } else {
-            Log.e("ScheduleActivity loadScheduleDataFromCache", "❌ No cached schedule data found.")
         }
     }
 
@@ -1226,36 +1238,35 @@ class ScheduleActivity : AppCompatActivity() {
     private var isBusCacheUpdated = false // Flag to ensure cache is updated only once
     @SuppressLint("LongLogTag")
     private fun saveBusDataToCache() {
-        if (!NetworkStatusHelper.isNetworkAvailable(this)) {
-            Log.d("MainActivity saveBusDataToCache", "❌ No internet connection. Skipping cache update.")
-            return
-        }
-        // ✅ Check if cache has already been updated
-        if (isBusCacheUpdated) {
-            Log.d("MainActivity saveBusDataToCache", "🚫 Skipping cache update (already updated).")
-            return
-        }
-        val cacheFile = File(getHiddenFolder(), "busDataCache.txt") // Change extension to .txt
-//        Log.d("MainActivity saveBusDataToCache aid", aid.toString())
-//        Log.d("MainActivity saveBusDataToCache config", config.toString())
-//        Log.d("MainActivity saveBusDataToCache busRoute", routeCache.toString())
-//        Log.d("MainActivity saveBusDataToCache busStop", stopsCache.toString())
+        ioScope.launch {
+            // 1) Skip if no internet or already updated
+            if (!NetworkStatusHelper.isNetworkAvailable(this@ScheduleActivity) || isBusCacheUpdated) {
+                return@launch
+            }
+            try {
+                // 2) Write JSON to disk
+                val cacheFile = File(getHiddenFolder(), "busDataCache.txt")
+                val busData = mapOf(
+                    "aid"          to aid,
+                    "busRouteData" to busRouteData,
+                    "config"       to config
+                )
+                cacheFile.writeText(Gson().toJson(busData))
 
-        try {
-            val busData = mapOf(
-                "aid" to aid,
-                "busRouteData" to busRouteData,
-                "config" to config
-            )
+                // 3) Mark flag so we never repeat
+                isBusCacheUpdated = true
 
-            val jsonStringBusData = Gson().toJson(busData) // Convert data to JSON
-            cacheFile.writeText(jsonStringBusData) // Overwrite cache file
-            Log.d("MainActivity saveBusDataToCache", "✅ Bus data cache updated successfully in busDataCache.txt.")
-            Toast.makeText(this, "Bus data cache updated successfully in busDataCache.txt.", Toast.LENGTH_SHORT).show()
-            // ✅ Set flag to true after successful update
-            isBusCacheUpdated = true
-        } catch (e: Exception) {
-            Log.e("MainActivity saveBusDataToCache", "❌ Error saving bus data cache: ${e.message}")
+                // 4) Back to Main to show toast exactly once
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@ScheduleActivity,
+                        "Bus data cache updated successfully",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Exception) {
+                Log.e("ScheduleActivity saveBusDataToCache", "Error saving bus data cache: ${e.message}")
+            }
         }
     }
 
@@ -1265,23 +1276,33 @@ class ScheduleActivity : AppCompatActivity() {
     private var isScheduleCacheUpdated = false // Flag to ensure cache is updated only once
     @SuppressLint("LongLogTag")
     private fun saveScheduleDataToCache() {
-        val cacheFile = File(getHiddenFolder(), "scheduleDataCache.txt")
-
-        try {
-            if (!cacheFile.exists()) {
-                cacheFile.createNewFile()
-                Log.d("ScheduleActivity saveScheduleDataToCache", "✅ File created successfully: ${cacheFile.absolutePath}")
+        ioScope.launch {
+            // 1) Skip if already updated
+            if (isScheduleCacheUpdated) {
+                return@launch
             }
+            try {
+                // 2) Ensure file exists, then write JSON
+                val cacheFile = File(getHiddenFolder(), "scheduleDataCache.txt")
+                if (!cacheFile.exists()) {
+                    cacheFile.createNewFile()
+                }
+                cacheFile.writeText(Gson().toJson(scheduleData))
 
-            val jsonStringScheduleData = Gson().toJson(scheduleData)
-            cacheFile.writeText(jsonStringScheduleData)
+                // 3) Mark flag so we never repeat
+                isScheduleCacheUpdated = true
 
-            Log.d("ScheduleActivity saveScheduleDataToCache", "✅ Schedule data cache updated successfully.")
-            Toast.makeText(this, "Schedule data cache updated successfully.", Toast.LENGTH_SHORT).show()
-            isScheduleCacheUpdated = true
-
-        } catch (e: Exception) {
-            Log.e("ScheduleActivity saveScheduleDataToCache", "❌ Error saving schedule data cache: ${e.message}")
+                // 4) Back to Main to show toast exactly once
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@ScheduleActivity,
+                        "Schedule data cache updated successfully",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Exception) {
+                Log.e("ScheduleActivity saveScheduleDataToCache", "Error saving schedule data cache: ${e.message}")
+            }
         }
     }
 

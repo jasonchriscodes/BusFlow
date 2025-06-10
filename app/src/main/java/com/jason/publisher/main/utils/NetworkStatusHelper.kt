@@ -75,7 +75,7 @@ object NetworkStatusHelper {
      * @param context The application context.
      * @return True if network is available, false otherwise.
      */
-    fun isNetworkAvailable(context: Context): Boolean {
+    fun isNetworkAvailable(context: Activity): Boolean {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
