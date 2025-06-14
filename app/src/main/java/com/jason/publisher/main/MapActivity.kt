@@ -25,6 +25,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
@@ -69,6 +70,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mapsforge.core.util.Utils
+import org.mapsforge.map.layer.overlay.Marker
 import org.osmdroid.views.MapController
 import retrofit2.Call
 import retrofit2.Callback
@@ -416,27 +418,61 @@ class MapActivity : AppCompatActivity() {
             runOnUiThread {
                 val gson = Gson()
                 val data = gson.fromJson(message, Bus::class.java)
+                val newConfig = data.shared?.config?.busConfig ?: return@runOnUiThread
 
-                config = data.shared?.config?.busConfig
-                arrBusData = config.orEmpty() // Ensure arrBusData is assigned
-                Log.d("subscribeSharedData config", config.toString())
-                Log.d("subscribeSharedData arrBusData", arrBusData.toString())
+                // 1) Filter out *this* tablet’s own AID
+                val newArr = newConfig.filter { it.aid != aid }
 
-                if (config.isNullOrEmpty()) {
-                    Toast.makeText(this, "No bus information available.", Toast.LENGTH_SHORT).show()
-                    clearBusData()
-                    return@runOnUiThread
+                // 2) Add or update markers *and* fetch their attributes
+                // airedale lat long -36.8558512, 174.7648727
+                val initialLat = -36.8558512
+                val initialLon = 174.7648727
+                newArr.forEach { bus ->
+                    // 1) pick icon by AID
+                    val icon = getBusIconFor(bus.aid)
+
+                    // 2) bottom-centre anchor
+                    val m = Marker(
+                        LatLong(initialLat, initialLon),
+                        icon,
+                        -icon.width  / 2,
+                        -icon.height
+                    )
+
+                    binding.map.layerManager.layers.add(m)
+                    markerBus[bus.accessToken] = m
+
+                    // 3) now fetch their live attrs
+                    getAttributes(apiService, bus.accessToken, clientKeys)
                 }
 
-                val matchingAid = config!!.any { it.aid == aid }
-
-                if (!matchingAid) {
-                    Toast.makeText(this, "AID does not match.", Toast.LENGTH_SHORT).show()
-                    clearBusData()
-                    return@runOnUiThread
+                // 3) Remove any buses that dropped out of config
+                val toRemove = markerBus.keys - newArr.map { it.accessToken }.toSet()
+                toRemove.forEach { token ->
+                    binding.map.layerManager.layers.remove(markerBus[token])
+                    markerBus.remove(token)
                 }
+
+                // 4) Keep your local list up to date
+                arrBusData = newArr
+
+                binding.map.invalidate()
             }
         }
+    }
+
+    /**
+     * Pick the right bus icon based on AID (or bus name).
+     * - The *own* device (aid == ourAid) always uses ic_bus_symbol
+     * - All *others* use ic_bus_symbol2
+     */
+    private fun getBusIconFor(aid: String): org.mapsforge.core.graphics.Bitmap {
+        val res = if (aid == this.aid) {
+            R.drawable.ic_bus_symbol
+        } else {
+            R.drawable.ic_bus_symbol2
+        }
+        return createBusIcon(res)
     }
 
     /**
@@ -455,11 +491,11 @@ class MapActivity : AppCompatActivity() {
         handler.postDelayed(object : Runnable {
             override fun run() {
                 for (bus in arrBusData) {
-                    // Only fetch attributes if we have a marker to update:
+                    Log.d("MapActivity sendRequestAttributes", "Looping arrBusData, candidate token=${bus.accessToken}")
                     if (markerBus.containsKey(bus.accessToken)) {
                         getAttributes(apiService, bus.accessToken, clientKeys)
                     } else {
-                        Log.w("MapActivity sendRequestAttributes", "Skipping getAttributes for ${bus.accessToken} because no marker exists yet.")
+                        Log.w("MapActivity sendRequestAttributes", "No marker for ${bus.accessToken} yet, skipping attrs-read.")
                     }
                 }
                 handler.postDelayed(this, 1000)
@@ -485,39 +521,53 @@ class MapActivity : AppCompatActivity() {
             "application/json",
             clientKeys
         )
+
+        Log.d("MapActivity getAttributes", "Requesting attrs for token=$token  keys=$clientKeys")
+
         call.enqueue(object : Callback<ClientAttributesResponse> {
             override fun onResponse(
                 call: Call<ClientAttributesResponse>,
                 response: Response<ClientAttributesResponse>
             ) {
+                Log.d("MapActivity", "getAttrs got code=${response.code()} for token=$token")
                 if (!response.isSuccessful) return
-                val client = response.body()?.client ?: return
 
-                // skip empty positions
-                if (client.latitude == 0.0 && client.longitude == 0.0) return
+                val client = response.body()?.client
+                if (client == null) {
+                    Log.w("MapActivity", "getAttrs empty body for token=$token")
+                    return
+                }
+
+                Log.d(
+                    "MapActivity getAttributes",
+                    "getAttrs for $token → lat=${client.latitude}, lon=${client.longitude}, bearing=${client.bearing}, speed=${client.speed}"
+                )
+
 
                 val lat = client.latitude
                 val lon = client.longitude
 
-                val existing = markerBus[token]
-                if (existing != null) {
-                    // Move the existing marker
-                    existing.latLong = LatLong(lat, lon)
-                } else {
-                    // 🎯 First time we get this bus’s position, create its marker
-                    val icon = AndroidGraphicFactory.convertToBitmap(
-                        ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol2, null)
-                            ?: error("ic_bus_symbol2 missing")
-                    )
-                    val newMarker = org.mapsforge.map.layer.overlay.Marker(
-                        LatLong(lat, lon),
-                        icon,
-                        0,
-                        0
-                    )
-                    binding.map.layerManager.layers.add(newMarker)
-                    markerBus[token] = newMarker
-                    Log.d("MapActivity getAttributes", "→ Added new bus‐marker for $token")
+                runOnUiThread {
+                    val existing = markerBus[token]
+                    if (existing != null) {
+                        existing.latLong = LatLong(lat, lon)
+                    } else {
+                        // same icon-pick + anchor logic:
+                        val busItem = config!!.find { it.accessToken == token }
+                        val aidForThisMarker = busItem?.aid ?: ""
+                        val icon = getBusIconFor(aidForThisMarker)
+                        val marker = Marker(
+                            LatLong(lat, lon),
+                            icon,
+                            -icon.width  / 2,
+                            -icon.height
+                        )
+                        binding.map.layerManager.layers.add(marker)
+                        markerBus[token] = marker
+                    }
+
+                    // **very important** — force a redraw
+                    binding.map.invalidate()
                 }
             }
 
@@ -525,6 +575,22 @@ class MapActivity : AppCompatActivity() {
                 Log.e("MapActivity getAttributes", "Network error: ${t.message}")
             }
         })
+    }
+
+    /**
+     * Creates a Mapsforge‐compatible bitmap from a VectorDrawable resource.
+     *
+     * @param id   The drawable resource ID (e.g. R.drawable.ic_bus_symbol2).
+     * @param px   The desired width and height in pixels (defaults to 64).
+     * @return     An AndroidBitmap you can pass directly into a Mapsforge Marker.
+     */
+    private fun createBusIcon(@DrawableRes id: Int): org.mapsforge.core.graphics.Bitmap {
+        val drawable = ResourcesCompat.getDrawable(resources, id, null)!!
+        // Force the drawable to the size you want (e.g. 64×64px)
+        val size = 64
+        drawable.setBounds(0, 0, size, size)
+        // Let Mapsforge do the conversion
+        return AndroidGraphicFactory.convertToBitmap(drawable)
     }
 
     /**
@@ -2583,6 +2649,8 @@ class MapActivity : AppCompatActivity() {
         publishTelemetryData()
         updateClientAttributes()
 
+        sendRequestAttributes()
+
         // Convert Drawable to Bitmap and rotate it
         val rotatedBitmap = rotateDrawable(bearing)
 
@@ -2620,24 +2688,16 @@ class MapActivity : AppCompatActivity() {
     private fun updateClientAttributes() {
         val url = ApiService.BASE_URL + "$token/attributes"
         val attributesData = AttributesData(latitude, longitude, bearing, null,speed, direction)
-        val call = apiService.postAttributes(
-            url = url,
-            "application/json",
-            requestBody = attributesData
-        )
+
+        Log.d("MapActivity updateClientAttributes", "Posting client-attrs for aid=$aid → $attributesData")
+
+        val call = apiService.postAttributes(url, "application/json", attributesData)
         call.enqueue(object : Callback<Void> {
             override fun onResponse(call: Call<Void>, response: Response<Void>) {
-//                Log.d("Client Attributes", response.message().toString())
-//                Log.d("Client Attributes", response.code().toString())
-//                Log.d("Client Attributes", response.errorBody().toString())
-                if (response.isSuccessful) {
-//                    Log.d("Client Attributes", "Successfull")
-                } else {
-//                    Log.d("Client Attributes", "Fail")
-                }
+                Log.d("MapActivity updateClientAttributes", "postAttrs response for aid=$aid: code=${response.code()}  msg=${response.message()}")
             }
             override fun onFailure(call: Call<Void>, t: Throwable) {
-//                Log.d("Client Attributes", t.message.toString())
+                Log.e("MapActivity updateClientAttributes", "postAttrs fail for aid=$aid: ${t.message}")
             }
         })
     }
@@ -2898,9 +2958,7 @@ class MapActivity : AppCompatActivity() {
         Log.d("MapActivity getDefaultConfigValue arrBusDataOnline2", arrBusData.toString())
         for (bus in arrBusData) {
             val busPosition = LatLong(latitude, longitude)
-            val markerDrawable = AndroidGraphicFactory.convertToBitmap(
-                ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol2, null)
-            )
+            val markerDrawable = createBusIcon(R.drawable.ic_bus_symbol2)
             // Create a Mapsforge marker
             val marker = org.mapsforge.map.layer.overlay.Marker(
                 busPosition, // LatLong position
