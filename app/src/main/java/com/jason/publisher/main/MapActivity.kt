@@ -168,6 +168,7 @@ class MapActivity : AppCompatActivity() {
     private var apiService = ApiServiceBuilder.buildService(ApiService::class.java)
     private var clientKeys = "latitude,longitude,bearing,speed,direction"
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val lastSeen = mutableMapOf<String, Long>()
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -270,6 +271,8 @@ class MapActivity : AppCompatActivity() {
 
                 // 4) Only now do we start polling attributes every 3 seconds
                 sendRequestAttributes()
+                Log.d("MapActivity oncreate", "Start monitor activity is called")
+                startActivityMonitor()
                 Log.d("MapActivity oncreate fetchConfig config", config.toString())
                 Log.d("MapActivity oncreate fetchConfig busRoute", route.toString())
                 Log.d("MapActivity oncreate fetchConfig busStop", stops.toString())
@@ -391,6 +394,31 @@ class MapActivity : AppCompatActivity() {
         binding.arriveButton.setOnClickListener {
             confirmArrival()
         }
+    }
+
+    /** Monitor other buses every second, logging their count and active/inactive status. */
+    private fun startActivityMonitor() {
+        val handler = Handler(Looper.getMainLooper())
+        handler.post(object : Runnable {
+            override fun run() {
+                val now = System.currentTimeMillis()
+
+                // count other buses (excluding our own) and log
+                val totalOthers = markerBus.size - 1
+                Log.d("MapActivity startActivityMonitor", "ic_bus_symbol2 count: $totalOthers")
+
+                // check and log each other bus’s activity (last update within 10s)
+                markerBus.keys
+                    .filter { it != token }
+                    .forEach { t ->
+                        val last = lastSeen[t] ?: 0L
+                        val active = (now - last) < 10_000
+                        Log.d("MapActivity startActivityMonitor", "bus[$t] active: $active")
+                    }
+
+                handler.postDelayed(this, 1000L)
+            }
+        })
     }
 
     /**
@@ -565,6 +593,9 @@ class MapActivity : AppCompatActivity() {
                         binding.map.layerManager.layers.add(marker)
                         markerBus[token] = marker
                     }
+
+                    // record update time
+                    lastSeen[token] = System.currentTimeMillis()
 
                     // **very important** — force a redraw
                     binding.map.invalidate()
