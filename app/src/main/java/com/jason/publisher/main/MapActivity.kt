@@ -168,7 +168,13 @@ class MapActivity : AppCompatActivity() {
     private var apiService = ApiServiceBuilder.buildService(ApiService::class.java)
     private var clientKeys = "latitude,longitude,bearing,speed,direction"
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val lastSeen = mutableMapOf<String, Long>()
+
+    // for other buses
+    private val lastSeen       = mutableMapOf<String, Long>()                  // you already have this
+    private val prevCoords     = mutableMapOf<String, Pair<Double, Double>>() // remember last lat/lon per token
+
+    // for self
+    private var prevOwnCoords: Pair<Double,Double>? = null
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -403,20 +409,20 @@ class MapActivity : AppCompatActivity() {
             override fun run() {
                 val now = System.currentTimeMillis()
 
-                // count other buses (excluding our own) and log
-                val totalOthers = markerBus.size - 1
-                Log.d("MapActivity startActivityMonitor", "ic_bus_symbol2 count: $totalOthers")
-
-                // check and log each other bus’s activity (last update within 10s)
                 markerBus.keys
                     .filter { it != token }
                     .forEach { t ->
                         val last = lastSeen[t] ?: 0L
-                        val active = (now - last) < 10_000
-                        Log.d("MapActivity startActivityMonitor", "bus[$t] active: $active")
+                        if (last != 0L && now - last >= 10_000L) {
+                            binding.map.layerManager.layers.remove(markerBus[t])
+                            markerBus.remove(t)
+                            prevCoords.remove(t)
+                        }
                     }
 
-                handler.postDelayed(this, 1000L)
+                // redraw so the removed markers actually disappear
+                binding.map.invalidate()
+                handler.postDelayed(this, 1_000L)
             }
         })
     }
@@ -448,29 +454,37 @@ class MapActivity : AppCompatActivity() {
                 val data = gson.fromJson(message, Bus::class.java)
                 val newConfig = data.shared?.config?.busConfig ?: return@runOnUiThread
 
-                // 1) Filter out *this* tablet’s own AID
+                // filter out this device
                 val newArr = newConfig.filter { it.aid != aid }
 
-                // 2) Add or update markers *and* fetch their attributes
-                // airedale lat long -36.8558512, 174.7648727
+                // for each other bus, add a marker and fetch its attrs
                 val initialLat = -36.8558512
-                val initialLon = 174.7648727
+                val initialLon =  174.7648727
                 newArr.forEach { bus ->
-                    // 1) pick icon by AID
-                    val icon = getBusIconFor(bus.aid)
+                    // pick correct icon resource
+                    val iconRes = if (bus.aid == this.aid) {
+                        R.drawable.ic_bus_symbol
+                    } else {
+                        R.drawable.ic_bus_symbol2
+                    }
+                    val symbolName = if (iconRes == R.drawable.ic_bus_symbol)
+                        "ic_bus_symbol" else "ic_bus_symbol2"
 
-                    // 2) bottom-centre anchor
+                    // <-- new log -->
+                    Log.d("MapActivity subscribeSharedData",
+                        "$symbolName for accessToken=${bus.accessToken} at [$initialLat, $initialLon] is drawn")
+
+                    val icon = createBusIcon(iconRes)
                     val m = Marker(
                         LatLong(initialLat, initialLon),
                         icon,
                         -icon.width  / 2,
                         -icon.height
                     )
-
                     binding.map.layerManager.layers.add(m)
                     markerBus[bus.accessToken] = m
 
-                    // 3) now fetch their live attrs
+                    // now fetch live attrs
                     getAttributes(apiService, bus.accessToken, clientKeys)
                 }
 
@@ -539,6 +553,11 @@ class MapActivity : AppCompatActivity() {
      * @param token        The access token for authentication.
      * @param clientKeys   The keys to request attributes for.
      */
+    /**
+     * Retrieves attributes data for each bus from the server,
+     * logs which ic_bus_symbol2 (i.e. non-own) buses are currently active,
+     * and moves the existing Mapsforge Marker to the new LatLong.
+     */
     private fun getAttributes(
         apiService: ApiService,
         token: String,
@@ -550,40 +569,39 @@ class MapActivity : AppCompatActivity() {
             clientKeys
         )
 
-        Log.d("MapActivity getAttributes", "Requesting attrs for token=$token  keys=$clientKeys")
-
         call.enqueue(object : Callback<ClientAttributesResponse> {
             override fun onResponse(
                 call: Call<ClientAttributesResponse>,
                 response: Response<ClientAttributesResponse>
             ) {
-                Log.d("MapActivity", "getAttrs got code=${response.code()} for token=$token")
-                if (!response.isSuccessful) return
+                val now = System.currentTimeMillis()
+                lastSeen[token] = now
 
-                val client = response.body()?.client
-                if (client == null) {
-                    Log.w("MapActivity", "getAttrs empty body for token=$token")
-                    return
-                }
-
-                Log.d(
-                    "MapActivity getAttributes",
-                    "getAttrs for $token → lat=${client.latitude}, lon=${client.longitude}, bearing=${client.bearing}, speed=${client.speed}"
-                )
-
-
+                val client = response.body()?.client ?: return
                 val lat = client.latitude
                 val lon = client.longitude
+
+                val prev = prevCoords[token]
+                if (prev?.first == lat && prev.second == lon) return
+                prevCoords[token] = Pair(lat, lon)
+
+                // figure out if it's own bus or another one
+                val busAid = config?.find { it.accessToken == token }?.aid ?: "UNKNOWN"
+                val symbolName = if (busAid == this@MapActivity.aid)
+                    "ic_bus_symbol" else "ic_bus_symbol2"
+
+                // <-- new log -->
+                Log.d("MapActivity getAttributes",
+                    "$symbolName for accessToken=$token at [$lat, $lon] is updated")
 
                 runOnUiThread {
                     val existing = markerBus[token]
                     if (existing != null) {
                         existing.latLong = LatLong(lat, lon)
                     } else {
-                        // same icon-pick + anchor logic:
-                        val busItem = config!!.find { it.accessToken == token }
-                        val aidForThisMarker = busItem?.aid ?: ""
-                        val icon = getBusIconFor(aidForThisMarker)
+                        val iconRes = if (busAid == this@MapActivity.aid)
+                            R.drawable.ic_bus_symbol else R.drawable.ic_bus_symbol2
+                        val icon = createBusIcon(iconRes)
                         val marker = Marker(
                             LatLong(lat, lon),
                             icon,
@@ -593,11 +611,6 @@ class MapActivity : AppCompatActivity() {
                         binding.map.layerManager.layers.add(marker)
                         markerBus[token] = marker
                     }
-
-                    // record update time
-                    lastSeen[token] = System.currentTimeMillis()
-
-                    // **very important** — force a redraw
                     binding.map.invalidate()
                 }
             }
@@ -2717,6 +2730,18 @@ class MapActivity : AppCompatActivity() {
      * Updates the client attributes by posting the current location, bearing, speed, and direction data to the server.
      */
     private fun updateClientAttributes() {
+        // before you build & post…
+        val curr = latitude to longitude
+        if (prevOwnCoords == curr) {
+            Log.d("MapActivity updateClientAttributes",
+                "self notActive: location unchanged (${curr.first},${curr.second}) → skipping publish")
+            return
+        } else {
+            Log.d("MapActivity updateClientAttributes",
+                "self active: location changed → publishing client attributes")
+            prevOwnCoords = curr
+        }
+
         val url = ApiService.BASE_URL + "$token/attributes"
         val attributesData = AttributesData(latitude, longitude, bearing, null,speed, direction)
 
@@ -2765,7 +2790,7 @@ class MapActivity : AppCompatActivity() {
 //                    BusStopProximityManager.getNextBusStopInSequence(closestBusStopToPubDevice)
 //                if (nextBusStopInSequence != null) {
 
-                    // Note: uncomment below lines of code to use TomTom API.
+                // Note: uncomment below lines of code to use TomTom API.
 //                    val etaToNextBStop = TomTomService.getEstimateTimeFromPointToPoint(
 //                        latitude, longitude,
 //                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
@@ -2997,6 +3022,7 @@ class MapActivity : AppCompatActivity() {
                 0, // Horizontal offset
                 0 // Vertical offset
             )
+
             // Add marker to Mapsforge Layer Manager
             binding.map.layerManager.layers.add(marker)
             // Store it in markerBus HashMap
