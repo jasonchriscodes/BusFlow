@@ -73,6 +73,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
      * - Creating TextViews for duties with route styles.
      * - Inserting break segments between duties with break styles and delta text.
      */
+    @SuppressLint("LongLogTag")
     @RequiresApi(Build.VERSION_CODES.M)
     private fun renderTimeline() {
         removeAllViews()
@@ -98,6 +99,16 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
             val isBreak = dutyName.equals("Break", ignoreCase = true)
             val startTime = workIntervals[i].first
             val firstStopAbbr = item?.busStops?.firstOrNull()?.abbreviation ?: "?"
+
+            Log.d(
+                "StyledMultiColorTimeline renderTimeline",
+                "Duty box $i: " +
+                        "dutyName=$dutyName, isRep=$isRep, isBreak=$isBreak, " +
+                        "startTime=$startTime, " +
+                        "firstStopAbbr=$firstStopAbbr, " +
+                        "lastStopAbbr=${item?.busStops?.lastOrNull()?.abbreviation ?: "?"}, " +
+                        "source ScheduleItem=${item?.dutyName} [busStops: ${item?.busStops?.map { it.abbreviation }}]"
+            )
 
             val box = LinearLayout(context).apply {
                 orientation = VERTICAL

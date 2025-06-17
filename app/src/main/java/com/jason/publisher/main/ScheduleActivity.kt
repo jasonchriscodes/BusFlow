@@ -872,36 +872,6 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /**
-     * function to style the table cell
-     */
-    private fun createStyledCell(text: String, gravity: Int): TextView {
-        return TextView(this).apply {
-            this.text = text
-            textSize = 18f // smaller text
-            setTextColor(Color.WHITE)
-            setPadding(4, 4, 4, 4) // smaller padding
-            this.gravity = gravity
-            layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f)
-        }
-    }
-
-    /**
-     * helper function to create table cell
-     */
-    @RequiresApi(Build.VERSION_CODES.M)
-    private fun createTableCell(text: String, weight: Float): TextView {
-        val params = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, weight) // Ensure uniform weight
-        return TextView(this).apply {
-            this.text = text
-            textSize = 14f
-            setPadding(8, 8, 8, 8)
-            setTextColor(resources.getColor(R.color.white, null))
-            setBackgroundResource(R.drawable.table_cell_border)
-            layoutParams = params
-        }
-    }
-
-    /**
      * Extracts work intervals from the schedule table and updates the timeline view.
      */
     @RequiresApi(Build.VERSION_CODES.M)
@@ -933,17 +903,17 @@ class ScheduleActivity : AppCompatActivity() {
             val busStops2   = allBusStops.subList(stopSize, stopSize * 2)
             val busStops3   = allBusStops.subList(stopSize * 2, allBusStops.size)
 
+            timeline1.setScheduleData(scheduleData.subList(0, partSize))
             timeline1.setTimelineData(intervals1, names1)
             timeline1.setBusStops(busStops1)
-            timeline1.setScheduleData(scheduleData.subList(0, partSize))
 
+            timeline2.setScheduleData(scheduleData.subList(partSize, partSize * 2))
             timeline2.setTimelineData(intervals2, names2)
             timeline2.setBusStops(busStops2)
-            timeline2.setScheduleData(scheduleData.subList(partSize, partSize * 2))
 
+            timeline3.setScheduleData(scheduleData.subList(partSize * 2, scheduleData.size))
             timeline3.setTimelineData(intervals3, names3)
             timeline3.setBusStops(busStops3)
-            timeline3.setScheduleData(scheduleData.subList(partSize * 2, scheduleData.size))
         }
     }
 
