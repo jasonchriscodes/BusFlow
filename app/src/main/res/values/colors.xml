@@ -24,4 +24,6 @@
     <color name="blind_cyan">#38E2BF</color>
     <color name="blind_orange">#FDA115</color>
     <color name="blind_light_orange">#FCD299</color>
+    <color name="grey">#808080</color>
+
 </resources>

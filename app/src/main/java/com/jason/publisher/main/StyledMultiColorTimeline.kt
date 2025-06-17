@@ -141,6 +141,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                 } else if (isBreak) {
                     val icon = ImageView(context).apply {
                         setImageResource(R.drawable.cup_break)
+                        setColorFilter(if (isDarkMode) Color.GRAY else Color.WHITE)
                         layoutParams = LinearLayout.LayoutParams(32, 32).apply {
                             gravity = Gravity.CENTER_HORIZONTAL
                         }
@@ -198,6 +199,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
 
                     val busIcon = ImageView(context).apply {
                         setImageResource(R.drawable.bus_timeline)
+                        setColorFilter(if (isDarkMode) Color.GRAY else Color.WHITE)
                         layoutParams = LinearLayout.LayoutParams(32, 32)
                     }
 

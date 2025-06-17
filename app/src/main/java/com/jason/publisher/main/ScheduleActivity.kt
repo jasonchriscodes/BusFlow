@@ -190,7 +190,7 @@ class ScheduleActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // initialize RecyclerView adapter
-        scheduleAdapter = ScheduleAdapter(emptyList())
+        scheduleAdapter = ScheduleAdapter(emptyList(), isDarkMode)
         scheduleRecycler = binding.scheduleRecycler
         scheduleRecycler.apply {
             layoutManager = LinearLayoutManager(this@ScheduleActivity)
@@ -223,7 +223,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         scheduleRecycler.addItemDecoration(divider)
 
-        scheduleAdapter     = ScheduleAdapter(emptyList())
+        scheduleAdapter = ScheduleAdapter(emptyList(), isDarkMode)
 
         binding.scheduleRecycler.apply {
             layoutManager = LinearLayoutManager(this@ScheduleActivity)
@@ -514,8 +514,11 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     private fun applyThemeMode(isDark: Boolean) {
         val rootLayout = findViewById<View>(R.id.rootLayout)
-        val backgroundRes = if (isDark) R.drawable.dark_gradient_background else R.drawable.gradient_background
-        rootLayout.background = ContextCompat.getDrawable(this, backgroundRes)
+        if (isDark) {
+            rootLayout.setBackgroundColor(Color.BLACK)
+        } else {
+            rootLayout.background = ContextCompat.getDrawable(this, R.drawable.gradient_background)
+        }
 
         // ✅ Update text of darkModeSwitch
         val darkModeSwitch = findViewById<Switch>(R.id.darkModeSwitch)
@@ -523,7 +526,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         // ✅ Apply dark mode color to currentDateTimeTextView
         val currentDateTimeTextView = findViewById<TextView>(R.id.currentDateTimeTextView)
-        val backgroundColorRes = if (isDark) R.color.colorAccent else R.color.purple_500
+        val backgroundColorRes = if (isDark) R.color.grey else R.color.purple_500
         currentDateTimeTextView.setBackgroundColor(ContextCompat.getColor(this, backgroundColorRes))
 
 // Apply same background color as tint to changeModeButton
@@ -532,7 +535,7 @@ class ScheduleActivity : AppCompatActivity() {
         // ✅ Change background colors of Start/Test buttons
         val startBtn = findViewById<Button>(R.id.startRouteButton)
         val testBtn = findViewById<Button>(R.id.testStartRouteButton)
-        val buttonBackgroundTint = if (isDark) R.color.purple_700 else R.color.purple_400
+        val buttonBackgroundTint = if (isDark) R.color.grey else R.color.purple_400
 
         startBtn.setBackgroundTintList(ContextCompat.getColorStateList(this, buttonBackgroundTint))
         testBtn.setBackgroundTintList(ContextCompat.getColorStateList(this, buttonBackgroundTint))
@@ -541,6 +544,20 @@ class ScheduleActivity : AppCompatActivity() {
         timeline1.setDarkMode(isDark)
         timeline2.setDarkMode(isDark)
         timeline3.setDarkMode(isDark)
+
+        scheduleAdapter.setThemeMode(isDark)
+
+        // ✅ Update networkStatusIndicator if currently online
+        val networkIndicator = findViewById<View>(R.id.networkStatusIndicator)
+        val isConnected = NetworkStatusHelper.isNetworkAvailable(this)
+
+        val drawableRes = when {
+            isDark && isConnected -> R.drawable.dark_circle_shape_green
+            !isDark && isConnected -> R.drawable.circle_shape_green
+            else -> R.drawable.circle_shape_red // you can define other states as needed
+        }
+
+        networkIndicator.background = ContextCompat.getDrawable(this, drawableRes)
     }
 
     /** Copies a file from assets to the device's file system and returns the File object. */
