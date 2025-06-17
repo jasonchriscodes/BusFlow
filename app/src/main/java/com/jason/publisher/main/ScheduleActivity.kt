@@ -24,6 +24,7 @@ import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.Switch
@@ -117,6 +118,11 @@ class ScheduleActivity : AppCompatActivity() {
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var scheduleAdapter: ScheduleAdapter
     private lateinit var scheduleRecycler: RecyclerView
+    private lateinit var fetchingLayout: LinearLayout
+    private lateinit var fetchingText: TextView
+    private val fetchingHandler = Handler(Looper.getMainLooper())
+    private var dotCount = 1
+    private lateinit var fetchingIcon: ImageView
 
 
     companion object {
@@ -210,6 +216,9 @@ class ScheduleActivity : AppCompatActivity() {
         paginationLayout.visibility = View.GONE
         btnPrevious = findViewById(R.id.btnPrevious)
         btnNext = findViewById(R.id.btnNext)
+        fetchingLayout = findViewById(R.id.fetchingLayout)
+        fetchingText = findViewById(R.id.fetchingText)
+        fetchingIcon = findViewById(R.id.fetchingIcon)
 
         // add a light gray 1dp divider without any XML
         val divider = DividerItemDecoration(this, DividerItemDecoration.VERTICAL)
@@ -643,6 +652,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         findViewById<ProgressBar>(R.id.progressBar).visibility = View.VISIBLE
         startLoadingBar()
+        startFetchingAnimation()
 
         fetchConfig { success ->
             if (success) {
@@ -658,6 +668,41 @@ class ScheduleActivity : AppCompatActivity() {
                 enterOfflineMode()
             }
         }
+    }
+
+    /**
+     * Starts a looping animation for the "Fetching data" text with dots (., .., ...) every 500ms.
+     * Also makes the spinner + text layout visible.
+     */
+    private fun startFetchingAnimation() {
+        // Make the spinner and text visible
+        fetchingLayout.visibility = View.VISIBLE
+
+        // Start a repeating task using Handler
+        fetchingHandler.post(object : Runnable {
+            override fun run() {
+                // Build the animated dots: ".", "..", or "..."
+                val dots = ".".repeat(dotCount)
+
+                // Update the text with the animated dots
+                fetchingText.text = "Fetching data $dots"
+
+                // Cycle dotCount: 1 → 2 → 3 → 1 → ...
+                dotCount = (dotCount % 3) + 1
+
+                // Re-post this Runnable after 500ms
+                fetchingHandler.postDelayed(this, 500)
+            }
+        })
+    }
+
+    /**
+     * Stops the fetching text animation and hides the spinner layout.
+     */
+    private fun stopFetchingAnimation() {
+        fetchingHandler.removeCallbacksAndMessages(null)
+        fetchingText.text = "Fetching data Complete!"
+        fetchingIcon.setImageResource(R.drawable.ic_check_green) // your finish icon
     }
 
     /**
@@ -683,6 +728,7 @@ class ScheduleActivity : AppCompatActivity() {
                 if (progress == 100) {
                     Toast.makeText(this, "All data successfully received!", Toast.LENGTH_SHORT).show()
                     showCacheCompleteDialog()
+                    stopFetchingAnimation()
                 }
             }, delay)
         }
@@ -704,24 +750,26 @@ class ScheduleActivity : AppCompatActivity() {
     private fun showCacheCompleteDialog() {
         AlertDialog.Builder(this)
             .setTitle("Cache Complete")
-            .setMessage("All data has been cached successfully. Please turn click OK to view the schedule.")
+            .setMessage("All data has been cached successfully. Please click OK to view the schedule.")
             .setCancelable(false)
             .setPositiveButton("OK") { dialog, _ ->
                 dialog.dismiss()
 
-                // ✅ After dialog is dismissed, hide progress bar and show timeline views
+                // ✅ Hide progress bar
                 findViewById<ProgressBar>(R.id.progressBar).visibility = View.GONE
 
-                // ✅ Show the timelines
+                // ✅ Stop animation and show complete message/icon
+                fetchingHandler.removeCallbacksAndMessages(null)
+                fetchingLayout.visibility = View.GONE
+                fetchingLayout.visibility = View.INVISIBLE
+
+                // ✅ Show main timeline + buttons
                 timeline1.visibility = View.VISIBLE
                 timeline2.visibility = View.VISIBLE
                 timeline3.visibility = View.VISIBLE
-
-                // ✅ Update timelines with the newly fetched schedule data
                 updateScheduleTablePaged()
                 updateTimeline()
 
-                // ✅ Show start and test buttons now
                 binding.startRouteButton.visibility = View.VISIBLE
                 binding.testStartRouteButton.visibility = View.VISIBLE
             }

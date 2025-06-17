@@ -83,6 +83,36 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
+    <LinearLayout
+        android:id="@+id/fetchingLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_margin="16dp">
+
+        <ImageView
+            android:id="@+id/fetchingIcon"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/ic_spinner"
+            android:contentDescription="Fetching icon"/>
+
+        <TextView
+            android:id="@+id/fetchingText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Fetching data ."
+            android:textSize="20sp"
+            android:textColor="@android:color/white"/>
+    </LinearLayout>
+
     <!-- Table Layout for Schedule -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/scheduleRecycler"
