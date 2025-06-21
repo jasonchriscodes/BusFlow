@@ -255,13 +255,8 @@ class MapActivity : AppCompatActivity() {
         // ✅ Ensure locationManager is initialized
         locationManager = LocationManager(this)
 
-//        aidTextView.text = "AID: $aid"
-
         // Set up network status UI
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
-
-        // Initialize the date/time updater
-//        startDateTimeUpdater()
 
         // 2) Now fetch the shared config from your server (ThingsBoard)
         fetchConfig { success ->
@@ -296,10 +291,6 @@ class MapActivity : AppCompatActivity() {
                 longitude = location.longitude
                 Log.d("MapActivity onCreate Latitude", latitude.toString())
                 Log.d("MapActivity onCreate Longitude", longitude.toString())
-
-                // Update UI components with the current location
-//                latitudeTextView.text = "Latitude: $latitude"
-//                longitudeTextView.text = "Longitude: $longitude"
             }
         })
 
@@ -679,16 +670,10 @@ class MapActivity : AppCompatActivity() {
             if (listConfig.isNotEmpty()) {
                 config = listConfig
                 Log.d("MapActivity fetchConfig", "Config received: $config")
-//                runOnUiThread {
-//                    Toast.makeText(this, "Config initialized successfully", Toast.LENGTH_SHORT).show()
-//                }
                 callback(true)
             } else {
                 config = emptyList()
                 Log.e("MapActivity fetchConfig", "Failed to initialize config. No bus information available.")
-//                runOnUiThread {
-//                    Toast.makeText(this, "Failed to initialize config. No bus information available.", Toast.LENGTH_SHORT).show()
-//                }
                 callback(false)
             }
         }
@@ -730,15 +715,6 @@ class MapActivity : AppCompatActivity() {
 
         currentTimeHandler.post(currentTimeRunnable)
     }
-
-//    /**
-//     * setter to adjust current time
-//     */
-//    private fun setSimulatedCurrentTime(hour: Int, minute: Int, second: Int) {
-//        simulatedStartTime.set(Calendar.HOUR_OF_DAY, hour)
-//        simulatedStartTime.set(Calendar.MINUTE, minute)
-//        simulatedStartTime.set(Calendar.SECOND, second)
-//    }
 
     /**
      * Starts the simulated clock using the startTime of the first ScheduleItem in scheduleList.
@@ -978,7 +954,6 @@ class MapActivity : AppCompatActivity() {
         checkScheduleStatus()    // Immediately refresh the schedule status
         Log.d("MapActivity confirmArrival", "✅ Schedule Status Checked")
 
-//        showCustomToast("Confirm Arrival at Latitude: ${latitude}, Longitude: ${longitude}, Address: ${stopAddress}")
         Log.d("MapActivity confirmArrival", "✅ Arrival confirmed at: ${stopAddress}")
 
         startLocationUpdate()   // ✅ Continue marker updates
@@ -1166,44 +1141,6 @@ class MapActivity : AppCompatActivity() {
         }
         Log.d("MapActivity SpeedControl", "Slow Down: simulationSpeedFactor is now $simulationSpeedFactor")
     }
-
-//    /**
-//     * Starts actual time from schedule
-//     */
-//    private fun startActualTimeUpdater() {
-//        if (scheduleList.isNotEmpty()) {
-//            val startTimeStr = scheduleList.first().startTime  // e.g. "08:00"
-//            val timeParts = startTimeStr.split(":")
-//            if (timeParts.size == 2) {
-//                simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
-//                simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
-//                simulatedStartTime.set(Calendar.SECOND, 0)
-//            }
-//        }
-//
-//        actualTimeHandler = Handler(Looper.getMainLooper())
-//        actualTimeRunnable = object : Runnable {
-//            override fun run() {
-//                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-//                actualTimeTextView.text = timeFormat.format(simulatedStartTime.time)
-//
-//                // Always advance time by 1 second per tick (simulate real clock)
-//                simulatedStartTime.add(Calendar.SECOND, 1)
-//
-//                // Update schedule status based on the new simulated time
-//                scheduleStatusValueTextView.text = "Calculating..."
-//                checkScheduleStatus()
-//
-//                actualTimeHandler.postDelayed(this, 1000)
-//            }
-//        }
-//        actualTimeHandler.post(actualTimeRunnable)
-//    }
-
-//    /** Stops actual time */
-//    private fun stopActualTimeUpdater() {
-//        actualTimeHandler.removeCallbacks(actualTimeRunnable)
-//    }
 
     /**
      * Checks and updates the bus schedule status for the upcoming red timing point.
@@ -1427,7 +1364,6 @@ class MapActivity : AppCompatActivity() {
             FileLogger.d("MapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
             FileLogger.d("MapActivity checkScheduleStatus", "Delta to Timing Point: $deltaSec seconds")
             FileLogger.d("MapActivity checkScheduleStatus", "Status: $statusText")
-//            showCustomToastBottom("Latitude: ${latitude}, Longitude: ${longitude}, effectiveSpeed: ${effectiveSpeed}, Bearing: ${bearing}, Distance to Red Stop (d1): $d1 meters, Total Distance (d2): $d2 meters, Total Time (t2): $t2 seconds, Estimated Time Remaining (t1 = d1 / effectiveSpeed): $t1 seconds, Predicted Arrival: $predictedArrivalStr, API Time: $apiTimeStr, Actual Time: $actualTimeStr, Delta to Timing Point: $deltaSec seconds")
             overrideLateStatusForNextSchedule()
         } catch (e: Exception) {
             Log.e("MapActivity checkScheduleStatus", "Error: ${e.localizedMessage}")
@@ -1576,31 +1512,6 @@ class MapActivity : AppCompatActivity() {
         }
         return calendar.time
     }
-
-//    /**
-//     * Function to normalize all times to the same date
-//     */
-//    fun normalizeTimeToToday(original: Date): Calendar {
-//        val now = Calendar.getInstance()
-//        val cal = Calendar.getInstance()
-//        cal.time = original
-//        cal.set(Calendar.YEAR, now.get(Calendar.YEAR))
-//        cal.set(Calendar.MONTH, now.get(Calendar.MONTH))
-//        cal.set(Calendar.DAY_OF_MONTH, now.get(Calendar.DAY_OF_MONTH))
-//        return cal
-//    }
-
-//    /**
-//     * Converts seconds to mm:ss format.
-//     */
-//    private fun formatSecondsAsTime(seconds: Int): String {
-//        val sign = if (seconds < 0) "-" else ""
-//        val absSeconds = Math.abs(seconds)
-//        val hours = absSeconds / 3600
-//        val minutes = (absSeconds % 3600) / 60
-//        val secs = absSeconds % 60
-//        return String.format("%s%02d:%02d:%02d", sign, hours, minutes, secs)
-//    }
 
     /** 🔹 Reset actual time when the bus reaches a stop or upcoming stop changes */
     private fun resetActualTime() {
@@ -1819,34 +1730,6 @@ class MapActivity : AppCompatActivity() {
         // Find the first scheduled index greater than currentIndex
         return scheduledIndices.firstOrNull { it > currentIndex }
     }
-
-//    /**
-//     * Calculates the total duration to be used in API time update.
-//     * If the bus stop at [currentIndex] is in the schedule list,
-//     * then the total duration is the sum of durations from index 0 up to and including
-//     * the next scheduled bus stop (if one exists). Otherwise, it simply sums up
-//     * durations from index 0 to [currentIndex].
-//     */
-//    private fun calculateDurationBetweenBusStopWithTimingPoint(
-//        timingList: List<BusStopWithTimingPoint>,
-//        scheduleList: List<ScheduleItem>,
-//        currentIndex: Int
-//    ): Double {
-//        return if (isBusStopInScheduleList(timingList[currentIndex].address, scheduleList)) {
-//            // Find the next scheduled bus stop index in timingList
-//            val nextScheduledIndex = nextBusStopIndexInScheduleList(timingList, scheduleList, currentIndex)
-//            if (nextScheduledIndex != null) {
-//                // Sum durations from index 0 to nextScheduledIndex (inclusive)
-//                timingList.subList(0, nextScheduledIndex + 1).sumOf { it.duration }
-//            } else {
-//                // Fallback: sum durations from index 0 to currentIndex if no next scheduled stop found
-//                timingList.subList(0, currentIndex + 1).sumOf { it.duration }
-//            }
-//        } else {
-//            // Not a scheduled bus stop; sum durations normally from index 0 to currentIndex
-//            timingList.subList(0, currentIndex + 1).sumOf { it.duration }
-//        }
-//    }
 
     /** Updates timing point based on current bus location */
     @SuppressLint("LongLogTag")
@@ -2301,77 +2184,6 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
-//    /**
-//     * Retrieves the Android ID (AID) from a hidden JSON file in the app-specific documents directory.
-//     * If the file or directory does not exist, it creates them and generates a new AID.
-//     *
-//     * @return The AID (Android ID) as a String.
-//     */
-//    @SuppressLint("HardwareIds", "LongLogTag")
-//    private fun getOrCreateAid(): String {
-//        // Ensure we have the correct storage permission
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-//            if (!Environment.isExternalStorageManager()) {
-//                Log.e("MapActivity getOrCreateAid", "Storage permission not granted.")
-//                return "Permission Denied"
-//            }
-//        } else {
-//            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-//                != PackageManager.PERMISSION_GRANTED) {
-//                Log.e("MapActivity getOrCreateAid", "Storage permission not granted.")
-//                return "Permission Denied"
-//            }
-//        }
-//
-//        // Use External Storage Public Directory for Documents
-//        val externalDocumentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
-//        val hiddenFolder = File(externalDocumentsDir, ".vlrshiddenfolder")
-//
-//        if (!hiddenFolder.exists()) {
-//            val success = hiddenFolder.mkdirs()
-//            if (!success) {
-//                Log.e("MapActivity getOrCreateAid", "Failed to create directory: ${hiddenFolder.absolutePath}")
-//                return "Failed to create directory"
-//            }
-//        }
-//
-//        val aidFile = File(hiddenFolder, "busDataCache.json")
-//        Log.d("MapActivity getOrCreateAid", "Attempting to create: ${aidFile.absolutePath}")
-//
-//        if (!aidFile.exists()) {
-//            val newAid = generateNewAid()
-//            val jsonObject = JSONObject().apply {
-//                put("aid", newAid)
-//            }
-//            try {
-//                aidFile.writeText(jsonObject.toString())
-//                Toast.makeText(this, "AID saved successfully in busDataCache.json", Toast.LENGTH_SHORT).show()
-//            } catch (e: Exception) {
-//                Log.e("MapActivity getOrCreateAid", "Error writing to file: ${e.message}")
-//                return "Error writing file"
-//            }
-//            return newAid
-//        }
-//
-//        return try {
-//            val jsonContent = JSONObject(aidFile.readText())
-//            jsonContent.getString("aid").trim()
-//        } catch (e: Exception) {
-//            Log.e("MapActivity getOrCreateAid", "Error reading JSON file: ${e.message}")
-//            "Error reading file"
-//        }
-//    }
-
-//    /**
-//     * Generates a new Android ID (AID) using the device's secure Android ID.
-//     *
-//     * @return A unique Android ID as a String.
-//     */
-//    @SuppressLint("HardwareIds")
-//    private fun generateNewAid(): String {
-//        return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-//    }
-
     /**
      * Starts live location updates using the device's GPS instead of simulation.
      * Updates latitude, longitude, bearing, speed, and UI elements accordingly.
@@ -2471,11 +2283,6 @@ class MapActivity : AppCompatActivity() {
                         targetPoint.longitude ?: 0.0
                     )
 
-                    // Assuming 'route' is your List<BusRoute> already populated
-//                    if (route.isNotEmpty()) {
-//                        busRouteDetectionZone(route, nearestDistance)
-//                    }
-
                     Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
                     Log.d("GPS_DEBUG", "Speed: ${location.speed}, Bearing: ${location.bearing}")
 
@@ -2555,30 +2362,6 @@ class MapActivity : AppCompatActivity() {
         })
     }
 
-//    /**
-//     * Function to add circular markers to represent the detection area for each stop with 25% opacity.
-//     */
-//    private fun busRouteDetectionZone(busRoute: List<BusRoute>, radiusMeters: Double) {
-//        busRoute.forEach { point ->
-//            val circleLayer = org.mapsforge.map.layer.overlay.Circle(
-//                LatLong(point.latitude!!, point.longitude!!),
-//                radiusMeters.toFloat(),
-//                AndroidGraphicFactory.INSTANCE.createPaint().apply {
-//                    color = Color.argb(8, 128, 0, 128) // Purple with 25% opacity
-//                    setStyle(org.mapsforge.core.graphics.Style.FILL)
-//                },
-//                AndroidGraphicFactory.INSTANCE.createPaint().apply {
-//                    color = Color.rgb(128, 0, 128) // Solid Purple border
-//                    strokeWidth = 2f
-//                    setStyle(org.mapsforge.core.graphics.Style.STROKE)
-//                }
-//            )
-//
-//            binding.map.layerManager.layers.add(circleLayer)
-//        }
-//
-//        binding.map.invalidate() // Refresh map view
-//    }
     /**
      * function to calculate the nearest coordinate index in the busRoute
      */
@@ -2603,86 +2386,6 @@ class MapActivity : AppCompatActivity() {
 
         return nearestIndex
     }
-
-//    /**
-//     * function to smooth the bearing to reduce sudden direction flips.
-//     */
-//    private var previousBearing: Float? = null
-//
-//    private fun smoothBearing(newBearing: Float, alpha: Float = 0.2f): Float {
-//        return if (previousBearing == null) {
-//            previousBearing = newBearing
-//            newBearing
-//        } else {
-//            val smoothedBearing = (alpha * newBearing) + ((1 - alpha) * previousBearing!!)
-//            previousBearing = smoothedBearing
-//            smoothedBearing
-//        }
-//    }
-
-//    /**
-//     * normalize the bearing to ensure it’s within the valid range.
-//     */
-//    private fun normalizeBearing(bearing: Float): Float {
-//        return (bearing + 360) % 360
-//    }
-
-//    /**
-//     * custom toast align center
-//     */
-//    fun showCustomToast(message: String) {
-//        val toast = Toast.makeText(this@MapActivity, message, Toast.LENGTH_LONG)
-//
-//        // Position the toast at the top-center
-//        toast.setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, 100)
-//
-//        // Custom view with a TextView for longer text
-//        val textView = TextView(this)
-//        textView.text = message
-//        textView.setTextColor(Color.WHITE)
-//        textView.setBackgroundColor(Color.BLACK) // Custom background for visibility
-//        textView.setPadding(20, 20, 20, 20)
-//
-//        toast.view = textView
-//        toast.show()
-//    }
-
-//    /**
-//     * custom toast align bottom
-//     */
-//    fun showCustomToastBottom(message: String) {
-//        val toast = Toast.makeText(this@MapActivity, message, Toast.LENGTH_LONG)
-//
-//        // Position the toast at the top-center
-//        toast.setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, 140)
-//
-//        // Custom view with a TextView for longer text
-//        val textView = TextView(this)
-//        textView.text = message
-//        textView.setTextColor(Color.WHITE)
-//        textView.setBackgroundColor(Color.BLACK) // Custom background for visibility
-//        textView.setPadding(20, 20, 20, 20)
-//
-//        toast.view = textView
-//        toast.show()
-//    }
-
-//    /**
-//     * ✅ Function to validate time format (HH:mm:ss)
-//     */
-//    private fun isValidTime(time: String?): Boolean {
-//        if (time.isNullOrEmpty() || time == "Unknown") {
-//            Log.e("MapActivity isValidTime", "❌ Invalid time detected: '$time'")
-//            return false
-//        }
-//        return try {
-//            SimpleDateFormat("HH:mm:ss", Locale.getDefault()).parse(time)
-//            true
-//        } catch (e: Exception) {
-//            Log.e("MapActivity isValidTime", "❌ Failed to parse time: '$time' - ${e.localizedMessage}")
-//            false
-//        }
-//    }
 
     private var firstTimeCentering = true  // Add this flag to track the initial centering
 
@@ -2769,50 +2472,13 @@ class MapActivity : AppCompatActivity() {
         jsonObject.put("bearing", bearing)
         jsonObject.put("direction", direction)
         jsonObject.put("speed", speed)
-//        jsonObject.put("showDepartureTime", showDepartureTime)
-//        jsonObject.put("departureTime", departureTime)
 //        jsonObject.put("bus", busname)
         jsonObject.put("aid", aid)
-//        Log.d("BusConfig", busConfig)
 //        Log.d("aid", aid)
-
-        // To publish the closest bus stop to the publisher device.
-//        closestBusStopToPubDevice = BusStopProximityManager.getTheClosestBusStopToPubDevice(
-//            latitude,
-//            longitude,
-//            closestBusStopToPubDevice
-//        );
-//        jsonObject.put("closestBusStopToPubDevice", closestBusStopToPubDevice)
-
         CoroutineScope(Dispatchers.Main).launch {
             try {
-//                val nextBusStopInSequence =
-//                    BusStopProximityManager.getNextBusStopInSequence(closestBusStopToPubDevice)
-//                if (nextBusStopInSequence != null) {
-
-                // Note: uncomment below lines of code to use TomTom API.
-//                    val etaToNextBStop = TomTomService.getEstimateTimeFromPointToPoint(
-//                        latitude, longitude,
-//                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
-//                    )
-
-//                    etaToNextBStop = OpenRouteService.getEstimateTimeFromPointToPoint(
-//                        latitude, longitude,
-//                        nextBusStopInSequence.latitude, nextBusStopInSequence.longitude
-//                    )
-//
-//                    jsonObject.put("ETAtoNextBStop", etaToNextBStop)
-//                }
-
                 val jsonString = jsonObject.toString()
                 mqttManager.publish(MapActivity.PUB_POS_TOPIC, jsonString, 1)
-//                notificationManager.showNotification(
-//                    channelId = "channel1",
-//                    notificationId = 1,
-//                    title = "Connected",
-//                    message = "Lat: $latitude, Long: $longitude, Direction: $direction",
-//                    false
-//                )
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -2866,39 +2532,6 @@ class MapActivity : AppCompatActivity() {
             Log.d("MapActivity onBusMarkerUpdated", "The displayed upcoming stop '$currentDisplayedStop' is not found in the stops list.")
         }
     }
-
-//    /**
-//     * Calculates the average latitude and longitude of the next 'count' points in the busRoute.
-//     */
-//    private fun calculateAverageNextCoordinates(lat: Double, lon: Double, count: Int): Pair<Double, Double>? {
-//        if (route.isEmpty()) return null
-//
-//        var totalLat = 0.0
-//        var totalLon = 0.0
-//        var validPoints = 0
-//
-//        // Find the current position in the route
-//        val currentIndex = route.indexOfFirst { it.latitude == lat && it.longitude == lon }
-//        if (currentIndex == -1) return null // Current position not found
-//
-//        // Take the next 'count' points
-//        for (i in 1..count) {
-//            val nextIndex = currentIndex + i
-//            if (nextIndex < route.size) {
-//                totalLat += route[nextIndex].latitude ?: 0.0
-//                totalLon += route[nextIndex].longitude ?: 0.0
-//                validPoints++
-//            } else {
-//                break // Stop if we run out of points
-//            }
-//        }
-//
-//        return if (validPoints > 0) {
-//            Pair(totalLat / validPoints, totalLon / validPoints)
-//        } else {
-//            null
-//        }
-//    }
 
     /**
      * Rotates the bus symbol drawable based on the given angle.
@@ -3031,27 +2664,6 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
-//    /**
-//     * Helper function to convert stops to busStopInfo
-//     */
-//    @SuppressLint("LongLogTag")
-//    private fun updateBusStopProximityManager() {
-//        if (stops.isNotEmpty()) {
-//            busStopInfo = stops.map { stop ->
-//                BusStopInfo(
-//                    latitude = stop.latitude ?: 0.0,
-//                    longitude = stop.longitude ?: 0.0,
-//                    busStopName = "BusStop_${stop.latitude}_${stop.longitude}"
-//                )
-//            }
-//            BusStopProximityManager.setBusStopList(busStopInfo)
-//            Log.d("MapActivity updateBusStopProximityManager", "BusStopProximityManager updated with ${busStopInfo.size} stops.")
-//            Log.d("MapActivity updateBusStopProximityManager", "busStopInfo ${busStopInfo.toString()}")
-//        } else {
-//            Log.d("MapActivity updateBusStopProximityManager", "No stops available to update BusStopProximityManager.")
-//        }
-//    }
-
     /**
      * Loads the offline map from assets and configures the map.
      * Prevents adding duplicate layers.
@@ -3178,8 +2790,6 @@ class MapActivity : AppCompatActivity() {
 
     /** Cleans up resources on activity destruction. */
     override fun onDestroy() {
-//        mqttManager.disconnect()
-//        stopDateTimeUpdater()
         super.onDestroy()
 
         // Remove polyline from Mapsforge map
