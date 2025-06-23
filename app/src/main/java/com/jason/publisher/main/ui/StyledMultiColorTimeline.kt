@@ -1,4 +1,4 @@
-package com.jason.publisher.main
+package com.jason.publisher.main.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -8,7 +8,6 @@ import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.Log
 import android.view.Gravity
-import android.view.View
 import android.widget.*
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat

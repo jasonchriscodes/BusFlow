@@ -11,7 +11,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.jason.publisher.R
-import com.jason.publisher.main.MapActivity
+import com.jason.publisher.main.activity.MapActivity
 import com.jason.publisher.main.services.MqttManager
 import okhttp3.Call
 import okhttp3.Callback

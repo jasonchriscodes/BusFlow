@@ -1,4 +1,4 @@
-package com.jason.publisher.main
+package com.jason.publisher.main.activity
 
 import android.annotation.SuppressLint
 import android.os.Bundle
@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.jason.publisher.LocationListener
 import com.jason.publisher.R
+import com.jason.publisher.main.utils.Helper
 import com.jason.publisher.main.model.BusItem
 import com.jason.publisher.main.model.BusStop
 import com.jason.publisher.main.model.BusStopInfo

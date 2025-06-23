@@ -3,7 +3,7 @@ package com.jason.publisher.old
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.jason.publisher.databinding.ActivityTestBinding
-import com.jason.publisher.main.MapActivity
+import com.jason.publisher.main.activity.MapActivity
 import com.jason.publisher.main.services.SharedPrefMananger
 import org.eclipse.paho.client.mqttv3.MqttClient
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions

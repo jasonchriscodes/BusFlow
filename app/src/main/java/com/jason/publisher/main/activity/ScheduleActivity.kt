@@ -1,6 +1,5 @@
-package com.jason.publisher.main
+package com.jason.publisher.main.activity
 
-import HeaderAdapter
 import ScheduleAdapter
 import android.Manifest
 import android.annotation.SuppressLint
@@ -28,8 +27,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.Switch
-import android.widget.TableLayout
-import android.widget.TableRow
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
@@ -43,6 +40,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.gson.Gson
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityScheduleBinding
+import com.jason.publisher.main.ui.StyledMultiColorTimeline
 import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.model.BusDataCache
 import com.jason.publisher.main.model.BusItem

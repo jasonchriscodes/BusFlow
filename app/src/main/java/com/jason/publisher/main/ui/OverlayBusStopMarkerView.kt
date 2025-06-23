@@ -1,12 +1,10 @@
-package com.jason.publisher.main
+package com.jason.publisher.main.ui
 
 import android.content.Context
 import android.graphics.*
 import android.util.AttributeSet
 import android.view.View
 import com.jason.publisher.main.model.BusScheduleInfo
-import java.text.SimpleDateFormat
-import java.util.*
 
 class OverlayBusStopMarkerView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null

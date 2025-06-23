@@ -59,10 +59,10 @@
         <activity android:name=".old.LoginActivity"></activity>
         <activity android:name=".old.RegisterActivity" />
         <activity
-            android:name=".main.MapActivity"
+            android:name=".main.activity.MapActivity"
             android:exported="false"
             android:screenOrientation="landscape" />
-        <activity android:name=".main.TestMapActivity"
+        <activity android:name=".main.activity.TestMapActivity"
             android:exported="false"
             android:screenOrientation="landscape"/>
 
@@ -78,7 +78,7 @@
 <!--            </intent-filter>-->
 <!--        </activity>-->
         <activity
-            android:name=".main.ScheduleActivity"
+            android:name=".main.activity.ScheduleActivity"
             android:exported="true"
             android:screenOrientation="landscape">
             <intent-filter>

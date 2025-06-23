@@ -1,4 +1,4 @@
-package com.jason.publisher.main
+package com.jason.publisher.main.utils
 
 import android.content.Context
 import android.graphics.Bitmap

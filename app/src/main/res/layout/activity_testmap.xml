@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/colorPrimary"
-    tools:context=".main.TestMapActivity">
+    tools:context=".main.activity.TestMapActivity">
 
 <!-- Large Map -->
     <org.mapsforge.map.android.view.MapView

@@ -24,7 +24,7 @@ import com.jason.publisher.Contacts.ChatActivity
 import com.jason.publisher.LocationListener
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityLiveBinding
-import com.jason.publisher.main.Helper
+import com.jason.publisher.main.utils.Helper
 import com.jason.publisher.main.services.LocationManager
 import com.jason.publisher.main.services.MqttManager
 import org.osmdroid.config.Configuration

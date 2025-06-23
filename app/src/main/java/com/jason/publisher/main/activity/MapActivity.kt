@@ -1,7 +1,6 @@
-package com.jason.publisher.main
+package com.jason.publisher.main.activity
 
 import FileLogger
-import android.Manifest
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.os.Handler
@@ -13,14 +12,11 @@ import com.jason.publisher.main.model.BusRoute
 import java.text.SimpleDateFormat
 import java.util.*
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.location.Location
 import android.os.Build
-import android.os.Environment
-import android.provider.Settings
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -36,7 +32,6 @@ import com.jason.publisher.main.model.BusStopWithTimingPoint
 import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.LocationManager
-import com.jason.publisher.main.utils.BusStopProximityManager
 import com.jason.publisher.main.utils.NetworkStatusHelper
 import org.json.JSONArray
 import org.json.JSONObject
@@ -57,6 +52,7 @@ import com.google.gson.Gson
 import com.jason.publisher.LocationListener
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
+import com.jason.publisher.main.utils.Helper
 import com.jason.publisher.main.model.AttributesData
 import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.services.ApiServiceBuilder
@@ -69,7 +65,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.mapsforge.core.util.Utils
 import org.mapsforge.map.layer.overlay.Marker
 import org.osmdroid.views.MapController
 import retrofit2.Call
@@ -263,7 +258,7 @@ class MapActivity : AppCompatActivity() {
             if (success) {
                 getAccessToken()
                 Log.d("MapActivity onCreate Token", token)
-                mqttManager = MqttManager(serverUri = MapActivity.SERVER_URI, clientId = MapActivity.CLIENT_ID, username = token)
+                mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
                 // 3) Build all remote‐bus markers BEFORE polling attributes:
                 getDefaultConfigValue()   // ← this populates markerBus[accessToken] for every bus
 
@@ -2478,7 +2473,7 @@ class MapActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.Main).launch {
             try {
                 val jsonString = jsonObject.toString()
-                mqttManager.publish(MapActivity.PUB_POS_TOPIC, jsonString, 1)
+                mqttManager.publish(PUB_POS_TOPIC, jsonString, 1)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
