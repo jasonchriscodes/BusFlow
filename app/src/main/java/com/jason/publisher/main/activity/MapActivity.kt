@@ -80,26 +80,26 @@ class MapActivity : AppCompatActivity() {
     private lateinit var dateTimeHandler: Handler
 //    private lateinit var dateTimeRunnable: Runnable
 
-    private var latitude = 0.0
-    private var longitude = 0.0
+    var latitude = 0.0
+    var longitude = 0.0
     private var lastLatitude = 0.0
     private var lastLongitude = 0.0
-    private var bearing = 0.0F
-    private var speed = 0.0F
-    private var direction = ""
+    var bearing = 0.0F
+    var speed = 0.0F
+    var direction = ""
     private var busConfig = ""
     private var busname = ""
-    private var aid = ""
+    var aid = ""
     private var busDataCache = ""
     private var jsonString = ""
     private var token = ""
-    private var config: List<BusItem>? = emptyList()
+    var config: List<BusItem>? = emptyList()
     private var route: List<BusRoute> = emptyList()
     private var stops: List<BusStop> = emptyList()
     private var busRouteData: List<RouteData> = emptyList()
     private var durationBetweenStops: List<Double> = emptyList()
     private var busStopInfo: List<BusStopInfo> = emptyList()
-    private var arrBusData: List<BusItem> = emptyList()
+    var arrBusData: List<BusItem> = emptyList()
     private var firstTime = true
     private var upcomingStop: String = "Unknown"
     private var stopAddress: String = "Unknown"
@@ -118,7 +118,7 @@ class MapActivity : AppCompatActivity() {
 
     private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
     private var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
-    private var markerBus = HashMap<String, org.mapsforge.map.layer.overlay.Marker>()
+    var markerBus = HashMap<String, org.mapsforge.map.layer.overlay.Marker>()
 
     private lateinit var simulationHandler: Handler
     private lateinit var simulationRunnable: Runnable
@@ -157,27 +157,28 @@ class MapActivity : AppCompatActivity() {
     private var smoothedSpeed: Float = 0f
     // Choose an alpha value between 0 and 1: smaller alpha means slower adjustment (more smoothing)
     private val smoothingAlpha = 0.2f
-    private lateinit var mqttManagerConfig: MqttManager
-    private lateinit var mqttManager: MqttManager
-    private var tokenConfigData = "oRSsbeuqDMSckyckcMyE"
-    private var apiService = ApiServiceBuilder.buildService(ApiService::class.java)
-    private var clientKeys = "latitude,longitude,bearing,speed,direction"
+    var apiService = ApiServiceBuilder.buildService(ApiService::class.java)
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // for other buses
-    private val lastSeen       = mutableMapOf<String, Long>()                  // you already have this
-    private val prevCoords     = mutableMapOf<String, Pair<Double, Double>>() // remember last lat/lon per token
+    val lastSeen       = mutableMapOf<String, Long>()                  // you already have this
+    val prevCoords     = mutableMapOf<String, Pair<Double, Double>>() // remember last lat/lon per token
 
     // for self
     private var prevOwnCoords: Pair<Double,Double>? = null
+    private lateinit var mqttHelper: MqttHelper
+    var tokenConfigData = "oRSsbeuqDMSckyckcMyE"
+    val clientKeys       = "latitude,longitude,bearing,speed,direction"
+    lateinit var mqttManagerConfig: MqttManager
+    lateinit var mqttManager:        MqttManager
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
         const val CLIENT_ID = "jasonAndroidClientId"
         const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
-        private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
-        private const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
-        private const val REQUEST_PERIODIC_TIME = 1000L
+        const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
+        const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
+        const val REQUEST_PERIODIC_TIME = 1000L
         private const val PUBLISH_POSITION_TIME = 1000L
         private const val LAST_MSG_KEY = "lastMessageKey"
         private const val MSG_KEY = "messageKey"
@@ -197,8 +198,15 @@ class MapActivity : AppCompatActivity() {
         // Initialize managers before using them
         initializeManagers()
 
+        // before creating the helper, set up the config‐fetching client:
+        mqttManagerConfig = MqttManager(
+            serverUri = SERVER_URI,
+            clientId  = "$CLIENT_ID-config",
+            username  = tokenConfigData
+        )
+
         // Initialize mqttManager before using it
-        mqttManagerConfig = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = tokenConfigData)
+        mqttHelper = MqttHelper(this, binding)
 
         // Retrieve data passed from TimeTableActivity
         aid = intent.getStringExtra("AID") ?: "Unknown"
@@ -254,7 +262,7 @@ class MapActivity : AppCompatActivity() {
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
 
         // 2) Now fetch the shared config from your server (ThingsBoard)
-        fetchConfig { success ->
+        mqttHelper.fetchConfig { success ->
             if (success) {
                 getAccessToken()
                 Log.d("MapActivity onCreate Token", token)
@@ -262,11 +270,11 @@ class MapActivity : AppCompatActivity() {
                 // 3) Build all remote‐bus markers BEFORE polling attributes:
                 getDefaultConfigValue()   // ← this populates markerBus[accessToken] for every bus
 
-                requestAdminMessage()
-                connectAndSubscribe()
+                mqttHelper.requestAdminMessage()
+                mqttHelper.connectAndSubscribe()
 
                 // 4) Only now do we start polling attributes every 3 seconds
-                sendRequestAttributes()
+                mqttHelper.sendRequestAttributes()
                 Log.d("MapActivity oncreate", "Start monitor activity is called")
                 startActivityMonitor()
                 Log.d("MapActivity oncreate fetchConfig config", config.toString())
@@ -414,82 +422,6 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * Connects to the MQTT broker and subscribes to the shared data topic upon successful connection.
-     */
-    private fun connectAndSubscribe() {
-        mqttManager.connect { isConnected ->
-            if (isConnected) {
-                Log.d("MapActivity", "Connected to MQTT broker")
-                subscribeSharedData()
-            } else {
-                Log.e("MapActivity", "Failed to connect to MQTT broker")
-//                Toast.makeText(this, "Failed to connect to MQTT broker", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    /**
-     * Subscribes to shared data from the server.
-     * Checks if the configuration is null or empty, and if the `aid` from ThingsBoard matches the tablet's `aid`.
-     * If either check fails, it returns and runs on the UI thread.
-     */
-    private fun subscribeSharedData() {
-        mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
-            runOnUiThread {
-                val gson = Gson()
-                val data = gson.fromJson(message, Bus::class.java)
-                val newConfig = data.shared?.config?.busConfig ?: return@runOnUiThread
-
-                // filter out this device
-                val newArr = newConfig.filter { it.aid != aid }
-
-                // for each other bus, add a marker and fetch its attrs
-                val initialLat = -36.8558512
-                val initialLon =  174.7648727
-                newArr.forEach { bus ->
-                    // pick correct icon resource
-                    val iconRes = if (bus.aid == this.aid) {
-                        R.drawable.ic_bus_symbol
-                    } else {
-                        R.drawable.ic_bus_symbol2
-                    }
-                    val symbolName = if (iconRes == R.drawable.ic_bus_symbol)
-                        "ic_bus_symbol" else "ic_bus_symbol2"
-
-                    // <-- new log -->
-                    Log.d("MapActivity subscribeSharedData",
-                        "$symbolName for accessToken=${bus.accessToken} at [$initialLat, $initialLon] is drawn")
-
-                    val icon = createBusIcon(iconRes)
-                    val m = Marker(
-                        LatLong(initialLat, initialLon),
-                        icon,
-                        -icon.width  / 2,
-                        -icon.height
-                    )
-                    binding.map.layerManager.layers.add(m)
-                    markerBus[bus.accessToken] = m
-
-                    // now fetch live attrs
-                    getAttributes(apiService, bus.accessToken, clientKeys)
-                }
-
-                // 3) Remove any buses that dropped out of config
-                val toRemove = markerBus.keys - newArr.map { it.accessToken }.toSet()
-                toRemove.forEach { token ->
-                    binding.map.layerManager.layers.remove(markerBus[token])
-                    markerBus.remove(token)
-                }
-
-                // 4) Keep your local list up to date
-                arrBusData = newArr
-
-                binding.map.invalidate()
-            }
-        }
-    }
-
-    /**
      * Pick the right bus icon based on AID (or bus name).
      * - The *own* device (aid == ourAid) always uses ic_bus_symbol
      * - All *others* use ic_bus_symbol2
@@ -512,109 +444,13 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * Sends data attributes to the server.
-     */
-    private fun sendRequestAttributes() {
-        val handler = Handler(Looper.getMainLooper())
-        handler.postDelayed(object : Runnable {
-            override fun run() {
-                for (bus in arrBusData) {
-                    Log.d("MapActivity sendRequestAttributes", "Looping arrBusData, candidate token=${bus.accessToken}")
-                    if (markerBus.containsKey(bus.accessToken)) {
-                        getAttributes(apiService, bus.accessToken, clientKeys)
-                    } else {
-                        Log.w("MapActivity sendRequestAttributes", "No marker for ${bus.accessToken} yet, skipping attrs-read.")
-                    }
-                }
-                handler.postDelayed(this, 1000)
-            }
-        }, 0)
-    }
-
-    /**
-     * Retrieves attributes data for each bus from the server,
-     * and moves the existing Mapsforge Marker to the new LatLong.
-     *
-     * @param apiService   The API service instance.
-     * @param token        The access token for authentication.
-     * @param clientKeys   The keys to request attributes for.
-     */
-    /**
-     * Retrieves attributes data for each bus from the server,
-     * logs which ic_bus_symbol2 (i.e. non-own) buses are currently active,
-     * and moves the existing Mapsforge Marker to the new LatLong.
-     */
-    private fun getAttributes(
-        apiService: ApiService,
-        token: String,
-        clientKeys: String
-    ) {
-        val call = apiService.getAttributes(
-            "${ApiService.BASE_URL}$token/attributes",
-            "application/json",
-            clientKeys
-        )
-
-        call.enqueue(object : Callback<ClientAttributesResponse> {
-            override fun onResponse(
-                call: Call<ClientAttributesResponse>,
-                response: Response<ClientAttributesResponse>
-            ) {
-                val now = System.currentTimeMillis()
-                lastSeen[token] = now
-
-                val client = response.body()?.client ?: return
-                val lat = client.latitude
-                val lon = client.longitude
-
-                val prev = prevCoords[token]
-                if (prev?.first == lat && prev.second == lon) return
-                prevCoords[token] = Pair(lat, lon)
-
-                // figure out if it's own bus or another one
-                val busAid = config?.find { it.accessToken == token }?.aid ?: "UNKNOWN"
-                val symbolName = if (busAid == this@MapActivity.aid)
-                    "ic_bus_symbol" else "ic_bus_symbol2"
-
-                // <-- new log -->
-                Log.d("MapActivity getAttributes",
-                    "$symbolName for accessToken=$token at [$lat, $lon] is updated")
-
-                runOnUiThread {
-                    val existing = markerBus[token]
-                    if (existing != null) {
-                        existing.latLong = LatLong(lat, lon)
-                    } else {
-                        val iconRes = if (busAid == this@MapActivity.aid)
-                            R.drawable.ic_bus_symbol else R.drawable.ic_bus_symbol2
-                        val icon = createBusIcon(iconRes)
-                        val marker = Marker(
-                            LatLong(lat, lon),
-                            icon,
-                            -icon.width  / 2,
-                            -icon.height
-                        )
-                        binding.map.layerManager.layers.add(marker)
-                        markerBus[token] = marker
-                    }
-                    binding.map.invalidate()
-                }
-            }
-
-            override fun onFailure(call: Call<ClientAttributesResponse>, t: Throwable) {
-                Log.e("MapActivity getAttributes", "Network error: ${t.message}")
-            }
-        })
-    }
-
-    /**
      * Creates a Mapsforge‐compatible bitmap from a VectorDrawable resource.
      *
      * @param id   The drawable resource ID (e.g. R.drawable.ic_bus_symbol2).
      * @param px   The desired width and height in pixels (defaults to 64).
      * @return     An AndroidBitmap you can pass directly into a Mapsforge Marker.
      */
-    private fun createBusIcon(@DrawableRes id: Int): org.mapsforge.core.graphics.Bitmap {
+    fun createBusIcon(@DrawableRes id: Int): org.mapsforge.core.graphics.Bitmap {
         val drawable = ResourcesCompat.getDrawable(resources, id, null)!!
         // Force the drawable to the size you want (e.g. 64×64px)
         val size = 64
@@ -634,42 +470,6 @@ class MapActivity : AppCompatActivity() {
             if (configItem.aid == aid) {
                 token = configItem.accessToken
                 break
-            }
-        }
-    }
-
-    /**
-     * Requests admin messages periodically.
-     */
-    private fun requestAdminMessage() {
-        val jsonObject = JSONObject()
-        jsonObject.put("sharedKeys","message,busRoute,busStop,config")
-        val jsonString = jsonObject.toString()
-        val handler = Handler(Looper.getMainLooper())
-        mqttManager.publish(PUB_MSG_TOPIC, jsonString)
-        handler.post(object : Runnable {
-            override fun run() {
-                mqttManager.publish(PUB_MSG_TOPIC, jsonString)
-                handler.postDelayed(this, REQUEST_PERIODIC_TIME)
-            }
-        })
-    }
-
-    /**
-     * Fetches the configuration data and initializes the config variable.
-     * Calls the provided callback with true if successful, false otherwise.
-     */
-    private fun fetchConfig(callback: (Boolean) -> Unit) {
-        Log.d("MapActivity fetchConfig", "Fetching config...")
-        mqttManagerConfig.fetchSharedAttributes(tokenConfigData) { listConfig ->
-            if (listConfig.isNotEmpty()) {
-                config = listConfig
-                Log.d("MapActivity fetchConfig", "Config received: $config")
-                callback(true)
-            } else {
-                config = emptyList()
-                Log.e("MapActivity fetchConfig", "Failed to initialize config. No bus information available.")
-                callback(false)
             }
         }
     }
@@ -2388,10 +2188,10 @@ class MapActivity : AppCompatActivity() {
     private fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float) {
         val newPosition = LatLong(lat, lon)
 
-        publishTelemetryData()
+        mqttHelper.publishTelemetryData()
         updateClientAttributes()
 
-        sendRequestAttributes()
+        mqttHelper.sendRequestAttributes()
 
         // Convert Drawable to Bitmap and rotate it
         val rotatedBitmap = rotateDrawable(bearing)
@@ -2454,30 +2254,6 @@ class MapActivity : AppCompatActivity() {
                 Log.e("MapActivity updateClientAttributes", "postAttrs fail for aid=$aid: ${t.message}")
             }
         })
-    }
-
-    /**
-     * Publishes telemetry data including latitude, longitude, bearing, speed, direction, and other relevant information.
-     */
-    private fun publishTelemetryData() {
-        val jsonObject = JSONObject()
-//        busname = Utils.findBusNameByAid(aid) ?: ""
-        jsonObject.put("latitude", latitude)
-        jsonObject.put("longitude", longitude)
-        jsonObject.put("bearing", bearing)
-        jsonObject.put("direction", direction)
-        jsonObject.put("speed", speed)
-//        jsonObject.put("bus", busname)
-        jsonObject.put("aid", aid)
-//        Log.d("aid", aid)
-        CoroutineScope(Dispatchers.Main).launch {
-            try {
-                val jsonString = jsonObject.toString()
-                mqttManager.publish(PUB_POS_TOPIC, jsonString, 1)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
     }
 
     /**

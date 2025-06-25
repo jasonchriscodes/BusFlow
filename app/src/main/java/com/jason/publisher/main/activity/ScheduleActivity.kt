@@ -73,8 +73,8 @@ import java.util.Locale
 class ScheduleActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityScheduleBinding
-    private lateinit var mqttManagerConfig: MqttManager
-    private lateinit var mqttManager: MqttManager
+    lateinit var mqttManagerConfig: MqttManager
+    lateinit var mqttManager: MqttManager
     private lateinit var connectionStatusTextView: TextView
     private val REQUEST_MANAGE_EXTERNAL_STORAGE = 1001
     private val REQUEST_WRITE_PERMISSION = 1002
