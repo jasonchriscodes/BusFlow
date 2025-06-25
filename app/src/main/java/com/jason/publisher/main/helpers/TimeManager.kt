@@ -10,7 +10,7 @@ import com.jason.publisher.main.model.ScheduleItem
 import java.text.SimpleDateFormat
 import java.util.*
 
-class TimeManager(private val owner: MapActivity) {
+class TimeManager(private val owner: MapActivity, private val scheduleStatusManager: ScheduleStatusManager) {
 
     var simulatedStartTime: Calendar = Calendar.getInstance()
     lateinit var currentTimeHandler: Handler
@@ -45,7 +45,7 @@ class TimeManager(private val owner: MapActivity) {
 
                 // Update schedule status based on the new simulated time
                 owner.scheduleStatusValueTextView.text = "Calculating..."
-                owner.checkScheduleStatus()
+                scheduleStatusManager.checkScheduleStatus()
 
                 currentTimeHandler.postDelayed(this, 1000) // Update every second
             }
