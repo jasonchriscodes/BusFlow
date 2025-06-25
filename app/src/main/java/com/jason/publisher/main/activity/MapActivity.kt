@@ -50,6 +50,7 @@ import com.google.android.gms.location.*
 import com.jason.publisher.LocationListener
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
+import com.jason.publisher.main.helpers.MapViewController
 import com.jason.publisher.main.helpers.MqttHelper
 import com.jason.publisher.main.helpers.TimeManager
 import com.jason.publisher.main.utils.Helper
@@ -63,7 +64,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.osmdroid.views.MapController
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -73,7 +73,6 @@ class MapActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMapBinding
     private lateinit var locationManager: LocationManager
-    private lateinit var mapController: MapController
     private lateinit var dateTimeHandler: Handler
 //    private lateinit var dateTimeRunnable: Runnable
 
@@ -89,10 +88,10 @@ class MapActivity : AppCompatActivity() {
     var aid = ""
     private var busDataCache = ""
     private var jsonString = ""
-    private var token = ""
+    var token = ""
     var config: List<BusItem>? = emptyList()
-    private var route: List<BusRoute> = emptyList()
-    private var stops: List<BusStop> = emptyList()
+    var route: List<BusRoute> = emptyList()
+    var stops: List<BusStop> = emptyList()
     private var busRouteData: List<RouteData> = emptyList()
     private var durationBetweenStops: List<Double> = emptyList()
     private var busStopInfo: List<BusStopInfo> = emptyList()
@@ -114,7 +113,7 @@ class MapActivity : AppCompatActivity() {
     private lateinit var tripEndTimeTextView: TextView
 
     private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
-    private var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
+    var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
     var markerBus = HashMap<String, org.mapsforge.map.layer.overlay.Marker>()
 
     private lateinit var simulationHandler: Handler
@@ -124,7 +123,7 @@ class MapActivity : AppCompatActivity() {
     var simulationStartTime: Long = 0L
     lateinit var scheduleList: List<ScheduleItem>
     lateinit var scheduleData: List<ScheduleItem>
-    private val redBusStops = mutableSetOf<String>()
+    val redBusStops = mutableSetOf<String>()
 
     private lateinit var actualTimeHandler: Handler
     private lateinit var actualTimeRunnable: Runnable
@@ -141,7 +140,7 @@ class MapActivity : AppCompatActivity() {
     private var nextTimingPoint: String = "Unknown"
     lateinit var currentTimeTextView: TextView
     lateinit var nextTripCountdownTextView: TextView
-    private var busStopRadius: Double = 50.0
+    var busStopRadius: Double = 50.0
     private val forceAheadStatus = false
     private var statusText  = "Please wait..."
     private var baseTimeStr  = "00:00:00"
@@ -164,8 +163,10 @@ class MapActivity : AppCompatActivity() {
     var tokenConfigData = "oRSsbeuqDMSckyckcMyE"
     val clientKeys       = "latitude,longitude,bearing,speed,direction"
     lateinit var mqttManagerConfig: MqttManager
+
     lateinit var mqttManager:        MqttManager
     private lateinit var timeManager: TimeManager
+    lateinit var mapController: MapViewController
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -203,6 +204,7 @@ class MapActivity : AppCompatActivity() {
         // Initialize Managers before using it
         mqttHelper = MqttHelper(this, binding)
         timeManager = TimeManager(this)
+        mapController  = MapViewController(this, binding, mqttHelper)
 
         // Retrieve data passed from TimeTableActivity
         aid = intent.getStringExtra("AID") ?: "Unknown"
@@ -264,7 +266,7 @@ class MapActivity : AppCompatActivity() {
                 Log.d("MapActivity onCreate Token", token)
                 mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
                 // 3) Build all remote‐bus markers BEFORE polling attributes:
-                getDefaultConfigValue()   // ← this populates markerBus[accessToken] for every bus
+                mapController.getDefaultConfigValue()   // ← this populates markerBus[accessToken] for every bus
 
                 mqttHelper.requestAdminMessage()
                 mqttHelper.connectAndSubscribe()
@@ -272,7 +274,7 @@ class MapActivity : AppCompatActivity() {
                 // 4) Only now do we start polling attributes every 3 seconds
                 mqttHelper.sendRequestAttributes()
                 Log.d("MapActivity oncreate", "Start monitor activity is called")
-                startActivityMonitor()
+                mapController.startActivityMonitor()
                 Log.d("MapActivity oncreate fetchConfig config", config.toString())
                 Log.d("MapActivity oncreate fetchConfig busRoute", route.toString())
                 Log.d("MapActivity oncreate fetchConfig busStop", stops.toString())
@@ -294,7 +296,7 @@ class MapActivity : AppCompatActivity() {
         })
 
         // Load offline map first
-        openMapFromAssets()
+        mapController.openMapFromAssets()
 
         // Start tracking the location and updating the marker
         startLocationUpdate()
@@ -392,69 +394,6 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
-    /** Monitor other buses every second, logging their count and active/inactive status. */
-    private fun startActivityMonitor() {
-        val handler = Handler(Looper.getMainLooper())
-        handler.post(object : Runnable {
-            override fun run() {
-                val now = System.currentTimeMillis()
-
-                markerBus.keys
-                    .filter { it != token }
-                    .forEach { t ->
-                        val last = lastSeen[t] ?: 0L
-                        if (last != 0L && now - last >= 10_000L) {
-                            binding.map.layerManager.layers.remove(markerBus[t])
-                            markerBus.remove(t)
-                            prevCoords.remove(t)
-                        }
-                    }
-
-                // redraw so the removed markers actually disappear
-                binding.map.invalidate()
-                handler.postDelayed(this, 1_000L)
-            }
-        })
-    }
-
-    /**
-     * Pick the right bus icon based on AID (or bus name).
-     * - The *own* device (aid == ourAid) always uses ic_bus_symbol
-     * - All *others* use ic_bus_symbol2
-     */
-    private fun getBusIconFor(aid: String): org.mapsforge.core.graphics.Bitmap {
-        val res = if (aid == this.aid) {
-            R.drawable.ic_bus_symbol
-        } else {
-            R.drawable.ic_bus_symbol2
-        }
-        return createBusIcon(res)
-    }
-
-    /**
-     * Clears any existing bus data from the map and other UI elements.
-     */
-    private fun clearBusData() {
-        binding.map.invalidate()
-        markerBus.clear()
-    }
-
-    /**
-     * Creates a Mapsforge‐compatible bitmap from a VectorDrawable resource.
-     *
-     * @param id   The drawable resource ID (e.g. R.drawable.ic_bus_symbol2).
-     * @param px   The desired width and height in pixels (defaults to 64).
-     * @return     An AndroidBitmap you can pass directly into a Mapsforge Marker.
-     */
-    fun createBusIcon(@DrawableRes id: Int): org.mapsforge.core.graphics.Bitmap {
-        val drawable = ResourcesCompat.getDrawable(resources, id, null)!!
-        // Force the drawable to the size you want (e.g. 64×64px)
-        val size = 64
-        drawable.setBounds(0, 0, size, size)
-        // Let Mapsforge do the conversion
-        return AndroidGraphicFactory.convertToBitmap(drawable)
-    }
-
     /**
      * Retrieves the access token for the current device's Android ID from the configuration list.
      */
@@ -488,7 +427,7 @@ class MapActivity : AppCompatActivity() {
         }
 
         Log.d("MapActivity confirmArrival", "🔎 Starting nearest route point search...")
-        var nearestIndex = findNearestBusRoutePoint(latitude, longitude)
+        var nearestIndex = mapController.findNearestBusRoutePoint(latitude, longitude)
         Log.d("MapActivity confirmArrival", "✅ Nearest Route Point Found at Index: $nearestIndex")
 
         var nearestStop: BusStop? = null
@@ -540,7 +479,7 @@ class MapActivity : AppCompatActivity() {
             Log.w("MapActivity confirmArrival", "⚠️ No Nearest Stop Found")
         }
 
-        drawDetectionZones(stops)
+        mapController.drawDetectionZones(stops)
 
         // 🔹 Ensure schedule status updates correctly
         Log.d("MapActivity confirmArrival", "🔄 Updating API Time...")
@@ -898,17 +837,17 @@ class MapActivity : AppCompatActivity() {
             val stopLon = redStop.longitude!!
 
             // --- 1. Distance from current location to red timing point (d1) ---
-            val d1 = calculateDistance(latitude, longitude, stopLat, stopLon)
+            val d1 = mapController.calculateDistance(latitude, longitude, stopLat, stopLon)
 
             // --- 2. Total distance from route start to this red timing point (d2) ---
             val upcomingIndex = route.indexOfLast {
-                calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
+                mapController.calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
             }.coerceAtLeast(1)
 
             val d2 = (0 until upcomingIndex).sumOf { i ->
                 val p1 = route[i]
                 val p2 = route[i + 1]
-                calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
+                mapController.calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
             }
 
             if (d2 == 0.0) {
@@ -1030,17 +969,17 @@ class MapActivity : AppCompatActivity() {
         Log.d(logTag, "Final stop coordinates: lat=$stopLat, lon=$stopLon")
 
         // --- Compute distance from current position to final stop (d1) ---
-        val d1 = calculateDistance(latitude, longitude, stopLat, stopLon)
+        val d1 = mapController.calculateDistance(latitude, longitude, stopLat, stopLon)
         Log.d(logTag, "d1 (distance current to final stop): $d1 meters")
 
         // --- Calculate the total distance (d2) along the route to near the final stop ---
         val finalStopRouteIndex = route.indexOfLast {
-            calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
+            mapController.calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
         }.coerceAtLeast(1)
         val d2 = (0 until finalStopRouteIndex).sumOf { i ->
             val p1 = route[i]
             val p2 = route[i + 1]
-            calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
+            mapController.calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
         }
         Log.d(logTag, "d2 (total route distance to final stop): $d2 meters")
         if (d2 == 0.0) {
@@ -1339,7 +1278,7 @@ class MapActivity : AppCompatActivity() {
         for ((index, stop) in stopList.withIndex()) {
             val stopLat = stop.latitude
             val stopLon = stop.longitude
-            val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
+            val distance = mapController.calculateDistance(currentLat, currentLon, stopLat, stopLon)
 
             val stopPassThreshold = 25.0 // Within 25 meters
 
@@ -1389,7 +1328,7 @@ class MapActivity : AppCompatActivity() {
      * @param currentLat The current latitude of the bus.
      * @param currentLon The current longitude of the bus.
      */
-    private val passedStops = mutableListOf<BusStop>() // Track stops that have been passed
+    val passedStops = mutableListOf<BusStop>() // Track stops that have been passed
     private var currentStopIndex = 0 // Keep track of the current stop in order
     private var hasPassedFirstStopAgain = false
     private val isCircularRoute: Boolean
@@ -1427,7 +1366,7 @@ class MapActivity : AppCompatActivity() {
             updateApiTime()
         }
 
-        val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
+        val distance = mapController.calculateDistance(currentLat, currentLon, stopLat, stopLon)
 
         if (distance <= busStopRadius) {
 
@@ -1485,14 +1424,14 @@ class MapActivity : AppCompatActivity() {
                 // ✅ Add this block to track and update detection zones
                 if (!passedStops.contains(nextStop)) {
                     passedStops.add(nextStop)
-                    drawDetectionZones(stops) // Redraw zones to reflect changes
+                    mapController.drawDetectionZones(stops) // Redraw zones to reflect changes
                 }
 
                 passedStops.add(nextStop)
                 currentStopIndex++
 
                 // Ensure the next stop is updated correctly even if a stop is skipped
-                while (currentStopIndex < stops.size && calculateDistance(
+                while (currentStopIndex < stops.size && mapController.calculateDistance(
                         currentLat, currentLon,
                         stops[currentStopIndex].latitude ?: 0.0,
                         stops[currentStopIndex].longitude ?: 0.0
@@ -1562,38 +1501,8 @@ class MapActivity : AppCompatActivity() {
      * Geofence Detection Method
      */
     private fun isBusInDetectionArea(currentLat: Double, currentLon: Double, stopLat: Double, stopLon: Double, radius: Double = busStopRadius): Boolean {
-        val distance = calculateDistance(currentLat, currentLon, stopLat, stopLon)
+        val distance = mapController.calculateDistance(currentLat, currentLon, stopLat, stopLon)
         return distance <= radius
-    }
-
-    /**
-     * Function to add circular markers to represent the detection area for each stop with 25% opacity.
-     */
-    private fun drawDetectionZones(busStops: List<BusStop>, radiusMeters: Double = busStopRadius) {
-        busStops.forEach { stop ->
-            val isPassed = passedStops.any { it.latitude == stop.latitude && it.longitude == stop.longitude }
-
-            val fillColor = if (isPassed) Color.argb(64, 0, 255, 0) // Green with 25% opacity
-            else Color.argb(64, 255, 0, 0) // Red with 25% opacity
-
-            val circleLayer = org.mapsforge.map.layer.overlay.Circle(
-                LatLong(stop.latitude!!, stop.longitude!!),
-                radiusMeters.toFloat(),
-                AndroidGraphicFactory.INSTANCE.createPaint().apply {
-                    color = fillColor
-                    setStyle(org.mapsforge.core.graphics.Style.FILL)
-                },
-                AndroidGraphicFactory.INSTANCE.createPaint().apply {
-                    color = if (isPassed) Color.GREEN else Color.RED
-                    strokeWidth = 2f
-                    setStyle(org.mapsforge.core.graphics.Style.STROKE)
-                }
-            )
-
-            binding.map.layerManager.layers.add(circleLayer)
-        }
-
-        binding.map.invalidate() // Refresh map view
     }
 
     /** Finds the nearest upcoming bus stop */
@@ -1641,7 +1550,7 @@ class MapActivity : AppCompatActivity() {
                 val stopLon = stop.getDouble("longitude")
                 val stopAddress = stop.getString("address")
 
-                val distance = calculateDistance(lat, lon, stopLat, stopLon)
+                val distance = mapController.calculateDistance(lat, lon, stopLat, stopLon)
 
                 if (distance < minDistance) {
                     minDistance = distance
@@ -1654,22 +1563,6 @@ class MapActivity : AppCompatActivity() {
             Log.e("MapActivity getUpcomingBusStopName", "Error: ${e.localizedMessage}", e)
             return "MapActivity getUpcomingBusStopName Error Retrieving Stop"
         }
-    }
-
-    /** Calculates distance between two lat/lon points in meters */
-    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val R = 6371000 // Radius of Earth in meters
-        val lat1Rad = Math.toRadians(lat1)
-        val lat2Rad = Math.toRadians(lat2)
-        val deltaLat = Math.toRadians(lat2 - lat1)
-        val deltaLon = Math.toRadians(lon2 - lon1)
-
-        val a = sin(deltaLat / 2) * sin(deltaLat / 2) +
-                cos(lat1Rad) * cos(lat2Rad) *
-                sin(deltaLon / 2) * sin(deltaLon / 2)
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-
-        return R * c // Distance in meters
     }
 
     /** Stops the simulation and resets the state. */
@@ -1718,51 +1611,7 @@ class MapActivity : AppCompatActivity() {
         }
         // If needed, you can re-add the polyline:
         if (route.isNotEmpty()) {
-            drawPolyline()
-        }
-    }
-
-    /**
-     * Draws a polyline on the Mapsforge map using the busRoute data.
-     */
-    @SuppressLint("LongLogTag")
-    private fun drawPolyline() {
-        Log.d("MapActivity drawPolyline", "Drawing polyline with route: $route")
-
-        if (route.isNotEmpty()) {
-            val routePoints = route.map { LatLong(it.latitude!!, it.longitude!!) }
-
-            // **Remove existing polyline before adding a new one**
-            routePolyline?.let {
-                binding.map.layerManager.layers.remove(it)
-            }
-
-            // **Ensure Mapsforge factory is initialized**
-            AndroidGraphicFactory.createInstance(application)
-
-            // **Set up paint for polyline**
-            val polylinePaint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
-                color = Color.BLUE  // Change color to RED for visibility
-                strokeWidth = 8f  // Increase thickness for better visibility
-                setStyle(org.mapsforge.core.graphics.Style.STROKE)
-            }
-
-            // **Create polyline with proper style**
-            routePolyline = org.mapsforge.map.layer.overlay.Polyline(polylinePaint, AndroidGraphicFactory.INSTANCE).apply {
-                addPoints(routePoints)
-            }
-
-            // **Ensure polyline is added to the map**
-            if (!binding.map.layerManager.layers.contains(routePolyline)) {
-                binding.map.layerManager.layers.add(routePolyline)
-            }
-
-            // **Force map redraw**
-            binding.map.invalidate()
-
-            Log.d("MapActivity drawPolyline", "✅ Polyline drawn with ${routePoints.size} points.")
-        } else {
-            Log.e("MapActivity drawPolyline", "❌ No route data available for polyline.")
+            mapController.drawPolyline()
         }
     }
 
@@ -1811,7 +1660,7 @@ class MapActivity : AppCompatActivity() {
                     }
 
                     // Find the nearest route point
-                    val nearestIndex = findNearestBusRoutePoint(latitude, longitude)
+                    val nearestIndex = mapController.findNearestBusRoutePoint(latitude, longitude)
 
                     // Handle First Bus Stop Rule
                     if (!hasPassedFirstStop) {
@@ -1822,7 +1671,7 @@ class MapActivity : AppCompatActivity() {
                             Log.d("MapActivity", "⚠️ Waiting for first bus stop to be passed.")
                             // Use live GPS data until the first stop is passed
                             runOnUiThread {
-                                updateBusMarkerPosition(latitude, longitude, bearing)
+                                mapController.updateBusMarkerPosition(latitude, longitude, bearing)
                                 binding.map.invalidate()
                             }
                             return
@@ -1833,9 +1682,9 @@ class MapActivity : AppCompatActivity() {
                     if (nearestIndex < nearestRouteIndex) return
 
                     // Unlock detection zone logic
-                    val distance = calculateDistance(lastLatitude, lastLongitude, latitude, longitude)
+                    val distance = mapController.calculateDistance(lastLatitude, lastLongitude, latitude, longitude)
                     if (distance > detectionZoneRadius * 2) {
-                        nearestRouteIndex = findNearestBusRoutePoint(latitude, longitude)
+                        nearestRouteIndex = mapController.findNearestBusRoutePoint(latitude, longitude)
                     }
 
                     // Ignore sudden jumps (skip unexpected spikes)
@@ -1843,7 +1692,7 @@ class MapActivity : AppCompatActivity() {
 
                     // Smooth marker animation for consecutive points
                     if (nearestIndex >= nearestRouteIndex) {
-                        animateMarkerThroughPoints(nearestRouteIndex, nearestIndex)
+                        mapController.animateMarkerThroughPoints(nearestRouteIndex, nearestIndex)
                     }
 
                     // Update the valid position
@@ -1859,7 +1708,7 @@ class MapActivity : AppCompatActivity() {
                     val nextIndex = if (nearestIndex < route.size - 1) nearestIndex + 1 else nearestIndex
                     val targetPoint = route[nextIndex]
 
-                    bearing = calculateBearing(
+                    bearing = mapController.calculateBearing(
                         latitude, longitude,
                         targetPoint.latitude ?: 0.0,
                         targetPoint.longitude ?: 0.0
@@ -1874,7 +1723,7 @@ class MapActivity : AppCompatActivity() {
 
                     runOnUiThread {
                         speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
-                        updateBusMarkerPosition(latitude, longitude, bearing)
+                        mapController.updateBusMarkerPosition(latitude, longitude, bearing)
                         checkPassedStops(latitude, longitude)
                         updateTimingPointBasedOnLocation(latitude, longitude)
                         scheduleStatusValueTextView.text = "Calculating..."
@@ -1923,98 +1772,9 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * function to smoothly animate the marker's movement instead of jumping suddenly.
-     */
-    private fun animateMarkerThroughPoints(startIndex: Int, endIndex: Int) {
-        val handler = Handler(Looper.getMainLooper())
-        val pointsToAnimate = route.subList(startIndex, endIndex + 1)
-
-        var currentStep = 0
-        val totalSteps = pointsToAnimate.size
-
-        handler.post(object : Runnable {
-            override fun run() {
-                if (currentStep < totalSteps) {
-                    val point = pointsToAnimate[currentStep]
-                    updateBusMarkerPosition(point.latitude ?: 0.0, point.longitude ?: 0.0, bearing)
-                    currentStep++
-                    handler.postDelayed(this, 500) // Smooth animation every 500ms
-                }
-            }
-        })
-    }
-
-    /**
-     * function to calculate the nearest coordinate index in the busRoute
-     */
-    private fun findNearestBusRoutePoint(currentLat: Double, currentLon: Double): Int {
-        var nearestIndex = 0
-        var minDistance = Double.MAX_VALUE
-
-        for (i in route.indices) {
-            val routePoint = route[i]
-            val distance = calculateDistance(
-                currentLat ?: 0.0,
-                currentLon ?: 0.0,
-                routePoint.latitude ?: 0.0,
-                routePoint.longitude ?: 0.0
-            )
-
-            if (distance < minDistance) {
-                minDistance = distance
-                nearestIndex = i
-            }
-        }
-
-        return nearestIndex
-    }
-
-    private var firstTimeCentering = true  // Add this flag to track the initial centering
-
-    /** Move the bus marker dynamically with updated bearing */
-    private fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float) {
-        val newPosition = LatLong(lat, lon)
-
-        mqttHelper.publishTelemetryData()
-        updateClientAttributes()
-
-        mqttHelper.sendRequestAttributes()
-
-        // Convert Drawable to Bitmap and rotate it
-        val rotatedBitmap = rotateDrawable(bearing)
-
-        // Remove old marker if it exists
-        busMarker?.let {
-            binding.map.layerManager.layers.remove(it)
-        }
-
-        // Create a new rotated marker at the updated position
-        busMarker = org.mapsforge.map.layer.overlay.Marker(
-            newPosition, rotatedBitmap, 0, 0
-        )
-        binding.map.layerManager.layers.add(busMarker)
-
-        // Apply map rotation
-        binding.map.setRotation(-bearing) // Negative to align with compass movement
-
-        // Scale the map to prevent cropping
-        binding.map.scaleX = 1f  // Adjust scaling factor
-        binding.map.scaleY = 1f
-
-        Log.d("MapActivity updateBusMarkerPosition", "Recentering map on bus at lat=$lat, lon=$lon")
-
-        // Keep the map centered on the bus location
-        binding.map.setCenter(newPosition)
-        binding.map.invalidate() // Force redraw
-
-        // Call our new listener function to check/update upcoming bus stop details
-        onBusMarkerUpdated()
-    }
-
-    /**
      * Updates the client attributes by posting the current location, bearing, speed, and direction data to the server.
      */
-    private fun updateClientAttributes() {
+    fun updateClientAttributes() {
         // before you build & post…
         val curr = latitude to longitude
         if (prevOwnCoords == curr) {
@@ -2050,7 +1810,7 @@ class MapActivity : AppCompatActivity() {
      * If the stop is within the defined busStopRadius, then it automatically updates the upcoming stop to the next one.
      * For stops that are timing points (i.e. red bus stops) the API timing is also updated.
      */
-    private fun onBusMarkerUpdated() {
+    fun onBusMarkerUpdated() {
         // Get the stop address currently shown in the upcoming bus stop text view.
         val currentDisplayedStop = upcomingBusStopTextView.text.toString()
         // Try to find this stop in the stops list.
@@ -2060,7 +1820,7 @@ class MapActivity : AppCompatActivity() {
         if (currentStopIndexFromDisplay != -1) {
             val currentStop = stops[currentStopIndexFromDisplay]
             // Compute the distance between the bus marker position and this bus stop.
-            val distanceToStop = calculateDistance(
+            val distanceToStop = mapController.calculateDistance(
                 latitude, longitude,
                 currentStop.latitude ?: 0.0,
                 currentStop.longitude ?: 0.0
@@ -2089,67 +1849,6 @@ class MapActivity : AppCompatActivity() {
         } else {
             Log.d("MapActivity onBusMarkerUpdated", "The displayed upcoming stop '$currentDisplayedStop' is not found in the stops list.")
         }
-    }
-
-    /**
-     * Rotates the bus symbol drawable based on the given angle.
-     *
-     * @param angle The angle in degrees.
-     * @return Rotated Bitmap.
-     */
-    private fun rotateDrawable(angle: Float): org.mapsforge.core.graphics.Bitmap {
-        val markerDrawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)
-
-        if (markerDrawable == null) {
-            Log.e("rotateDrawable", "Drawable is null!")
-            // Use an alternative way to create a blank Bitmap
-            val emptyBitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-            return AndroidBitmap(emptyBitmap)
-        }
-
-        // Convert Drawable to Android Bitmap
-        val androidBitmap = android.graphics.Bitmap.createBitmap(
-            markerDrawable.intrinsicWidth,
-            markerDrawable.intrinsicHeight,
-            android.graphics.Bitmap.Config.ARGB_8888
-        )
-
-        val canvas = android.graphics.Canvas(androidBitmap)
-        markerDrawable.setBounds(0, 0, canvas.width, canvas.height)
-        markerDrawable.draw(canvas) // Draw the drawable onto the canvas
-
-        // Apply rotation
-        val matrix = android.graphics.Matrix()
-        matrix.postRotate(angle)
-
-        val rotatedAndroidBitmap = android.graphics.Bitmap.createBitmap(
-            androidBitmap, 0, 0, androidBitmap.width, androidBitmap.height, matrix, true
-        )
-
-        // Wrap rotated Android Bitmap inside an AndroidBitmap
-        return AndroidBitmap(rotatedAndroidBitmap)
-    }
-
-    /**
-     * Calculates the bearing between two geographical points.
-     *
-     * @param lat1 The latitude of the first point.
-     * @param lon1 The longitude of the first point.
-     * @param lat2 The latitude of the second point.
-     * @param lon2 The longitude of the second point.
-     * @return The bearing between the two points in degrees.
-     */
-    private fun calculateBearing(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
-        val lat1Rad = Math.toRadians(lat1)
-        val lat2Rad = Math.toRadians(lat2)
-        val deltaLon = Math.toRadians(lon2 - lon1)
-
-        val y = sin(deltaLon) * cos(lat2Rad)
-        val x = cos(lat1Rad) * sin(lat2Rad) - sin(lat1Rad) * cos(lat2Rad) * cos(deltaLon)
-        val angleRad = atan2(y, x)
-        val angleDeg = (Math.toDegrees(angleRad) + 360) % 360
-
-        return angleDeg.toFloat()
     }
 
     /**
@@ -2187,150 +1886,6 @@ class MapActivity : AppCompatActivity() {
         arriveButtonContainer = findViewById(R.id.arriveButtonContainer)
         currentTimeTextView = binding.currentTimeTextView
         nextTripCountdownTextView = binding.nextTripCountdownTextView
-    }
-
-    /**
-     * Retrieves default configuration values for the activity, such as latitude, longitude, bearing, and more.
-     */
-    @SuppressLint("LongLogTag")
-    private fun getDefaultConfigValue() {
-//        busConfig = intent.getStringExtra(Constant.deviceNameKey).toString()
-//        Toast.makeText(this, "arrBusDataOnline1: ${arrBusData}", Toast.LENGTH_SHORT).show()
-        Log.d("MapActivity getDefaultConfigValue busConfig", arrBusData.toString())
-        Log.d("MapActivity getDefaultConfigValue arrBusDataOnline1", arrBusData.toString())
-        Log.d("MapActivity getDefaultConfigValue config", config.toString())
-        arrBusData = config!!
-        arrBusData = arrBusData.filter { it.aid != aid }
-//        Toast.makeText(this, "getDefaultConfigValue arrBusDataOnline2: ${arrBusData}", Toast.LENGTH_SHORT).show()
-        Log.d("MapActivity getDefaultConfigValue arrBusDataOnline2", arrBusData.toString())
-        for (bus in arrBusData) {
-            val busPosition = LatLong(latitude, longitude)
-            val markerDrawable = createBusIcon(R.drawable.ic_bus_symbol2)
-            // Create a Mapsforge marker
-            val marker = org.mapsforge.map.layer.overlay.Marker(
-                busPosition, // LatLong position
-                markerDrawable, // Marker icon
-                0, // Horizontal offset
-                0 // Vertical offset
-            )
-
-            // Add marker to Mapsforge Layer Manager
-            binding.map.layerManager.layers.add(marker)
-            // Store it in markerBus HashMap
-            markerBus[bus.accessToken] = marker
-            Log.d("MapActivity getDefaultConfigValue MarkerDrawable", "Bus symbol drawable applied")
-        }
-    }
-
-    /**
-     * Loads the offline map from assets and configures the map.
-     * Prevents adding duplicate layers.
-     */
-    private fun openMapFromAssets() {
-        binding.map.mapScaleBar.isVisible = true
-        binding.map.setBuiltInZoomControls(true)
-
-        val cache = AndroidUtil.createTileCache(
-            this, "preloadCache",
-            binding.map.model.displayModel.tileSize,
-            1f,
-            binding.map.model.frameBufferModel.overdrawFactor
-        )
-
-        val mapFile = copyAssetToFile("new-zealand.map")
-        if (!mapFile.exists()) {
-            Toast.makeText(this, "Offline map missing", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        // off-thread mapStore + renderer creation
-        ioScope.launch {
-            val mapStore = try {
-                MapFile(mapFile)
-            } catch (e: Exception) {
-                Log.e("MapActivity", "MapFile open failed: ${e.message}")
-                return@launch
-            }
-
-            val renderLayer = TileRendererLayer(
-                cache,
-                mapStore,
-                binding.map.model.mapViewPosition,
-                AndroidGraphicFactory.INSTANCE
-            ).apply {
-                setXmlRenderTheme(InternalRenderTheme.DEFAULT)
-            }
-
-            // back on UI thread to add layer & center/map.invalidate
-            withContext(Dispatchers.Main) {
-                if (!binding.map.layerManager.layers.contains(renderLayer)) {
-                    binding.map.layerManager.layers.add(renderLayer)
-                }
-                binding.map.post {
-                    binding.map.model.mapViewPosition.setZoomLevel(16)
-                    binding.map.model.mapViewPosition.setCenter(LatLong(latitude, longitude))
-                    drawDetectionZones(stops)
-                    drawPolyline()
-                    addBusStopMarkers(stops)
-                    addBusMarker(latitude, longitude)
-                    binding.map.invalidate()
-                }
-            }
-        }
-    }
-
-    /**
-     * Place the bus marker at a given latitude and longitude
-     */
-    private fun addBusMarker(lat: Double, lon: Double) {
-        val busPosition = LatLong(lat, lon)
-
-        val markerDrawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)
-        val markerBitmap = AndroidGraphicFactory.convertToBitmap(markerDrawable)
-
-        // Remove previous marker if it exists
-        busMarker?.let {
-            binding.map.layerManager.layers.remove(it)
-        }
-
-        // Create and add a new marker
-        busMarker = org.mapsforge.map.layer.overlay.Marker(
-            busPosition, markerBitmap, 0, 0
-        )
-        binding.map.layerManager.layers.add(busMarker)
-    }
-
-    /**
-     * Adds bus stops to the map using OverlayItem instead of Marker.
-     */
-    @SuppressLint("LongLogTag")
-    private fun addBusStopMarkers(busStops: List<BusStop>) {
-        val totalStops = busStops.size
-
-        busStops.forEachIndexed { index, stop ->
-            // build the same "lat,lon" key
-            val coordKey = "${stop.latitude},${stop.longitude}"
-            val isRed    = redBusStops.contains(coordKey)
-
-            Log.d("TestMapActivity addBusStopMarkers", "Checking $coordKey, isRed=$isRed")
-
-            val busStopSymbol = Helper.createBusStopSymbol(
-                applicationContext,
-                index,
-                totalStops,
-                isRed
-            )
-            val markerBitmap = AndroidGraphicFactory.convertToBitmap(busStopSymbol)
-
-            val marker = org.mapsforge.map.layer.overlay.Marker(
-                LatLong(stop.latitude!!, stop.longitude!!),
-                markerBitmap,
-                0,
-                0
-            )
-            binding.map.layerManager.layers.add(marker)
-        }
-        binding.map.invalidate()
     }
 
     /** Copies a file from assets to the device's file system and returns the File object. */

@@ -78,7 +78,7 @@ class MqttHelper(
                 // build markers for each other bus
                 newArr.forEach { bus ->
                     val iconRes = if (bus.aid == owner.aid) R.drawable.ic_bus_symbol else R.drawable.ic_bus_symbol2
-                    val icon = owner.createBusIcon(iconRes)
+                    val icon = owner.mapController.createBusIcon(iconRes)
                     val m = Marker(LatLong(-36.8558512, 174.7648727), icon, -icon.width/2, -icon.height)
                     binding.map.layerManager.layers.add(m)
                     owner.markerBus[bus.accessToken] = m
