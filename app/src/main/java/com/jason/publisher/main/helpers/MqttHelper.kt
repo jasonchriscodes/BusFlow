@@ -1,4 +1,4 @@
-package com.jason.publisher.main.activity
+package com.jason.publisher.main.helpers
 
 import android.annotation.SuppressLint
 import android.os.Handler
@@ -7,6 +7,7 @@ import android.util.Log
 import com.google.gson.Gson
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
+import com.jason.publisher.main.activity.MapActivity
 import com.jason.publisher.main.model.Bus
 import com.jason.publisher.services.ClientAttributesResponse
 import com.jason.publisher.services.ApiService

@@ -34,7 +34,6 @@ import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.LocationManager
 import com.jason.publisher.main.utils.NetworkStatusHelper
 import org.json.JSONArray
-import org.json.JSONObject
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidBitmap
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
@@ -48,24 +47,22 @@ import java.lang.Math.cos
 import java.lang.Math.sin
 import java.lang.Math.sqrt
 import com.google.android.gms.location.*
-import com.google.gson.Gson
 import com.jason.publisher.LocationListener
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
+import com.jason.publisher.main.helpers.MqttHelper
+import com.jason.publisher.main.helpers.TimeManager
 import com.jason.publisher.main.utils.Helper
 import com.jason.publisher.main.model.AttributesData
-import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.services.ApiServiceBuilder
 import com.jason.publisher.main.services.MqttManager
 import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
 import com.jason.publisher.services.ApiService
-import com.jason.publisher.services.ClientAttributesResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.mapsforge.map.layer.overlay.Marker
 import org.osmdroid.views.MapController
 import retrofit2.Call
 import retrofit2.Callback
@@ -124,9 +121,9 @@ class MapActivity : AppCompatActivity() {
     private lateinit var simulationRunnable: Runnable
     private var currentRouteIndex = 0
     private var isSimulating = false
-    private var simulationStartTime: Long = 0L
-    private lateinit var scheduleList: List<ScheduleItem>
-    private lateinit var scheduleData: List<ScheduleItem>
+    var simulationStartTime: Long = 0L
+    lateinit var scheduleList: List<ScheduleItem>
+    lateinit var scheduleData: List<ScheduleItem>
     private val redBusStops = mutableSetOf<String>()
 
     private lateinit var actualTimeHandler: Handler
@@ -134,19 +131,16 @@ class MapActivity : AppCompatActivity() {
     private lateinit var actualTimeTextView: TextView
     private lateinit var timingPointValueTextView: TextView
     private lateinit var ApiTimeValueTextView: TextView
-    private lateinit var scheduleStatusValueTextView: TextView
+    lateinit var scheduleStatusValueTextView: TextView
     private lateinit var thresholdRangeValueTextView: TextView
-    private var simulatedStartTime: Calendar = Calendar.getInstance()
 
     private var apiTimeLocked = false
     private var lockedApiTime: String? = null
     private var simulationSpeedFactor: Int = 1
     private lateinit var arriveButtonContainer: LinearLayout
     private var nextTimingPoint: String = "Unknown"
-    private lateinit var currentTimeTextView: TextView
-    private lateinit var currentTimeHandler: Handler
-    private lateinit var currentTimeRunnable: Runnable
-    private lateinit var nextTripCountdownTextView: TextView
+    lateinit var currentTimeTextView: TextView
+    lateinit var nextTripCountdownTextView: TextView
     private var busStopRadius: Double = 50.0
     private val forceAheadStatus = false
     private var statusText  = "Please wait..."
@@ -171,6 +165,7 @@ class MapActivity : AppCompatActivity() {
     val clientKeys       = "latitude,longitude,bearing,speed,direction"
     lateinit var mqttManagerConfig: MqttManager
     lateinit var mqttManager:        MqttManager
+    private lateinit var timeManager: TimeManager
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -205,8 +200,9 @@ class MapActivity : AppCompatActivity() {
             username  = tokenConfigData
         )
 
-        // Initialize mqttManager before using it
+        // Initialize Managers before using it
         mqttHelper = MqttHelper(this, binding)
+        timeManager = TimeManager(this)
 
         // Retrieve data passed from TimeTableActivity
         aid = intent.getStringExtra("AID") ?: "Unknown"
@@ -246,10 +242,10 @@ class MapActivity : AppCompatActivity() {
 
         // Start the current time counter
 //        startCurrentTimeUpdater()
-        startStartTime()
+        timeManager.startStartTime()
 
         // Start the next trip countdown updater
-        startNextTripCountdownUpdater()
+        timeManager.startNextTripCountdownUpdater()
 
         updateApiTime() // Ensure API time is updated at the start
 
@@ -336,8 +332,8 @@ class MapActivity : AppCompatActivity() {
             customTime = "22:15:00"                    // actualTimeStr
             // result
 
-            stopCurrentTime()
-            startCustomTime(customTime)
+            timeManager.stopCurrentTime()
+            timeManager.startCustomTime(customTime)
 //            startActualTimeUpdater()
 
             // Trigger visual change to test schedule status UI
@@ -472,165 +468,6 @@ class MapActivity : AppCompatActivity() {
                 break
             }
         }
-    }
-
-    /**
-     * Starts a custom time from a hardcoded string and counts up from there.
-     * Example: startCustomTime("08:11:00")
-     */
-    private fun startCustomTime(customTime: String) {
-        val timeParts = customTime.split(":")
-        if (timeParts.size != 3) {
-            Log.e("MapActivity startCustomTime", "❌ Invalid time format: $customTime. Expected HH:mm:ss")
-            return
-        }
-
-        // Initialize simulatedStartTime from the custom string
-        simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
-        simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
-        simulatedStartTime.set(Calendar.SECOND, timeParts[2].toInt())
-
-        currentTimeHandler = Handler(Looper.getMainLooper())
-        currentTimeRunnable = object : Runnable {
-            override fun run() {
-                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
-                Log.d("MapActivity startCustomTime", "currentTimeTextView.text: ${currentTimeTextView.text}")
-
-                // Advance time by 1 second per tick
-                simulatedStartTime.add(Calendar.SECOND, 1)
-
-                // Update schedule status based on the new simulated time
-                scheduleStatusValueTextView.text = "Calculating..."
-                checkScheduleStatus()
-
-                currentTimeHandler.postDelayed(this, 1000) // Update every second
-            }
-        }
-
-        currentTimeHandler.post(currentTimeRunnable)
-    }
-
-    /**
-     * Starts the simulated clock using the startTime of the first ScheduleItem in scheduleList.
-     */
-    private fun startStartTime() {
-        if (scheduleList.isEmpty()) {
-            Log.e("MapActivity", "❌ scheduleList is empty. Cannot start start time updater.")
-            return
-        }
-
-        // Extract the first schedule start time (e.g., "11:15")
-        val startTimeStr = scheduleList.first().startTime
-        val timeParts = startTimeStr.split(":")
-        if (timeParts.size != 2) {
-            Log.e("MapActivity", "❌ Invalid start time format in scheduleList: $startTimeStr")
-            return
-        }
-
-        // Initialize simulatedStartTime to the scheduled start time
-        simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
-        simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
-        simulatedStartTime.set(Calendar.SECOND, 0)
-
-        currentTimeHandler = Handler(Looper.getMainLooper())
-        currentTimeRunnable = object : Runnable {
-            override fun run() {
-                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
-                Log.d("MapActivity startStartTime", "Current simulated time: ${currentTimeTextView.text}")
-
-                // Advance the simulated time by 1 second per tick
-                simulatedStartTime.add(Calendar.SECOND, 1)
-
-                // Schedule the next update after 1 second
-                currentTimeHandler.postDelayed(this, 1000)
-            }
-        }
-
-        currentTimeHandler.post(currentTimeRunnable)
-    }
-
-    /**
-     * function to calculate and display the remaining time until the next scheduled run
-     */
-    private fun startNextTripCountdownUpdater() {
-        Log.d("MapActivity startNextTripCountdownUpdater", "scheduleList: $scheduleList")
-        Log.d("MapActivity startNextTripCountdownUpdater", "scheduleData: $scheduleData")
-        val handler = Handler(Looper.getMainLooper())
-        val runnable = object : Runnable {
-            override fun run() {
-                // Use the simulated clock (instead of the real system time)
-                val currentTime = simulatedStartTime.clone() as Calendar
-                Log.d("MapActivity startNextTripCountdownUpdater", "Current simulated time: ${currentTime.time}")
-
-                // Retrieve the next schedule start time using your helper function.
-                val nextTripStartTime = getNextScheduleStartTime()
-
-                if (nextTripStartTime != null) {
-                    // Parse the nextTripStartTime (e.g., "12:00") into a Calendar object.
-                    val timeParts = nextTripStartTime.split(":").map { it.toInt() }
-                    val nextTripCalendar = Calendar.getInstance().apply {
-                        // Set date to match the current simulation time
-                        set(Calendar.YEAR, currentTime.get(Calendar.YEAR))
-                        set(Calendar.MONTH, currentTime.get(Calendar.MONTH))
-                        set(Calendar.DAY_OF_MONTH, currentTime.get(Calendar.DAY_OF_MONTH))
-                        // Set the schedule start time from the string
-                        set(Calendar.HOUR_OF_DAY, timeParts[0])
-                        set(Calendar.MINUTE, timeParts[1])
-                        set(Calendar.SECOND, 0)
-                        // If the scheduled time has already passed for this day, assume the next trip is tomorrow:
-                        if (timeInMillis <= currentTime.timeInMillis) {
-                            add(Calendar.DATE, 1)
-                        }
-                    }
-
-                    val timeDiffMillis = nextTripCalendar.timeInMillis - currentTime.timeInMillis
-                    Log.d("MapActivity startNextTripCountdownUpdater", "timeDiffMillis: $timeDiffMillis")
-                    if (timeDiffMillis > 0) {
-                        val minutesRemaining = (timeDiffMillis / 1000 / 60).toInt()
-                        val secondsRemaining = ((timeDiffMillis / 1000) % 60).toInt()
-                        runOnUiThread {
-                            nextTripCountdownTextView.text = "Next run in: $minutesRemaining mins $secondsRemaining seconds"
-                        }
-                    } else {
-                        runOnUiThread {
-                            nextTripCountdownTextView.text = "You are late for the next run"
-                        }
-                    }
-                } else {
-                    runOnUiThread {
-                        nextTripCountdownTextView.text = "No more scheduled trips for today"
-                    }
-                }
-                handler.postDelayed(this, 1000) // Update every second
-            }
-        }
-        handler.post(runnable)
-    }
-
-    /**
-     * function to update the currentTimeTextView
-     */
-    private fun startCurrentTimeUpdater() {
-        currentTimeHandler = Handler(Looper.getMainLooper())
-        currentTimeRunnable = object : Runnable {
-            override fun run() {
-                val currentTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                val currentTimeString = currentTimeFormat.format(Date())  // Display system time directly
-
-                currentTimeTextView.text = currentTimeString
-                currentTimeHandler.postDelayed(this, 1000) // Update every second
-            }
-        }
-        currentTimeHandler.post(currentTimeRunnable)
-    }
-
-    /**
-     * Function to remove current time call back
-     */
-    fun stopCurrentTime() {
-        currentTimeRunnable?.let { currentTimeHandler.removeCallbacks(it) }
     }
 
     /**
@@ -856,14 +693,6 @@ class MapActivity : AppCompatActivity() {
     }
 
     /**
-     * Add this helper function to convert a time string (e.g. "08:11") to minutes since midnight.
-     */
-    private fun convertTimeToMinutes(time: String): Int {
-        val parts = time.split(":").map { it.toInt() }
-        return parts[0] * 60 + parts[1]
-    }
-
-    /**
      * Call this function when the simulation finishes.
      */
     @RequiresApi(Build.VERSION_CODES.M)
@@ -880,9 +709,9 @@ class MapActivity : AppCompatActivity() {
             "You have completed last run of the day."
         } else {
             val nextTrip = flatSchedule[1]
-            val nextStartMinutes = convertTimeToMinutes(nextTrip.startTime)
-            val currentMinutes = simulatedStartTime.get(Calendar.HOUR_OF_DAY) * 60 +
-                    simulatedStartTime.get(Calendar.MINUTE)
+            val nextStartMinutes = timeManager.convertTimeToMinutes(nextTrip.startTime)
+            val currentMinutes = timeManager.simulatedStartTime.get(Calendar.HOUR_OF_DAY) * 60 +
+                    timeManager.simulatedStartTime.get(Calendar.MINUTE)
             val restTotalMinutes = if (nextStartMinutes > currentMinutes) nextStartMinutes - currentMinutes else 0
             val restHours = restTotalMinutes / 60
             val restMinutes = restTotalMinutes % 60
@@ -995,7 +824,7 @@ class MapActivity : AppCompatActivity() {
      * - If the upcoming stop is the first bus stop and additional duration applies, the API time is adjusted accordingly.
      */
     @SuppressLint("LongLogTag")
-    private fun checkScheduleStatus() {
+    fun checkScheduleStatus() {
         // If using mock data and first stop hasn't been passed, show "Please wait..."
         if (forceAheadStatus && !hasPassedFirstStop) {
             runOnUiThread {
@@ -1015,7 +844,7 @@ class MapActivity : AppCompatActivity() {
 
         try {
             val scheduledTimeStr = timingPointValueTextView.text.toString()
-            val timingPointTime = parseTimeToday(scheduledTimeStr)
+            val timingPointTime = timeManager.parseTimeToday(scheduledTimeStr)
 
             if (forceAheadStatus) {
                 baseTimeStr = customTime
@@ -1024,7 +853,7 @@ class MapActivity : AppCompatActivity() {
                 baseTimeStr = scheduleList.first().startTime + ":00"
                 Log.d("MapActivity checkScheduleStatus", "baseTimeStr: ${baseTimeStr}")
             }
-            val baseTime = parseTimeToday(baseTimeStr)
+            val baseTime = timeManager.parseTimeToday(baseTimeStr)
 
             var apiTimeStr = ApiTimeValueTextView.text.toString()
             val firstAddress = scheduleList.firstOrNull()?.busStops?.firstOrNull()?.address
@@ -1048,9 +877,9 @@ class MapActivity : AppCompatActivity() {
                 apiTimeStr = adjustedApiTime
             }
 
-            val apiTime = parseTimeToday(apiTimeStr)
-            val actualTimeStr = timeFormat.format(simulatedStartTime.time)
-            val actualTime = simulatedStartTime.time
+            val apiTime = timeManager.parseTimeToday(apiTimeStr)
+            val actualTimeStr = timeFormat.format(timeManager.simulatedStartTime.time)
+            val actualTime = timeManager.simulatedStartTime.time
 
             // ✅ Find next stop that is a red timing point
             var redStopIndex = stops.indexOfFirst { stop ->
@@ -1096,7 +925,7 @@ class MapActivity : AppCompatActivity() {
             val t1 = d1 / effectiveSpeed  // d1 is the distance to the red stop in meters
 
             val predictedArrival = Calendar.getInstance().apply {
-                time = simulatedStartTime.time
+                time = timeManager.simulatedStartTime.time
                 add(Calendar.SECOND, t1.toInt())
             }
 
@@ -1186,12 +1015,12 @@ class MapActivity : AppCompatActivity() {
 
         // Retrieve the scheduled final stop time from the current schedule's endTime.
         val scheduledTimeForFinalStopStr = scheduleList.first().endTime + ":00"
-        val finalStopScheduledTime = parseTimeToday(scheduledTimeForFinalStopStr)
+        val finalStopScheduledTime = timeManager.parseTimeToday(scheduledTimeForFinalStopStr)
         Log.d(logTag, "Final stop scheduled time: $scheduledTimeForFinalStopStr")
 
         // Base time is the schedule's start time.
         val baseTimeStr = scheduleList.first().startTime + ":00"
-        val baseTime = parseTimeToday(baseTimeStr)
+        val baseTime = timeManager.parseTimeToday(baseTimeStr)
         Log.d(logTag, "Base time: $baseTimeStr")
 
         // Use the final bus stop (last element in the stops list).
@@ -1230,21 +1059,21 @@ class MapActivity : AppCompatActivity() {
 
         // Compute predicted arrival at final stop.
         val predictedArrival = Calendar.getInstance().apply {
-            time = simulatedStartTime.time
+            time = timeManager.simulatedStartTime.time
             add(Calendar.SECOND, t1.toInt())
         }
         val predictedArrivalLastStop = timeFormat.format(predictedArrival.time)
         Log.d(logTag, "Predicted arrival at final stop: $predictedArrivalLastStop")
 
         // Retrieve the next schedule start time.
-        val nextScheduleStartRaw = getNextScheduleStartTime()
+        val nextScheduleStartRaw = timeManager.getNextScheduleStartTime()
         if (nextScheduleStartRaw == null) {
             Log.d(logTag, "No next schedule start time available; skipping override.")
             return
         }
         // Append ":00" for seconds.
         val nextScheduleStartStr = nextScheduleStartRaw + ":00"
-        val nextScheduleStartTime = parseTimeToday(nextScheduleStartStr)
+        val nextScheduleStartTime = timeManager.parseTimeToday(nextScheduleStartStr)
         Log.d(logTag, "Next schedule start time: $nextScheduleStartStr")
 
         // Compute delta in seconds: (next schedule start time - predicted arrival time).
@@ -1270,48 +1099,6 @@ class MapActivity : AppCompatActivity() {
         } else {
             Log.d(logTag, "Delta not within override range; no status override applied.")
         }
-    }
-
-    /**
-     * Returns the start time for the next schedule.
-     * Assumes that the scheduleData list is sorted chronologically.
-     */
-    @SuppressLint("LongLogTag")
-    private fun getNextScheduleStartTime(): String? {
-        // Flatten scheduleData in case it's a nested list.
-        val flatSchedule = (scheduleData as? List<Any> ?: emptyList()).flatMap { element ->
-            when (element) {
-                is ScheduleItem -> listOf(element)
-                is List<*> -> element.filterIsInstance<ScheduleItem>()
-                else -> emptyList()
-            }
-        }
-        // Now check if we have a second schedule item.
-        val nextStartTime = if (flatSchedule.size > 1) flatSchedule[1].startTime else null
-        Log.d("TestMapActivity getNextScheduleStartTime", "Next schedule start time: ${nextStartTime ?: "None"}")
-        return nextStartTime
-    }
-
-    /**
-     * Set the same base date for all Date
-     */
-    private fun parseTimeToday(timeStr: String): Date {
-        val parts = timeStr.split(":")
-        if (parts.size != 3) return Date()
-
-        val calendar = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, parts[0].toInt())
-            set(Calendar.MINUTE, parts[1].toInt())
-            set(Calendar.SECOND, parts[2].toInt())
-            set(Calendar.MILLISECOND, 0)
-        }
-        return calendar.time
-    }
-
-    /** 🔹 Reset actual time when the bus reaches a stop or upcoming stop changes */
-    private fun resetActualTime() {
-        simulationStartTime = System.currentTimeMillis()
-        Log.d("MapActivity", "✅ Actual time reset to current time.")
     }
 
     /**
@@ -1909,9 +1696,9 @@ class MapActivity : AppCompatActivity() {
             val startTimeStr = scheduleList.first().startTime  // e.g. "08:00"
             val timeParts = startTimeStr.split(":")
             if (timeParts.size == 2) {
-                simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
-                simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
-                simulatedStartTime.set(Calendar.SECOND, 0)
+                timeManager.simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+                timeManager.simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
+                timeManager.simulatedStartTime.set(Calendar.SECOND, 0)
             }
         }
 
@@ -2569,6 +2356,6 @@ class MapActivity : AppCompatActivity() {
             binding.map.invalidate()
         }
         Log.d("MapActivity", "🗑️ Removed polyline on destroy.")
-        currentTimeHandler.removeCallbacks(currentTimeRunnable)
+        timeManager.currentTimeHandler.removeCallbacks(timeManager.currentTimeRunnable)
     }
 }
