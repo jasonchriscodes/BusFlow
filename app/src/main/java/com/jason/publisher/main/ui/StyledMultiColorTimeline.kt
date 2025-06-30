@@ -115,70 +115,72 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                 setPadding(12, 8, 12, 8)
                 background = ContextCompat.getDrawable(context,
                     when {
-                        isRep -> if (isDarkMode) R.drawable.dark_rep_vertical_style else R.drawable.rep_vertical_style
+                        isRep   -> if (isDarkMode) R.drawable.dark_rep_vertical_style   else R.drawable.rep_vertical_style
                         isBreak -> if (isDarkMode) R.drawable.dark_break_horizontal_style else R.drawable.break_horizontal_style
-                        else -> if (isDarkMode) R.drawable.dark_route_rounded_style else R.drawable.route_rounded_style
+                        else    -> if (isDarkMode) R.drawable.dark_route_rounded_style   else R.drawable.route_rounded_style
                     }
                 )
 
+                // create timeLabel but only add it for REP or Break
                 val timeLabel = TextView(context).apply {
                     text = startTime
                     textSize = 12f
                     gravity = Gravity.CENTER
                     setTextColor(Color.WHITE)
                 }
+                if (isRep || isBreak) {
+                    addView(timeLabel)
+                }
 
-                addView(timeLabel)
-
-                if (isRep) {
-                    val repLabel = TextView(context).apply {
-                        text = "REP"
-                        textSize = 16f
-                        gravity = Gravity.CENTER
-                        setTextColor(Color.WHITE)
-                    }
-
-                    val stopLabel = TextView(context).apply {
-                        text = firstStopAbbr
-                        textSize = 14f
-                        gravity = Gravity.CENTER
-                        setTextColor(Color.WHITE)
-                    }
-
-                    addView(repLabel)
-                    addView(stopLabel)
-
-                } else if (isBreak) {
-                    val icon = ImageView(context).apply {
-                        setImageResource(R.drawable.cup_break)
-                        setColorFilter(if (isDarkMode) Color.GRAY else Color.WHITE)
-                        layoutParams = LinearLayout.LayoutParams(32, 32).apply {
-                            gravity = Gravity.CENTER_HORIZONTAL
+                when {
+                    isRep -> {
+                        val repLabel = TextView(context).apply {
+                            text = "REP"
+                            textSize = 16f
+                            gravity = Gravity.CENTER
+                            setTextColor(Color.WHITE)
                         }
+                        val stopLabel = TextView(context).apply {
+                            text = firstStopAbbr
+                            textSize = 14f
+                            gravity = Gravity.CENTER
+                            setTextColor(Color.WHITE)
+                        }
+                        addView(repLabel)
+                        addView(stopLabel)
+
                     }
+                    isBreak -> {
+                        val icon = ImageView(context).apply {
+                            setImageResource(R.drawable.cup_break)
+                            setColorFilter(if (isDarkMode) Color.GRAY else Color.WHITE)
+                            layoutParams = LinearLayout.LayoutParams(32, 32).apply {
+                                gravity = Gravity.CENTER_HORIZONTAL
+                            }
+                        }
+                        val stopLabel = TextView(context).apply {
+                            text = firstStopAbbr
+                            textSize = 14f
+                            gravity = Gravity.CENTER
+                            setTextColor(Color.WHITE)
+                        }
+                        addView(icon)
+                        addView(stopLabel)
 
-                    val stopLabel = TextView(context).apply {
-                        text = firstStopAbbr
-                        textSize = 14f
-                        gravity = Gravity.CENTER
-                        setTextColor(Color.WHITE)
                     }
+                    else -> {
+                        val lastStopAbbr = item?.busStops?.lastOrNull()?.abbreviation ?: "?"
 
-                    addView(icon)
-                    addView(stopLabel)
-
-                } else {
-                    val lastStopAbbr = item?.busStops?.lastOrNull()?.abbreviation ?: "?"
-                    val label = TextView(context).apply {
-                        text = "$dutyName $firstStopAbbr → $lastStopAbbr"
-                        textSize = 16f
-                        gravity = Gravity.CENTER
-                        maxLines = 1
-                        ellipsize = TextUtils.TruncateAt.END
-                        setTextColor(Color.WHITE)
+                        val singleLineLabel = TextView(context).apply {
+                            text = "$startTime $dutyName $firstStopAbbr → $lastStopAbbr"
+                            textSize = 16f
+                            gravity = Gravity.CENTER
+                            maxLines = 1
+                            ellipsize = TextUtils.TruncateAt.END
+                            setTextColor(Color.WHITE)
+                        }
+                        addView(singleLineLabel)
                     }
-
-                    addView(label)
                 }
             }
 
