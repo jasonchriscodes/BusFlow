@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.core.content.ContextCompat
@@ -325,14 +326,30 @@ class MapViewController(
      * Retrieves default configuration values for the activity,
      * such as adding other-bus markers.
      */
+    @SuppressLint("LongLogTag")
     fun getDefaultConfigValue() {
-        activity.arrBusData = activity.config!!.filter { it.aid != activity.aid }
-        activity.arrBusData.forEach { bus ->
-            val pos = LatLong(activity.latitude, activity.longitude)
-            val icon = createBusIcon(R.drawable.ic_bus_symbol2)
-            val marker = Marker(pos, icon, 0, 0)
-            binding.map.layerManager.layers.add(marker)
-            activity.markerBus[bus.accessToken] = marker
+        activity.arrBusData.forEachIndexed { idx, bus ->
+            val slot = min(idx + 2, 10)
+            Log.d("MapViewController getDefaultConfigValue", "📍 getDefaultConfigValue: bus-aid=${bus.accessToken} → ic_bus_symbol$slot")
+            val lat = activity.latitude
+            val lon = activity.longitude
+            val token = bus.accessToken
+            val iconRes = activity.resources.getIdentifier(
+                "ic_bus_symbol${min(idx + 2, 10)}",
+                "drawable",
+                activity.packageName
+            )
+            val icon  = createBusIcon(iconRes)
+
+            if (activity.markerBus.containsKey(token)) {
+                // just move the existing one
+                activity.markerBus[token]?.latLong = LatLong(lat, lon)
+            } else {
+                // first time
+                val marker = Marker(LatLong(lat, lon), icon, 0, 0)
+                binding.map.layerManager.layers.add(marker)
+                activity.markerBus[token] = marker
+            }
         }
     }
 }

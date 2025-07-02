@@ -12,12 +12,14 @@ import com.jason.publisher.main.model.Bus
 import com.jason.publisher.services.ClientAttributesResponse
 import com.jason.publisher.services.ApiService
 import com.jason.publisher.main.services.MqttManager
+import org.checkerframework.checker.units.qual.min
 import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.layer.overlay.Marker
+import kotlin.math.min
 
 /**
  * Helper to encapsulate all MQTT-related logic extracted from MapActivity.
@@ -32,6 +34,8 @@ class MqttHelper(
     private val mqttManager: MqttManager get() = owner.mqttManager
     private val apiService: ApiService get() = owner.apiService
     private val clientKeys: String get() = owner.clientKeys
+    private val tokenSlots = mutableMapOf<String, Int>()
+
 
     /**
      * Fetches the configuration data and initializes the config variable.
@@ -75,13 +79,9 @@ class MqttHelper(
                 val newConfig = data.shared?.config?.busConfig ?: return@runOnUiThread
                 val newArr = newConfig.filter { it.aid != owner.aid }
 
-                // build markers for each other bus
+                // For each new bus, just request its attributes.
+                // getAttributes() will create & log the marker exactly once.
                 newArr.forEach { bus ->
-                    val iconRes = if (bus.aid == owner.aid) R.drawable.ic_bus_symbol else R.drawable.ic_bus_symbol2
-                    val icon = owner.mapController.createBusIcon(iconRes)
-                    val m = Marker(LatLong(-36.8558512, 174.7648727), icon, -icon.width/2, -icon.height)
-                    binding.map.layerManager.layers.add(m)
-                    owner.markerBus[bus.accessToken] = m
                     getAttributes(apiService, bus.accessToken, clientKeys)
                 }
 
@@ -118,11 +118,13 @@ class MqttHelper(
     /**
      * Retrieves attributes data for each bus and updates marker.
      */
+    @SuppressLint("LongLogTag")
     fun getAttributes(
         apiService: ApiService,
         token: String,
         clientKeys: String
     ) {
+        Log.d("MqttHelper getAttributes", "→ getAttributes for token=$token")
         val call = apiService.getAttributes(
             "${ApiService.BASE_URL}$token/attributes",
             "application/json",
@@ -130,6 +132,7 @@ class MqttHelper(
         )
 
         call.enqueue(object : Callback<ClientAttributesResponse> {
+            @SuppressLint("LongLogTag")
             override fun onResponse(
                 call: Call<ClientAttributesResponse>,
                 response: Response<ClientAttributesResponse>
@@ -143,7 +146,28 @@ class MqttHelper(
                 owner.prevCoords[token] = Pair(lat, lon)
 
                 owner.runOnUiThread {
-                    owner.markerBus[token]?.latLong = LatLong(lat, lon)
+                    val newLat = client.latitude
+                    val newLon = client.longitude
+
+                    if (owner.markerBus.containsKey(token)) {
+                        // just move the existing one
+                        owner.markerBus[token]?.latLong = LatLong(newLat, newLon)
+                    } else {
+                        // assign this token its unique slot number (0,1,2…)
+                        val iconIdx = tokenSlots.getOrPut(token) { tokenSlots.size }
+                        val slot = min(iconIdx + 2, 10)
+                        Log.d("MqttHelper getAttributes", "🚌 bus-aid=$token assigned icon ic_bus_symbol$slot (idx=$iconIdx)")
+                        val iconRes = owner.resources.getIdentifier(
+                            "ic_bus_symbol$slot",
+                            "drawable",
+                            owner.packageName
+                        )
+                        val icon   = owner.mapController.createBusIcon(iconRes)
+                        val marker = Marker(LatLong(newLat, newLon), icon, 0, 0)
+                        binding.map.layerManager.layers.add(marker)
+                        owner.markerBus[token] = marker
+                    }
+
                     binding.map.invalidate()
                 }
             }
