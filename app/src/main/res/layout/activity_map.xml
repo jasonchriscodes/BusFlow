@@ -93,34 +93,35 @@
         </LinearLayout>
 
         <!-- Blank Space (Center) -->
-    <LinearLayout
-        android:id="@+id/arriveButtonContainer"
-        android:layout_width="0dp"
-        android:layout_height="48dp"
-        android:layout_weight="1"
-        android:layout_margin="4dp"
-        android:orientation="horizontal"
-        android:gravity="center"
         android:background="@drawable/button_rounded_background"
-        android:backgroundTint="@color/purple_500"
-        android:padding="8dp">
-        <Button
-            android:id="@+id/arriveButton"
+        <LinearLayout
+            android:id="@+id/arriveButtonContainer"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_weight="1"
             android:layout_margin="4dp"
+            android:orientation="horizontal"
             android:gravity="center"
-            android:textAllCaps="false"
-            android:background="@android:color/transparent"
-            android:padding="8dp"
-            android:text="Arrive"
-            android:textSize="16sp"
-            android:textColor="@color/white" />
-    </LinearLayout>
+            android:background="@drawable/button_rounded_background"
+            android:backgroundTint="@color/purple_500"
+            android:padding="8dp">
+            <Button
+                android:id="@+id/arriveButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_margin="4dp"
+                android:gravity="center"
+                android:textAllCaps="false"
+                android:background="@android:color/transparent"
+                android:padding="8dp"
+                android:text="Arrive"
+                android:textSize="16sp"
+                android:textColor="@color/white" />
+        </LinearLayout>
     </LinearLayout>
 
-    <!-- Bottom Section: 2x2 Grid -->
+    <!-- Bottom Section: 2x2 grid -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/bottomContainer"
         android:layout_width="0dp"
@@ -131,7 +132,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Vertical Guideline at 50% -->
+        <!-- 50% vertical line -->
         <androidx.constraintlayout.widget.Guideline
             android:id="@+id/guidelineVertical"
             android:layout_width="wrap_content"
@@ -139,7 +140,7 @@
             android:orientation="vertical"
             app:layout_constraintGuide_percent="0.68" />
 
-        <!-- Horizontal Guideline at 50% -->
+        <!-- 50% horizontal line -->
         <androidx.constraintlayout.widget.Guideline
             android:id="@+id/guidelineHorizontal"
             android:layout_width="wrap_content"
@@ -147,336 +148,374 @@
             android:orientation="horizontal"
             app:layout_constraintGuide_percent="0.7" />
 
-        <!-- Top Left Quadrant: MapView -->
+        <!-- Top-Left quadrant: map + detail split 3:1 -->
         <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/mapContainer"
+            android:id="@+id/mapAndDetailContainer"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="@id/scheduleStatusContainer"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="@id/upcomingStopContainer">
-
-            <org.mapsforge.map.android.view.MapView
-                android:id="@+id/map"
-                android:layout_width="800dp"
-                android:layout_height="800dp"
-                android:translationY="-250dp"
-                android:translationX="-50dp"
-                android:contentDescription="Live map displaying bus routes and stops"
-                tools:ignore="MissingConstraints">
-
-            <androidx.constraintlayout.widget.ConstraintLayout
-                    android:id="@+id/hiddenUIContainer"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:alpha="0"
-                    android:clickable="false"
-                    android:focusable="false"
-                    android:padding="8dp">
-
-                    <Button
-                        android:id="@+id/startSimulationButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="4dp"
-                        android:layout_weight="1"
-                        android:backgroundTint="@color/purple_400"
-                        android:drawableLeft="@drawable/ic_play"
-                        android:padding="10dp"
-                        android:text="Simulation"
-                        android:textAllCaps="false"
-                        android:textColor="@color/white"
-                        tools:ignore="MissingConstraints" />
-
-                    <Button
-                        android:id="@+id/stopSimulationButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:backgroundTint="@color/purple_400"
-                        android:drawableLeft="@drawable/ic_stop"
-                        android:padding="10dp"
-                        android:text="Simulation"
-                        android:textAllCaps="false"
-                        android:textColor="@color/white"
-                        tools:ignore="MissingConstraints" />
-
-                    <!-- Speed Control Buttons -->
-                    <Button
-                        android:id="@+id/slowDownButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="4dp"
-                        android:layout_weight="1"
-                        android:backgroundTint="@color/purple_400"
-                        android:drawableLeft="@drawable/ic_slow_down"
-                        android:padding="10dp"
-                        android:text="Slow Down"
-                        android:textAllCaps="false"
-                        android:textColor="@color/white"
-                        tools:ignore="MissingConstraints" />
-
-                    <Button
-                        android:id="@+id/speedUpButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="4dp"
-                        android:layout_weight="1"
-                        android:backgroundTint="@color/purple_400"
-                        android:drawableLeft="@drawable/ic_speed_up"
-                        android:padding="10dp"
-                        android:text="Speed Up"
-                        android:textAllCaps="false"
-                        android:textColor="@color/white"
-                        tools:ignore="MissingConstraints" />
-
-                    <TextView
-                        android:id="@+id/timingPointValueTextView"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="end"
-                        android:text="Unknown"
-                        android:textColor="@android:color/white"
-                        android:textSize="16sp"
-                        tools:ignore="MissingConstraints" />
-
-                    <TextView
-                        android:id="@+id/speedTextView"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="end"
-                        android:text="0 km/h"
-                        android:textColor="@android:color/white"
-                        android:textSize="16sp"
-                        tools:ignore="MissingConstraints" />
-
-                    <TextView
-                        android:id="@+id/timingPointandStopsTextView"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:gravity="start"
-                        android:text="Bus stop 0 at 00:00"
-                        android:textColor="@android:color/white"
-                        android:textSize="16sp"
-                        tools:ignore="MissingConstraints" />
-
-                    <TextView
-                        android:id="@+id/actualTimeValueTextView"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="end"
-                        android:text="Unknown"
-                        android:textColor="@android:color/white"
-                        android:textSize="16sp"
-                        tools:ignore="MissingConstraints" />
-
-                    <TextView
-                        android:id="@+id/ApiTimeValueTextView"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="end"
-                        android:text="Unknown"
-                        android:textColor="@android:color/white"
-                        android:textSize="16sp"
-                        tools:ignore="MissingConstraints" />
-
-                    <TextView
-                        android:id="@+id/thresholdRangeValueTextView"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="end"
-                        android:text="Unknown"
-                        android:textColor="@android:color/white"
-                        android:textSize="16sp"
-                        tools:ignore="MissingConstraints" />
-
-                </androidx.constraintlayout.widget.ConstraintLayout>
-            </org.mapsforge.map.android.view.MapView>
-        </androidx.constraintlayout.widget.ConstraintLayout>
-
-        <!-- UI components hidden behind the map -->
-
-        <!-- Schedule Status Container with ic_schedule_ahead added -->
-        <LinearLayout
-            android:id="@+id/scheduleStatusContainer"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:orientation="vertical"
-            android:padding="8dp"
-            android:gravity="center"
-            android:layout_margin="4dp"
-            android:background="@drawable/white_border"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toEndOf="@id/guidelineVertical"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintBottom_toTopOf="@id/guidelineHorizontal">
-
-            <TextView
-                android:id="@+id/scheduleStatusValueTextView"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Please wait..."
-                android:textColor="@color/white"
-                android:textSize="22sp"
-                android:textStyle="bold" />
-
-            <ImageView
-                android:id="@+id/scheduleAheadIcon"
-                android:layout_width="64dp"
-                android:layout_height="64dp"
-                android:src="@drawable/ic_please_wait"
-                android:layout_marginTop="8dp" />
-        </LinearLayout>
-
-        <!-- Upcoming Stop Container -->
-        <LinearLayout
-            android:id="@+id/upcomingStopContainer"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:orientation="vertical"
-            android:padding="8dp"
-            android:gravity="center"
-            android:layout_margin="4dp"
-            android:background="@drawable/white_border"
-            app:layout_constraintTop_toBottomOf="@id/guidelineHorizontal"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toStartOf="@id/guidelineVertical"
-            app:layout_constraintBottom_toBottomOf="parent">
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/guidelineHorizontal">
 
-        <!-- Upcoming Stop Row -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/upcomingStopLabel"
+            <!-- 75% vertical inside this block -->
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/mapDetailGuideline"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Upcoming Stop:"
-                android:textColor="@color/white"
-                android:textSize="22sp"
-                android:textStyle="bold" />
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.75"/>
 
-            <TextView
-                android:id="@+id/upcomingBusStopTextView"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="Unknown"
-                android:textColor="@color/white"
-                android:textSize="22sp"
-                android:textStyle="bold" />
-        </LinearLayout>
+            <!-- Map container (left 75%) -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/mapContainer"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/mapDetailGuideline"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent">
 
-        <!-- Countdown Text -->
+                <org.mapsforge.map.android.view.MapView
+                    android:id="@+id/map"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="Live map displaying bus routes and stops">
+
+                    <androidx.constraintlayout.widget.ConstraintLayout
+                        android:id="@+id/hiddenUIContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:alpha="0"
+                        android:padding="8dp">
+
+                        <Button
+                            android:id="@+id/startSimulationButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="4dp"
+                            android:layout_weight="1"
+                            android:backgroundTint="@color/purple_400"
+                            android:drawableLeft="@drawable/ic_play"
+                            android:padding="10dp"
+                            android:text="Simulation"
+                            android:textAllCaps="false"
+                            android:textColor="@color/white"
+                            tools:ignore="MissingConstraints" />
+
+                        <Button
+                            android:id="@+id/stopSimulationButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:backgroundTint="@color/purple_400"
+                            android:drawableLeft="@drawable/ic_stop"
+                            android:padding="10dp"
+                            android:text="Simulation"
+                            android:textAllCaps="false"
+                            android:textColor="@color/white"
+                            tools:ignore="MissingConstraints" />
+
+                        <!-- Speed Control Buttons -->
+                        <Button
+                            android:id="@+id/slowDownButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="4dp"
+                            android:layout_weight="1"
+                            android:backgroundTint="@color/purple_400"
+                            android:drawableLeft="@drawable/ic_slow_down"
+                            android:padding="10dp"
+                            android:text="Slow Down"
+                            android:textAllCaps="false"
+                            android:textColor="@color/white"
+                            tools:ignore="MissingConstraints" />
+
+                        <Button
+                            android:id="@+id/speedUpButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="4dp"
+                            android:layout_weight="1"
+                            android:backgroundTint="@color/purple_400"
+                            android:drawableLeft="@drawable/ic_speed_up"
+                            android:padding="10dp"
+                            android:text="Speed Up"
+                            android:textAllCaps="false"
+                            android:textColor="@color/white"
+                            tools:ignore="MissingConstraints" />
+
+                        <TextView
+                            android:id="@+id/timingPointValueTextView"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="end"
+                            android:text="Unknown"
+                            android:textColor="@android:color/white"
+                            android:textSize="16sp"
+                            tools:ignore="MissingConstraints" />
+
+
+
+
+
+                        <TextView
+                            android:id="@+id/speedTextView"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="end"
+                            android:text="0 km/h"
+                            android:textColor="@android:color/white"
+                            android:textSize="16sp"
+                            tools:ignore="MissingConstraints" />
+
+                        <TextView
+                            android:id="@+id/timingPointandStopsTextView"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="start"
+                            android:text="Bus stop 0 at 00:00"
+                            android:textColor="@android:color/white"
+                            android:textSize="16sp"
+                            tools:ignore="MissingConstraints" />
+
+                        <TextView
+                            android:id="@+id/actualTimeValueTextView"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="end"
+                            android:text="Unknown"
+                            android:textColor="@android:color/white"
+                            android:textSize="16sp"
+                            tools:ignore="MissingConstraints" />
+
+
+
+
+
+
+
+
+
+
+
+                        <TextView
+                            android:id="@+id/ApiTimeValueTextView"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="end"
+                            android:text="Unknown"
+                            android:textColor="@android:color/white"
+                            android:textSize="16sp"
+                            tools:ignore="MissingConstraints" />
+
+                        <TextView
+                            android:id="@+id/thresholdRangeValueTextView"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="end"
+                            android:text="Unknown"
+                            android:textColor="@android:color/white"
+                            android:textSize="16sp"
+                            tools:ignore="MissingConstraints" />
+
+                    </androidx.constraintlayout.widget.ConstraintLayout>
+
+                </org.mapsforge.map.android.view.MapView>
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <!-- Detail panel (right 25%) -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/detailPanelContainer"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:background="@android:color/white"
+                app:layout_constraintStart_toEndOf="@id/mapDetailGuideline"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"/>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <!-- Schedule Status Container with ic_schedule_ahead added -->
+            <LinearLayout
+                android:id="@+id/scheduleStatusContainer"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:orientation="vertical"
+                android:padding="8dp"
+                android:gravity="center"
+                android:layout_margin="4dp"
+                android:background="@drawable/white_border"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toEndOf="@id/guidelineVertical"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintBottom_toTopOf="@id/guidelineHorizontal">
+
+                <TextView
+                    android:id="@+id/scheduleStatusValueTextView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Please wait..."
+                    android:textColor="@color/white"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <ImageView
+                    android:id="@+id/scheduleAheadIcon"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:src="@drawable/ic_please_wait"
+                    android:layout_marginTop="8dp" />
+            </LinearLayout>
+
+            <!-- Upcoming Stop Container -->
+            <LinearLayout
+                android:id="@+id/upcomingStopContainer"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:orientation="vertical"
+                android:padding="8dp"
+                android:gravity="center"
+                android:layout_margin="4dp"
+                android:background="@drawable/white_border"
+                app:layout_constraintTop_toBottomOf="@id/guidelineHorizontal"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/guidelineVertical"
+                app:layout_constraintBottom_toBottomOf="parent">
+
+                <!-- Upcoming Stop Row -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/upcomingStopLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Upcoming Stop:"
+                        android:textColor="@color/white"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/upcomingBusStopTextView"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="Unknown"
+                        android:textColor="@color/white"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- Countdown Text -->
+                <TextView
+                    android:id="@+id/nextTripCountdownTextView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Next run in: -- mins -- seconds"
+                    android:textColor="@color/white"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- New Combined Current Time and Finish Time Container -->
+            <LinearLayout
+                android:id="@+id/finishTimeContainer"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:orientation="vertical"
+                android:padding="8dp"
+                android:gravity="center"
+                android:layout_margin="4dp"
+                android:background="@drawable/white_border"
+                app:layout_constraintTop_toBottomOf="@id/guidelineHorizontal"
+                app:layout_constraintStart_toEndOf="@id/guidelineVertical"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent">
+
+                <!-- Current Time Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center">
+                    <TextView
+                        android:id="@+id/currentTimeLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Current Time:"
+                        android:textColor="@color/white"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/currentTimeTextView"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="00:00:00"
+                        android:textColor="@color/white"
+                        android:textSize="20sp" />
+                </LinearLayout>
+
+                <!-- Finish Time Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center">
+                    <TextView
+                        android:id="@+id/tripEndTimeTitleTextView"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Trip End Time:"
+                        android:textColor="@color/white"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/tripEndTimeTextView"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="00:00:00"
+                        android:textColor="@color/white"
+                        android:textSize="20sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <!-- Version Text at Bottom Right -->
         <TextView
-            android:id="@+id/nextTripCountdownTextView"
+            android:id="@+id/versionTextView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="Next run in: -- mins -- seconds"
-            android:textColor="@color/white"
-            android:textSize="22sp"
-            android:textStyle="bold" />
-    </LinearLayout>
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="16dp"
+            android:text="Version 1.0.1"
+            android:textSize="14sp"
+            android:textColor="@color/lightGrey"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- New Combined Current Time and Finish Time Container -->
-        <LinearLayout
-            android:id="@+id/finishTimeContainer"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:orientation="vertical"
-            android:padding="8dp"
-            android:gravity="center"
-            android:layout_margin="4dp"
-            android:background="@drawable/white_border"
-            app:layout_constraintTop_toBottomOf="@id/guidelineHorizontal"
-            app:layout_constraintStart_toEndOf="@id/guidelineVertical"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent">
-
-            <!-- Current Time Row -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center">
-                <TextView
-                    android:id="@+id/currentTimeLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Current Time:"
-                    android:textColor="@color/white"
-                    android:textSize="22sp"
-                    android:textStyle="bold" />
-                <TextView
-                    android:id="@+id/currentTimeTextView"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="00:00:00"
-                    android:textColor="@color/white"
-                    android:textSize="20sp" />
-            </LinearLayout>
-
-            <!-- Finish Time Row -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center">
-                <TextView
-                    android:id="@+id/tripEndTimeTitleTextView"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Trip End Time:"
-                    android:textColor="@color/white"
-                    android:textSize="22sp"
-                    android:textStyle="bold" />
-                <TextView
-                    android:id="@+id/tripEndTimeTextView"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="00:00:00"
-                    android:textColor="@color/white"
-                    android:textSize="20sp" />
-            </LinearLayout>
-        </LinearLayout>
+        <!-- Bus Name Text at Bottom Left -->
+        <TextView
+            android:id="@+id/busNameTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginBottom="16dp"
+            android:text=""
+            android:textSize="16sp"
+            android:textColor="@color/lightGrey"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
-
-    <!-- Version Text at Bottom Right -->
-    <TextView
-        android:id="@+id/versionTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="16dp"
-        android:text="Version 1.0.1"
-        android:textSize="14sp"
-        android:textColor="@color/lightGrey"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <!-- Bus Name Text at Bottom Left -->
-    <TextView
-        android:id="@+id/busNameTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginBottom="16dp"
-        android:text=""
-        android:textSize="16sp"
-        android:textColor="@color/lightGrey"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
-
-</androidx.constraintlayout.widget.ConstraintLayout>

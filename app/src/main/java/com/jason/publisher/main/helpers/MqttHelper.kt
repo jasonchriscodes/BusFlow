@@ -162,7 +162,7 @@ class MqttHelper(
                             "drawable",
                             owner.packageName
                         )
-                        val icon   = owner.mapController.createBusIcon(iconRes)
+                        val icon   = owner.mapController.createBusIcon(iconRes, sizeDp = 16)
                         val marker = Marker(LatLong(newLat, newLon), icon, 0, 0)
                         binding.map.layerManager.layers.add(marker)
                         owner.markerBus[token] = marker

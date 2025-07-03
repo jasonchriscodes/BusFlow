@@ -2,10 +2,12 @@ package com.jason.publisher.main.helpers
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.util.TypedValue
 import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.core.content.ContextCompat
@@ -70,28 +72,29 @@ class MapViewController(
     }
 
     /**
-     * Pick the right bus icon based on AID (or bus name).
-     */
-    fun getBusIconFor(aid: String): MfBitmap {
-        val res = if (aid == activity.aid) R.drawable.ic_bus_symbol else R.drawable.ic_bus_symbol2
-        return createBusIcon(res)
-    }
-
-    /** Clears any existing bus data from the map and other UI elements. */
-    fun clearBusData() {
-        binding.map.invalidate()
-        activity.markerBus.clear()
-    }
-
-    /**
      * Creates a Mapsforge‐compatible bitmap from a VectorDrawable resource.
      */
-    fun createBusIcon(@DrawableRes id: Int): MfBitmap {
+    fun createBusIcon(@DrawableRes id: Int, sizeDp: Int = 16): MfBitmap {
+        // 1) load the drawable
         val drawable = ResourcesCompat.getDrawable(activity.resources, id, null)!!
-        val size = 64
-        drawable.setBounds(0, 0, size, size)
-        return AndroidGraphicFactory.convertToBitmap(drawable)
+
+        // 2) convert dp → px
+        val sizePx = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            sizeDp.toFloat(),
+            activity.resources.displayMetrics
+        ).toInt()
+
+        // 3) create a real Android Bitmap and draw the vector into it
+        val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        drawable.setBounds(0, 0, sizePx, sizePx)
+        drawable.draw(canvas)
+
+        // 4) wrap it for Mapsforge
+        return AndroidBitmap(bmp)
     }
+
 
     /**
      * Draws a polyline on the Mapsforge map using the busRoute data.
@@ -155,7 +158,7 @@ class MapViewController(
                     binding.map.layerManager.layers.add(layer)
 
                 binding.map.post {
-                    binding.map.model.mapViewPosition.setZoomLevel(16)
+                    binding.map.model.mapViewPosition.setZoomLevel(15)
                     binding.map.model.mapViewPosition.setCenter(
                         LatLong(activity.latitude, activity.longitude)
                     )
@@ -172,8 +175,8 @@ class MapViewController(
     /** Place the bus marker at a given latitude and longitude */
     fun addBusMarker(lat: Double, lon: Double) {
         val pos = LatLong(lat, lon)
-        val bm = ResourcesCompat.getDrawable(activity.resources, R.drawable.ic_bus_symbol, null)!!
-        val mf = AndroidGraphicFactory.convertToBitmap(bm)
+        val mf = createBusIcon(R.drawable.ic_bus_symbol, sizeDp = 16)
+        activity.busMarker = Marker(LatLong(lat, lon), mf, 0, 0)
 
         activity.busMarker?.let { binding.map.layerManager.layers.remove(it) }
 
@@ -290,7 +293,7 @@ class MapViewController(
         binding.map.layerManager.layers.add(activity.busMarker)
 
         binding.map.rotation = -bearing
-        binding.map.scaleX = 1f; binding.map.scaleY = 1f
+        binding.map.scaleX = 1.9f; binding.map.scaleY = 1.9f
         binding.map.setCenter(newPos)
         binding.map.invalidate()
 
@@ -298,15 +301,23 @@ class MapViewController(
     }
 
     /** Rotates the bus symbol drawable based on the given angle. */
-    fun rotateDrawable(angle: Float): MfBitmap {
-        val d = ResourcesCompat.getDrawable(activity.resources, R.drawable.ic_bus_symbol, null)
-            ?: return AndroidBitmap(Bitmap.createBitmap(1,1,Bitmap.Config.ARGB_8888))
-        val bmp = Bitmap.createBitmap(d.intrinsicWidth, d.intrinsicHeight, Bitmap.Config.ARGB_8888)
-        val canvas = android.graphics.Canvas(bmp)
-        d.setBounds(0,0,canvas.width,canvas.height); d.draw(canvas)
-        val matrix = android.graphics.Matrix().apply { postRotate(angle) }
-        val rot = Bitmap.createBitmap(bmp,0,0,bmp.width,bmp.height,matrix,true)
-        return AndroidBitmap(rot)
+    fun rotateDrawable(angle: Float, sizeDp: Int = 16): MfBitmap {
+        val d = ResourcesCompat.getDrawable(activity.resources, R.drawable.ic_bus_symbol, null)!!
+        // convert dp→px
+        val sizePx = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            sizeDp.toFloat(),
+            activity.resources.displayMetrics
+        ).toInt()
+
+        // draw & rotate around center
+        val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        d.setBounds(0, 0, sizePx, sizePx)
+        canvas.rotate(angle, sizePx / 2f, sizePx / 2f)
+        d.draw(canvas)
+
+        return AndroidBitmap(bmp)
     }
 
     /** Calculates the bearing between two geographical points. */
