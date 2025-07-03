@@ -166,6 +166,7 @@ class MqttHelper(
                         val marker = Marker(LatLong(newLat, newLon), icon, 0, 0)
                         binding.map.layerManager.layers.add(marker)
                         owner.markerBus[token] = marker
+                        owner.mapController.refreshDetailPanelIcons()
                     }
 
                     binding.map.invalidate()

@@ -8,6 +8,9 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.util.TypedValue
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.core.content.ContextCompat
@@ -42,7 +45,8 @@ import kotlin.math.pow
 class MapViewController(
     private val activity: MapActivity,
     private val binding: ActivityMapBinding,
-    private val mqttHelper: MqttHelper
+    private val mqttHelper: MqttHelper,
+    private val detailContainer: LinearLayout
 ) {
     private var routePolyline: Polyline? = null
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -360,7 +364,58 @@ class MapViewController(
                 val marker = Marker(LatLong(lat, lon), icon, 0, 0)
                 binding.map.layerManager.layers.add(marker)
                 activity.markerBus[token] = marker
+                refreshDetailPanelIcons()
             }
+        }
+    }
+
+    /**
+     * utility to convert dp → px
+     */
+    private fun dpToPx(dp: Int): Int = TypedValue
+        .applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            dp.toFloat(),
+            activity.resources.displayMetrics
+        ).toInt()
+
+    /** Wraps the vector drawable into an ImageView, adds with 8dp top-margin */
+    private fun addIconToContainer(@DrawableRes id: Int, sizeDp: Int, parent: LinearLayout) {
+        val bmp = drawableToBitmap(id, sizeDp)
+        val iv = ImageView(activity).apply {
+            setImageBitmap(bmp)
+            layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
+                topMargin = dpToPx(8)
+            }
+        }
+        parent.addView(iv)
+    }
+
+    /** Inflate a VectorDrawable @id into an Android Bitmap at sizeDp × sizeDp */
+    private fun drawableToBitmap(@DrawableRes id: Int, sizeDp: Int): Bitmap {
+        val drawable = ResourcesCompat.getDrawable(activity.resources, id, null)!!
+        val sizePx = dpToPx(sizeDp)
+        val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        drawable.setBounds(0, 0, sizePx, sizePx)
+        drawable.draw(canvas)
+        return bmp
+    }
+
+
+    /** Call this any time you re-draw or move markers on the map */
+    fun refreshDetailPanelIcons() {
+        detailContainer.removeAllViews()
+
+        // 1) own bus
+        addIconToContainer(R.drawable.ic_bus_symbol, sizeDp = 16, detailContainer)
+
+        // 2) each other bus
+        activity.markerBus.keys.forEachIndexed { idx, _ ->
+            val slot  = min(idx + 2, 10)
+            val name  = "ic_bus_symbol$slot"
+            val resId = activity.resources.getIdentifier(name, "drawable", activity.packageName)
+            addIconToContainer(resId, sizeDp = 16, detailContainer)
         }
     }
 }

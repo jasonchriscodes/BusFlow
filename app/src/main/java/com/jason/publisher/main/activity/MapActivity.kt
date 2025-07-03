@@ -207,7 +207,7 @@ class MapActivity : AppCompatActivity() {
         scheduleStatusManager = ScheduleStatusManager(this, binding)
         timeManager = TimeManager(this, scheduleStatusManager)
         mqttHelper = MqttHelper(this, binding)
-        mapController  = MapViewController(this, binding, mqttHelper)
+        mapController  = MapViewController(this, binding, mqttHelper, binding.detailIconsContainer)
 
         // Retrieve data passed from TimeTableActivity
         aid = intent.getStringExtra("AID") ?: "Unknown"
@@ -270,6 +270,7 @@ class MapActivity : AppCompatActivity() {
                 mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
                 // 3) Build all remote‐bus markers BEFORE polling attributes:
                 mapController.getDefaultConfigValue()   // ← this populates markerBus[accessToken] for every bus
+                mapController.refreshDetailPanelIcons()
 
                 mqttHelper.requestAdminMessage()
                 mqttHelper.connectAndSubscribe()
