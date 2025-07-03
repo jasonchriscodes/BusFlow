@@ -509,6 +509,14 @@ class ScheduleActivity : AppCompatActivity() {
                 putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
                 putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
             }
+
+             // ➊ build labels from your extracted intervals & names
+             val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
+             val labels = workIntervals.mapIndexed { i, (s,e) ->
+                   "$s ${dutyNames[i]} ${scheduleData[i].busStops.first().abbreviation} → " +
+                             scheduleData[i].busStops.last().abbreviation
+                 }
+             intent.putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
             startActivity(intent)
         } else {
             Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()

@@ -8,9 +8,13 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.util.TypedValue
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.core.content.ContextCompat
@@ -50,6 +54,7 @@ class MapViewController(
 ) {
     private var routePolyline: Polyline? = null
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    var activeSegment: String? = null
 
     /** Monitor other buses every second, logging their count and active/inactive status. */
     fun startActivityMonitor() {
@@ -407,15 +412,79 @@ class MapViewController(
     fun refreshDetailPanelIcons() {
         detailContainer.removeAllViews()
 
-        // 1) own bus
-        addIconToContainer(R.drawable.ic_bus_symbol, sizeDp = 16, detailContainer)
+        // helper to add a divider
+        fun addDivider() {
+            val divider = View(activity).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    MATCH_PARENT,
+                    dpToPx(1)
+                ).apply {
+                    topMargin = dpToPx(4)
+                    bottomMargin = dpToPx(4)
+                }
+                setBackgroundColor(Color.LTGRAY)
+            }
+            detailContainer.addView(divider)
+        }
 
-        // 2) each other bus
-        activity.markerBus.keys.forEachIndexed { idx, _ ->
-            val slot  = min(idx + 2, 10)
-            val name  = "ic_bus_symbol$slot"
-            val resId = activity.resources.getIdentifier(name, "drawable", activity.packageName)
-            addIconToContainer(resId, sizeDp = 16, detailContainer)
+        // 1) Own bus + timeline row
+        activeSegment?.let { label ->
+            val row = LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    WRAP_CONTENT, WRAP_CONTENT
+                )
+            }
+            val iv = ImageView(activity).apply {
+                setImageResource(R.drawable.ic_bus_symbol)
+                layoutParams = LinearLayout.LayoutParams(dpToPx(16), dpToPx(16))
+            }
+            val tv = TextView(activity).apply {
+                text = label
+                setTextColor(Color.DKGRAY)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setPadding(dpToPx(8), 0, 0, 0)
+                layoutParams = LinearLayout.LayoutParams(
+                    WRAP_CONTENT, WRAP_CONTENT
+                )
+            }
+            row.addView(iv)
+            row.addView(tv)
+            detailContainer.addView(row)
+            addDivider()
+        }
+
+        // 2) Other buses
+        val others = listOf(
+            Pair(R.drawable.ic_bus_symbol2, "11:30 WX2 ABC → DEF"),
+            Pair(R.drawable.ic_bus_symbol3, "11:45 WX3 GHI → JKL"),
+            Pair(R.drawable.ic_bus_symbol4, "12:00 WX4 MNO → PQR")
+        )
+
+        others.forEach { (iconRes, label) ->
+            val row = LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT)
+            }
+            val iv = ImageView(activity).apply {
+                setImageResource(iconRes)
+                layoutParams = LinearLayout.LayoutParams(dpToPx(16), dpToPx(16))
+            }
+            val tv = TextView(activity).apply {
+                text = label
+                setTextColor(Color.DKGRAY)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setPadding(dpToPx(8), 0, 0, 0)
+                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT)
+            }
+            row.addView(iv)
+            row.addView(tv)
+            detailContainer.addView(row)
+            addDivider()
         }
     }
 }

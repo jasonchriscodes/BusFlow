@@ -17,6 +17,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.location.Location
 import android.os.Build
+import android.view.Gravity
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -219,6 +220,7 @@ class MapActivity : AppCompatActivity() {
         busRouteData = intent.getSerializableExtra("BUS_ROUTE_DATA") as? List<RouteData> ?: emptyList()
         scheduleList = intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? List<ScheduleItem> ?: emptyList()
         scheduleData = intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? List<ScheduleItem> ?: emptyList()
+        val timelineLabels = intent.getStringArrayListExtra("TIMELINE_LABELS") ?: emptyList<String>()
 
         Log.d("MapActivity onCreate retrieve", "Received aid: $aid")
         Log.d("MapActivity onCreate retrieve", "Received config: ${config.toString()}")
@@ -229,6 +231,7 @@ class MapActivity : AppCompatActivity() {
         Log.d("MapActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
         Log.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
         Log.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
+        Log.d("MapActivity onCreate retrieve", "▶ Received timelineLabels = $timelineLabels")
 
         FileLogger.d("MapActivity onCreate retrieve", "Received aid: $aid")
         FileLogger.d("MapActivity onCreate retrieve", "Received config: ${config.toString()}")
@@ -247,7 +250,17 @@ class MapActivity : AppCompatActivity() {
 
         // Start the current time counter
 //        startCurrentTimeUpdater()
+
+        // 1) start the simulated clock
         timeManager.startStartTime()
+
+        // 2) compute “now” in minutes out of your simulated Calendar
+        val nowCal = timeManager.simulatedStartTime
+        val nowMinutes = nowCal.get(Calendar.HOUR_OF_DAY) * 60 +
+                nowCal.get(Calendar.MINUTE)
+
+        // 3) find the active label
+        val active = findActiveLabel(timelineLabels, nowMinutes)
 
         // Start the next trip countdown updater
         timeManager.startNextTripCountdownUpdater()
@@ -270,6 +283,7 @@ class MapActivity : AppCompatActivity() {
                 mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
                 // 3) Build all remote‐bus markers BEFORE polling attributes:
                 mapController.getDefaultConfigValue()   // ← this populates markerBus[accessToken] for every bus
+                mapController.activeSegment = active
                 mapController.refreshDetailPanelIcons()
 
                 mqttHelper.requestAdminMessage()
@@ -395,6 +409,25 @@ class MapActivity : AppCompatActivity() {
 //        binding.arriveButton.visibility = View.GONE
         binding.arriveButton.setOnClickListener {
             confirmArrival()
+        }
+    }
+
+    /**
+     * Returns the first label whose time‐range contains the given `HH:mm` time.
+     */
+    private fun findActiveLabel(
+        labels: List<String>,
+        nowMinutes: Int
+    ): String? {
+        return labels.firstOrNull { label ->
+            val start = label.substring(0,5)
+            val end   = labels
+                .dropWhile { !it.startsWith(start) }
+                .getOrNull(1)?.substring(0,5)
+                ?: start
+            val sMin = start.split(":").let { it[0].toInt()*60 + it[1].toInt() }
+            val eMin = end.split(":").let   { it[0].toInt()*60 + it[1].toInt() }
+            nowMinutes in sMin until eMin
         }
     }
 
