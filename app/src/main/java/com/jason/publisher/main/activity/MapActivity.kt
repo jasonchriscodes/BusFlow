@@ -276,28 +276,42 @@ class MapActivity : AppCompatActivity() {
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
 
         // 2) Now fetch the shared config from your server (ThingsBoard)
+        // Always switch back to the main thread before touching any views:
         mqttHelper.fetchConfig { success ->
-            if (success) {
-                getAccessToken()
-                Log.d("MapActivity onCreate Token", token)
-                mqttManager = MqttManager(serverUri = SERVER_URI, clientId = CLIENT_ID, username = token)
-                // 3) Build all remote‐bus markers BEFORE polling attributes:
-                mapController.getDefaultConfigValue()   // ← this populates markerBus[accessToken] for every bus
-                mapController.activeSegment = active
-                mapController.refreshDetailPanelIcons()
+            // now you’re inside the callback, and `success` is in scope
+            runOnUiThread {
+                if (success) {
+                    getAccessToken()
+                    mqttManager = MqttManager(
+                        serverUri = SERVER_URI,
+                        clientId  = CLIENT_ID,
+                        username  = token
+                    )
+                    // build your markers etc.
+                    mapController.getDefaultConfigValue()
+                    mapController.activeSegment = active
+                    mapController.refreshDetailPanelIcons()
 
-                mqttHelper.requestAdminMessage()
-                mqttHelper.connectAndSubscribe()
+                    mqttHelper.requestAdminMessage()
+                    mqttHelper.connectAndSubscribe()
+                    mqttHelper.sendRequestAttributes()
+                    mapController.startActivityMonitor()
+                } else {
+                    // --- FAILURE HANDLING ---
+                    Log.e("MapActivity", "Failed to fetch config, entering offline mode.")
+                    Toast.makeText(
+                        this@MapActivity,
+                        "Unable to connect. Falling back to offline map…",
+                        Toast.LENGTH_LONG
+                    ).show()
 
-                // 4) Only now do we start polling attributes every 3 seconds
-                mqttHelper.sendRequestAttributes()
-                Log.d("MapActivity oncreate", "Start monitor activity is called")
-                mapController.startActivityMonitor()
-                Log.d("MapActivity oncreate fetchConfig config", config.toString())
-                Log.d("MapActivity oncreate fetchConfig busRoute", route.toString())
-                Log.d("MapActivity oncreate fetchConfig busStop", stops.toString())
-            } else {
-                Log.e("MapActivity onCreate", "Failed to fetch config, running in offline mode.")
+                    // load your offline map immediately
+                    mapController.openMapFromAssets()
+
+                    // disable any UI that needs live data
+                    binding.startSimulationButton.isEnabled = false
+                    binding.stopSimulationButton.isEnabled  = false
+                }
             }
         }
 
