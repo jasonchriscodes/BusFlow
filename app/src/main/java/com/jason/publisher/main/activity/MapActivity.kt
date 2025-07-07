@@ -1590,19 +1590,6 @@ class MapActivity : AppCompatActivity() {
         nextTripCountdownTextView = binding.nextTripCountdownTextView
     }
 
-    /** Copies a file from assets to the device's file system and returns the File object. */
-    private fun copyAssetToFile(assetName: String): File {
-        val file = File(cacheDir, assetName)
-        if (!file.exists()) {
-            assets.open(assetName).use { inputStream ->
-                file.outputStream().use { outputStream ->
-                    inputStream.copyTo(outputStream)
-                }
-            }
-        }
-        return file
-    }
-
     /** Cleans up resources on activity destruction. */
     override fun onDestroy() {
         super.onDestroy()

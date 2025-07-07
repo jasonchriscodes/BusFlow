@@ -575,19 +575,6 @@ class ScheduleActivity : AppCompatActivity() {
         networkIndicator.background = ContextCompat.getDrawable(this, drawableRes)
     }
 
-    /** Copies a file from assets to the device's file system and returns the File object. */
-    private fun copyAssetToFile(assetName: String): File {
-        val file = File(cacheDir, assetName)
-        if (!file.exists()) {
-            assets.open(assetName).use { inputStream ->
-                file.outputStream().use { outputStream ->
-                    inputStream.copyTo(outputStream)
-                }
-            }
-        }
-        return file
-    }
-
     /**
      * Switches the activity into offline mode:
      * - Notifies the user that cached data will be used

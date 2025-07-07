@@ -143,7 +143,10 @@ class MapViewController(
             1f,
             binding.map.model.frameBufferModel.overdrawFactor
         )
-        val mapFile = File(activity.cacheDir, "new-zealand.map")
+        // 1) copy it out of assets into cacheDir
+        val mapFile = copyAssetToFile("new-zealand.map")
+
+        // 2) now you know it’s there
         if (!mapFile.exists()) {
             Toast.makeText(activity, "Offline map missing", Toast.LENGTH_SHORT).show()
             return
@@ -179,6 +182,21 @@ class MapViewController(
                 }
             }
         }
+    }
+
+    /**
+     * Copy a file from assets into cacheDir and return the File handle.
+     */
+    private fun copyAssetToFile(assetName: String): File {
+        val outFile = File(activity.cacheDir, assetName)
+        if (!outFile.exists()) {
+            activity.assets.open(assetName).use { input ->
+                outFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
+        return outFile
     }
 
     /** Place the bus marker at a given latitude and longitude */
