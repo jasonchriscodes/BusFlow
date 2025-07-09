@@ -57,24 +57,36 @@ class MapViewController(
     var activeSegment: String? = null
 
     /** Monitor other buses every second, logging their count and active/inactive status. */
+    @SuppressLint("LongLogTag")
     fun startActivityMonitor() {
+        Log.d("MapViewController ActivityMonitor", "▶ startActivityMonitor() called")
         val handler = Handler(Looper.getMainLooper())
         handler.post(object : Runnable {
+            @SuppressLint("LongLogTag")
             override fun run() {
                 val now = System.currentTimeMillis()
 
+                // 1) remove any buses inactive ≥10s
                 activity.markerBus.keys
                     .filter { it != activity.token }
                     .forEach { t ->
                         val last = activity.lastSeen[t] ?: 0L
                         if (last != 0L && now - last >= 10_000L) {
+                            Log.d("MapViewController ActivityMonitor",
+                                "Removing bus marker for token=$t; inactive for ${now - last}ms")
                             binding.map.layerManager.layers.remove(activity.markerBus[t])
                             activity.markerBus.remove(t)
                             activity.prevCoords.remove(t)
                         }
                     }
 
+                val active = activity.markerBus.keys.filter { it != activity.token }
+                Log.d("MapViewController ActivityMonitor", "Current active bus markers: $active")
+
+                // 2) refresh the map
                 binding.map.invalidate()
+
+                // 3) schedule next check in 1s
                 handler.postDelayed(this, 1_000L)
             }
         })

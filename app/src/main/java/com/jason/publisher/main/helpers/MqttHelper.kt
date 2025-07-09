@@ -35,6 +35,8 @@ class MqttHelper(
     private val apiService: ApiService get() = owner.apiService
     private val clientKeys: String get() = owner.clientKeys
     private val tokenSlots = mutableMapOf<String, Int>()
+    // track which tokens suppressed
+    private val suppressedTokens = mutableSetOf<String>()
 
 
     /**
@@ -137,44 +139,67 @@ class MqttHelper(
                 call: Call<ClientAttributesResponse>,
                 response: Response<ClientAttributesResponse>
             ) {
-                owner.lastSeen[token] = System.currentTimeMillis()
+                val now = System.currentTimeMillis()
                 val client = response.body()?.client ?: return
+
                 val lat = client.latitude
                 val lon = client.longitude
+
+                // 1) throw away bad coords
+                if (lat == 0.0 && lon == 0.0) {
+                    Log.d("MqttHelper getAttributes", "Ignoring $token at (0.0,0.0)")
+                    return
+                }
+
+                // 2) throw away “no change” → now remove marker completely
                 val prev = owner.prevCoords[token]
-                if (prev?.first == lat && prev.second == lon) return
-                owner.prevCoords[token] = Pair(lat, lon)
+                if (prev != null && prev.first == lat && prev.second == lon) {
+                    // first time we see it static → remove marker, suppress until it moves
+                    if (suppressedTokens.add(token)) {
+                        owner.runOnUiThread {
+                            binding.map.layerManager.layers.remove(owner.markerBus[token])
+                            owner.markerBus.remove(token)
+                            binding.map.invalidate()
+                        }
+                    }
+                    // update lastSeen so activityMonitor doesn’t kill it prematurely
+                    owner.lastSeen[token] = now
+                    return
+                }
+
+                // 3) genuinely new position → clear suppression, update
+                suppressedTokens.remove(token)
+                owner.lastSeen[token] = now
+                owner.prevCoords[token] = lat to lon
 
                 owner.runOnUiThread {
-                    val newLat = client.latitude
-                    val newLon = client.longitude
+                    // if we’re still suppressed (shouldn't happen) bail
+                    if (token in suppressedTokens) return@runOnUiThread
 
-                    if (owner.markerBus.containsKey(token)) {
-                        // just move the existing one
-                        owner.markerBus[token]?.latLong = LatLong(newLat, newLon)
-                    } else {
-                        // assign this token its unique slot number (0,1,2…)
+                    val existing = owner.markerBus[token]
+                    if (existing == null) {
+                        // add new
                         val iconIdx = tokenSlots.getOrPut(token) { tokenSlots.size }
                         val slot = min(iconIdx + 2, 10)
-                        Log.d("MqttHelper getAttributes", "🚌 bus-aid=$token assigned icon ic_bus_symbol$slot (idx=$iconIdx)")
                         val iconRes = owner.resources.getIdentifier(
-                            "ic_bus_symbol$slot",
-                            "drawable",
-                            owner.packageName
+                            "ic_bus_symbol$slot", "drawable", owner.packageName
                         )
-                        val icon   = owner.mapController.createBusIcon(iconRes, sizeDp = 16)
-                        val marker = Marker(LatLong(newLat, newLon), icon, 0, 0)
-                        binding.map.layerManager.layers.add(marker)
-                        owner.markerBus[token] = marker
+                        val bmp = owner.mapController.createBusIcon(iconRes, 16)
+                        val m = Marker(LatLong(lat, lon), bmp, 0, 0)
+                        binding.map.layerManager.layers.add(m)
+                        owner.markerBus[token] = m
                         owner.mapController.refreshDetailPanelIcons()
+                    } else {
+                        // move existing
+                        existing.latLong = LatLong(lat, lon)
                     }
-
                     binding.map.invalidate()
                 }
             }
+
             @SuppressLint("LongLogTag")
             override fun onFailure(call: Call<ClientAttributesResponse>, t: Throwable) {
-                Log.e("MapActivity getAttributes", "Network error: ${'$'}{t.message}")
+                Log.e("MqttHelper getAttributes", "Network error: ${t.message}")
             }
         })
     }
