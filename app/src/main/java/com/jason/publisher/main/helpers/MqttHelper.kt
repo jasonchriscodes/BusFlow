@@ -187,6 +187,7 @@ class MqttHelper(
                         existing.latLong = pos
                     }
                     binding.map.invalidate()
+                    owner.mapController.activeBusToken = token
                     owner.mapController.refreshDetailPanelIcons()
                 }
             }

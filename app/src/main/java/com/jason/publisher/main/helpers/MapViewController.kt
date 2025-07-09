@@ -55,6 +55,7 @@ class MapViewController(
     private var routePolyline: Polyline? = null
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     var activeSegment: String? = null
+    var activeBusToken: String? = null
 
     /** Monitor other buses every second, logging their count and active/inactive status. */
     @SuppressLint("LongLogTag")
@@ -439,80 +440,82 @@ class MapViewController(
 
 
     /** Call this any time you re-draw or move markers on the map */
+    @SuppressLint("LongLogTag")
     fun refreshDetailPanelIcons() {
         detailContainer.removeAllViews()
 
-        // helper to add a divider
+        // helper to draw the little grey line between rows
         fun addDivider() {
             val divider = View(activity).apply {
                 layoutParams = LinearLayout.LayoutParams(
-                    MATCH_PARENT,
-                    dpToPx(1)
+                    MATCH_PARENT, dpToPx(1)
                 ).apply {
-                    topMargin = dpToPx(4)
-                    bottomMargin = dpToPx(4)
+                    topMargin = dpToPx(4); bottomMargin = dpToPx(4)
                 }
                 setBackgroundColor(Color.LTGRAY)
             }
             detailContainer.addView(divider)
         }
 
-        // 1) Own bus + timeline row
+        // build a list of tokens: self first, then others
+        val selfToken = activity.token
+        val otherTokens = activity.markerBus.keys.filter { it != selfToken }
+        // sort so that the most recently active bus appears at the top of the “others”
+        val sortedOthers = otherTokens.sortedBy { it != activeBusToken }
+
+        // 1) Your own bus row
         activeSegment?.let { label ->
             val row = LinearLayout(activity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
                 gravity = Gravity.CENTER_VERTICAL
-                layoutParams = LinearLayout.LayoutParams(
-                    WRAP_CONTENT, WRAP_CONTENT
-                )
             }
             val iv = ImageView(activity).apply {
-                setImageResource(R.drawable.ic_bus_symbol)
+                setImageResource(
+                    activity.resources.getIdentifier(
+                        "ic_bus_symbol", "drawable", activity.packageName
+                    )
+                )
                 layoutParams = LinearLayout.LayoutParams(dpToPx(16), dpToPx(16))
             }
             val tv = TextView(activity).apply {
                 text = label
-                setTextColor(Color.DKGRAY)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 setPadding(dpToPx(8), 0, 0, 0)
-                layoutParams = LinearLayout.LayoutParams(
-                    WRAP_CONTENT, WRAP_CONTENT
-                )
             }
-            row.addView(iv)
-            row.addView(tv)
+            row.addView(iv); row.addView(tv)
             detailContainer.addView(row)
             addDivider()
         }
 
-        // 2) Other buses
-        val others = listOf(
-            Pair(R.drawable.ic_bus_symbol2, "11:30 WX2 ABC → DEF"),
-            Pair(R.drawable.ic_bus_symbol3, "11:45 WX3 GHI → JKL"),
-            Pair(R.drawable.ic_bus_symbol4, "12:00 WX4 MNO → PQR")
-        )
+        // 2) Dynamically for each other active bus
+        sortedOthers.forEachIndexed { idx, token ->
+            // slot → 2..10
+            val slot = min(idx + 2, 10)
+            val iconName = "ic_bus_symbol$slot"
+            val iconRes = activity.resources.getIdentifier(iconName, "drawable", activity.packageName)
 
-        others.forEach { (iconRes, label) ->
+            // try to pull the bus‐name from your arrBusData, fallback to token
+            val busName = activity.arrBusData
+                .find { it.accessToken == token }
+                ?.bus   // or `.name` if your model uses a different field
+                ?: token
+
             val row = LinearLayout(activity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
                 gravity = Gravity.CENTER_VERTICAL
-                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT)
             }
             val iv = ImageView(activity).apply {
                 setImageResource(iconRes)
                 layoutParams = LinearLayout.LayoutParams(dpToPx(16), dpToPx(16))
             }
             val tv = TextView(activity).apply {
-                text = label
-                setTextColor(Color.DKGRAY)
+                text = busName
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 setPadding(dpToPx(8), 0, 0, 0)
-                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT)
             }
-            row.addView(iv)
-            row.addView(tv)
+            row.addView(iv); row.addView(tv)
             detailContainer.addView(row)
             addDivider()
         }
