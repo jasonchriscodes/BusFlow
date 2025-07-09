@@ -37,7 +37,7 @@ class MqttHelper(
     private val tokenSlots = mutableMapOf<String, Int>()
     // track which tokens suppressed
     private val suppressedTokens = mutableSetOf<String>()
-
+    private val staticCounts = mutableMapOf<String, Int>()
 
     /**
      * Fetches the configuration data and initializes the config variable.
@@ -127,73 +127,67 @@ class MqttHelper(
         clientKeys: String
     ) {
         Log.d("MqttHelper getAttributes", "→ getAttributes for token=$token")
-        val call = apiService.getAttributes(
+        val now = System.currentTimeMillis()
+
+        apiService.getAttributes(
             "${ApiService.BASE_URL}$token/attributes",
             "application/json",
             clientKeys
-        )
-
-        call.enqueue(object : Callback<ClientAttributesResponse> {
+        ).enqueue(object : Callback<ClientAttributesResponse> {
             @SuppressLint("LongLogTag")
             override fun onResponse(
                 call: Call<ClientAttributesResponse>,
                 response: Response<ClientAttributesResponse>
             ) {
-                val now = System.currentTimeMillis()
                 val client = response.body()?.client ?: return
-
                 val lat = client.latitude
                 val lon = client.longitude
 
-                // 1) throw away bad coords
+                // 1) ignore really invalid coords
                 if (lat == 0.0 && lon == 0.0) {
-                    Log.d("MqttHelper getAttributes", "Ignoring $token at (0.0,0.0)")
+                    Log.d("MqttHelper getAttributes", "Ignoring $token at (0,0)")
                     return
                 }
 
-                // 2) throw away “no change” → now remove marker completely
+                // 2) have we ever seen this token before?
                 val prev = owner.prevCoords[token]
-                if (prev != null && prev.first == lat && prev.second == lon) {
-                    // first time we see it static → remove marker, suppress until it moves
-                    if (suppressedTokens.add(token)) {
-                        owner.runOnUiThread {
-                            binding.map.layerManager.layers.remove(owner.markerBus[token])
-                            owner.markerBus.remove(token)
-                            binding.map.invalidate()
-                        }
-                    }
-                    // update lastSeen so activityMonitor doesn’t kill it prematurely
+                if (prev == null) {
+                    // first time we see it — just record, don't draw
+                    owner.prevCoords[token] = lat to lon
+                    owner.lastSeen[token] = now
+                    Log.d("MqttHelper getAttributes", "First fetch for $token; awaiting movement")
+                    return
+                }
+
+                // 3) coords unchanged? update timestamp, do nothing else
+                if (prev.first == lat && prev.second == lon) {
                     owner.lastSeen[token] = now
                     return
                 }
 
-                // 3) genuinely new position → clear suppression, update
-                suppressedTokens.remove(token)
-                owner.lastSeen[token] = now
+                // 4) movement detected! record new pos and draw/update marker
                 owner.prevCoords[token] = lat to lon
+                owner.lastSeen[token] = now
 
                 owner.runOnUiThread {
-                    // if we’re still suppressed (shouldn't happen) bail
-                    if (token in suppressedTokens) return@runOnUiThread
-
+                    val pos = LatLong(lat, lon)
                     val existing = owner.markerBus[token]
                     if (existing == null) {
-                        // add new
-                        val iconIdx = tokenSlots.getOrPut(token) { tokenSlots.size }
-                        val slot = min(iconIdx + 2, 10)
+                        // never drawn before — create a new one
+                        val idx = owner.markerBus.size
+                        val slot = min(idx + 2, 10)
                         val iconRes = owner.resources.getIdentifier(
                             "ic_bus_symbol$slot", "drawable", owner.packageName
                         )
-                        val bmp = owner.mapController.createBusIcon(iconRes, 16)
-                        val m = Marker(LatLong(lat, lon), bmp, 0, 0)
-                        binding.map.layerManager.layers.add(m)
-                        owner.markerBus[token] = m
-                        owner.mapController.refreshDetailPanelIcons()
+                        val marker = Marker(pos, owner.mapController.createBusIcon(iconRes), 0, 0)
+                        binding.map.layerManager.layers.add(marker)
+                        owner.markerBus[token] = marker
                     } else {
-                        // move existing
-                        existing.latLong = LatLong(lat, lon)
+                        // already on‐screen → just move it
+                        existing.latLong = pos
                     }
                     binding.map.invalidate()
+                    owner.mapController.refreshDetailPanelIcons()
                 }
             }
 
