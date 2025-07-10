@@ -34,10 +34,13 @@ class MqttHelper(
     private val mqttManager: MqttManager get() = owner.mqttManager
     private val apiService: ApiService get() = owner.apiService
     private val clientKeys: String get() = owner.clientKeys
-    private val tokenSlots = mutableMapOf<String, Int>()
-    // track which tokens suppressed
-    private val suppressedTokens = mutableSetOf<String>()
-    private val staticCounts = mutableMapOf<String, Int>()
+
+    companion object {
+        private const val MIN_FETCH_INTERVAL_MS = 2_000L
+    }
+
+    // track when we last fetched attributes for each token
+    private val lastFetchTime = mutableMapOf<String, Long>()
 
     /**
      * Fetches the configuration data and initializes the config variable.
@@ -112,9 +115,9 @@ class MqttHelper(
                         getAttributes(apiService, bus.accessToken, clientKeys)
                     }
                 }
-                handler.postDelayed(this, MapActivity.REQUEST_PERIODIC_TIME)
+                handler.postDelayed(this, MIN_FETCH_INTERVAL_MS)
             }
-        }, 0)
+        }, MIN_FETCH_INTERVAL_MS)
     }
 
     /**
@@ -129,6 +132,12 @@ class MqttHelper(
         Log.d("MqttHelper getAttributes", "→ getAttributes for token=$token")
         val now = System.currentTimeMillis()
 
+        // 1) throttle to once every 2 s per bus
+        val last = lastFetchTime[token] ?: 0L
+        if (now - last < MIN_FETCH_INTERVAL_MS) return
+        lastFetchTime[token] = now
+
+        Log.d("MqttHelper getAttributes", "→ getAttributes for token=$token")
         apiService.getAttributes(
             "${ApiService.BASE_URL}$token/attributes",
             "application/json",

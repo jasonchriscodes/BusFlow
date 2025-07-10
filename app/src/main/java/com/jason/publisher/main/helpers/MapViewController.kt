@@ -324,7 +324,6 @@ class MapViewController(
         val newPos = LatLong(lat, lon)
         mqttHelper.publishTelemetryData()
         activity.updateClientAttributes()
-        mqttHelper.sendRequestAttributes()
 
         val rotated = rotateDrawable(bearing)
         activity.busMarker?.let { binding.map.layerManager.layers.remove(it) }
