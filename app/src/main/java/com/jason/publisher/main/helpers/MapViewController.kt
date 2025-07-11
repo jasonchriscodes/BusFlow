@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -131,7 +132,7 @@ class MapViewController(
             AndroidGraphicFactory.createInstance(activity.application)
             val paint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
                 color = Color.BLUE
-                strokeWidth = 8f
+                strokeWidth = 4f
                 setStyle(org.mapsforge.core.graphics.Style.STROKE)
             }
 
@@ -228,17 +229,50 @@ class MapViewController(
     @SuppressLint("LongLogTag")
     fun addBusStopMarkers(busStops: List<com.jason.publisher.main.model.BusStop>) {
         val total = busStops.size
+        // desired symbol square in dp
+        val desiredDp = 30
+        val sizePx = dpToPx(desiredDp)
+
         busStops.forEachIndexed { idx, stop ->
             val key = "${stop.latitude},${stop.longitude}"
             val isRed = activity.redBusStops.contains(key)
-            val sym = com.jason.publisher.main.utils.Helper.createBusStopSymbol(
-                activity, idx, total, isRed
-            )
-            val bmp = AndroidGraphicFactory.convertToBitmap(sym)
 
-            val m = Marker(LatLong(stop.latitude!!, stop.longitude!!), bmp, 0, 0)
-            binding.map.layerManager.layers.add(m)
+            // 1) get the Drawable from your helper
+            val symDrawable: Drawable =
+                com.jason.publisher.main.utils.Helper.createBusStopSymbol(
+                    activity, idx, total, isRed
+                )
+
+            // 2) prepare a square bitmap
+            val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bmp)
+
+            // 3) compute a centered, aspect-correct destination rect
+            val iw = symDrawable.intrinsicWidth
+            val ih = symDrawable.intrinsicHeight
+            val scale = min(sizePx / iw.toFloat(), sizePx / ih.toFloat())
+            val dw = (iw * scale).toInt()
+            val dh = (ih * scale).toInt()
+            val left = (sizePx - dw) / 2
+            val top = (sizePx - dh) / 2
+            symDrawable.setBounds(left, top, left + dw, top + dh)
+
+            // 4) draw it
+            symDrawable.draw(canvas)
+
+            // 5) wrap for Mapsforge
+            val mfBmp: MfBitmap = AndroidBitmap(bmp)
+
+            // 6) add the marker
+            val marker = Marker(
+                LatLong(stop.latitude!!, stop.longitude!!),
+                mfBmp,
+                0,
+                0
+            )
+            binding.map.layerManager.layers.add(marker)
         }
+
         binding.map.invalidate()
     }
 
