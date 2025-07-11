@@ -878,35 +878,48 @@ class ScheduleActivity : AppCompatActivity() {
         val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
         Log.d("ScheduleActivity updateTimeline", "Work intervals: $workIntervals")
 
-        if (workIntervals.isNotEmpty()) {
-            val total    = workIntervals.size
-            val partSize = total / 3
+        val total    = workIntervals.size
+        val partSize = total / 3
 
-            val intervals1 = workIntervals.subList(0, partSize)
-            val intervals2 = workIntervals.subList(partSize, partSize * 2)
-            val intervals3 = workIntervals.subList(partSize * 2, total)
+        val intervals1 = workIntervals.subList(0, partSize)
+        val intervals2 = workIntervals.subList(partSize, partSize * 2)
+        val intervals3 = workIntervals.subList(partSize * 2, total)
 
-            val names1 = dutyNames.subList(0, partSize)
-            val names2 = dutyNames.subList(partSize, partSize * 2)
-            val names3 = dutyNames.subList(partSize * 2, total)
+        val names1 = dutyNames.subList(0, partSize)
+        val names2 = dutyNames.subList(partSize, partSize * 2)
+        val names3 = dutyNames.subList(partSize * 2, total)
 
-            val allBusStops = extractBusStops()
-            val stopSize    = allBusStops.size / 3
-            val busStops1   = allBusStops.subList(0, stopSize)
-            val busStops2   = allBusStops.subList(stopSize, stopSize * 2)
-            val busStops3   = allBusStops.subList(stopSize * 2, allBusStops.size)
+        val allBusStops = extractBusStops()
+        val stopSize    = allBusStops.size / 3
+        val busStops1   = allBusStops.subList(0, stopSize)
+        val busStops2   = allBusStops.subList(stopSize, stopSize * 2)
+        val busStops3   = allBusStops.subList(stopSize * 2, allBusStops.size)
 
-            timeline1.setScheduleData(scheduleData.subList(0, partSize))
-            timeline1.setTimelineData(intervals1, names1)
-            timeline1.setBusStops(busStops1)
+        // Decide “single-line?” based on count
+        val oneLineThreshold = 4
+        val single1 = intervals1.size <= oneLineThreshold
+        val single2 = intervals2.size <= oneLineThreshold
+        val single3 = intervals3.size <= oneLineThreshold
 
-            timeline2.setScheduleData(scheduleData.subList(partSize, partSize * 2))
-            timeline2.setTimelineData(intervals2, names2)
-            timeline2.setBusStops(busStops2)
+        timeline1.apply {
+            setScheduleData(scheduleData.subList(0, partSize))
+            setTimelineData(intervals1, names1)
+            setBusStops(busStops1)
+            setSingleLineMode(single1)
+        }
 
-            timeline3.setScheduleData(scheduleData.subList(partSize * 2, scheduleData.size))
-            timeline3.setTimelineData(intervals3, names3)
-            timeline3.setBusStops(busStops3)
+        timeline2.apply {
+            setScheduleData(scheduleData.subList(partSize, partSize * 2))
+            setTimelineData(intervals2, names2)
+            setBusStops(busStops2)
+            setSingleLineMode(single2)
+        }
+
+        timeline3.apply {
+            setScheduleData(scheduleData.subList(partSize * 2, total))
+            setTimelineData(intervals3, names3)
+            setBusStops(busStops3)
+            setSingleLineMode(single3)
         }
     }
 
@@ -920,7 +933,6 @@ class ScheduleActivity : AppCompatActivity() {
         }
         return busStopsList
     }
-
 
     /**
      * Extracts work intervals and duty names from the schedule data dynamically.

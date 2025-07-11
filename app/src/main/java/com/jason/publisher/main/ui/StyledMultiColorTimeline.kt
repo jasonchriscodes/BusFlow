@@ -31,14 +31,19 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
     private var dutyNames: List<String> = emptyList()
     private var busStops: List<BusScheduleInfo> = emptyList()
     private var allScheduleItems: List<ScheduleItem> = emptyList()
-    private val repBoxWidthPx = (80 * context.resources.displayMetrics.density).toInt()
-    private val dutyBoxMinWidthPx = (100 * context.resources.displayMetrics.density).toInt()
     private var isDarkMode = false
+    private var singleLineMode = true
 
     init {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(16, 16, 16, 16)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    fun setSingleLineMode(singleLine: Boolean) {
+        singleLineMode = singleLine
+        renderTimeline()
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -170,16 +175,35 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                     }
                     else -> {
                         val lastStopAbbr = item?.busStops?.lastOrNull()?.abbreviation ?: "?"
-
-                        val singleLineLabel = TextView(context).apply {
-                            text = "$startTime $dutyName $firstStopAbbr → $lastStopAbbr"
-                            textSize = 16f
-                            gravity = Gravity.CENTER
-                            maxLines = 1
-                            ellipsize = TextUtils.TruncateAt.END
-                            setTextColor(Color.WHITE)
+                        if (singleLineMode) {
+                            // 1-line:
+                            addView(TextView(context).apply {
+                                text = "$startTime $dutyName $firstStopAbbr → $lastStopAbbr"
+                                textSize = 16f
+                                gravity = Gravity.CENTER
+                                maxLines = 1
+                                ellipsize = TextUtils.TruncateAt.END
+                                setTextColor(Color.WHITE)
+                            })
+                        } else {
+                            // 2-line:
+                            // (1) time on its own line
+                            addView(TextView(context).apply {
+                                text = startTime
+                                textSize = 12f
+                                gravity = Gravity.CENTER
+                                setTextColor(Color.WHITE)
+                            })
+                            // (2) duty+stops on new line
+                            addView(TextView(context).apply {
+                                text = "$dutyName $firstStopAbbr → $lastStopAbbr"
+                                textSize = 16f
+                                gravity = Gravity.CENTER
+                                maxLines = 1
+                                ellipsize = TextUtils.TruncateAt.END
+                                setTextColor(Color.WHITE)
+                            })
                         }
-                        addView(singleLineLabel)
                     }
                 }
             }
