@@ -9,6 +9,7 @@ import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.activity.MapActivity
 import com.jason.publisher.main.model.Bus
+import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.services.ClientAttributesResponse
 import com.jason.publisher.services.ApiService
 import com.jason.publisher.main.services.MqttManager
@@ -37,6 +38,8 @@ class MqttHelper(
 
     companion object {
         private const val MIN_FETCH_INTERVAL_MS = 2_000L
+        // include scheduleData in your GET
+        private const val CLIENT_KEYS = "latitude,longitude,bearing,speed,direction,scheduleData"
     }
 
     // track when we last fetched attributes for each token
@@ -141,7 +144,7 @@ class MqttHelper(
         apiService.getAttributes(
             "${ApiService.BASE_URL}$token/attributes",
             "application/json",
-            clientKeys
+            CLIENT_KEYS
         ).enqueue(object : Callback<ClientAttributesResponse> {
             @SuppressLint("LongLogTag")
             override fun onResponse(
@@ -149,6 +152,24 @@ class MqttHelper(
                 response: Response<ClientAttributesResponse>
             ) {
                 val client = response.body()?.client ?: return
+                // parse scheduleData JSON if present
+                val scheduleJson = client.scheduleData
+                if (!scheduleJson.isNullOrEmpty()) {
+                    // turn it back into a list of ScheduleItem
+                    val otherSched = Gson().fromJson(
+                        scheduleJson,
+                        Array<ScheduleItem>::class.java
+                    ).toList()
+                    // build the “label” just like you do for self:
+                    val first = otherSched.firstOrNull()
+                    val label = first?.let {
+                        val abbrs = it.busStops
+                        "${it.startTime} ${it.dutyName} ${abbrs.first().abbreviation} → ${abbrs.last().abbreviation}"
+                    } ?: token
+                    // keep it around
+                    owner.otherBusLabels[token] = label
+                }
+
                 val lat = client.latitude
                 val lon = client.longitude
 

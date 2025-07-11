@@ -495,9 +495,8 @@ class MapViewController(
             val iconRes = activity.resources.getIdentifier(iconName, "drawable", activity.packageName)
 
             // try to pull the bus‐name from your arrBusData, fallback to token
-            val busName = activity.arrBusData
-                .find { it.accessToken == token }
-                ?.bus   // or `.name` if your model uses a different field
+            val busName = activity.otherBusLabels[token]
+                ?: activity.arrBusData.find { it.accessToken == token }?.bus
                 ?: token
 
             val row = LinearLayout(activity).apply {

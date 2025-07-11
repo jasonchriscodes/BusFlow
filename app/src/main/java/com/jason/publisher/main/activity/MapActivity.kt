@@ -48,6 +48,7 @@ import java.lang.Math.cos
 import java.lang.Math.sin
 import java.lang.Math.sqrt
 import com.google.android.gms.location.*
+import com.google.gson.Gson
 import com.jason.publisher.LocationListener
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
@@ -170,6 +171,7 @@ class MapActivity : AppCompatActivity() {
     lateinit var timeManager: TimeManager
     lateinit var mapController: MapViewController
     private lateinit var scheduleStatusManager: ScheduleStatusManager
+    val otherBusLabels = mutableMapOf<String,String>()
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -1504,7 +1506,17 @@ class MapActivity : AppCompatActivity() {
         }
 
         val url = ApiService.BASE_URL + "$token/attributes"
-        val attributesData = AttributesData(latitude, longitude, bearing, null,speed, direction)
+
+        val scheduleJson = Gson().toJson(scheduleData)
+        val attributesData = AttributesData(
+            latitude        = latitude,
+            longitude       = longitude,
+            bearing         = bearing,
+            bearingCustomer = null,
+            speed           = speed,
+            direction       = direction,
+            scheduleData    = scheduleJson
+        )
 
         Log.d("MapActivity updateClientAttributes", "Posting client-attrs for aid=$aid → $attributesData")
 

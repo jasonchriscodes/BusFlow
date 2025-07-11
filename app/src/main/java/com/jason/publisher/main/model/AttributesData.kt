@@ -13,8 +13,9 @@ package com.jason.publisher.main.model
 data class AttributesData(
     val latitude: Double,
     val longitude: Double,
-    val bearing: Float,
+    val bearing: Float?,
     val bearingCustomer: Float?,
-    val speed: Float,
-    val direction: String,
+    val speed: Float?,
+    val direction: String?,
+    val scheduleData: String? = null
 )
