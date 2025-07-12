@@ -67,10 +67,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.mapsforge.map.model.MapViewPosition
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import java.lang.Math.abs
+import org.mapsforge.map.model.common.Observer
 
 class MapActivity : AppCompatActivity() {
 
@@ -376,6 +378,16 @@ class MapActivity : AppCompatActivity() {
             scheduleStatusValueTextView.text = "Calculating..."
             scheduleStatusManager.checkScheduleStatus()
         }
+
+        binding.map.model.mapViewPosition.addObserver(object : Observer {
+            override fun onChange() {
+                val zoom = binding.map.model.mapViewPosition.zoomLevel.toDouble()
+                Log.d("MapActivity", "Zoom changed to $zoom")
+                runOnUiThread {
+                    mapController.refreshDetailPanelIcons()
+                }
+            }
+        })
 
         binding.startSimulationButton.setOnClickListener {
 //            startSimulation()
@@ -1629,3 +1641,4 @@ class MapActivity : AppCompatActivity() {
         timeManager.currentTimeHandler.removeCallbacks(timeManager.currentTimeRunnable)
     }
 }
+

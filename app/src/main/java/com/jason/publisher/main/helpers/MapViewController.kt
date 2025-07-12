@@ -475,81 +475,74 @@ class MapViewController(
     /** Call this any time you re-draw or move markers on the map */
     @SuppressLint("LongLogTag")
     fun refreshDetailPanelIcons() {
-        detailContainer.removeAllViews()
+        activity.runOnUiThread {
+            detailContainer.removeAllViews()
 
-        // helper to draw the little grey line between rows
-        fun addDivider() {
-            val divider = View(activity).apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    MATCH_PARENT, dpToPx(1)
-                ).apply {
-                    topMargin = dpToPx(4); bottomMargin = dpToPx(4)
+            val zoom = binding.map.model.mapViewPosition.zoomLevel.toDouble()
+            val bb   = binding.map.boundingBox
+
+            // 1) your own bus always first
+            val selfToken = activity.token
+
+            // 2) then any other markers currently on‐screen
+            val visibleOthers = activity.markerBus
+                .filter { it.key != selfToken
+                        && bb.contains(it.value.latLong.latitude, it.value.latLong.longitude)
                 }
-                setBackgroundColor(Color.LTGRAY)
-            }
-            detailContainer.addView(divider)
-        }
+                .keys
+                .toList()
 
-        // build a list of tokens: self first, then others
-        val selfToken = activity.token
-        val otherTokens = activity.markerBus.keys.filter { it != selfToken }
-        // sort so that the most recently active bus appears at the top of the “others”
-        val sortedOthers = otherTokens.sortedBy { it != activeBusToken }
+            // 3) full display order: self @ idx=0, others @ idx=1,2,3…
+            val displayOrder = listOf(selfToken) + visibleOthers
 
-        // 1) Your own bus row
-        activeSegment?.let { label ->
-            val row = LinearLayout(activity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            val iv = ImageView(activity).apply {
-                setImageResource(
-                    activity.resources.getIdentifier(
-                        "ic_bus_symbol", "drawable", activity.packageName
-                    )
-                )
-                layoutParams = LinearLayout.LayoutParams(dpToPx(16), dpToPx(16))
-            }
-            val tv = TextView(activity).apply {
-                text = label
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                setPadding(dpToPx(8), 0, 0, 0)
-            }
-            row.addView(iv); row.addView(tv)
-            detailContainer.addView(row)
-            addDivider()
-        }
+            displayOrder.forEachIndexed { idx, token ->
+                // when zoomed in past 25, skip everything except your own bus (idx==0)
+                if (zoom > 25.0 && idx >= 1) return@forEachIndexed
 
-        // 2) Dynamically for each other active bus
-        sortedOthers.forEachIndexed { idx, token ->
-            // slot → 2..10
-            val slot = min(idx + 2, 10)
-            val iconName = "ic_bus_symbol$slot"
-            val iconRes = activity.resources.getIdentifier(iconName, "drawable", activity.packageName)
+                // pick the right icon name…
+                val iconName = if (idx == 0) {
+                    "ic_bus_symbol"
+                } else {
+                    "ic_bus_symbol${(idx+1).coerceAtMost(10)}"
+                }
+                val iconRes = activity.resources.getIdentifier(iconName, "drawable", activity.packageName)
 
-            // try to pull the bus‐name from your arrBusData, fallback to token
-            val busName = activity.otherBusLabels[token]
-                ?: activity.arrBusData.find { it.accessToken == token }?.bus
-                ?: token
+                // …and label
+                val label = if (token == selfToken) {
+                    activeSegment ?: token
+                } else {
+                    activity.otherBusLabels[token] ?: token
+                }
 
-            val row = LinearLayout(activity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
-                gravity = Gravity.CENTER_VERTICAL
+                // inflate a row
+                val row = LinearLayout(activity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity     = Gravity.CENTER_VERTICAL
+                    val pad = dpToPx(8)
+                    setPadding(pad, pad/2, pad, pad/2)
+                }
+                val iv = ImageView(activity).apply {
+                    setImageResource(iconRes)
+                    layoutParams = LinearLayout.LayoutParams(dpToPx(16), dpToPx(16))
+                }
+                val tv = TextView(activity).apply {
+                    text = label
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    setPadding(dpToPx(8), 0, 0, 0)
+                }
+                row.addView(iv)
+                row.addView(tv)
+                detailContainer.addView(row)
+
+                // divider under every row except the last
+                if (idx < displayOrder.lastIndex) {
+                    detailContainer.addView(View(activity).apply {
+                        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dpToPx(1))
+                            .apply { topMargin = dpToPx(4); bottomMargin = dpToPx(4) }
+                        setBackgroundColor(Color.LTGRAY)
+                    })
+                }
             }
-            val iv = ImageView(activity).apply {
-                setImageResource(iconRes)
-                layoutParams = LinearLayout.LayoutParams(dpToPx(16), dpToPx(16))
-            }
-            val tv = TextView(activity).apply {
-                text = busName
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                setPadding(dpToPx(8), 0, 0, 0)
-            }
-            row.addView(iv); row.addView(tv)
-            detailContainer.addView(row)
-            addDivider()
         }
     }
 }
