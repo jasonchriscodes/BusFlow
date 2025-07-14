@@ -482,7 +482,7 @@ class MapActivity : AppCompatActivity() {
     private fun confirmArrival() {
         Log.d("MapActivity confirmArrival", "🚨 ConfirmArrival Triggered - Starting Process")
 
-        val startingPoint = busRouteData?.first()?.startingPoint?.let { sp ->
+        busRouteData?.first()?.startingPoint?.let { sp ->
             BusStop(latitude = sp.latitude, longitude = sp.longitude, address = sp.address)
         }
 
@@ -492,39 +492,23 @@ class MapActivity : AppCompatActivity() {
         }
 
         Log.d("MapActivity confirmArrival", "🔎 Starting nearest route point search...")
-        var nearestIndex = mapController.findNearestBusRoutePoint(latitude, longitude)
+
+        // 1) find nearest route‑point index
+        val nearestIndex = mapController.findNearestBusRoutePoint(latitude, longitude)
         Log.d("MapActivity confirmArrival", "✅ Nearest Route Point Found at Index: $nearestIndex")
 
         var nearestStop: BusStop? = null
 
-        for (stopIndex in stops.indices) {
-            val stop = stops[stopIndex]
-
-            val routePointIndex = route.indexOfFirst {
+        // 2) mark every stop up to that point as passed
+        var snappedStop: BusStop? = null
+        for (stop in stops) {
+            val routeIdx = route.indexOfFirst {
                 it.latitude == stop.latitude && it.longitude == stop.longitude
             }
-
-            Log.d("MapActivity confirmArrival", "🔎 Checking Stop: ${stop.address}")
-            Log.d("MapActivity confirmArrival", "   Route Point Index: $routePointIndex | Nearest Index: $nearestIndex")
-
-            if (routePointIndex != -1 && routePointIndex <= nearestIndex) {
-                for (i in 0..stopIndex) {
-                    if (!passedStops.contains(stops[i])) {
-                        passedStops.add(stops[i])
-                        Log.d("MapActivity confirmArrival", "✅ Passed Stop Added: ${stops[i].address}")
-                    }
-                }
-
-                if (nearestStop == null || routePointIndex < nearestIndex) {
-                    nearestStop = stop
-                    Log.d("MapActivity confirmArrival", "➡️ Nearest Stop Updated to: ${nearestStop.address}")
-                }
-
-                if (passedStops.contains(stop)) continue
-            } else {
-                Log.d("MapActivity confirmArrival", "❌ Stop Skipped: ${stop.address}")
-                break
-            }
+            if (routeIdx != -1 && routeIdx <= nearestIndex) {
+                if (!passedStops.contains(stop)) passedStops.add(stop)
+                snappedStop = stop
+            } else break
         }
 
         if (nearestStop != null) {
@@ -544,8 +528,20 @@ class MapActivity : AppCompatActivity() {
             Log.w("MapActivity confirmArrival", "⚠️ No Nearest Stop Found")
         }
 
+        // 3) clear & redraw all detection zones _once_
         mapController.drawDetectionZones(stops)
 
+        // 4) snap UI to the snappedStop (if any)
+        snappedStop?.let { stop ->
+            latitude  = stop.latitude!!
+            longitude = stop.longitude!!
+            stopAddress = findAddressByCoordinates(latitude, longitude)
+                ?: stop.address.orEmpty()
+            upcomingBusStopTextView.text = stopAddress
+            hasPassedFirstStop = true
+        }
+
+        // 5) continue with API‑time, schedule status updates, live GPS restart…
         // 🔹 Ensure schedule status updates correctly
         Log.d("MapActivity confirmArrival", "🔄 Updating API Time...")
         var busStopIndex = getBusStopIndex(latitude, longitude, stops)

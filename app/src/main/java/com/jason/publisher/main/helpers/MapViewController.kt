@@ -24,6 +24,7 @@ import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.activity.MapActivity
 import com.jason.publisher.main.helpers.MqttHelper
+import com.jason.publisher.main.model.BusStop
 import org.json.JSONArray
 import org.mapsforge.core.graphics.Bitmap as MfBitmap
 import org.mapsforge.core.model.LatLong
@@ -45,6 +46,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.mapsforge.core.graphics.Style
 import kotlin.math.pow
 
 class MapViewController(
@@ -280,26 +282,33 @@ class MapViewController(
      * Function to add circular markers to represent the detection area for each stop.
      */
     fun drawDetectionZones(
-        busStops: List<com.jason.publisher.main.model.BusStop>,
+        busStops: List<BusStop>,
         radiusMeters: Double = activity.busStopRadius
     ) {
+        // ① remove all old circles
+        val layers = binding.map.layerManager.layers
+        layers.filterIsInstance<Circle>()
+            .forEach { layers.remove(it) }
+
+        // ② draw fresh ones based on passedStops
         busStops.forEach { stop ->
             val passed = activity.passedStops.any {
                 it.latitude == stop.latitude && it.longitude == stop.longitude
             }
-            val fill = if (passed) Color.argb(64, 0, 255, 0) else Color.argb(64, 255, 0, 0)
+            val fill   = if (passed) Color.argb(64, 0,255,0) else Color.argb(64,255,0,0)
+            val stroke = if (passed) Color.GREEN else Color.RED
+
             val circle = Circle(
                 LatLong(stop.latitude!!, stop.longitude!!),
                 radiusMeters.toFloat(),
                 AndroidGraphicFactory.INSTANCE.createPaint().apply {
-                    color = fill; setStyle(org.mapsforge.core.graphics.Style.FILL)
+                    color = fill; setStyle(Style.FILL)
                 },
                 AndroidGraphicFactory.INSTANCE.createPaint().apply {
-                    color = if (passed) Color.GREEN else Color.RED
-                    strokeWidth = 2f; setStyle(org.mapsforge.core.graphics.Style.STROKE)
+                    color = stroke; strokeWidth = 2f; setStyle(Style.STROKE)
                 }
             )
-            binding.map.layerManager.layers.add(circle)
+            layers.add(circle)
         }
         binding.map.invalidate()
     }
