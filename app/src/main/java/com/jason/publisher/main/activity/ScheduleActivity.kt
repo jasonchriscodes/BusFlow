@@ -1134,8 +1134,13 @@ class ScheduleActivity : AppCompatActivity() {
                 newStops.add(BusStop(latitude = nextPoint.latitude, longitude = nextPoint.longitude))
 
                 // Add route coordinates
+                var last: Pair<Double,Double>? = null
                 for (coord in nextPoint.routeCoordinates) {
-                    newRoute.add(BusRoute(latitude = coord[1], longitude = coord[0]))
+                    val lat = coord[1]
+                    val lon = coord[0]
+                    if (last == lat to lon) continue      // skip duplicate
+                    newRoute.add(BusRoute(latitude = lat, longitude = lon))
+                    last = lat to lon
                 }
 
                 // Extract duration
