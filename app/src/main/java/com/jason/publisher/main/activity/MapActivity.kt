@@ -1072,6 +1072,25 @@ class MapActivity : AppCompatActivity() {
             return
         }
 
+        // ─── NEW: figure out where you are on the polyline ───
+        val nearestRouteIdx = mapController.findNearestBusRoutePoint(currentLat, currentLon)
+        Log.d("MapActivity checkPassedStops", "Nearest route index: $nearestRouteIdx")
+
+        // ─── NEW: auto-pass any stops whose route-index ≤ your position ───
+        stops.forEach { stop ->
+            val idx = route.indexOfFirst {
+                it.latitude == stop.latitude && it.longitude == stop.longitude
+            }
+            if (idx != -1 && idx <= nearestRouteIdx && !passedStops.contains(stop)) {
+                passedStops.add(stop)
+                Log.d("MapActivity checkPassedStops", "🟢 Auto-passed stop: ${stop.address}")
+            }
+        }
+
+        // ─── NEW: recompute currentStopIndex from passedStops ───
+        currentStopIndex = stops.indexOfFirst { it !in passedStops }
+            .takeIf { it >= 0 } ?: stops.size
+
         if (currentStopIndex >= stops.size) {
             Log.d("MapActivity checkPassedStops", "✅ All stops have been passed.")
             if (isManualMode) {
