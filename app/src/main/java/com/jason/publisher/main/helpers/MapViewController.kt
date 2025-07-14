@@ -352,42 +352,52 @@ class MapViewController(
     }
 
     /**
-     * Move the bus marker dynamically with updated bearing.
+     * Move (or create) the bus marker at [lat],[lon], rotated to [bearing],
+     * then spin the map so that “up” is always this bus’s heading.
      */
     fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float) {
-        val newPos = LatLong(lat, lon)
+        // 1) publish telemetry & client-attrs
         mqttHelper.publishTelemetryData()
         activity.updateClientAttributes()
 
-        val rotated = rotateDrawable(bearing)
+        // 2) build a rotated icon for *this* bus
+        val newPos  = LatLong(lat, lon)
+        val rotated = rotateDrawable(R.drawable.ic_bus_symbol, bearing)
+
+        // 3) remove the old marker (if any)
         activity.busMarker?.let { binding.map.layerManager.layers.remove(it) }
 
+        // 4) add the new, rotated marker
         activity.busMarker = Marker(newPos, rotated, 0, 0)
         binding.map.layerManager.layers.add(activity.busMarker)
 
+        // 5) spin the *map* so that this bus’s bearing is “up”
         binding.map.rotation = -bearing
-        binding.map.scaleX = 1.9f; binding.map.scaleY = 1.9f
-        binding.map.setCenter(newPos)
-        binding.map.invalidate()
 
+        // 6) optional: zoom, scale, center
+        binding.map.scaleX = 1.9f
+        binding.map.scaleY = 1.9f
+        binding.map.setCenter(newPos)
+
+        // 7) redraw & update the little detail-panel
+        binding.map.invalidate()
         activity.onBusMarkerUpdated()
     }
 
-    /** Rotates the bus symbol drawable based on the given angle. */
-    fun rotateDrawable(angle: Float, sizeDp: Int = 16): MfBitmap {
-        val d = ResourcesCompat.getDrawable(activity.resources, R.drawable.ic_bus_symbol, null)!!
-        // convert dp→px
+    /** Rotates any vector‐drawable @id by `angle`° around its center. */
+    fun rotateDrawable(@DrawableRes id: Int, angle: Float, sizeDp: Int = 16): MfBitmap {
+        val d = ResourcesCompat.getDrawable(activity.resources, id, null)!!
         val sizePx = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
             sizeDp.toFloat(),
             activity.resources.displayMetrics
         ).toInt()
 
-        // draw & rotate around center
         val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
-        d.setBounds(0, 0, sizePx, sizePx)
+        // rotate around the center
         canvas.rotate(angle, sizePx / 2f, sizePx / 2f)
+        d.setBounds(0, 0, sizePx, sizePx)
         d.draw(canvas)
 
         return AndroidBitmap(bmp)

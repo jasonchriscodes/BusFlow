@@ -200,22 +200,33 @@ class MqttHelper(
                 owner.lastSeen[token] = now
 
                 owner.runOnUiThread {
-                    val pos = LatLong(lat, lon)
+                    val pos      = LatLong(lat, lon)
                     val existing = owner.markerBus[token]
+
+                    // figure out which ic_bus_symbolN to use (N = 2..10)
+                    // we look up the position in arrBusData so that each bus stays on its own slot
+                    val idx  = owner.arrBusData.indexOfFirst { it.accessToken == token }
+                    val slot = ((idx + 2).coerceAtMost(10)).coerceAtLeast(2)
+                    val iconName = "ic_bus_symbol$slot"
+                    val iconRes  = owner.resources.getIdentifier(iconName, "drawable", owner.packageName)
+                    val rotated  = client.bearing?.let { owner.mapController.rotateDrawable(iconRes, it) }
+
                     if (existing == null) {
-                        // never drawn before — create a new one
-                        val idx = owner.markerBus.size
-                        val slot = min(idx + 2, 10)
-                        val iconRes = owner.resources.getIdentifier(
-                            "ic_bus_symbol$slot", "drawable", owner.packageName
-                        )
-                        val marker = Marker(pos, owner.mapController.createBusIcon(iconRes), 0, 0)
+                        // first time: create a new, rotated marker
+                        val marker = Marker(pos, rotated, 0, 0)
                         binding.map.layerManager.layers.add(marker)
                         owner.markerBus[token] = marker
                     } else {
-                        // already on‐screen → just move it
-                        existing.latLong = pos
+                        // already on-screen → move *and* re-rotate
+                        existing.apply {
+                            latLong = pos
+                            if (rotated != null) {
+                                // swap in the newly rotated bitmap
+                                bitmap = rotated
+                            }
+                        }
                     }
+
                     binding.map.invalidate()
                     owner.mapController.activeBusToken = token
                     owner.mapController.refreshDetailPanelIcons()
