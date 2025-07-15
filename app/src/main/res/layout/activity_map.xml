@@ -16,7 +16,9 @@
         android:orientation="horizontal"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintEnd_toEndOf="parent"
+        android:clipToPadding="false"
+        android:clipChildren="false">
 
         <!-- Back Button styled as a rectangle box with consistent styling -->
         <!--
@@ -50,7 +52,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:backgroundTint="@color/purple_500"
-                    android:background="@drawable/button_rounded_background"
+                    android:background="@drawable/button_rounded_background_outline"
                     android:padding="8dp"
                     android:textColor="@color/white"
                     android:text="             End Trip" />
@@ -101,23 +103,27 @@
             android:layout_margin="4dp"
             android:orientation="horizontal"
             android:gravity="center"
-            android:background="@drawable/button_rounded_background"
-            android:backgroundTint="@color/purple_500"
-            android:padding="8dp">
-            <Button
+            android:background="@drawable/button_rounded_background_outline"
+            android:clipToPadding="false"
+            android:clipChildren="false">
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/arriveButton"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:layout_margin="4dp"
-                android:gravity="center"
-                android:textAllCaps="false"
-                android:background="@android:color/transparent"
-                android:padding="8dp"
+                style="@style/Widget.NavTrack.Button"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
                 android:text="Arrive"
-                android:textSize="16sp"
-                android:textColor="@color/white" />
+                android:translationZ="4dp"
+                android:stateListAnimator="@animator/button_elevation_animator"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                app:icon="@drawable/ic_arrive"
+                app:iconTint="@color/white"
+                app:iconPadding="8dp"
+                app:iconGravity="textStart"
+                app:iconSize="20dp"
+                />
         </LinearLayout>
+
     </LinearLayout>
 
     <!-- Bottom Section: 2x2 grid -->
@@ -258,10 +264,6 @@
                             android:textSize="16sp"
                             tools:ignore="MissingConstraints" />
 
-
-
-
-
                         <TextView
                             android:id="@+id/speedTextView"
                             android:layout_width="0dp"
@@ -293,16 +295,6 @@
                             android:textColor="@android:color/white"
                             android:textSize="16sp"
                             tools:ignore="MissingConstraints" />
-
-
-
-
-
-
-
-
-
-
 
                         <TextView
                             android:id="@+id/ApiTimeValueTextView"

@@ -14,6 +14,7 @@
         <item name="colorOnSecondary">@color/black</item>
         <!-- Status bar color. -->
         <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <item name="materialButtonStyle">@style/Widget.NavTrack.Button</item>
     </style>
 
     <!-- Define the AppBarOverlay style -->
@@ -24,4 +25,16 @@
 
     <!-- Define the PopupOverlay style -->
     <style name="Theme.PopupOverlay" parent="ThemeOverlay.AppCompat.Light" />
+
+    <style name="ShapeAppearance.NavTrack.Button" parent="ShapeAppearance.MaterialComponents.SmallComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">20dp</item>
+    </style>
+
+    <!-- A MaterialComponents button style that uses that shape -->
+    <style name="Widget.NavTrack.Button" parent="Widget.MaterialComponents.Button">
+        <item name="shapeAppearance">@style/ShapeAppearance.NavTrack.Button</item>
+        <item name="backgroundTint">@color/purple_500</item>
+        <item name="android:textColor">@color/white</item>
+    </style>
 </resources>
