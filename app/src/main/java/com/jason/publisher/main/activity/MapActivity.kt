@@ -2,6 +2,9 @@ package com.jason.publisher.main.activity
 
 import FileLogger
 import android.annotation.SuppressLint
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -18,6 +21,8 @@ import android.graphics.Color
 import android.location.Location
 import android.os.Build
 import android.view.Gravity
+import android.view.KeyEvent
+import android.view.View
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -194,6 +199,8 @@ class MapActivity : AppCompatActivity() {
         AndroidGraphicFactory.createInstance(application)
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        hideSystemUI()
 
         // Add logger
         FileLogger.init(this)
@@ -438,6 +445,24 @@ class MapActivity : AppCompatActivity() {
         binding.arriveButton.setOnClickListener {
             confirmArrival()
         }
+    }
+
+    /**
+     * Enables immersive full-screen mode by hiding the navigation and status bars.
+     */
+    private fun hideSystemUI() {
+        window.decorView.systemUiVisibility = (
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                )
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemUI()
     }
 
     /**
@@ -1641,6 +1666,16 @@ class MapActivity : AppCompatActivity() {
         arriveButtonContainer = findViewById(R.id.arriveButtonContainer)
         currentTimeTextView = binding.currentTimeTextView
         nextTripCountdownTextView = binding.nextTripCountdownTextView
+    }
+
+    override fun onBackPressed() { /* no-op */ }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        return when (keyCode) {
+            KeyEvent.KEYCODE_BACK,
+            KeyEvent.KEYCODE_APP_SWITCH -> true  // swallow Back & Recents
+            else                         -> super.onKeyDown(keyCode, event)
+        }
     }
 
     /** Cleans up resources on activity destruction. */
