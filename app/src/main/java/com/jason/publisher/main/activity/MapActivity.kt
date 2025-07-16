@@ -1114,9 +1114,11 @@ class MapActivity : AppCompatActivity() {
 
         if (currentStopIndex >= stops.size) {
             Log.d("MapActivity checkPassedStops", "✅ All stops have been passed.")
-            if (isManualMode) {
-                isManualMode = false
-                startLocationUpdate() // 🔹 Resume GPS updates
+            // update UI to “end of route” and fire the summary dialog:
+            runOnUiThread {
+                upcomingBusStopTextView.text = "End of Route"
+                Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+                showSummaryDialog()
             }
             return
         }
