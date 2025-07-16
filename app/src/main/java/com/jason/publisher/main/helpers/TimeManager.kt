@@ -44,8 +44,8 @@ class TimeManager(private val owner: MapActivity, private val scheduleStatusMana
                 simulatedStartTime.add(Calendar.SECOND, 1)
 
                 // Update schedule status based on the new simulated time
-//                owner.scheduleStatusValueTextView.text = "Calculating..."
-//                scheduleStatusManager.checkScheduleStatus()
+                owner.scheduleStatusValueTextView.text = "Calculating..."
+                scheduleStatusManager.checkScheduleStatus()
 
                 currentTimeHandler.postDelayed(this, 1000) // Update every second
             }
