@@ -1,6 +1,7 @@
 package com.jason.publisher.main.activity
 
 import FileLogger
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
@@ -274,7 +275,7 @@ class MapActivity : AppCompatActivity() {
         val active = findActiveLabel(timelineLabels, nowMinutes)
 
         // Start the next trip countdown updater
-        timeManager.startNextTripCountdownUpdater()
+//        timeManager.startNextTripCountdownUpdater()
 
         updateApiTime() // Ensure API time is updated at the start
 
@@ -343,6 +344,78 @@ class MapActivity : AppCompatActivity() {
 
         // Start tracking the location and updating the marker
         startLocationUpdate()
+        mapController.refreshDetailPanelIcons()
+
+        // ─── TEST: after 5s, hard‑code next‑run & current time + first lat/lon,
+        //          then after 3s swap to the second lat/lon ───
+        val testHandler = Handler(Looper.getMainLooper())
+        testHandler.postDelayed({
+            // stop the real‑time ticker and start your custom‑time ticker
+            timeManager.stopCurrentTime()
+            // tablet A: 11:41:03, Tablet B: 08:40:40
+            timeManager.startCustomTime("08:40:40")
+            timeManager.startNextTripCountdownUpdater()
+
+            // ─── TEST STATUS: hard‑code “Very Ahead (~593s early)” and count down ───
+            val statusHandler = Handler(Looper.getMainLooper())
+
+            // tablet A: 593, Tablet B: 616
+            var remainingEarlySec = 616
+            val statusRunnable = object : Runnable {
+                override fun run() {
+                    if (remainingEarlySec >= 0) {
+                        binding.scheduleStatusValueTextView.text =
+                            "Very Ahead (~${remainingEarlySec}s early)"
+                        binding.scheduleStatusValueTextView.setTextColor(
+                            ContextCompat.getColor(this@MapActivity, R.color.blind_red)
+                        )
+                        binding.scheduleAheadIcon.apply {
+                            setImageResource(R.drawable.ic_schedule_very_ahead)
+                            rotation = 0f
+                        }
+                        remainingEarlySec--
+                        statusHandler.postDelayed(this, 1000L)
+                    }
+                }
+            }
+            statusHandler.post(statusRunnable)
+
+            // stop live‑GPS so our simulation isn’t overwritten
+            isManualMode = true
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+
+            // 2) warp to the first test location
+            val firstLat = -36.859158
+            val firstLon = 174.656232
+            val secondLat = -36.85829
+            val secondLon = 174.65249
+// compute bearing from current pos → first test pos
+            bearing = mapController.calculateBearing(
+                /*fromLat*/ firstLat, /*fromLon*/ firstLon,
+                /*toLat*/   secondLat, /*toLon*/   secondLon
+            )
+            latitude  = firstLat
+            longitude = firstLon
+            mapController.updateBusMarkerPosition(latitude, longitude, bearing)
+//            mapController.refreshDetailPanelIcons()
+            checkPassedStops(latitude, longitude)
+//            binding.map.invalidate()
+
+// 3) after another 5 seconds, warp to the second point
+            testHandler.postDelayed({
+                // compute bearing from first test pos → second test pos
+                bearing = mapController.calculateBearing(
+                    /*fromLat*/ firstLat, /*fromLon*/ firstLon,
+                    /*toLat*/   secondLat, /*toLon*/   secondLon
+                )
+                latitude  = secondLat
+                longitude = secondLon
+                mapController.updateBusMarkerPosition(latitude, longitude, bearing)
+//                mapController.refreshDetailPanelIcons()
+                checkPassedStops(latitude, longitude)
+//                binding.map.invalidate()
+            }, 10000L)
+        }, 10000L)
 
         // Mock data to check scheduleStatusValueTextView
         if (forceAheadStatus == true) {
@@ -382,8 +455,8 @@ class MapActivity : AppCompatActivity() {
 //            startActualTimeUpdater()
 
             // Trigger visual change to test schedule status UI
-            scheduleStatusValueTextView.text = "Calculating..."
-            scheduleStatusManager.checkScheduleStatus()
+//            scheduleStatusValueTextView.text = "Calculating..."
+//            scheduleStatusManager.checkScheduleStatus()
         }
 
         binding.map.model.mapViewPosition.addObserver(object : Observer {
@@ -447,6 +520,18 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
+    private fun animateAlong(path: List<LatLong>, totalDuration: Long) {
+        if (path.size < 2) return
+        val segmentDur = totalDuration / (path.size - 1)
+        val uiHandler = Handler(Looper.getMainLooper())
+        path.forEachIndexed { i, point ->
+            uiHandler.postDelayed({
+                mapController.updateBusMarkerPosition(point.latitude, point.longitude, bearing)
+                binding.map.invalidate()
+            }, segmentDur * i)
+        }
+    }
+
     /**
      * Enables immersive full-screen mode by hiding the navigation and status bars.
      */
@@ -463,6 +548,27 @@ class MapActivity : AppCompatActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemUI()
+    }
+
+    /**
+     * Animate the bus marker smoothly from one LatLong to another over [durationMs].
+     */
+    private fun animateBusMovement(
+        startLat: Double, startLon: Double,
+        endLat: Double,   endLon: Double,
+        durationMs: Long
+    ) {
+        ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = durationMs
+            addUpdateListener { animator ->
+                val fraction = animator.animatedValue as Float
+                val lat = startLat + (endLat - startLat) * fraction
+                val lon = startLon + (endLon - startLon) * fraction
+                mapController.updateBusMarkerPosition(lat, lon, bearing)
+                binding.map.invalidate()
+            }
+            start()
+        }
     }
 
     /**
@@ -607,13 +713,13 @@ class MapActivity : AppCompatActivity() {
         apiTimeLocked = false    // Unlock the API time to allow updates
         Log.d("MapActivity confirmArrival", "🔓 API Time Unlocked")
 
-        scheduleStatusValueTextView.text = "Calculating..."
-        scheduleStatusManager.checkScheduleStatus()   // Immediately refresh the schedule status
+//        scheduleStatusValueTextView.text = "Calculating..."
+//        scheduleStatusManager.checkScheduleStatus()   // Immediately refresh the schedule status
         Log.d("MapActivity confirmArrival", "✅ Schedule Status Checked")
 
         Log.d("MapActivity confirmArrival", "✅ Arrival confirmed at: ${stopAddress}")
 
-        startLocationUpdate()   // ✅ Continue marker updates
+//        startLocationUpdate()   // ✅ Continue marker updates
         Log.d("MapActivity confirmArrival", "✅ Tracking resumed after arrival confirmation.")
 
         Toast.makeText(this@MapActivity, "✅ Tracking resumed after arrival confirmation.", Toast.LENGTH_SHORT).show()
@@ -1498,8 +1604,8 @@ class MapActivity : AppCompatActivity() {
                         mapController.updateBusMarkerPosition(latitude, longitude, bearing)
                         checkPassedStops(latitude, longitude)
                         updateTimingPointBasedOnLocation(latitude, longitude)
-                        scheduleStatusValueTextView.text = "Calculating..."
-                        scheduleStatusManager.checkScheduleStatus()
+//                        scheduleStatusValueTextView.text = "Calculating..."
+//                        scheduleStatusManager.checkScheduleStatus()
                         updateApiTime()
 
                         binding.map.invalidate() // Refresh map view

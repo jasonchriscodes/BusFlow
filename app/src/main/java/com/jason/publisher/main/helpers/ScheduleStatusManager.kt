@@ -77,7 +77,7 @@ class ScheduleStatusManager(
         // If using mock data and first stop hasn't been passed, show "Please wait..."
         if (activity.forceAheadStatus && !activity.hasPassedFirstStop) {
             activity.runOnUiThread {
-                binding.scheduleStatusValueTextView.text = "Please wait..."
+//                binding.scheduleStatusValueTextView.text = "Please wait..."
             }
             return
         }
