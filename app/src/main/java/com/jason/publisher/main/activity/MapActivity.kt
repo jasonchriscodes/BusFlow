@@ -179,6 +179,14 @@ class MapActivity : AppCompatActivity() {
     lateinit var mapController: MapViewController
     private lateinit var scheduleStatusManager: ScheduleStatusManager
     val otherBusLabels = mutableMapOf<String,String>()
+    private lateinit var rawPos: LatLong
+    // have we currently snapped to the route?
+    private var isSnappedToRoute = false
+
+    // your normal detection radius
+    private val snapThreshold = 200.0
+    // a little extra margin so that you don't unsnap until say 250m away
+    private val unsnapThreshold = snapThreshold + 50.0
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -1417,6 +1425,10 @@ class MapActivity : AppCompatActivity() {
             override fun onLocationResult(locationResult: LocationResult) {
                 locationResult.lastLocation?.let { location ->
 
+                    // 1) Log raw GPS
+                    Log.d("FlickerDebug", "Raw GPS → lat: ${location.latitude}, lon: ${location.longitude}")
+
+
 //                    Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
 //                    Log.d("GPS_DEBUG", "Speed: ${location.speed}, Bearing: ${location.bearing}")
 //
@@ -1425,14 +1437,24 @@ class MapActivity : AppCompatActivity() {
 //                    Toast.makeText(this@MapActivity, "Speed: ${location.speed}, Bearing: ${location.bearing}", Toast.LENGTH_LONG).show()
 
                     if (!isManualMode) {
-                        latitude = location.latitude
-                        longitude = location.longitude
+                        // raw GPS
+                        val rawLat = location.latitude
+                        val rawLon = location.longitude
+                        rawPos = LatLong(rawLat, rawLon)
                         updateSpeed(location.speed * 3.6f)
                         bearing = location.bearing
                     }
 
-                    // Find the nearest route point
-                    val nearestIndex = mapController.findNearestBusRoutePoint(latitude, longitude)
+                    // 2) decide snapped vs raw
+                    val (nearestIndex, snapPoint, dToRoute) =
+                        mapController.findNearestBusRoutePointWithDistance(rawPos)
+                    // hysteresis logic
+                    isSnappedToRoute = if (isSnappedToRoute) {
+                        dToRoute <= unsnapThreshold
+                    } else {
+                        dToRoute <= snapThreshold
+                    }
+                    val targetPos = if (isSnappedToRoute) snapPoint else rawPos
 
                     // Handle First Bus Stop Rule
                     if (!hasPassedFirstStop) {
@@ -1462,19 +1484,20 @@ class MapActivity : AppCompatActivity() {
                     // Ignore sudden jumps (skip unexpected spikes)
                     if (nearestIndex > nearestRouteIndex + jumpThreshold) return
 
-                    // Smooth marker animation for consecutive points
-                    if (nearestIndex >= nearestRouteIndex) {
-                        mapController.animateMarkerThroughPoints(nearestRouteIndex, nearestIndex)
+                    if (isSnappedToRoute && nearestIndex >= nearestRouteIndex) {
+                       mapController.animateMarkerThroughPoints(nearestRouteIndex, nearestIndex)
+                       nearestRouteIndex = nearestIndex
                     }
 
-                    // Update the valid position
+                    // Update the valid position to exactly what we're drawing:
                     nearestRouteIndex = nearestIndex
-                    val nearestRoutePoint = route[nearestIndex]
-
-                    latitude = nearestRoutePoint.latitude ?: latitude
-                    longitude = nearestRoutePoint.longitude ?: longitude
+                    latitude  = targetPos.latitude
+                    longitude = targetPos.longitude
                     lastValidLatitude = latitude
                     lastValidLongitude = longitude
+
+                    // 4) _new_ log here!
+                    Log.d("FlickerDebug", "Using      → lat: $latitude, lon: $longitude  (snapped=$isSnappedToRoute)")
 
                     // Calculate bearing toward next index
                     val nextIndex = if (nearestIndex < route.size - 1) nearestIndex + 1 else nearestIndex
@@ -1495,7 +1518,12 @@ class MapActivity : AppCompatActivity() {
 
                     runOnUiThread {
                         speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
-                        mapController.updateBusMarkerPosition(latitude, longitude, bearing)
+                        // ④ always move to targetPos (raw or snapped)
+                        mapController.updateBusMarkerPosition(
+                            targetPos.latitude,
+                            targetPos.longitude,
+                            bearing
+                        )
                         checkPassedStops(latitude, longitude)
                         updateTimingPointBasedOnLocation(latitude, longitude)
                         scheduleStatusValueTextView.text = "Calculating..."
