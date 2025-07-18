@@ -112,7 +112,7 @@
                 style="@style/Widget.NavTrack.Button"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:text="Arrive"
+                android:text="Manual Confirm Arrival"
                 android:translationZ="4dp"
                 android:stateListAnimator="@animator/button_elevation_animator"
                 android:foreground="?attr/selectableItemBackgroundBorderless"
