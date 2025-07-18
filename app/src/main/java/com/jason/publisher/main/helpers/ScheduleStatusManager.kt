@@ -185,13 +185,18 @@ class ScheduleStatusManager(
             // --- 5. Compare predicted arrival with Timing Point ---
             val deltaSec = ((timingPointTime.time - predictedArrival.time.time) / 1000).toInt()
 
+            // convert to minutes only (drop seconds)
+            val deltaMin = deltaSec / 60               // signed minutes
+            val absMin   = kotlin.math.abs(deltaMin)   // absolute value
+            val timeDiff = "${absMin}min"
+
             val statusText = when {
-                deltaSec >= 120 -> "Very Ahead (~${deltaSec}s early)"
-                deltaSec in 1..119 -> "Slightly Ahead (~${deltaSec}s early)"
-                deltaSec in -179..0 -> "On Time (~${-deltaSec}s on time)"
-                deltaSec in -299..-180 -> "Slightly Behind (~${-deltaSec}s late)"
-                deltaSec <= -300 -> "Very Behind (~${-deltaSec}s late)"
-                else -> "Unknown"
+                deltaSec >= 120           -> "Very Ahead (~$timeDiff early)"
+                deltaSec in 1..119        -> "Slightly Ahead (~$timeDiff early)"
+                deltaSec in -179..0       -> "On Time (~$timeDiff on time)"
+                deltaSec in -299..-180    -> "Slightly Behind (~$timeDiff late)"
+                deltaSec <= -300          -> "Very Behind (~$timeDiff late)"
+                else                      -> "Unknown"
             }
 
             val symbolRes = when {
