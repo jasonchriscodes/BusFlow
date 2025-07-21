@@ -125,5 +125,5 @@ dependencies {
     implementation 'org.mapsforge:sqlite-android:0.18.0:natives-x86'
     implementation 'org.mapsforge:sqlite-android:0.18.0:natives-x86_64'
     implementation 'com.google.android.gms:play-services-location:21.0.1'
-
+    implementation 'pl.droidsonroids.gif:android-gif-drawable:1.2.+'
 }
