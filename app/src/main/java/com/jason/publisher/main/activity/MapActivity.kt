@@ -19,6 +19,10 @@ import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.location.Location
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
 import android.view.Gravity
 import android.view.KeyEvent
@@ -187,6 +191,9 @@ class MapActivity : AppCompatActivity() {
     private val snapThreshold = 200.0
     // a little extra margin so that you don't unsnap until say 250m away
     private val unsnapThreshold = snapThreshold + 50.0
+    private lateinit var connectivityManager: ConnectivityManager
+    private lateinit var networkCallback: ConnectivityManager.NetworkCallback
+    var active: String? = null
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -219,9 +226,14 @@ class MapActivity : AppCompatActivity() {
         // before creating the helper, set up the config‐fetching client:
         mqttManagerConfig = MqttManager(
             serverUri = SERVER_URI,
-            clientId  = "$CLIENT_ID-config",
-            username  = tokenConfigData
+            clientId  = "$CLIENT_ID-config"
         )
+
+       // ➋ now initialize the “live” mqttManager too (so that MqttHelper can call getMqttManager())
+       mqttManager = MqttManager(
+           serverUri = SERVER_URI,
+           clientId  = CLIENT_ID
+       )
 
         // Initialize Managers before using it
         scheduleStatusManager = ScheduleStatusManager(this, binding)
@@ -279,7 +291,7 @@ class MapActivity : AppCompatActivity() {
                 nowCal.get(Calendar.MINUTE)
 
         // 3) find the active label
-        val active = findActiveLabel(timelineLabels, nowMinutes)
+        active = findActiveLabel(timelineLabels, nowMinutes)
 
         // Start the next trip countdown updater
         timeManager.startNextTripCountdownUpdater()
@@ -294,45 +306,34 @@ class MapActivity : AppCompatActivity() {
         // Set up network status UI
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
 
-        // 2) Now fetch the shared config from your server (ThingsBoard)
-        // Always switch back to the main thread before touching any views:
-        mqttHelper.fetchConfig { success ->
-            // now you’re inside the callback, and `success` is in scope
-            runOnUiThread {
-                if (success) {
-                    getAccessToken()
-                    mqttManager = MqttManager(
-                        serverUri = SERVER_URI,
-                        clientId  = CLIENT_ID,
-                        username  = token
-                    )
-                    // build your markers etc.
-                    mapController.getDefaultConfigValue()
-                    mapController.activeSegment = active
-                    mapController.refreshDetailPanelIcons()
-
-                    mqttHelper.requestAdminMessage()
-                    mqttHelper.connectAndSubscribe()
-                    mqttHelper.sendRequestAttributes()
-                    mapController.startActivityMonitor()
-                } else {
-                    // --- FAILURE HANDLING ---
-                    Log.e("MapActivity", "Failed to fetch config, entering offline mode.")
-                    Toast.makeText(
-                        this@MapActivity,
-                        "Unable to connect. Falling back to offline map…",
-                        Toast.LENGTH_LONG
-                    ).show()
-
-                    // load your offline map immediately
-                    mapController.openMapFromAssets()
-
-                    // disable any UI that needs live data
-                    binding.startSimulationButton.isEnabled = false
-                    binding.stopSimulationButton.isEnabled  = false
-                }
+        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE)
+                as ConnectivityManager
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                // when internet comes back
+                runOnUiThread { enterOnlineMode() }
+            }
+            override fun onLost(network: Network) {
+                // when internet is lost
+                runOnUiThread { enterOfflineMode() }
             }
         }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            connectivityManager.registerDefaultNetworkCallback(networkCallback)
+        } else {
+            // for API 21–23
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            connectivityManager.registerNetworkCallback(request, networkCallback)
+        }
+
+        // 2) Read the flag passed from ScheduleActivity
+        val isOnlineAtStart = intent.getBooleanExtra("IS_ONLINE", true)
+
+        // 3) Kick off in the correct mode
+        if (isOnlineAtStart) enterOnlineMode() else enterOfflineMode()
 
         updateBusNameFromConfig()
 
@@ -452,6 +453,77 @@ class MapActivity : AppCompatActivity() {
 //        binding.arriveButton.visibility = View.GONE
         binding.arriveButton.setOnClickListener {
             confirmArrival()
+        }
+    }
+
+    /**
+     * Switches the activity into offline mode:
+     * – Updates the network status badge
+     * – Loads the offline map
+     * – Shuts down live‐only logic and disables relevant UI
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun enterOfflineMode() {
+        // update your little badge
+        binding.connectionStatusTextView.text = "Offline"
+        binding.networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_red)
+
+        // load the offline map
+        mapController.openMapFromAssets()
+
+        // shut down any live‐only logic
+        if (::mqttManager.isInitialized) {
+            try {
+                    mqttHelper.disconnect()
+                } catch (e: Exception) {
+                    Log.w("MapActivity", "MQTT disconnect skipped (already disconnected)", e)
+                }
+        }
+        // disable buttons that require online data, if any:
+        binding.startSimulationButton.isEnabled = false
+        binding.stopSimulationButton .isEnabled = false
+    }
+
+    /**
+     * Switches the activity into online mode:
+     * – Updates the network status badge
+     * – Fetches fresh configuration and reconnects MQTT
+     * – Re‐enables UI disabled in offline mode
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun enterOnlineMode() {
+        // update your little badge
+        binding.connectionStatusTextView.text = "Online"
+        binding.networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_green)
+
+        // fetch fresh config & reconnect MQTT
+        mqttHelper.fetchConfig { success ->
+            runOnUiThread {
+                if (success) {
+                    // your existing “online startup” sequence:
+                    getAccessToken()
+                    mqttManager = MqttManager(
+                        serverUri = SERVER_URI,
+                        clientId  = CLIENT_ID,
+                        username  = token
+                    )
+                    // build your markers etc.
+                    mapController.getDefaultConfigValue()
+                    mapController.activeSegment = active
+                    mapController.refreshDetailPanelIcons()
+
+                    mqttHelper.requestAdminMessage()
+                    mqttHelper.connectAndSubscribe()
+                    mqttHelper.sendRequestAttributes()
+                    mapController.startActivityMonitor()
+                    // re‐enable any buttons you disabled:
+                    binding.startSimulationButton.isEnabled = true
+                    binding.stopSimulationButton .isEnabled = true
+                } else {
+                    // fallback if config fetch really failed
+                    enterOfflineMode()
+                }
+            }
         }
     }
 
@@ -1711,6 +1783,7 @@ class MapActivity : AppCompatActivity() {
     /** Cleans up resources on activity destruction. */
     override fun onDestroy() {
         super.onDestroy()
+        connectivityManager.unregisterNetworkCallback(networkCallback)
 
         // Remove polyline from Mapsforge map
         routePolyline?.let {

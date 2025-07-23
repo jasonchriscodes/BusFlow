@@ -72,9 +72,26 @@ import java.util.Locale
 
 class ScheduleActivity : AppCompatActivity() {
 
+    companion object {
+        const val SERVER_URI = "tcp://43.226.218.97:1883"
+        const val CLIENT_ID = "jasonAndroidClientId"
+        const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
+        private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
+        private const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
+        private const val REQUEST_PERIODIC_TIME = 5000L
+        private const val PUBLISH_POSITION_TIME = 5000L
+        private const val LAST_MSG_KEY = "lastMessageKey"
+        private const val MSG_KEY = "messageKey"
+        private const val SOUND_FILE_NAME = "notif.wav"
+        private const val LOCATION_PERMISSION_REQUEST = 1234
+    }
+
     private lateinit var binding: ActivityScheduleBinding
     lateinit var mqttManagerConfig: MqttManager
-    lateinit var mqttManager: MqttManager
+    private var mqttManager: MqttManager = MqttManager(
+                serverUri = SERVER_URI,
+                clientId  = CLIENT_ID
+                    )
     private lateinit var connectionStatusTextView: TextView
     private val REQUEST_MANAGE_EXTERNAL_STORAGE = 1001
     private val REQUEST_WRITE_PERMISSION = 1002
@@ -99,7 +116,6 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var timeline2: StyledMultiColorTimeline
     private lateinit var timeline3: StyledMultiColorTimeline
     private val timelineRange = Pair("08:00", "11:10")
-    private lateinit var networkStatusHelper: NetworkStatusHelper
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
     private val loadingBarHandler = Handler(Looper.getMainLooper())
@@ -121,21 +137,6 @@ class ScheduleActivity : AppCompatActivity() {
     private val fetchingHandler = Handler(Looper.getMainLooper())
     private var dotCount = 1
     private lateinit var fetchingIcon: ImageView
-
-
-    companion object {
-        const val SERVER_URI = "tcp://43.226.218.97:1883"
-        const val CLIENT_ID = "jasonAndroidClientId"
-        const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
-        private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
-        private const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
-        private const val REQUEST_PERIODIC_TIME = 5000L
-        private const val PUBLISH_POSITION_TIME = 5000L
-        private const val LAST_MSG_KEY = "lastMessageKey"
-        private const val MSG_KEY = "messageKey"
-        private const val SOUND_FILE_NAME = "notif.wav"
-        private const val LOCATION_PERMISSION_REQUEST = 1234
-    }
 
 //    private val dummyScheduleData = listOf(
 //        ScheduleItem(
@@ -484,7 +485,8 @@ class ScheduleActivity : AppCompatActivity() {
     @SuppressLint("LongLogTag")
     private fun launchMapActivity() {
         if (scheduleData.isNotEmpty()) {
-            val firstScheduleItem = scheduleData.first() // ✅ Store first schedule item
+            val firstScheduleItem = scheduleData.firstOrNull()
+                ?: return Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show() // ✅ Store first schedule item
             Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
             Log.d("ScheduleActivity startRouteButton before", scheduleData.toString())
 
@@ -508,6 +510,7 @@ class ScheduleActivity : AppCompatActivity() {
                 putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
                 putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
                 putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+                putExtra("IS_ONLINE", NetworkStatusHelper.isNetworkAvailable(this@ScheduleActivity))
             }
 
              // ➊ build labels from your extracted intervals & names
