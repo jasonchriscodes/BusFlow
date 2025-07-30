@@ -13,5 +13,5 @@ dependencyResolutionManagement {
         maven { url 'https://jitpack.io' }
     }
 }
-rootProject.name = "BuSkedo-Publisher"
+rootProject.name = "BusFlow-Publisher"
 include ':app'

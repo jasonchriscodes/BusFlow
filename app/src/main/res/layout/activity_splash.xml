@@ -6,6 +6,6 @@
         android:id="@+id/openerGif"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:src="@drawable/buskedo_opener_gif"
+        android:src="@drawable/busflow_opener_gif"
         android:scaleType="centerCrop" />
 </FrameLayout>
