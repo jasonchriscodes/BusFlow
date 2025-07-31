@@ -56,9 +56,6 @@ Printed duty sheets can be hard to read on the go, and memorizing multiple timin
 
 ## Screenshots
 
-### App Drawer Launcher Icon  
-![BusFlow launcher icon](docs/screenshot-launcher-icon.png)  
-
 ### Launcher Screen  
 ![Launcher screen with sub-app icons](docs/screenshot-launcher-screen.png)  
 *Tap any of the following to launch a sub-app or feature:*
@@ -74,9 +71,6 @@ Printed duty sheets can be hard to read on the go, and memorizing multiple timin
 
 - **Customer Service**  
   ![Customer Service icon](docs/icon-customer-service.png)
-
-- **Registration Help**  
-  ![Registration Help icon](docs/icon-registration-help.png)
 
 ### Multi-Color Timeline View  
 ![Timeline view showing today’s roster with color-coded segments](docs/screenshot-timeline.png)  
