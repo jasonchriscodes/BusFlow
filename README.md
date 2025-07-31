@@ -1,6 +1,6 @@
 # BusFlow
 
-BusFlow is an Android application designed to replace printed duty sheets for bus drivers. It presents each driver’s roster in an easy-to-read multi-color timeline or paginated table view, helps them keep track of timing points, and provides a live map view to monitor on-time performance and nearby buses.
+BusFlow is an Android application designed to replace printed duty sheets by presenting each driver’s roster in an intuitive multi-color timeline or paginated table view. It highlights timing points, tracks on-time performance, and provides a live map to show your route, current position, and nearby buses.
 
 ---
 
@@ -8,6 +8,7 @@ BusFlow is an Android application designed to replace printed duty sheets for bu
 
 - [Why BusFlow?](#why-busflow)  
 - [Key Features](#key-features)  
+- [Screenshots](#screenshots)  
 - [Architecture & Modules](#architecture--modules)  
 - [Getting Started](#getting-started)  
   - [Prerequisites](#prerequisites)  
@@ -20,66 +21,71 @@ BusFlow is an Android application designed to replace printed duty sheets for bu
 
 ## Why BusFlow?
 
-Printed duty sheets are often hard to read and require drivers to memorize multiple timing points. BusFlow solves these pain points by:
+Printed duty sheets can be hard to read on the go, and memorizing multiple timing points adds cognitive load. BusFlow:
 
-- **Replacing paper rosters** with a digital schedule that’s legible at a glance  
-- **Visualizing duties** in color-coded timelines or tables  
-- **Highlighting timing points** so drivers always know whether they’re early, on time, or running late  
-- **Providing a live map** to show the route, current position, and nearby buses with the same destination  
+- **Replaces paper rosters** with a digital schedule that’s crystal-clear at a glance  
+- **Visualizes duties** in color-coded timelines or a scrollable table  
+- **Highlights timing points** so you know instantly if you’re early, on time, or running late  
+- **Provides a live map** for real-time position, route guidance, and tracking other buses  
 
 ---
 
 ## Key Features
 
 - **Multi-Color Timeline**  
-  Color-coded segments represent each duty, break, or relief period for intuitive at-a-glance status.
-  
+  Displays duties, breaks, and relief periods as proportional, color-coded segments.
+
 - **Paginated Table View**  
-  A compact, scrollable table mode with pagination for drivers who prefer tabular schedules.
-  
+  Switch to a concise, paginated table for drivers who prefer row-and-column layouts.
+
 - **Real-Time Schedule Adherence**  
-  In MapActivity, timing points are compared against actual vs. scheduled times to indicate “Ahead”, “On Time”, or “Behind.”
-  
+  MapActivity shows “Ahead”, “On Time”, or “Behind” icons at each timing point.
+
 - **Live Map Tracking**  
-  Displays the driver’s bus marker, upcoming stops, and icons for other buses on the same route using Mapsforge and MQTT.
-  
-- **Offline & Online Modes**  
-  Falls back to an offline map asset if network connectivity is lost, while still displaying the stored schedule.
-  
-- **Configurable via ThingsBoard**  
-  Fetches device-specific settings and schedules from a central IoT server using MQTT/REST.
+  Uses Mapsforge + MQTT to plot your bus marker, route polyline, red/green timing-point stops, and other buses on the same route.
+
+- **Offline Fallback**  
+  Automatically loads an offline map asset if connectivity drops, with an on-screen offline notice for other-bus tracking.
+
+- **Centralized Configuration**  
+  Fetch device-specific settings and today’s roster from a ThingsBoard IoT server via MQTT/REST.
+
+---
+
+## Screenshots
+
+### Multi-Color Timeline View  
+![Timeline view showing today’s roster with color-coded segments](docs/screenshot-timeline.png)  
+*ScheduleActivity in timeline mode: duties, breaks, reliefs.*
+
+### Live Map & Schedule Status  
+![Map view with bus marker, upcoming stop label, and timing-point status icons](docs/screenshot-map.png)  
+*MapActivity: route polyline, current bus marker, red/green timing-point markers, and other buses.*
 
 ---
 
 ## Architecture & Modules
 
 - **Activities**  
-  - `ScheduleActivity` – Renders the multi-color timeline or table view of today’s roster.  
-  - `MapActivity` – Shows live map, schedule adherence icons, and arrival confirmation logic.  
-  - `TimeTableActivity` – Entry point where drivers select their AID and load schedule data.
-  
+  - `ScheduleActivity` – timeline/table roster UI  
+  - `MapActivity` – live map, timing-point status, arrival confirmation  
+  - `TimeTableActivity` – entry screen for selecting AID and loading data
+
 - **Helpers & Managers**  
-  - `MapViewController` – Abstraction over Mapsforge to draw polylines, markers, and detection zones.  
-  - `MqttHelper`, `MqttManager` – Handle real-time data publishing/subscribing for telemetry and config.  
-  - `ScheduleStatusManager` – Computes and updates the “Ahead/On Time/Behind” status.  
-  - `LocationManager` – Wraps Android’s fused location provider for GPS updates.  
-  - `NetworkStatusHelper` – Monitors connectivity and toggles offline UI states.
+  - `MapViewController` – Mapsforge integration (polyline, markers, zones)  
+  - `MqttHelper` & `MqttManager` – telemetry, config via MQTT  
+  - `ScheduleStatusManager` – computes Ahead/On-Time/Behind  
+  - `LocationManager` – fused-location wrapper  
+  - `NetworkStatusHelper` – online/offline UI
 
 - **Data Models**  
-  - `BusRoute`, `RouteData`  
-  - `BusStop`, `BusStopInfo`, `BusStopWithTimingPoint`  
-  - `BusItem` (driver/device config)  
-  - `ScheduleItem` (start/end times and stop list)  
-  - `AttributesData` (for posting telemetry)
+  `BusRoute`, `RouteData`, `BusStop`, `BusStopWithTimingPoint`, `BusItem`, `ScheduleItem`, `AttributesData`
 
 - **Services & APIs**  
-  - Retrofit interfaces under `ApiService` & `ApiServiceBuilder` for REST calls.  
-  - GSON for JSON serialization/deserialization.
+  Retrofit + GSON under `ApiService` / `ApiServiceBuilder`
 
 - **UI & Resources**  
-  - Layouts in `res/layout/` (including `activity_map.xml`, `activity_schedule.xml`)  
-  - Vector drawables for bus icons and timing markers  
-  - Offline map asset (e.g. `assets/new-zealand.map`)
+  Layouts in `res/layout/`; vector drawables; offline map in `app/src/main/assets/`
 
 ---
 
@@ -87,15 +93,10 @@ Printed duty sheets are often hard to read and require drivers to memorize multi
 
 ### Prerequisites
 
-- **Android Studio** (Arctic Fox or later)  
-- **JDK 11+**  
-- **Android API level 21+**  
-- **Mapsforge libraries** (included via Gradle)  
-- **Google Play Services** (for fused location)  
-- **MQTT client** (Paho or equivalent)  
-- **Internet permission** in `AndroidManifest.xml`
-
-```xml
-<uses-permission android:name="android.permission.INTERNET"/>
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+- Android Studio (Arctic Fox or later)  
+- JDK 11+  
+- Android API 21+  
+- Internet & Location permissions in `AndroidManifest.xml`:
+  ```xml
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
