@@ -13,6 +13,8 @@ BusFlow is an Android application designed to replace printed duty sheets by pre
 - [Getting Started](#getting-started)  
   - [Prerequisites](#prerequisites)  
   - [Installation](#installation)  
+  - [Launcher](#launcher)  
+  - [Additional Requirements](#additional-requirements)  
 - [Usage](#usage)  
 - [Contributing](#contributing)  
 - [License](#license)  
@@ -42,10 +44,10 @@ Printed duty sheets can be hard to read on the go, and memorizing multiple timin
   MapActivity shows “Ahead”, “On Time”, or “Behind” icons at each timing point.
 
 - **Live Map Tracking**  
-  Uses Mapsforge + MQTT to plot your bus marker, route polyline, red/green timing-point stops, and other buses on the same route.
+  Uses Mapsforge + MQTT to plot your bus marker, route polyline, timing-point markers, and other buses on the same route.
 
 - **Offline Fallback**  
-  Automatically loads an offline map asset if connectivity drops, with an on-screen offline notice for other-bus tracking.
+  Automatically loads an offline map asset if connectivity drops, with an on-screen notice when other-bus tracking is unavailable.
 
 - **Centralized Configuration**  
   Fetch device-specific settings and today’s roster from a ThingsBoard IoT server via MQTT/REST.
@@ -54,38 +56,59 @@ Printed duty sheets can be hard to read on the go, and memorizing multiple timin
 
 ## Screenshots
 
+### App Drawer Launcher Icon  
+![BusFlow launcher icon](docs/screenshot-launcher-icon.png)  
+
+### Launcher Screen  
+![Launcher screen with sub-app icons](docs/screenshot-launcher-screen.png)  
+*Tap any of the following to launch a sub-app or feature:*
+
+- **Generate AT Route**  
+  ![Generate AT Route icon](docs/icon-generate-atroute.png)
+
+- **Create Route App**  
+  ![Create Route App icon](docs/icon-create-routeapp.png)
+
+- **Create Schedule App**  
+  ![Create Schedule App icon](docs/icon-create-scheduleapp.png)
+
+- **Customer Service**  
+  ![Customer Service icon](docs/icon-customer-service.png)
+
+- **Registration Help**  
+  ![Registration Help icon](docs/icon-registration-help.png)
+
 ### Multi-Color Timeline View  
 ![Timeline view showing today’s roster with color-coded segments](docs/screenshot-timeline.png)  
-*ScheduleActivity in timeline mode: duties, breaks, reliefs.*
 
 ### Live Map & Schedule Status  
 ![Map view with bus marker, upcoming stop label, and timing-point status icons](docs/screenshot-map.png)  
-*MapActivity: route polyline, current bus marker, red/green timing-point markers, and other buses.*
 
 ---
 
 ## Architecture & Modules
 
 - **Activities**  
+  - `LauncherActivity` – entry point that launches BusFlow main app and utilities  
   - `ScheduleActivity` – timeline/table roster UI  
   - `MapActivity` – live map, timing-point status, arrival confirmation  
-  - `TimeTableActivity` – entry screen for selecting AID and loading data
+  - `TimeTableActivity` – select AID and load schedule data
 
 - **Helpers & Managers**  
-  - `MapViewController` – Mapsforge integration (polyline, markers, zones)  
-  - `MqttHelper` & `MqttManager` – telemetry, config via MQTT  
+  - `MapViewController` – Mapsforge integration (polylines, markers, detection zones)  
+  - `MqttHelper` & `MqttManager` – telemetry & configuration via MQTT  
   - `ScheduleStatusManager` – computes Ahead/On-Time/Behind  
   - `LocationManager` – fused-location wrapper  
-  - `NetworkStatusHelper` – online/offline UI
+  - `NetworkStatusHelper` – monitors connectivity & toggles offline UI
 
 - **Data Models**  
   `BusRoute`, `RouteData`, `BusStop`, `BusStopWithTimingPoint`, `BusItem`, `ScheduleItem`, `AttributesData`
 
 - **Services & APIs**  
-  Retrofit + GSON under `ApiService` / `ApiServiceBuilder`
+  Retrofit interfaces plus GSON under `ApiService` / `ApiServiceBuilder`
 
 - **UI & Resources**  
-  Layouts in `res/layout/`; vector drawables; offline map in `app/src/main/assets/`
+  Layout XML in `res/layout/`; vector drawables; offline map in `app/src/main/assets/`
 
 ---
 
@@ -95,7 +118,7 @@ Printed duty sheets can be hard to read on the go, and memorizing multiple timin
 
 - Android Studio (Arctic Fox or later)  
 - JDK 11+  
-- Android API 21+  
+- Android API Level 21+  
 - Internet & Location permissions in `AndroidManifest.xml`:
   ```xml
   <uses-permission android:name="android.permission.INTERNET"/>
