@@ -191,8 +191,8 @@ class MqttHelper(
 
                 // 3) coords unchanged? update timestamp, do nothing else
                 if (prev.first == lat && prev.second == lon) {
-                    owner.lastSeen[token] = now
-                    return
+                  // no movement → don’t touch lastSeen so that Tablet B’s 10 s check can actually expire
+                  return
                 }
 
                 // 4) movement detected! record new pos and draw/update marker
