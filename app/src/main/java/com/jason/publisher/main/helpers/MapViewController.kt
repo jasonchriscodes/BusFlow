@@ -60,34 +60,6 @@ class MapViewController(
     var activeSegment: String? = null
     var activeBusToken: String? = null
 
-    /**
-     * Returns the index of the closest point on the route, that point itself,
-     * and the distance (in metres) from the given LatLong to that point.
-     */
-    fun findNearestBusRoutePointWithDistance(latLng: LatLong)
-            : Triple<Int, LatLong, Double> {
-        var bestIdx = 0
-        var bestDist = Double.MAX_VALUE
-
-        activity.route.forEachIndexed { i, pt ->
-            val routePt = LatLong(pt.latitude!!, pt.longitude!!)
-            val d = calculateDistance(
-                latLng.latitude, latLng.longitude,
-                routePt.latitude,  routePt.longitude
-            )
-            if (d < bestDist) {
-                bestDist = d
-                bestIdx  = i
-            }
-        }
-
-        val bestPoint = LatLong(
-            activity.route[bestIdx].latitude!!,
-            activity.route[bestIdx].longitude!!
-        )
-        return Triple(bestIdx, bestPoint, bestDist)
-    }
-
     /** Monitor other buses every second, logging their count and active/inactive status. */
     @SuppressLint("LongLogTag")
     fun startActivityMonitor() {

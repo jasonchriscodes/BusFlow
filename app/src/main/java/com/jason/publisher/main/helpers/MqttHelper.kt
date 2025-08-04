@@ -45,11 +45,6 @@ class MqttHelper(
     // track when we last fetched attributes for each token
     private val lastFetchTime = mutableMapOf<String, Long>()
 
-    /** Cleanly disconnect the MQTT client */
-    fun disconnect() {
-        mqttManager.disconnect()
-    }
-
     /**
      * Fetches the configuration data and initializes the config variable.
      */
@@ -265,7 +260,6 @@ class MqttHelper(
      * Publishes telemetry data including latitude, longitude, bearing, speed, direction, and aid.
      */
     fun publishTelemetryData() {
-        if (!mqttManager.isMqttConnect()) return
         val json = JSONObject().apply {
             put("latitude", owner.latitude)
             put("longitude", owner.longitude)
