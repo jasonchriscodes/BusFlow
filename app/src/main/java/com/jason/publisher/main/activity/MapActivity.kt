@@ -826,6 +826,7 @@ class MapActivity : AppCompatActivity() {
      *   • If non-null, it updates the API time.
      * - If the upcoming stop equals the last scheduled bus stop, then we lock the API time.
      */
+    @SuppressLint("LongLogTag")
     private fun updateApiTime() {
         // If locked, simply reuse the locked value — only if upcomingStopName matches the first timing point
         if (apiTimeLocked && lockedApiTime != null) {
@@ -1082,6 +1083,7 @@ class MapActivity : AppCompatActivity() {
     /**
      * initialize first timing point
      */
+    @SuppressLint("LongLogTag")
     private fun initializeTimingPoint() {
         if (scheduleList.isNotEmpty()) {
             val firstSchedule = scheduleList.first()
@@ -1109,6 +1111,7 @@ class MapActivity : AppCompatActivity() {
         get() = stops.isNotEmpty() && stops.first().address == stops.last().address
 
 
+    @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     private fun checkPassedStops(currentLat: Double, currentLon: Double) {
         if (stops.isEmpty()) {
@@ -1437,6 +1440,7 @@ class MapActivity : AppCompatActivity() {
             setWaitForAccurateLocation(true)  // Ensures precise GPS fix
         }
         locationCallback = object : LocationCallback() {
+            @RequiresApi(Build.VERSION_CODES.M)
             override fun onLocationResult(locationResult: LocationResult) {
                 locationResult.lastLocation?.let { location ->
 
@@ -1569,6 +1573,7 @@ class MapActivity : AppCompatActivity() {
     /**
      * Updates the client attributes by posting the current location, bearing, speed, and direction data to the server.
      */
+    @SuppressLint("LongLogTag")
     fun updateClientAttributes() {
         // before you build & post…
         val curr = latitude to longitude
@@ -1615,6 +1620,7 @@ class MapActivity : AppCompatActivity() {
      * If the stop is within the defined busStopRadius, then it automatically updates the upcoming stop to the next one.
      * For stops that are timing points (i.e. red bus stops) the API timing is also updated.
      */
+    @SuppressLint("LongLogTag")
     fun onBusMarkerUpdated() {
         // Get the stop address currently shown in the upcoming bus stop text view.
         val currentDisplayedStop = upcomingBusStopTextView.text.toString()
