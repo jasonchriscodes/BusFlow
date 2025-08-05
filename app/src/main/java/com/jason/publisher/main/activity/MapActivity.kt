@@ -19,6 +19,8 @@ import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.location.Location
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Build
 import android.view.Gravity
 import android.view.KeyEvent
@@ -179,6 +181,7 @@ class MapActivity : AppCompatActivity() {
     lateinit var mapController: MapViewController
     private lateinit var scheduleStatusManager: ScheduleStatusManager
     val otherBusLabels = mutableMapOf<String,String>()
+    private lateinit var connectivityManager: ConnectivityManager
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -193,12 +196,31 @@ class MapActivity : AppCompatActivity() {
         private const val SOUND_FILE_NAME = "notif.wav"
     }
 
+    @RequiresApi(Build.VERSION_CODES.N)
     @SuppressLint("LongLogTag")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AndroidGraphicFactory.createInstance(application)
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE)
+                as ConnectivityManager
+
+        connectivityManager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                // we’re back online → force a one-off refresh, then resume polling
+                runOnUiThread {
+                    mqttHelper.refreshAllAttributes()
+                    mqttHelper.startAttributePolling()
+                }
+            }
+
+            override fun onLost(network: Network) {
+                // went offline → stop polling
+                mqttHelper.stopAttributePolling()
+            }
+        })
 
         hideSystemUI()
 
@@ -305,7 +327,8 @@ class MapActivity : AppCompatActivity() {
 
                     mqttHelper.requestAdminMessage()
                     mqttHelper.connectAndSubscribe()
-                    mqttHelper.sendRequestAttributes()
+                    mqttHelper.startAttributePolling()
+//                    mqttHelper.sendRequestAttributes()
                     mapController.startActivityMonitor()
                 } else {
                     // --- FAILURE HANDLING ---

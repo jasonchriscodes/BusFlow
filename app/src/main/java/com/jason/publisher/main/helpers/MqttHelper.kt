@@ -106,21 +106,60 @@ class MqttHelper(
         }
     }
 
-    /**
-     * Sends data attributes to the server periodically.
-     */
-    fun sendRequestAttributes() {
-        val handler = Handler(Looper.getMainLooper())
-        handler.postDelayed(object : Runnable {
-            override fun run() {
-                owner.arrBusData.forEach { bus ->
-                    if (owner.markerBus.containsKey(bus.accessToken)) {
-                        getAttributes(apiService, bus.accessToken, clientKeys)
-                    }
-                }
-                handler.postDelayed(this, MIN_FETCH_INTERVAL_MS)
+//    /**
+//     * Sends data attributes to the server periodically.
+//     */
+//    fun sendRequestAttributes() {
+//        val handler = Handler(Looper.getMainLooper())
+//        handler.postDelayed(object : Runnable {
+//            override fun run() {
+//                owner.arrBusData.forEach { bus ->
+//                    if (owner.markerBus.containsKey(bus.accessToken)) {
+//                        getAttributes(apiService, bus.accessToken, clientKeys)
+//                    }
+//                }
+//                handler.postDelayed(this, MIN_FETCH_INTERVAL_MS)
+//            }
+//        }, MIN_FETCH_INTERVAL_MS)
+//    }
+
+    // ----------------------------------------------------------------
+    // 1) cancellable poller
+    // ----------------------------------------------------------------
+    private var pollingHandler: Handler? = null
+    private val pollRunnable = object : Runnable {
+        override fun run() {
+            owner.arrBusData.forEach { bus ->
+                getAttributes(apiService, bus.accessToken, clientKeys)
             }
-        }, MIN_FETCH_INTERVAL_MS)
+            pollingHandler?.postDelayed(this, MIN_FETCH_INTERVAL_MS)
+        }
+    }
+
+    /** Start or re-start the 2 s polling loop. */
+    fun startAttributePolling() {
+        stopAttributePolling()
+        pollingHandler = Handler(Looper.getMainLooper())
+        pollingHandler!!.postDelayed(pollRunnable, MIN_FETCH_INTERVAL_MS)
+    }
+
+    /** Immediately stop the 2 s polling loop. */
+    fun stopAttributePolling() {
+        pollingHandler?.removeCallbacksAndMessages(null)
+    }
+
+    // ----------------------------------------------------------------
+    // 2) one-off full refresh on reconnect
+    // ----------------------------------------------------------------
+    /**
+     * Clears throttling timestamps and fetches attributes
+     * for every bus exactly once.
+     */
+    fun refreshAllAttributes() {
+        lastFetchTime.clear()
+        owner.arrBusData.forEach { bus ->
+            getAttributes(apiService, bus.accessToken, clientKeys)
+        }
     }
 
     /**
