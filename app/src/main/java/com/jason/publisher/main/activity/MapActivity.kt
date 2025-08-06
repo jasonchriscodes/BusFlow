@@ -221,6 +221,12 @@ class MapActivity : AppCompatActivity() {
             username  = tokenConfigData
         )
 
+        // ── ADD THIS: initialize mqttManager for offline use ──
+        mqttManager = MqttManager(
+            serverUri = SERVER_URI,
+            clientId  = CLIENT_ID
+        )
+
         // Initialize Managers before using it
         scheduleStatusManager = ScheduleStatusManager(this, binding)
         timeManager = TimeManager(this, scheduleStatusManager)
@@ -305,8 +311,11 @@ class MapActivity : AppCompatActivity() {
                         connectionStatusTextView,
                         networkStatusIndicator
                     )
-                    mqttHelper.refreshAllAttributes()
-                    mqttHelper.startAttributePolling()
+                    // only start polling if mqttManager is ready
+                    if (::mqttManager.isInitialized) {
+                        mqttHelper.refreshAllAttributes()
+                        mqttHelper.startAttributePolling()
+                    }
                 }
             }
 
@@ -318,7 +327,10 @@ class MapActivity : AppCompatActivity() {
                         connectionStatusTextView,
                         networkStatusIndicator
                     )
-                    mqttHelper.stopAttributePolling()
+                    // only stop polling if mqttManager is ready
+                    if (::mqttManager.isInitialized) {
+                        mqttHelper.stopAttributePolling()
+                    }
                 }
             }
         })
@@ -347,6 +359,11 @@ class MapActivity : AppCompatActivity() {
                     mapController.startActivityMonitor()
                 } else {
                     // --- FAILURE HANDLING ---
+                    // ensure mqttManager is assigned even on config-fetch failure
+                    mqttManager = MqttManager(
+                        serverUri = SERVER_URI,
+                        clientId  = CLIENT_ID
+                    )
                     Log.e("MapActivity", "Failed to fetch config, entering offline mode.")
                     Toast.makeText(
                         this@MapActivity,
