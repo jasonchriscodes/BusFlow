@@ -374,6 +374,11 @@ class MapActivity : AppCompatActivity() {
                     // load your offline map immediately
                     mapController.openMapFromAssets()
 
+                    // **populate the detail-panel** exactly as in online mode
+                    mapController.getDefaultConfigValue()
+                    mapController.activeSegment = active
+                    mapController.refreshDetailPanelIcons()
+
                     // disable any UI that needs live data
                     binding.startSimulationButton.isEnabled = false
                     binding.stopSimulationButton.isEnabled  = false

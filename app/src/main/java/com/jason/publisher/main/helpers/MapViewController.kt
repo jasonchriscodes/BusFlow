@@ -432,6 +432,7 @@ class MapViewController(
      * Retrieves default configuration values for the activity,
      * such as adding other-bus markers.
      */
+    @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     fun getDefaultConfigValue() {
         activity.arrBusData.forEachIndexed { idx, bus ->
