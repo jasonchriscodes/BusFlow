@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.Drawable
+import android.net.NetworkCapabilities
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -18,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.DrawableRes
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.jason.publisher.R
@@ -492,6 +495,7 @@ class MapViewController(
 
 
     /** Call this any time you re-draw or move markers on the map */
+    @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     fun refreshDetailPanelIcons() {
         activity.runOnUiThread {
@@ -562,6 +566,31 @@ class MapViewController(
                     })
                 }
             }
+
+            // if only your own bus is shown, show an offline hint ──
+            if (visibleOthers.isEmpty() && !isReallyOnline()) {
+                val hint = TextView(activity).apply {
+                    text = "Other bus tracking is not available in offline mode"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    setTextColor(Color.GRAY)
+                    setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(8))
+                    gravity = Gravity.CENTER
+                }
+                detailContainer.addView(hint)
+            }
         }
+    }
+
+    /**
+     * Returns true if the system’s current network is both capable of, and validated for, Internet.
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun isReallyOnline(): Boolean {
+        val cm = activity.connectivityManager
+        val net = cm.activeNetwork ?: return false
+        return cm.getNetworkCapabilities(net)?.run {
+            hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    && hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        } ?: false
     }
 }

@@ -181,7 +181,7 @@ class MapActivity : AppCompatActivity() {
     lateinit var mapController: MapViewController
     private lateinit var scheduleStatusManager: ScheduleStatusManager
     val otherBusLabels = mutableMapOf<String,String>()
-    private lateinit var connectivityManager: ConnectivityManager
+    lateinit var connectivityManager: ConnectivityManager
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
