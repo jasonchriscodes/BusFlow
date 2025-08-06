@@ -311,10 +311,32 @@ class MapActivity : AppCompatActivity() {
                         connectionStatusTextView,
                         networkStatusIndicator
                     )
-                    // only start polling if mqttManager is ready
-                    if (::mqttManager.isInitialized) {
-                        mqttHelper.refreshAllAttributes()
-                        mqttHelper.startAttributePolling()
+
+                    // re-fetch config (to repopulate arrBusData & token)
+                    mqttHelper.fetchConfig { success ->
+                        if (success) {
+                            // rebuild your MQTT client with the new token
+                            getAccessToken()
+                            mqttManager = MqttManager(
+                                serverUri = SERVER_URI,
+                                clientId  = CLIENT_ID,
+                                username  = token
+                            )
+                            // tell ThingsBoard to re-send shared data
+                            mqttHelper.requestAdminMessage()
+                            // (re)subscribe to the shared message topic
+                            mqttHelper.connectAndSubscribe()
+                            // now poll each bus once, then resume polling loop
+                            // only start polling if mqttManager is ready
+                            if (::mqttManager.isInitialized) {
+                                mqttHelper.refreshAllAttributes()
+                                mqttHelper.startAttributePolling()
+                            }
+                            // and redraw your detail panel
+                            mapController.getDefaultConfigValue()
+                            mapController.refreshDetailPanelIcons()
+                            mapController.startActivityMonitor()
+                        }
                     }
                 }
             }
