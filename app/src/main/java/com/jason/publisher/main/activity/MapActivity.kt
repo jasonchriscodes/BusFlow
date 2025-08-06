@@ -182,6 +182,8 @@ class MapActivity : AppCompatActivity() {
     private lateinit var scheduleStatusManager: ScheduleStatusManager
     val otherBusLabels = mutableMapOf<String,String>()
     lateinit var connectivityManager: ConnectivityManager
+    private lateinit var connectionStatusTextView: TextView
+    private lateinit var networkStatusIndicator: View
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -203,24 +205,6 @@ class MapActivity : AppCompatActivity() {
         AndroidGraphicFactory.createInstance(application)
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE)
-                as ConnectivityManager
-
-        connectivityManager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                // we’re back online → force a one-off refresh, then resume polling
-                runOnUiThread {
-                    mqttHelper.refreshAllAttributes()
-                    mqttHelper.startAttributePolling()
-                }
-            }
-
-            override fun onLost(network: Network) {
-                // went offline → stop polling
-                mqttHelper.stopAttributePolling()
-            }
-        })
 
         hideSystemUI()
 
@@ -307,6 +291,37 @@ class MapActivity : AppCompatActivity() {
 
         // Set up network status UI
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
+
+        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE)
+                as ConnectivityManager
+
+        connectivityManager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                // we’re back online → force a one-off refresh, then resume polling
+                runOnUiThread {
+                    // reuse the same helper to flip your dot + text
+                    NetworkStatusHelper.setupNetworkStatus(
+                        this@MapActivity,
+                        connectionStatusTextView,
+                        networkStatusIndicator
+                    )
+                    mqttHelper.refreshAllAttributes()
+                    mqttHelper.startAttributePolling()
+                }
+            }
+
+            override fun onLost(network: Network) {
+                // went offline → stop polling
+                runOnUiThread {
+                    NetworkStatusHelper.setupNetworkStatus(
+                        this@MapActivity,
+                        connectionStatusTextView,
+                        networkStatusIndicator
+                    )
+                    mqttHelper.stopAttributePolling()
+                }
+            }
+        })
 
         // 2) Now fetch the shared config from your server (ThingsBoard)
         // Always switch back to the main thread before touching any views:
@@ -1697,6 +1712,8 @@ class MapActivity : AppCompatActivity() {
         arriveButtonContainer = findViewById(R.id.arriveButtonContainer)
         currentTimeTextView = binding.currentTimeTextView
         nextTripCountdownTextView = binding.nextTripCountdownTextView
+        connectionStatusTextView   = binding.connectionStatusTextView
+        networkStatusIndicator     = binding.networkStatusIndicator
     }
 
     override fun onBackPressed() { /* no-op */ }
