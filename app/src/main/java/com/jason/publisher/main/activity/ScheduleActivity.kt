@@ -434,7 +434,8 @@ class ScheduleActivity : AppCompatActivity() {
                 Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
 
                 // ✅ Actually remove the first item
-//                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+                timeline1.getChildAt(0)?.let { timeline1.removeView(it) }
                 updateScheduleTablePaged()
                 updateTimeline()
                 rewriteOfflineScheduleData()
@@ -489,7 +490,7 @@ class ScheduleActivity : AppCompatActivity() {
             Log.d("ScheduleActivity startRouteButton before", scheduleData.toString())
 
             // ✅ Actually remove the first item
-//                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+            scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
             updateScheduleTablePaged()
             updateTimeline()
             rewriteOfflineScheduleData()
@@ -614,8 +615,6 @@ class ScheduleActivity : AppCompatActivity() {
 
         loadBusDataFromCache()
         loadScheduleDataFromCache()
-
-        updateTimeline()
     }
 
     /**
@@ -870,56 +869,85 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     private fun updateTimeline() {
-        if (scheduleData.isEmpty()) {
-            Log.e("ScheduleActivity updateTimeline", "No scheduleData to draw!")
-            return
-        }
 
-        val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
-        Log.d("ScheduleActivity updateTimeline", "Work intervals: $workIntervals")
+        runOnUiThread {
+            timeline1.visibility = View.VISIBLE
+            timeline2.visibility = View.VISIBLE
+            timeline3.visibility = View.VISIBLE
+            if (scheduleData.isEmpty()) {
+                Log.e("ScheduleActivity updateTimeline", "No scheduleData to draw!")
+                return@runOnUiThread
+            }
 
-        val total    = workIntervals.size
-        val partSize = total / 3
+            // 1) extract raw data
+            val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
+            Log.d("ScheduleActivity updateTimeline", "🔄 workIntervals=$workIntervals")
+            Log.d("ScheduleActivity updateTimeline", "🔄 dutyNames    =$dutyNames")
 
-        val intervals1 = workIntervals.subList(0, partSize)
-        val intervals2 = workIntervals.subList(partSize, partSize * 2)
-        val intervals3 = workIntervals.subList(partSize * 2, total)
+            // 2) decide how many per row
+            val maxPerLine = 3
 
-        val names1 = dutyNames.subList(0, partSize)
-        val names2 = dutyNames.subList(partSize, partSize * 2)
-        val names3 = dutyNames.subList(partSize * 2, total)
+            // slice intervals & names into 3 fixed chunks
+            val intervals1 = workIntervals.take(maxPerLine)
+            val intervals2 = workIntervals.drop(maxPerLine).take(maxPerLine)
+            val intervals3 = workIntervals.drop(2 * maxPerLine).take(maxPerLine)
 
-        val allBusStops = extractBusStops()
-        val stopSize    = allBusStops.size / 3
-        val busStops1   = allBusStops.subList(0, stopSize)
-        val busStops2   = allBusStops.subList(stopSize, stopSize * 2)
-        val busStops3   = allBusStops.subList(stopSize * 2, allBusStops.size)
+            val names1 = dutyNames.take(maxPerLine)
+            val names2 = dutyNames.drop(maxPerLine).take(maxPerLine)
+            val names3 = dutyNames.drop(2 * maxPerLine).take(maxPerLine)
 
-        // Decide “single-line?” based on count
-        val oneLineThreshold = 4
-        val single1 = intervals1.size <= oneLineThreshold
-        val single2 = intervals2.size <= oneLineThreshold
-        val single3 = intervals3.size <= oneLineThreshold
+            Log.d(
+                "ScheduleActivity updateTimeline",
+                "🔹 timeline1 intervals=$intervals1, names=$names1"
+            )
+            Log.d(
+                "ScheduleActivity updateTimeline",
+                "🔹 timeline2 intervals=$intervals2, names=$names2"
+            )
+            Log.d(
+                "ScheduleActivity updateTimeline",
+                "🔹 timeline3 intervals=$intervals3, names=$names3"
+            )
 
-        timeline1.apply {
-            setScheduleData(scheduleData.subList(0, partSize))
-            setTimelineData(intervals1, names1)
-            setBusStops(busStops1)
-            setSingleLineMode(single1)
-        }
+            // 3) slice the corresponding ScheduleItem lists
+            val items1 = scheduleData.take(maxPerLine)
+            val items2 = scheduleData.drop(maxPerLine).take(maxPerLine)
+            val items3 = scheduleData.drop(2 * maxPerLine).take(maxPerLine)
 
-        timeline2.apply {
-            setScheduleData(scheduleData.subList(partSize, partSize * 2))
-            setTimelineData(intervals2, names2)
-            setBusStops(busStops2)
-            setSingleLineMode(single2)
-        }
+            // 4) extract busStops per line
+            val busStops1 = items1.flatMap { it.busStops }
+            val busStops2 = items2.flatMap { it.busStops }
+            val busStops3 = items3.flatMap { it.busStops }
 
-        timeline3.apply {
-            setScheduleData(scheduleData.subList(partSize * 2, total))
-            setTimelineData(intervals3, names3)
-            setBusStops(busStops3)
-            setSingleLineMode(single3)
+            Log.d("ScheduleActivity updateTimeline", "🔹 timeline1 busStops=$busStops1")
+            Log.d("ScheduleActivity updateTimeline", "🔹 timeline2 busStops=$busStops2")
+            Log.d("ScheduleActivity updateTimeline", "🔹 timeline3 busStops=$busStops3")
+
+            // 5) decide single‐line mode threshold
+            val oneLineThreshold = 4
+            val single1 = intervals1.size <= oneLineThreshold
+            val single2 = intervals2.size <= oneLineThreshold
+            val single3 = intervals3.size <= oneLineThreshold
+
+            // 6) apply to each StyledMultiColorTimeline
+            timeline1.apply {
+                setScheduleData(items1)
+                setTimelineData(intervals1, names1)
+                setBusStops(busStops1)
+                setSingleLineMode(single1)
+            }
+            timeline2.apply {
+                setScheduleData(items2)
+                setTimelineData(intervals2, names2)
+                setBusStops(busStops2)
+                setSingleLineMode(single2)
+            }
+            timeline3.apply {
+                setScheduleData(items3)
+                setTimelineData(intervals3, names3)
+                setBusStops(busStops3)
+                setSingleLineMode(single3)
+            }
         }
     }
 
@@ -1093,8 +1121,10 @@ class ScheduleActivity : AppCompatActivity() {
                     )
 
                     // Use the loaded schedule data
-                    updateScheduleTablePaged()
-                    updateTimeline()
+                    withContext(Dispatchers.Main) {
+                        updateScheduleTablePaged()
+                        updateTimeline()
+                    }
 
                 } catch (e: Exception) {
                     Log.e(
