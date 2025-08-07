@@ -485,21 +485,22 @@ class ScheduleActivity : AppCompatActivity() {
     @SuppressLint("LongLogTag")
     private fun launchMapActivity() {
         if (scheduleData.isNotEmpty()) {
-            val firstScheduleItem = scheduleData.first() // ✅ Store first schedule item
+            // Store the first schedule item for the Map
+            val firstScheduleItem = scheduleData.first()
             Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
             Log.d("ScheduleActivity startRouteButton before", scheduleData.toString())
 
-            // ✅ Actually remove the first item
-            scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
-            updateScheduleTablePaged()
-            updateTimeline()
-            rewriteOfflineScheduleData()
-
-            jsonString = Gson().toJson(busRouteData)
-
-            Log.d("ScheduleActivity startRouteButton after", scheduleData.toString())
-
+            // ➊ Build labels from the *full* scheduleData
+            val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
+            val labels = workIntervals.mapIndexed { i, (start, end) ->
+                val stops = scheduleData[i].busStops
+                val from = stops.firstOrNull()?.abbreviation ?: "?"
+                val to   = stops.lastOrNull()?.abbreviation  ?: "?"
+                "$start ${dutyNames[i]} $from → $to"
+            }
+            // Pass those labels into the Intent
             val intent = Intent(this, MapActivity::class.java).apply {
+                putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
                 putExtra("AID", aid)
                 putExtra("CONFIG", ArrayList(config))
                 putExtra("JSON_STRING", jsonString)
@@ -508,16 +509,19 @@ class ScheduleActivity : AppCompatActivity() {
                 putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
                 putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
                 putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
-                putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
             }
 
-            // ➊ build labels from your extracted intervals & names
-            val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
-            val labels = workIntervals.mapIndexed { i, (s,e) ->
-                "$s ${dutyNames[i]} ${scheduleData[i].busStops.first().abbreviation} → " +
-                        scheduleData[i].busStops.last().abbreviation
-            }
-            intent.putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
+            // ➋ Now remove the first schedule from the list
+            scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+            Log.d("ScheduleActivity startRouteButton after removal", scheduleData.toString())
+
+            updateScheduleTablePaged()
+            updateTimeline()
+            rewriteOfflineScheduleData()
+
+            // And hand over the remaining full schedule
+            intent.putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+
             startActivity(intent)
         } else {
             Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
