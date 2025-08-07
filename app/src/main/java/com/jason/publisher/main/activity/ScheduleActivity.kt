@@ -305,12 +305,10 @@ class ScheduleActivity : AppCompatActivity() {
 
         // read the user’s choice from the Splash
         val fetchRoster = intent.getBooleanExtra("EXTRA_FETCH_ROSTER", false)
-
-        // if they tapped “Fetch Roster” *and* we have internet, do a one-time fetch
+// if they tapped “Fetch Roster” *and* we have internet, do a one-time fetch
         if (fetchRoster && NetworkStatusHelper.isNetworkAvailable(this)) {
             enterOnlineMode()
         } else {
-            // either no internet, or they chose “Use Cached Data”
             enterOfflineMode()
         }
 
@@ -461,7 +459,8 @@ class ScheduleActivity : AppCompatActivity() {
 
                 // ✅ Actually remove the first item
                 scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
-                timeline1.getChildAt(0)?.let { timeline1.removeView(it) }
+                isScheduleCacheUpdated = false
+                saveScheduleDataToCache()
                 updateScheduleTablePaged()
                 updateTimeline()
                 rewriteOfflineScheduleData()
@@ -540,10 +539,12 @@ class ScheduleActivity : AppCompatActivity() {
             // ➋ Now remove the first schedule from the list
             scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
             Log.d("ScheduleActivity startRouteButton after removal", scheduleData.toString())
-
+            isScheduleCacheUpdated = false
+            saveScheduleDataToCache()
             updateScheduleTablePaged()
             updateTimeline()
             rewriteOfflineScheduleData()
+
 
             // And hand over the remaining full schedule
             intent.putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
