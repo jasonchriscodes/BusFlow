@@ -1,10 +1,10 @@
 package com.jason.publisher.main.activity
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.View
-import android.widget.VideoView
+import android.widget.Button
+import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
 import com.jason.publisher.R
 import pl.droidsonroids.gif.GifDrawable
@@ -12,28 +12,53 @@ import pl.droidsonroids.gif.GifImageView
 
 class SplashActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // apply transparent theme
+        // apply transparent splash theme
         setTheme(R.style.Theme_NavTrack_Splash)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_splash)
 
-        // hide system UI (full‑screen)
+        // full-screen immersive mode
         window.decorView.systemUiVisibility = (
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                         or View.SYSTEM_UI_FLAG_FULLSCREEN
                         or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                 )
 
-        val gifView = findViewById<GifImageView>(R.id.openerGif)
-        val drawable = gifView.drawable as GifDrawable
+        val gifView       = findViewById<GifImageView>(R.id.openerGif)
+        val choiceLayout  = findViewById<LinearLayout>(R.id.choiceLayout)
+        val btnFetch      = findViewById<Button>(R.id.btnFetchRoster)
+        val btnUseCache   = findViewById<Button>(R.id.btnUseCache)
 
-        // 1️⃣ Play the GIF **only once**
+        // play GIF only once
+        val drawable = gifView.drawable as GifDrawable
         drawable.loopCount = 1
 
-        // listen for animation end
+        // when the GIF finishes, show the two choice buttons
         drawable.addAnimationListener {
-            // once the GIF has looped through once, go to ScheduleActivity
-            startActivity(Intent(this, ScheduleActivity::class.java))
+            choiceLayout.visibility = View.VISIBLE
+            choiceLayout.bringToFront()
+        }
+
+        // “Fetch Roster Data” → fresh fetch
+        btnFetch.setOnClickListener {
+            startScheduleActivity(fetch = true)
+        }
+
+        // “Use Cached Data” → offline
+        btnUseCache.setOnClickListener {
+            startScheduleActivity(fetch = false)
+        }
+    }
+
+    /**
+     * Launch ScheduleActivity with the user’s choice.
+     *
+     * @param fetch true to fetch fresh roster data, false to use cached data
+     */
+    private fun startScheduleActivity(fetch: Boolean) {
+        Intent(this, ScheduleActivity::class.java).also {
+            it.putExtra("EXTRA_FETCH_ROSTER", fetch)
+            startActivity(it)
             finish()
         }
     }

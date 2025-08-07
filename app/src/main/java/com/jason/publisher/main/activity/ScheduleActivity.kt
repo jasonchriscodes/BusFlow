@@ -121,6 +121,8 @@ class ScheduleActivity : AppCompatActivity() {
     private val fetchingHandler = Handler(Looper.getMainLooper())
     private var dotCount = 1
     private lateinit var fetchingIcon: ImageView
+    private lateinit var networkStatusIndicator: View
+    private var fetchRoster = false
 
 
     companion object {
@@ -192,6 +194,11 @@ class ScheduleActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityScheduleBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // initialize them here
+        connectionStatusTextView     = binding.connectionStatusTextView
+        networkStatusIndicator       = binding.networkStatusIndicator
+        fetchRoster = intent.getBooleanExtra("EXTRA_FETCH_ROSTER", false)
 
         // initialize RecyclerView adapter
         scheduleAdapter = ScheduleAdapter(emptyList(), isDarkMode)
@@ -268,8 +275,16 @@ class ScheduleActivity : AppCompatActivity() {
 // 2. define the callback
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                // when internet is back
-                runOnUiThread { enterOnlineMode() }
+                if (fetchRoster) {
+                    // only fetch when the user actually asked for fresh data
+                    runOnUiThread { enterOnlineMode() }
+                } else {
+                    // just update your status indicator
+                    runOnUiThread {
+                        connectionStatusTextView.text = "Connected (cache only)"
+                        networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_green)
+                    }
+                }
             }
             override fun onLost(network: Network) {
                 // when internet is gone
@@ -288,12 +303,23 @@ class ScheduleActivity : AppCompatActivity() {
             connectivityManager.registerNetworkCallback(request, networkCallback)
         }
 
-// 4. do an initial-mode check
-        if (NetworkStatusHelper.isNetworkAvailable(this)) {
+        // read the user’s choice from the Splash
+        val fetchRoster = intent.getBooleanExtra("EXTRA_FETCH_ROSTER", false)
+
+        // if they tapped “Fetch Roster” *and* we have internet, do a one-time fetch
+        if (fetchRoster && NetworkStatusHelper.isNetworkAvailable(this)) {
             enterOnlineMode()
         } else {
+            // either no internet, or they chose “Use Cached Data”
             enterOfflineMode()
         }
+
+        // still register the network-status indicator, but *do not* auto-fetch on reconnect
+        NetworkStatusHelper.setupNetworkStatus(
+            this,
+            binding.connectionStatusTextView,
+            binding.networkStatusIndicator
+        )
 
         // Check and request permission
         requestAllFilesAccessPermission()
