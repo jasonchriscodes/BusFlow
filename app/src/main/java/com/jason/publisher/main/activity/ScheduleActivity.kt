@@ -454,6 +454,11 @@ class ScheduleActivity : AppCompatActivity() {
         binding.testStartRouteButton.setOnClickListener {
             if (scheduleData.isNotEmpty()) {
                 val firstScheduleItem = scheduleData.first()
+                val selectedIdx = routeIndexFromRouteNo(firstScheduleItem.routeNo)
+                intent.putExtra("SELECTED_ROUTE_INDEX", selectedIdx ?: -1)
+                selectedIdx?.let { idx ->
+                    intent.putExtra("SELECTED_ROUTE_DATA", busRouteData[idx])
+                }
                 Log.d("ScheduleActivity testStartRouteButton firstScheduleItem", firstScheduleItem.toString())
                 Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
 
@@ -512,39 +517,45 @@ class ScheduleActivity : AppCompatActivity() {
         if (scheduleData.isNotEmpty()) {
             // Store the first schedule item for the Map
             val firstScheduleItem = scheduleData.first()
+            val selectedIdx = routeIndexFromRouteNo(firstScheduleItem.routeNo)
             Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
             Log.d("ScheduleActivity startRouteButton before", scheduleData.toString())
 
-            // ➊ Build labels from the *full* scheduleData
-            val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
-            val labels = workIntervals.mapIndexed { i, (start, end) ->
-                val stops = scheduleData[i].busStops
-                val from = stops.firstOrNull()?.abbreviation ?: "?"
-                val to   = stops.lastOrNull()?.abbreviation  ?: "?"
-                "$start ${dutyNames[i]} $from → $to"
-            }
-            // Pass those labels into the Intent
+            // We will still pass the full list (for future trips), AND pass the selected one explicitly.
             val intent = Intent(this, MapActivity::class.java).apply {
+                // timeline labels (unchanged)
+                val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
+                val labels = workIntervals.mapIndexed { i, (start, end) ->
+                    val stops = scheduleData[i].busStops
+                    val from = stops.firstOrNull()?.abbreviation ?: "?"
+                    val to   = stops.lastOrNull()?.abbreviation  ?: "?"
+                    "$start ${dutyNames[i]} $from → $to"
+                }
                 putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
+
+                // essentials
                 putExtra("AID", aid)
                 putExtra("CONFIG", ArrayList(config))
                 putExtra("JSON_STRING", jsonString)
-                putExtra("ROUTE", ArrayList(route))
-                putExtra("STOPS", ArrayList(stops))
-                putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
+
+                // keep sending the *full* sets as before
                 putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
                 putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+
+                // NEW: tell MapActivity which one to use for THIS trip
+                putExtra("SELECTED_ROUTE_INDEX", selectedIdx ?: -1)
+                selectedIdx?.let { idx ->
+                    putExtra("SELECTED_ROUTE_DATA", busRouteData[idx])  // RouteData must be Serializable/Parcelable (you already pass list)
+                }
             }
 
-            // ➋ Now remove the first schedule from the list
+            // remove first schedule & persist
             scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
-            Log.d("ScheduleActivity startRouteButton after removal", scheduleData.toString())
             isScheduleCacheUpdated = false
             saveScheduleDataToCache()
             updateScheduleTablePaged()
             updateTimeline()
             rewriteOfflineScheduleData()
-
 
             // And hand over the remaining full schedule
             intent.putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
@@ -553,6 +564,15 @@ class ScheduleActivity : AppCompatActivity() {
         } else {
             Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /** Map "1" or "Route 1" → 0-based index into busRouteData */
+    private fun routeIndexFromRouteNo(routeNo: String): Int? {
+        // Accepts "1" or "Route 1" etc.
+        val cleaned = routeNo.trim().lowercase(Locale.ROOT)
+        val digits  = cleaned.removePrefix("route").trim()
+        val idx     = digits.toIntOrNull()?.minus(1) ?: return null
+        return if (idx in busRouteData.indices) idx else null
     }
 
     /**

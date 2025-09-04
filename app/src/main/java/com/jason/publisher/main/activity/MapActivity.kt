@@ -105,6 +105,7 @@ class MapActivity : AppCompatActivity() {
     var route: List<BusRoute> = emptyList()
     var stops: List<BusStop> = emptyList()
     private var busRouteData: List<RouteData> = emptyList()
+    private var selectedRouteData: RouteData? = null
     var durationBetweenStops: List<Double> = emptyList()
     private var busStopInfo: List<BusStopInfo> = emptyList()
     var arrBusData: List<BusItem> = emptyList()
@@ -265,6 +266,39 @@ class MapActivity : AppCompatActivity() {
         FileLogger.d("MapActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
         FileLogger.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
         FileLogger.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
+
+        // Prefer the exact RouteData sent via Intent, else index, else first
+        @Suppress("DEPRECATION") // for getSerializableExtra() on older APIs
+        selectedRouteData =
+            (intent.getSerializableExtra("SELECTED_ROUTE_DATA") as? RouteData)
+                ?: run {
+                    // Fallback to index if only SELECTED_ROUTE_INDEX was sent
+                    val idx = intent.getIntExtra("SELECTED_ROUTE_INDEX", -1)
+                    busRouteData.getOrNull(idx)
+                }
+                        ?: busRouteData.firstOrNull()
+
+// If we have a selected route, derive the map vectors from it
+        selectedRouteData?.let { rd ->
+            val (r, s, d) = processSingleRouteData(rd)
+            route = r            // override flat polyline for this trip
+            stops = s            // override stop list for this trip
+            durationBetweenStops = d // override per-leg durations
+            Log.d("MapActivity", "✅ Using selectedRouteData with ${stops.size} stops and ${route.size} polyline points")
+        } ?: run {
+            Log.w("MapActivity", "⚠️ No selectedRouteData; leaving existing route/stops as-is")
+        }
+
+        /** If we have a selected route, derive the map vectors from it */
+        selectedRouteData?.let { rd ->
+            val (r, s, d) = processSingleRouteData(rd)
+            route = r            /** override flat polyline for this trip */
+            stops = s            /** override stop list for this trip     */
+            durationBetweenStops = d /** override per-leg durations       */
+            Log.d("MapActivity", "✅ Using selectedRouteData with ${stops.size} stops and ${route.size} polyline points")
+        } ?: run {
+            Log.w("MapActivity", "⚠️ No selectedRouteData; leaving existing route/stops as-is")
+        }
 
         extractRedBusStops()
 
@@ -566,6 +600,39 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
+    /** Turn a single RouteData into flat polyline, stops, and durations */
+    private fun processSingleRouteData(routeData: RouteData): Triple<List<BusRoute>, List<BusStop>, List<Double>> {
+        // Working lists for this one route
+        val route = mutableListOf<BusRoute>()
+        val stops = mutableListOf<BusStop>()
+        val durations = mutableListOf<Double>()
+
+        // Starting point is a stop
+        stops.add(BusStop(latitude = routeData.startingPoint.latitude, longitude = routeData.startingPoint.longitude))
+
+        // Walk each next point
+        for (next in routeData.nextPoints) {
+            // Each next point is also a stop
+            stops.add(BusStop(latitude = next.latitude, longitude = next.longitude))
+
+            // Build polyline, skipping consecutive duplicates
+            var last: Pair<Double, Double>? = null
+            for (coord in next.routeCoordinates) {
+                val lat = coord[1]
+                val lon = coord[0]
+                if (last == lat to lon) continue
+                route.add(BusRoute(latitude = lat, longitude = lon))
+                last = lat to lon
+            }
+
+            // Parse "X.Y minutes" → X.Y
+            durations.add(next.duration.split(" ")[0].toDoubleOrNull() ?: 0.0)
+        }
+
+        // Return as (polyline, stops, durations)
+        return Triple(route, stops, durations)
+    }
+
     /**
      * Retrieves the access token for the current device's Android ID from the configuration list.
      */
@@ -589,7 +656,7 @@ class MapActivity : AppCompatActivity() {
     private fun confirmArrival() {
         Log.d("MapActivity confirmArrival", "🚨 ConfirmArrival Triggered - Starting Process")
 
-        busRouteData?.first()?.startingPoint?.let { sp ->
+        selectedRouteData?.startingPoint?.let { sp ->
             BusStop(latitude = sp.latitude, longitude = sp.longitude, address = sp.address)
         }
 
@@ -897,7 +964,8 @@ class MapActivity : AppCompatActivity() {
             }
 
             // Get timing list and last red timing point
-            val timingList = BusStopWithTimingPoint.fromRouteData(busRouteData.first())
+            val baseRoute = selectedRouteData ?: busRouteData.firstOrNull()
+            val timingList = baseRoute?.let { BusStopWithTimingPoint.fromRouteData(it) } ?: emptyList()
             val lastScheduledAddress = getLastScheduledAddress(timingList, scheduleList)
             val lastTimingPointIndex = timingList.indexOfFirst { it.address == lastScheduledAddress }
             val finalStopIndex = timingList.lastIndex
@@ -934,7 +1002,8 @@ class MapActivity : AppCompatActivity() {
         }
 
         // Build timing list.
-        val timingList = BusStopWithTimingPoint.fromRouteData(busRouteData.first())
+        val baseRoute = selectedRouteData ?: busRouteData.firstOrNull()
+        val timingList = baseRoute?.let { BusStopWithTimingPoint.fromRouteData(it) } ?: emptyList()
         Log.d("MapActivity updateApiTime", "Timing list: $timingList")
 
         val upcomingAddress = upcomingStop
@@ -1318,7 +1387,8 @@ class MapActivity : AppCompatActivity() {
             }
 
             // Build timing list and update API time only if the stop exists in it
-            val timingList = BusStopWithTimingPoint.fromRouteData(busRouteData.first())
+            val baseRoute = selectedRouteData ?: busRouteData.firstOrNull()
+            val timingList = baseRoute?.let { BusStopWithTimingPoint.fromRouteData(it) } ?: emptyList()
             if (timingList.any { it.address?.equals(stopAddress, ignoreCase = true) == true }) {
                 updateApiTime()
             } else {
