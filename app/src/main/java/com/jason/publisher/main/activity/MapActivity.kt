@@ -22,9 +22,12 @@ import android.location.Location
 import android.net.ConnectivityManager
 import android.net.Network
 import android.os.Build
+import android.text.InputType
+import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.autofill.AutofillManager
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -33,6 +36,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.view.ViewCompat
 import com.jason.publisher.main.model.BusItem
 import com.jason.publisher.main.model.BusStop
 import com.jason.publisher.main.model.BusStopInfo
@@ -525,26 +529,29 @@ class MapActivity : AppCompatActivity() {
             }
 
             // Show number pad confirmation dialog
-            val numberPadDialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            val dlgBuilder = androidx.appcompat.app.AlertDialog.Builder(this)
             val numberPadView = layoutInflater.inflate(R.layout.dialog_number_pad, null)
             val numberPadInput = numberPadView.findViewById<EditText>(R.id.numberPadInput)
 
-            // ⛔️ Disable Autofill on this dialog + field
+            // 1) DO NOT mark it as a "password" input type (that triggers credential suggestions).
+            //    Use plain numeric input + manually mask it.
+            numberPadInput.inputType = InputType.TYPE_CLASS_NUMBER
+            numberPadInput.transformationMethod = PasswordTransformationMethod.getInstance()
+
+            // 2) Turn off saving & autofill on the exact field.
+            numberPadInput.setSaveEnabled(false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                numberPadView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
-                numberPadInput.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
-                numberPadInput.setAutofillHints(*emptyArray()) // no hints
+                numberPadInput.setAutofillHints(null) // not emptyArray()
+                ViewCompat.setImportantForAutofill(numberPadInput, View.IMPORTANT_FOR_AUTOFILL_NO)
             }
 
-            // (optional) keep it numeric & hide suggestions
-            numberPadInput.inputType =
-                (android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD)
-            numberPadInput.setText("") // ensure no prefilled value
+            // (optional) keep the keyboard from learning this content
+            numberPadInput.imeOptions = numberPadInput.imeOptions or
+                    android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
 
-            numberPadDialog.setView(numberPadView)
+            dlgBuilder.setView(numberPadView)
                 .setTitle("Enter Passcode")
                 .setPositiveButton("Confirm") { _, _ ->
-                    // Verify passcode
                     val enteredCode = numberPadInput.text.toString()
                     if (enteredCode == "0000") {
                         val intent = Intent(this, ScheduleActivity::class.java)
@@ -555,10 +562,21 @@ class MapActivity : AppCompatActivity() {
                         Toast.makeText(this, "❌ Incorrect code. Please enter 0000.", Toast.LENGTH_LONG).show()
                     }
                 }
-                .setNegativeButton("Cancel") { dialog, _ ->
-                    dialog.dismiss()
+                .setNegativeButton("Cancel") { d, _ -> d.dismiss() }
+
+            val dialog = dlgBuilder.create()
+
+            // 3) After the dialog is attached, also block autofill on the dialog window
+            dialog.setOnShowListener {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    dialog.window?.decorView?.importantForAutofill =
+                        View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+
+                    // 4) Cancel any running autofill session to dismiss inline suggestions immediately.
+                    getSystemService(AutofillManager::class.java)?.cancel()
                 }
-                .show()
+            }
+            dialog.show()
         }
 
         binding.speedUpButton.setOnClickListener {
