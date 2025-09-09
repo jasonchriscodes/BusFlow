@@ -529,6 +529,18 @@ class MapActivity : AppCompatActivity() {
             val numberPadView = layoutInflater.inflate(R.layout.dialog_number_pad, null)
             val numberPadInput = numberPadView.findViewById<EditText>(R.id.numberPadInput)
 
+            // ⛔️ Disable Autofill on this dialog + field
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                numberPadView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+                numberPadInput.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+                numberPadInput.setAutofillHints(*emptyArray()) // no hints
+            }
+
+            // (optional) keep it numeric & hide suggestions
+            numberPadInput.inputType =
+                (android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD)
+            numberPadInput.setText("") // ensure no prefilled value
+
             numberPadDialog.setView(numberPadView)
                 .setTitle("Enter Passcode")
                 .setPositiveButton("Confirm") { _, _ ->

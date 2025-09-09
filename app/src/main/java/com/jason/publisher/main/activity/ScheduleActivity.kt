@@ -196,8 +196,8 @@ class ScheduleActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // initialize them here
-        connectionStatusTextView     = binding.connectionStatusTextView
-        networkStatusIndicator       = binding.networkStatusIndicator
+        connectionStatusTextView = binding.connectionStatusTextView
+        networkStatusIndicator = binding.networkStatusIndicator
         fetchRoster = intent.getBooleanExtra("EXTRA_FETCH_ROSTER", false)
 
         // initialize RecyclerView adapter
@@ -205,8 +205,8 @@ class ScheduleActivity : AppCompatActivity() {
         scheduleRecycler = binding.scheduleRecycler
         scheduleRecycler.apply {
             layoutManager = LinearLayoutManager(this@ScheduleActivity)
-            adapter       = scheduleAdapter
-            visibility    = View.GONE
+            adapter = scheduleAdapter
+            visibility = View.GONE
         }
 
         // Initialize all views up front:
@@ -241,8 +241,8 @@ class ScheduleActivity : AppCompatActivity() {
 
         binding.scheduleRecycler.apply {
             layoutManager = LinearLayoutManager(this@ScheduleActivity)
-            adapter       = scheduleAdapter
-            visibility    = View.GONE
+            adapter = scheduleAdapter
+            visibility = View.GONE
         }
 
         // Load dark mode preference BEFORE setting switch listener, but AFTER initializing buttons
@@ -255,18 +255,19 @@ class ScheduleActivity : AppCompatActivity() {
         darkModeSwitch.setOnCheckedChangeListener { _, isChecked ->
             isDarkMode = isChecked
             applyThemeMode(isDarkMode)
-            getSharedPreferences("prefs", MODE_PRIVATE).edit().putBoolean("dark_mode", isDarkMode).apply()
+            getSharedPreferences("prefs", MODE_PRIVATE).edit().putBoolean("dark_mode", isDarkMode)
+                .apply()
         }
 
         // 0) init your MQTT managers *before* you ever call enterOnlineMode()/fetchConfig()
         mqttManagerConfig = MqttManager(
             serverUri = SERVER_URI,
-            clientId  = CLIENT_ID,
-            username  = tokenConfigData
+            clientId = CLIENT_ID,
+            username = tokenConfigData
         )
         mqttManager = MqttManager(
             serverUri = SERVER_URI,
-            clientId  = CLIENT_ID
+            clientId = CLIENT_ID
         )
 
         // 1. get connectivity service
@@ -286,6 +287,7 @@ class ScheduleActivity : AppCompatActivity() {
                     }
                 }
             }
+
             override fun onLost(network: Network) {
                 // when internet is gone
                 runOnUiThread { enterOfflineMode() }
@@ -327,10 +329,15 @@ class ScheduleActivity : AppCompatActivity() {
         Log.d("TimeTableActivity", "Fetched AID: $aid")
 
         // Set up network status UI
-        NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
+        NetworkStatusHelper.setupNetworkStatus(
+            this,
+            binding.connectionStatusTextView,
+            binding.networkStatusIndicator
+        )
 
         // Load configuration
-        Configuration.getInstance().load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
+        Configuration.getInstance()
+            .load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
 
         // Connect and subscribe to MQTT
         connectAndSubscribe()
@@ -365,7 +372,11 @@ class ScheduleActivity : AppCompatActivity() {
         val mapFile = File(getHiddenFolder(), "new-zealand-2.map")
         if (!mapFile.exists()) {
             Log.e("ScheduleActivity", "Map file not found at: ${mapFile.absolutePath}")
-            Toast.makeText(this, "Offline map unavailable. Other features will still work.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                this,
+                "Offline map unavailable. Other features will still work.",
+                Toast.LENGTH_SHORT
+            ).show()
         } else {
             ioScope.launch {
                 // Open the .map file on IO
@@ -391,7 +402,12 @@ class ScheduleActivity : AppCompatActivity() {
                         preloadMap.layerManager.layers.add(renderer)
                         preloadMap.post {
                             preloadMap.model.mapViewPosition.setZoomLevel(16)
-                            preloadMap.model.mapViewPosition.setCenter(LatLong(-36.855647, 174.765249))
+                            preloadMap.model.mapViewPosition.setCenter(
+                                LatLong(
+                                    -36.855647,
+                                    174.765249
+                                )
+                            )
                             preloadMap.invalidate()
                         }
                     }
@@ -437,7 +453,8 @@ class ScheduleActivity : AppCompatActivity() {
 
         // ➊ Immediately ask for location permission on startup
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-            != PackageManager.PERMISSION_GRANTED) {
+            != PackageManager.PERMISSION_GRANTED
+        ) {
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
@@ -447,49 +464,52 @@ class ScheduleActivity : AppCompatActivity() {
 
         // Set up the "Start Route" button
         binding.startRouteButton.setOnClickListener {
-            launchMapActivity()
+            if (scheduleData.isEmpty()) {
+                Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val first = scheduleData.first()
+            if (isBreak(first)) {
+                launchBreakActivity(first)
+            } else {
+                launchMapActivity()
+            }
         }
 
 // Set up the "Test Start Route" button
         binding.testStartRouteButton.setOnClickListener {
-            if (scheduleData.isNotEmpty()) {
-                val firstScheduleItem = scheduleData.first()
-                val selectedIdx = routeIndexFromRouteNo(firstScheduleItem.routeNo)
-                intent.putExtra("SELECTED_ROUTE_INDEX", selectedIdx ?: -1)
-                selectedIdx?.let { idx ->
-                    intent.putExtra("SELECTED_ROUTE_DATA", busRouteData[idx])
-                }
-                Log.d("ScheduleActivity testStartRouteButton firstScheduleItem", firstScheduleItem.toString())
-                Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
-
-                // ✅ Actually remove the first item
-                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
-                isScheduleCacheUpdated = false
-                saveScheduleDataToCache()
-                updateScheduleTablePaged()
-                updateTimeline()
-                rewriteOfflineScheduleData()
-
-                jsonString = Gson().toJson(busRouteData)
-
-                Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
-
-                val intent = Intent(this, TestMapActivity::class.java).apply {
-                    putExtra("AID", aid)
-                    putExtra("CONFIG", ArrayList(config))
-                    putExtra("JSON_STRING", jsonString)
-                    putExtra("ROUTE", ArrayList(route))
-                    putExtra("STOPS", ArrayList(stops))
-                    putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
-                    putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
-                    putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
-                    putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
-                }
-                startActivity(intent)
-            } else {
+            if (scheduleData.isEmpty()) {
                 Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val first = scheduleData.first()
+            if (isBreak(first)) {
+                launchBreakActivity(first)   // NEW (test button respects break too)
+            } else {
+                launchMapActivity()
             }
         }
+    }
+
+    /**
+     * Launches BreakActivity for a "Break" item: pops it from the list, persists cache, refreshes UI, and passes current/remaining schedules.
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun launchBreakActivity(firstScheduleItem: ScheduleItem) {
+        // Remove the break from the front of the list, persist cache, and refresh UI
+        scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+        isScheduleCacheUpdated = false
+        saveScheduleDataToCache()
+        updateScheduleTablePaged()
+        updateTimeline()
+        rewriteOfflineScheduleData()
+
+        val intent = Intent(this, BreakActivity::class.java).apply {
+            putExtra("AID", aid)
+            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+            putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+        }
+        startActivity(intent)
     }
 
     // ➌ Handle the user’s response to your initial permission request
@@ -1484,6 +1504,14 @@ class ScheduleActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Returns true if this schedule item represents a break (case-insensitive).
+     */
+    private fun isBreak(item: com.jason.publisher.main.model.ScheduleItem): Boolean {
+        // Accept "Break" or "break"
+        return item.dutyName.equals("break", ignoreCase = true)
     }
 
     override fun onDestroy() {
