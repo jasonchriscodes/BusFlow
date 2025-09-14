@@ -504,47 +504,51 @@ class MapViewController(
 
             val zoom = binding.map.model.mapViewPosition.zoomLevel.toDouble()
             val bb   = binding.map.boundingBox
-
-            // 1) your own bus always first
             val selfToken = activity.token
 
-            // 2) then any other markers currently on‐screen
+            // Other buses that are currently drawn AND on screen
             val visibleOthers = activity.markerBus
-                .filter { it.key != selfToken
-                        && bb.contains(it.value.latLong.latitude, it.value.latLong.longitude)
-                }
+                .filter { (t, m) -> t != selfToken &&
+                        bb.contains(m.latLong.latitude, m.latLong.longitude) }
                 .keys
                 .toList()
 
-            // 3) full display order: self @ idx=0, others @ idx=1,2,3…
-            val displayOrder = listOf(selfToken) + visibleOthers
+            // If zoomed way in or there are no other online/visible buses → show only self
+            val displayOrder = if (zoom > 25.0 || visibleOthers.isEmpty()) {
+                listOf(selfToken)
+            } else {
+                // Prefer the active bus if it's visible, else take the first visible other
+                val prioritized = activeBusToken?.takeIf { it in visibleOthers }
+                    ?: visibleOthers.first()
+                listOf(selfToken, prioritized) + visibleOthers.filter { it != prioritized }
+            }
 
             displayOrder.forEachIndexed { idx, token ->
-                // when zoomed in past 25, skip everything except your own bus (idx==0)
-                if (zoom > 25.0 && idx >= 1) return@forEachIndexed
+                // If we're in deep zoom or there are no others, skip any non-self rows
+                if (idx >= 1 && (zoom > 25.0 || visibleOthers.isEmpty())) return@forEachIndexed
 
-                // pick the right icon name…
-                val iconName = if (idx == 0) {
-                    "ic_bus_symbol"
+                val iconName = if (idx == 0) "ic_bus_symbol"
+                else "ic_bus_symbol${(idx + 1).coerceAtMost(10)}"
+                val iconRes  = activity.resources.getIdentifier(iconName, "drawable", activity.packageName)
+
+                // Labels:
+                // - self: current trip label if available
+                // - others: stored label only; if missing/blank, skip (no "---")
+                val label: String = if (token == selfToken) {
+                    activeSegment ?: selfToken
                 } else {
-                    "ic_bus_symbol${(idx+1).coerceAtMost(10)}"
-                }
-                val iconRes = activity.resources.getIdentifier(iconName, "drawable", activity.packageName)
-
-                // …and label
-                val label = if (token == selfToken) {
-                    activeSegment ?: token
-                } else {
-                    activity.otherBusLabels[token] ?: token
+                    val lbl = activity.otherBusLabels[token]
+                    if (lbl.isNullOrBlank()) return@forEachIndexed
+                    lbl
                 }
 
-                // inflate a row
                 val row = LinearLayout(activity).apply {
                     orientation = LinearLayout.HORIZONTAL
-                    gravity     = Gravity.CENTER_VERTICAL
+                    gravity = Gravity.CENTER_VERTICAL
                     val pad = dpToPx(8)
                     setPadding(pad, pad/2, pad, pad/2)
                 }
+
                 val iv = ImageView(activity).apply {
                     setImageResource(iconRes)
                     layoutParams = LinearLayout.LayoutParams(dpToPx(16), dpToPx(16))
@@ -554,21 +558,21 @@ class MapViewController(
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     setPadding(dpToPx(8), 0, 0, 0)
                 }
+
                 row.addView(iv)
                 row.addView(tv)
                 detailContainer.addView(row)
 
-                // divider under every row except the last
                 if (idx < displayOrder.lastIndex) {
                     detailContainer.addView(View(activity).apply {
-                        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dpToPx(1))
-                            .apply { topMargin = dpToPx(4); bottomMargin = dpToPx(4) }
+                        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dpToPx(1)).apply {
+                            topMargin = dpToPx(4); bottomMargin = dpToPx(4)
+                        }
                         setBackgroundColor(Color.LTGRAY)
                     })
                 }
             }
 
-            // if only your own bus is shown, show an offline hint ──
             if (visibleOthers.isEmpty() && !isReallyOnline()) {
                 val hint = TextView(activity).apply {
                     text = "Other bus tracking is not available in offline mode"

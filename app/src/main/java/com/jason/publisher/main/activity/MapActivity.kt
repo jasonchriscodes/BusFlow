@@ -84,6 +84,7 @@ import retrofit2.Callback
 import retrofit2.Response
 import java.lang.Math.abs
 import org.mapsforge.map.model.common.Observer
+import java.lang.Math.min
 
 class MapActivity : AppCompatActivity() {
 
@@ -189,6 +190,9 @@ class MapActivity : AppCompatActivity() {
     lateinit var connectivityManager: ConnectivityManager
     private lateinit var connectionStatusTextView: TextView
     private lateinit var networkStatusIndicator: View
+    private var hasDumpedPanelLog = false
+    private var lastPanelDump: String? = null
+    private var panelDebugEnabled = true
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -249,6 +253,7 @@ class MapActivity : AppCompatActivity() {
         scheduleList = intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? List<ScheduleItem> ?: emptyList()
         scheduleData = intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? List<ScheduleItem> ?: emptyList()
         val timelineLabels = intent.getStringArrayListExtra("TIMELINE_LABELS") ?: emptyList<String>()
+        panelDebugNo = intent.getIntExtra("EXTRA_PANEL_DEBUG_NO", 0)
 
         Log.d("MapActivity onCreate retrieve", "Received aid: $aid")
         Log.d("MapActivity onCreate retrieve", "Received config: ${config.toString()}")
@@ -373,6 +378,11 @@ class MapActivity : AppCompatActivity() {
                             // and redraw your detail panel
                             mapController.getDefaultConfigValue()
                             mapController.refreshDetailPanelIcons()
+                            // Log immediately
+                            if (!hasDumpedPanelLog) {
+                                logPanelDebugFromDetailPanel()
+                                hasDumpedPanelLog = true
+                            }
                             mapController.startActivityMonitor()
                         }
                     }
@@ -411,6 +421,14 @@ class MapActivity : AppCompatActivity() {
                     mapController.getDefaultConfigValue()
                     mapController.activeSegment = active
                     mapController.refreshDetailPanelIcons()
+
+                    // Log immediately
+                    logPanelDebugFromDetailPanel()
+
+                    // Log again shortly after MQTT polling begins (gives time for other buses to populate)
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        logPanelDebugFromDetailPanel()
+                    }, 1200)
 
                     mqttHelper.requestAdminMessage()
                     mqttHelper.connectAndSubscribe()
@@ -512,6 +530,7 @@ class MapActivity : AppCompatActivity() {
                 Log.d("MapActivity", "Zoom changed to $zoom")
                 runOnUiThread {
                     mapController.refreshDetailPanelIcons()
+                    logPanelDebugFromDetailPanel()
                 }
             }
         })
@@ -591,6 +610,40 @@ class MapActivity : AppCompatActivity() {
         binding.arriveButton.setOnClickListener {
             confirmArrival()
         }
+    }
+
+    @SuppressLint("LongLogTag")
+    private fun logPanelDebugFromDetailPanel() {
+        if (!panelDebugEnabled) return
+
+        val sb = StringBuilder()
+        sb.appendLine("no: ${currentPanelDebugNo()}")
+
+        val first = scheduleList.firstOrNull()
+        sb.appendLine("dutyName: ${first?.dutyName ?: "?"}")
+        if (first != null) {
+            sb.appendLine("currentDetailPanel: ic_bus_symbol ${formatPanelLabel(first)}")
+        }
+
+        // detailIconsContainer[0] is "me"; others are other buses
+        val container = binding.detailIconsContainer
+        if (container.childCount > 1) {
+            for (i in 1 until container.childCount) {
+                val row = container.getChildAt(i) as? LinearLayout ?: continue
+                val text = (0 until row.childCount)
+                    .mapNotNull { j -> (row.getChildAt(j) as? TextView)?.text?.toString() }
+                    .firstOrNull()
+                if (!text.isNullOrBlank()) {
+                    val iconName = "ic_bus_symbol${kotlin.math.min(i + 1, 10)}"
+                    sb.appendLine("otherDetailPanel: \"$iconName\" $text")
+                }
+            }
+        }
+
+        val dump = sb.toString().trimEnd()
+        if (dump == lastPanelDump) return  // ← only log when changed
+        lastPanelDump = dump
+        Log.d("PanelDebug", dump)
     }
 
     /**
@@ -1586,6 +1639,7 @@ class MapActivity : AppCompatActivity() {
     var hasPassedFirstStop = false
     private val jumpThreshold = 3 // Prevents sudden jumps
     private val detectionZoneRadius = 200.0 // 200m detection zone
+    private var panelDebugNo: Int = 0
 
 
     @SuppressLint("MissingPermission", "LongLogTag")
@@ -1747,8 +1801,10 @@ class MapActivity : AppCompatActivity() {
         }
 
         val url = ApiService.BASE_URL + "$token/attributes"
-
         val scheduleJson = Gson().toJson(scheduleData)
+        // this remains the ORIGINAL first item passed in via intent
+        val currentLabel = scheduleList.firstOrNull()?.let { formatPanelLabel(it) }
+
         val attributesData = AttributesData(
             latitude        = latitude,
             longitude       = longitude,
@@ -1756,7 +1812,8 @@ class MapActivity : AppCompatActivity() {
             bearingCustomer = null,
             speed           = speed,
             direction       = direction,
-            scheduleData    = scheduleJson
+            scheduleData    = scheduleJson,
+            currentTripLabel = currentLabel
         )
 
         Log.d("MapActivity updateClientAttributes", "Posting client-attrs for aid=$aid → $attributesData")
@@ -1873,6 +1930,8 @@ class MapActivity : AppCompatActivity() {
     /** Cleans up resources on activity destruction. */
     override fun onDestroy() {
         super.onDestroy()
+        panelDebugEnabled = false
+        if (::mqttHelper.isInitialized) mqttHelper.stopAttributePolling()
 
         // Remove polyline from Mapsforge map
         routePolyline?.let {
@@ -1881,5 +1940,36 @@ class MapActivity : AppCompatActivity() {
         }
         Log.d("MapActivity", "🗑️ Removed polyline on destroy.")
         timeManager.currentTimeHandler.removeCallbacks(timeManager.currentTimeRunnable)
+    }
+
+    private fun isTokenLike(s: String?): Boolean {
+        if (s.isNullOrBlank()) return false
+        val t = s.trim()
+        return t.length in 20..40 && t.all { it.isLetterOrDigit() }
+    }
+
+    private fun safeDutyName(item: ScheduleItem): String {
+        if (!isTokenLike(item.dutyName)) return item.dutyName
+        val from = item.busStops.firstOrNull()?.abbreviation ?: item.busStops.firstOrNull()?.name ?: "?"
+        val to   = item.busStops.lastOrNull()?.abbreviation  ?: item.busStops.lastOrNull()?.name  ?: "?"
+        return "${item.routeNo} $from → $to"
+    }
+
+    private fun formatPanelLabel(item: ScheduleItem): String {
+        val from = item.busStops.firstOrNull()?.abbreviation ?: item.busStops.firstOrNull()?.name ?: "?"
+        val to   = item.busStops.lastOrNull()?.abbreviation  ?: item.busStops.lastOrNull()?.name  ?: "?"
+        val duty = safeDutyName(item)
+        return "${item.startTime} $duty $from → $to"
+    }
+
+    private fun currentPanelDebugNo(): Int =
+        getSharedPreferences("panel_debug_pref", MODE_PRIVATE)
+            .getInt("panel_debug_no", 0)
+
+    override fun onStop() {
+        super.onStop()
+        panelDebugEnabled = false
+        if (::mqttHelper.isInitialized) mqttHelper.stopAttributePolling()
+        // remove any observers/timers you set that could call logPanelDebugFromDetailPanel()
     }
 }

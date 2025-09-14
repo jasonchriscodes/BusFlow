@@ -15,6 +15,14 @@ class SplashActivity : AppCompatActivity() {
         // apply transparent splash theme
         setTheme(R.style.Theme_NavTrack_Splash)
         super.onCreate(savedInstanceState)
+
+        if (savedInstanceState == null) { // cold start, not a rotation
+            getSharedPreferences("panel_debug_pref", MODE_PRIVATE)
+                .edit()
+                .putInt("panel_debug_no", 0)
+                .apply()
+        }
+
         setContentView(R.layout.activity_splash)
 
         // full-screen immersive mode

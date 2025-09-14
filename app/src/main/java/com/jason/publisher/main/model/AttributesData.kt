@@ -17,5 +17,6 @@ data class AttributesData(
     val bearingCustomer: Float?,
     val speed: Float?,
     val direction: String?,
-    val scheduleData: String? = null
+    val scheduleData: String? = null,
+    val currentTripLabel: String? = null
 )

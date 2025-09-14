@@ -123,7 +123,9 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var fetchingIcon: ImageView
     private lateinit var networkStatusIndicator: View
     private var fetchRoster = false
-
+    private val PANEL_DEBUG_PREF = "panel_debug_pref"
+    private val PANEL_DEBUG_NO_KEY = "panel_debug_no"
+    private var lastPreStartDump: String? = null
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -369,7 +371,7 @@ class ScheduleActivity : AppCompatActivity() {
         )
 
         // 4. Open the .map file off the main thread
-        val mapFile = File(getHiddenFolder(), "new-zealand-2.map")
+        val mapFile = File(getHiddenFolder(), "new-zealand.map")
         if (!mapFile.exists()) {
             Log.e("ScheduleActivity", "Map file not found at: ${mapFile.absolutePath}")
             Toast.makeText(
@@ -468,11 +470,18 @@ class ScheduleActivity : AppCompatActivity() {
                 Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
+            val no = nextPanelDebugNo()
             val first = scheduleData.first()
+
+            // Log now (works for Trip or Break)
+            logPanelDebugPreStart(no, first)
+
             if (isBreak(first)) {
-                launchBreakActivity(first)
+                // (optional) you can pass the number to BreakActivity too if you want
+                launchBreakActivity(first, no)
             } else {
-                launchMapActivity()
+                // hand the "no" to MapActivity so it can log the rest
+                launchMapActivity(no)
             }
         }
 
@@ -482,11 +491,15 @@ class ScheduleActivity : AppCompatActivity() {
                 Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
+            val no = nextPanelDebugNo()
             val first = scheduleData.first()
+
+            logPanelDebugPreStart(no, first)
+
             if (isBreak(first)) {
-                launchBreakActivity(first)   // NEW (test button respects break too)
+                launchBreakActivity(first,no)
             } else {
-                launchMapActivity()
+                launchMapActivity(no)
             }
         }
     }
@@ -495,8 +508,8 @@ class ScheduleActivity : AppCompatActivity() {
      * Launches BreakActivity for a "Break" item: pops it from the list, persists cache, refreshes UI, and passes current/remaining schedules.
      */
     @RequiresApi(Build.VERSION_CODES.M)
-    private fun launchBreakActivity(firstScheduleItem: ScheduleItem) {
-        // Remove the break from the front of the list, persist cache, and refresh UI
+    private fun launchBreakActivity(firstScheduleItem: ScheduleItem, no: Int) {
+        // remove first item, persist, refresh (your existing code) ...
         scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
         isScheduleCacheUpdated = false
         saveScheduleDataToCache()
@@ -508,6 +521,7 @@ class ScheduleActivity : AppCompatActivity() {
             putExtra("AID", aid)
             putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
             putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+            putExtra("EXTRA_PANEL_DEBUG_NO", no)   // <-- same counter
         }
         startActivity(intent)
     }
@@ -533,7 +547,7 @@ class ScheduleActivity : AppCompatActivity() {
      */
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
-    private fun launchMapActivity() {
+    private fun launchMapActivity(no: Int) {
         if (scheduleData.isNotEmpty()) {
             // Store the first schedule item for the Map
             val firstScheduleItem = scheduleData.first()
@@ -567,6 +581,7 @@ class ScheduleActivity : AppCompatActivity() {
                 selectedIdx?.let { idx ->
                     putExtra("SELECTED_ROUTE_DATA", busRouteData[idx])  // RouteData must be Serializable/Parcelable (you already pass list)
                 }
+                putExtra("EXTRA_PANEL_DEBUG_NO", no)
             }
 
             // remove first schedule & persist
@@ -1260,6 +1275,12 @@ class ScheduleActivity : AppCompatActivity() {
      * @return File representing the hidden directory.
      */
     private fun getHiddenFolder(): File {
+        Log.d("storage",
+            "api=${Build.VERSION.SDK_INT}, " +
+                    "target=${applicationInfo.targetSdkVersion}, " +
+                    "allFiles=${if (Build.VERSION.SDK_INT>=30) Environment.isExternalStorageManager() else "n/a"}"
+        )
+
         val externalDocumentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
         val hiddenFolder = File(externalDocumentsDir, ".vlrshiddenfolder")
 
@@ -1524,5 +1545,33 @@ class ScheduleActivity : AppCompatActivity() {
     /** Fetches the Android ID (AID) of the device. */
     private fun getAndroidId(): String {
         return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+    }
+
+    private fun nextPanelDebugNo(): Int {
+        val sp = getSharedPreferences(PANEL_DEBUG_PREF, MODE_PRIVATE)
+        val next = sp.getInt(PANEL_DEBUG_NO_KEY, 0) + 1
+        sp.edit().putInt(PANEL_DEBUG_NO_KEY, next).apply()
+        return next
+    }
+
+    // Keep it simple: build the same label your panel shows
+    private fun formatPanelLabel(item: ScheduleItem): String {
+        val from = item.busStops.firstOrNull()?.abbreviation
+            ?: item.busStops.firstOrNull()?.name ?: "?"
+        val to = item.busStops.lastOrNull()?.abbreviation
+            ?: item.busStops.lastOrNull()?.name ?: "?"
+        return "${item.startTime} ${item.dutyName} $from → $to"
+    }
+
+    private fun logPanelDebugPreStart(no: Int, first: ScheduleItem) {
+        val current = "ic_bus_symbol ${formatPanelLabel(first)}"
+        val dump = buildString {
+            appendLine("no: $no")
+            appendLine("dutyName: ${first.dutyName}")
+            append("currentDetailPanel: $current")
+        }
+        if (dump == lastPreStartDump) return
+        lastPreStartDump = dump
+        Log.d("PanelDebug", dump)
     }
 }
