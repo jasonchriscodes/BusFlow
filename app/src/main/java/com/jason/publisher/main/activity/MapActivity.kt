@@ -187,7 +187,9 @@ class MapActivity : AppCompatActivity() {
     lateinit var mapController: MapViewController
     private lateinit var scheduleStatusManager: ScheduleStatusManager
     val otherBusLabels = mutableMapOf<String,String>()
-    lateinit var connectivityManager: ConnectivityManager
+    val connectivityManager by lazy(LazyThreadSafetyMode.NONE) {
+        getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    }
     private lateinit var connectionStatusTextView: TextView
     private lateinit var networkStatusIndicator: View
     private var hasDumpedPanelLog = false
@@ -276,6 +278,14 @@ class MapActivity : AppCompatActivity() {
         FileLogger.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
         FileLogger.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
 
+        val selfLabel = scheduleList.firstOrNull()?.let { formatPanelLabel(it) }
+        mapController.activeSegment = selfLabel // let the controller draw using this exact text
+        selfLabel?.let {
+            publishActiveSegment(it)            // tell the other tablet right now
+            Handler(Looper.getMainLooper()).postDelayed({ publishActiveSegment(it) }, 1200) // nudge once more
+        }
+        mapController.refreshDetailPanelIcons()
+
         // Prefer the exact RouteData sent via Intent, else index, else first
         @Suppress("DEPRECATION") // for getSerializableExtra() on older APIs
         selectedRouteData =
@@ -317,16 +327,8 @@ class MapActivity : AppCompatActivity() {
         // Start the current time counter
 //        startCurrentTimeUpdater()
 
-        // 1) start the simulated clock
+        // start the simulated clock
         timeManager.startStartTime()
-
-        // 2) compute “now” in minutes out of your simulated Calendar
-        val nowCal = timeManager.simulatedStartTime
-        val nowMinutes = nowCal.get(Calendar.HOUR_OF_DAY) * 60 +
-                nowCal.get(Calendar.MINUTE)
-
-        // 3) find the active label
-        val active = findActiveLabel(timelineLabels, nowMinutes)
 
         // Start the next trip countdown updater
         timeManager.startNextTripCountdownUpdater()
@@ -340,9 +342,6 @@ class MapActivity : AppCompatActivity() {
 
         // Set up network status UI
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
-
-        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE)
-                as ConnectivityManager
 
         connectivityManager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
@@ -419,7 +418,7 @@ class MapActivity : AppCompatActivity() {
                     )
                     // build your markers etc.
                     mapController.getDefaultConfigValue()
-                    mapController.activeSegment = active
+                    mapController.activeSegment = selfLabel
                     mapController.refreshDetailPanelIcons()
 
                     // Log immediately
@@ -454,7 +453,7 @@ class MapActivity : AppCompatActivity() {
 
                     // **populate the detail-panel** exactly as in online mode
                     mapController.getDefaultConfigValue()
-                    mapController.activeSegment = active
+                    mapController.activeSegment = selfLabel
                     mapController.refreshDetailPanelIcons()
 
                     // disable any UI that needs live data
@@ -620,7 +619,6 @@ class MapActivity : AppCompatActivity() {
         sb.appendLine("no: ${currentPanelDebugNo()}")
 
         val first = scheduleList.firstOrNull()
-        sb.appendLine("dutyName: ${first?.dutyName ?: "?"}")
         if (first != null) {
             sb.appendLine("currentDetailPanel: ic_bus_symbol ${formatPanelLabel(first)}")
         }
@@ -1812,8 +1810,7 @@ class MapActivity : AppCompatActivity() {
             bearingCustomer = null,
             speed           = speed,
             direction       = direction,
-            scheduleData    = scheduleJson,
-            currentTripLabel = currentLabel
+            scheduleData    = scheduleJson
         )
 
         Log.d("MapActivity updateClientAttributes", "Posting client-attrs for aid=$aid → $attributesData")
@@ -1958,8 +1955,7 @@ class MapActivity : AppCompatActivity() {
     private fun formatPanelLabel(item: ScheduleItem): String {
         val from = item.busStops.firstOrNull()?.abbreviation ?: item.busStops.firstOrNull()?.name ?: "?"
         val to   = item.busStops.lastOrNull()?.abbreviation  ?: item.busStops.lastOrNull()?.name  ?: "?"
-        val duty = safeDutyName(item)
-        return "${item.startTime} $duty $from → $to"
+        return "${item.startTime} ${safeDutyName(item)} $from → $to"
     }
 
     private fun currentPanelDebugNo(): Int =
@@ -1971,5 +1967,16 @@ class MapActivity : AppCompatActivity() {
         panelDebugEnabled = false
         if (::mqttHelper.isInitialized) mqttHelper.stopAttributePolling()
         // remove any observers/timers you set that could call logPanelDebugFromDetailPanel()
+    }
+
+    private fun publishActiveSegment(label: String) {
+        val topic = "v1/devices/me/attributes"
+        // CHANGE activeSegment → currentTripLabel
+        val payload = "{\"currentTripLabel\":\"${label.replace("\"", "\\\"")}\"}"
+        try {
+            if (::mqttManager.isInitialized) {
+                mqttManager.publish(topic, payload)
+            }
+        } catch (_: Exception) { /* ignore when offline */ }
     }
 }

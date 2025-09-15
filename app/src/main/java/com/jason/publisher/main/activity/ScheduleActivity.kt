@@ -523,6 +523,8 @@ class ScheduleActivity : AppCompatActivity() {
             putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
             putExtra("EXTRA_PANEL_DEBUG_NO", no)   // <-- same counter
         }
+        val breakLabel = formatPanelLabel(firstScheduleItem) // this will render: "09:00 Break BCS → BCS"
+        publishActiveSegment(breakLabel)
         startActivity(intent)
     }
 
@@ -559,11 +561,10 @@ class ScheduleActivity : AppCompatActivity() {
             val intent = Intent(this, MapActivity::class.java).apply {
                 // timeline labels (unchanged)
                 val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
-                val labels = workIntervals.mapIndexed { i, (start, end) ->
-                    val stops = scheduleData[i].busStops
-                    val from = stops.firstOrNull()?.abbreviation ?: "?"
-                    val to   = stops.lastOrNull()?.abbreviation  ?: "?"
-                    "$start ${dutyNames[i]} $from → $to"
+                val labels = scheduleData.map { item ->
+                    val from = item.busStops.firstOrNull()?.abbreviation ?: "?"
+                    val to   = item.busStops.lastOrNull()?.abbreviation  ?: "?"
+                    "${item.startTime} ${safeDutyName(item)} $from → $to"
                 }
                 putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 
@@ -1198,8 +1199,7 @@ class ScheduleActivity : AppCompatActivity() {
                     val jsonContent = cacheFile.readText()
                     val cachedSchedule =
                         Gson().fromJson(jsonContent, Array<ScheduleItem>::class.java).toList()
-                    scheduleData = cachedSchedule
-
+                    scheduleData = cachedSchedule.map { it.copy(dutyName = safeDutyName(it)) }
 
                     Log.d(
                         "ScheduleActivity loadScheduleDataFromCache",
@@ -1347,7 +1347,7 @@ class ScheduleActivity : AppCompatActivity() {
                     Log.d("MainActivity subscribeSharedData", "busRouteData: $busRouteData")
 
                     // Retrieve `scheduleData` from ThingsBoard
-                    scheduleData = data.shared?.scheduleData1 ?: emptyList()
+                    scheduleData = (data.shared?.scheduleData1 ?: emptyList()).map { it.copy(dutyName = safeDutyName(it)) }
                     Log.d("MainActivity subscribeSharedData", "scheduleData: $scheduleData")
 
                     if (config != null && scheduleData.isNotEmpty()) {
@@ -1573,5 +1573,27 @@ class ScheduleActivity : AppCompatActivity() {
         if (dump == lastPreStartDump) return
         lastPreStartDump = dump
         Log.d("PanelDebug", dump)
+    }
+
+    private fun isTokenLike(s: String?): Boolean {
+        if (s.isNullOrBlank()) return false
+        val t = s.trim()
+        return t.length in 20..40 && t.all { it.isLetterOrDigit() }
+    }
+
+    private fun safeDutyName(item: ScheduleItem): String {
+        if (!isTokenLike(item.dutyName)) return item.dutyName
+        val from = item.busStops.firstOrNull()?.abbreviation ?: item.busStops.firstOrNull()?.name ?: "?"
+        val to   = item.busStops.lastOrNull()?.abbreviation  ?: item.busStops.lastOrNull()?.name  ?: "?"
+        return "${item.routeNo} $from → $to"
+    }
+
+    private fun publishActiveSegment(label: String) {
+        val topic = "v1/devices/me/attributes"
+        // CHANGE activeSegment → currentTripLabel
+        val payload = "{\"currentTripLabel\":\"${label.replace("\"", "\\\"")}\"}"
+        if (::mqttManager.isInitialized) {
+            mqttManager.publish(topic, payload)
+        }
     }
 }
