@@ -195,6 +195,8 @@ class MapActivity : AppCompatActivity() {
     private var hasDumpedPanelLog = false
     private var lastPanelDump: String? = null
     private var panelDebugEnabled = true
+    private var upcomingStopAddress = "Unknown"
+    private var upcomingTimingPoint = "Unknown"
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -800,7 +802,7 @@ class MapActivity : AppCompatActivity() {
         // 🔹 Ensure schedule status updates correctly
         Log.d("MapActivity confirmArrival", "🔄 Updating API Time...")
         var busStopIndex = getBusStopIndex(latitude, longitude, stops)
-        currentStopIndex = busStopIndex
+        currentStopIndex = maxOf(0, getBusStopIndex(latitude, longitude, stops))
 
         var totalDurationUntilArrive =
             busStopIndex?.let { getTotalDurationUpToIndex(it, durationBetweenStops) }
@@ -1087,15 +1089,17 @@ class MapActivity : AppCompatActivity() {
         val timingList = baseRoute?.let { BusStopWithTimingPoint.fromRouteData(it) } ?: emptyList()
         Log.d("MapActivity updateApiTime", "Timing list: $timingList")
 
-        val upcomingAddress = upcomingStop
+        val upcomingAddress = stopAddress
+        if (upcomingAddress.isBlank() || upcomingAddress == "Unknown") {
+            Log.d("MapActivity updateApiTime", "No upcoming address yet; skipping.")
+            return
+        }
         Log.d("MapActivity updateApiTime", "Upcoming stop address: $upcomingAddress")
 
         // Find the target index.
-        val targetIndex = timingList.indexOfFirst {
-            it.address?.equals(upcomingAddress, ignoreCase = true) == true
-        }
+        val targetIndex = timingList.indexOfFirst { it.address?.equals(upcomingAddress, true) == true }
         if (targetIndex == -1) {
-            Log.e("MapActivity updateApiTime", "Upcoming stop address not found in timing list.")
+            Log.e("...","Upcoming stop address not found in timing list.")
             return
         }
         Log.d("MapActivity updateApiTime", "Found target index: $targetIndex")
@@ -1516,60 +1520,37 @@ class MapActivity : AppCompatActivity() {
     /** Finds the nearest upcoming bus stop */
     @SuppressLint("LongLogTag")
     private fun getUpcomingBusStopName(lat: Double, lon: Double): String {
-        try {
-            Log.d("MapActivity getUpcomingBusStopName", "JSON String: $jsonString")
+        // Prefer the strongly-typed data you already have
+        findAddressByCoordinates(lat, lon)?.let { return it }
 
-            // Convert jsonString into a JSONArray
+        if (jsonString.isBlank()) {
+            Log.w("MapActivity getUpcomingBusStopName", "jsonString empty; falling back")
+            return "Unknown Stop"
+        }
+
+        return try {
             val jsonArray = JSONArray(jsonString)
-
-            if (jsonArray.length() == 0) {
-                Log.e("MapActivity getUpcomingBusStopName", "JSON array is empty")
-                return "No Upcoming Stop"
-            }
-
-            // Get the first object in the array
+            if (jsonArray.length() == 0) return "No Upcoming Stop"
             val jsonObject = jsonArray.getJSONObject(0)
-
-            // Ensure the key exists
-            if (!jsonObject.has("next_points")) {
-                Log.e("MapActivity getUpcomingBusStopName", "Missing 'next_points' key")
-                return "No Upcoming Stop"
-            }
-
+            if (!jsonObject.has("next_points")) return "No Upcoming Stop"
             val routeArray = jsonObject.getJSONArray("next_points")
+            if (routeArray.length() == 0) return "No Upcoming Stop"
 
-            if (routeArray.length() == 0) {
-                Log.e("MapActivity getUpcomingBusStopName", "next_points array is empty")
-                return "No Upcoming Stop"
-            }
-
-            var nearestStop: String? = null
-            var minDistance = Double.MAX_VALUE
-
+            var nearest: String? = null
+            var min = Double.MAX_VALUE
             for (i in 0 until routeArray.length()) {
                 val stop = routeArray.getJSONObject(i)
-
-                if (!stop.has("latitude") || !stop.has("longitude") || !stop.has("address")) {
-                    Log.e("MapActivity getUpcomingBusStopName", "Missing stop fields at index $i")
-                    continue
-                }
-
-                val stopLat = stop.getDouble("latitude")
-                val stopLon = stop.getDouble("longitude")
-                val stopAddress = stop.getString("address")
-
-                val distance = mapController.calculateDistance(lat, lon, stopLat, stopLon)
-
-                if (distance < minDistance) {
-                    minDistance = distance
-                    nearestStop = stopAddress
-                }
+                val stopLat = stop.optDouble("latitude", Double.NaN)
+                val stopLon = stop.optDouble("longitude", Double.NaN)
+                val stopAddr = stop.optString("address", "")
+                if (stopLat.isNaN() || stopLon.isNaN() || stopAddr.isBlank()) continue
+                val d = mapController.calculateDistance(lat, lon, stopLat, stopLon)
+                if (d < min) { min = d; nearest = stopAddr }
             }
-
-            return nearestStop ?: "Unknown Stop"
+            nearest ?: "Unknown Stop"
         } catch (e: Exception) {
             Log.e("MapActivity getUpcomingBusStopName", "Error: ${e.localizedMessage}", e)
-            return "MapActivity getUpcomingBusStopName Error Retrieving Stop"
+            "Unknown Stop"
         }
     }
 
