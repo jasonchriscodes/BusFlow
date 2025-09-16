@@ -517,13 +517,17 @@ class ScheduleActivity : AppCompatActivity() {
         updateTimeline()
         rewriteOfflineScheduleData()
 
+        val breakLabel = formatPanelLabel(firstScheduleItem) // e.g. "09:00 Break BCS → BCS"
+        getAccessToken()
+
         val intent = Intent(this, BreakActivity::class.java).apply {
             putExtra("AID", aid)
+            putExtra("ACCESS_TOKEN", token)
+            putExtra("BREAK_LABEL", breakLabel)
             putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
             putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
             putExtra("EXTRA_PANEL_DEBUG_NO", no)   // <-- same counter
         }
-        val breakLabel = formatPanelLabel(firstScheduleItem) // this will render: "09:00 Break BCS → BCS"
         publishActiveSegment(breakLabel)
         startActivity(intent)
     }

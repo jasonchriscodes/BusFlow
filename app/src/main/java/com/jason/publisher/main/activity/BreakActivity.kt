@@ -3,12 +3,15 @@ package com.jason.publisher.main.activity
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.jason.publisher.R
 import com.jason.publisher.main.model.ScheduleItem
+import com.jason.publisher.main.services.MqttManager
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -23,6 +26,13 @@ class BreakActivity : AppCompatActivity() {
     // Toggle this later when you want to use the ScheduleItem endTime
     private val USE_DYNAMIC = false
     private val FALLBACK_SECONDS = 30L
+    private lateinit var mqttManager: MqttManager
+
+    companion object {
+        const val SERVER_URI = MapActivity.SERVER_URI
+        const val CLIENT_ID  = MapActivity.CLIENT_ID
+        private const val ATTR_TOPIC = "v1/devices/me/attributes"
+    }
 
     @SuppressLint("SimpleDateFormat")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,11 +45,20 @@ class BreakActivity : AppCompatActivity() {
         doneBtn   = findViewById(R.id.breakDoneBtn)
 
         val firstList = intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? ArrayList<ScheduleItem>
+        val token      = intent.getStringExtra("ACCESS_TOKEN") ?: return
+        val breakLabel = intent.getStringExtra("BREAK_LABEL") ?: "Break"
         val breakItem = firstList?.firstOrNull()
         if (breakItem == null) {
             finish()
             return
         }
+
+        // Build a lightweight MQTT client just for attributes
+        mqttManager = MqttManager(
+            serverUri = SERVER_URI,
+            clientId  = "$CLIENT_ID-break",
+            username  = token
+        )
 
         // 1) Hardcoded 30s for testing, 2) later switch to dynamic endTime
         val durationMs: Long = if (!USE_DYNAMIC) {
@@ -64,6 +83,24 @@ class BreakActivity : AppCompatActivity() {
 
         // Simply pop back to ScheduleActivity on click
         doneBtn.setOnClickListener { finish() }
+        mqttManager.connect { ok ->
+            if (ok) {
+                publishBreakAttributes(breakLabel)
+
+                // (Optional) nudge once more after a short delay to defeat race conditions
+                Handler(Looper.getMainLooper()).postDelayed({
+                    publishBreakAttributes(breakLabel)
+                }, 300)
+            }
+        }
+    }
+
+    private fun publishBreakAttributes(label: String) {
+        // Make sure MqttHelper is requesting "currentTripLabel" key (it is).
+        val payload = "{\"currentTripLabel\":\"${label.replace("\"", "\\\"")}\"}"
+        try {
+            mqttManager.publish(ATTR_TOPIC, payload)
+        } catch (_: Exception) { /* ignore */ }
     }
 
     private fun showFinished() {
@@ -75,6 +112,7 @@ class BreakActivity : AppCompatActivity() {
     override fun onDestroy() {
         cd?.cancel()
         super.onDestroy()
+        try { mqttManager.disconnect() } catch (_: Exception) {}
     }
 
     private fun formatHMS(ms: Long): String {
