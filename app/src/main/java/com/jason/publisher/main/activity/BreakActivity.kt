@@ -14,6 +14,9 @@ import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.MqttManager
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.jason.publisher.main.ui.BreakUpcomingAdapter
 
 class BreakActivity : AppCompatActivity() {
 
@@ -51,6 +54,51 @@ class BreakActivity : AppCompatActivity() {
         if (breakItem == null) {
             finish()
             return
+        }
+
+        // Grab the remaining day schedule (already passed into the Intent by ScheduleActivity)
+        val fullRemaining = intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? ArrayList<ScheduleItem>
+        val upNextHeader = findViewById<TextView>(R.id.upNextHeader)
+        val upNextRecycler = findViewById<RecyclerView>(R.id.upNextRecycler)
+
+        // Build the slice: items until the *next* Break (exclusive)
+        val untilNextBreak: List<ScheduleItem> = buildList {
+            fullRemaining?.forEach { item ->
+                if (item.dutyName.equals("break", ignoreCase = true)) return@forEach
+                add(item)
+            }
+        }.let { raw ->
+            val idx = fullRemaining?.indexOfFirst { it.dutyName.equals("break", true) } ?: -1
+            if (idx in 0..raw.lastIndex) raw.take(idx) else raw
+        }
+
+        // If there’s something to show, reveal the header + list
+        if (!untilNextBreak.isNullOrEmpty()) {
+            upNextHeader.visibility = View.VISIBLE
+            upNextRecycler.apply {
+                visibility = View.VISIBLE
+                layoutManager = LinearLayoutManager(this@BreakActivity)
+                adapter = BreakUpcomingAdapter(untilNextBreak) // <-- new adapter
+                setHasFixedSize(true)
+                addItemDecoration(
+                    androidx.recyclerview.widget.DividerItemDecoration(
+                        this@BreakActivity,
+                        androidx.recyclerview.widget.DividerItemDecoration.VERTICAL
+                    ).apply {
+                        val d = object : android.graphics.drawable.ColorDrawable(
+                            android.graphics.Color.parseColor("#33FFFFFF") // ← light white
+                        ) {
+                            override fun getIntrinsicHeight(): Int =
+                                (resources.displayMetrics.density).toInt().coerceAtLeast(1)
+                        }
+                        setDrawable(d)
+                    }
+                )
+            }
+        } else {
+            // Nothing before the next Break — keep it hidden.
+            upNextHeader.visibility = View.GONE
+            upNextRecycler.visibility = View.GONE
         }
 
         // Build a lightweight MQTT client just for attributes

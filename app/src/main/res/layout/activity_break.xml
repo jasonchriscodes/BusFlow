@@ -37,6 +37,27 @@
         android:textColor="@android:color/white"
         android:layout_marginBottom="24dp"/>
 
+    <!-- Up-next (until next Break) header -->
+    <TextView
+        android:id="@+id/upNextHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Up next (until next Break)"
+        android:textStyle="bold"
+        android:textSize="18sp"
+        android:textColor="@android:color/white"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:visibility="gone" />
+
+    <!-- Simple table-style list -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/upNextRecycler"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:visibility="gone"/>
+
     <Button
         android:id="@+id/breakDoneBtn"
         android:layout_width="wrap_content"
