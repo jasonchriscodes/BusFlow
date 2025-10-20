@@ -126,6 +126,7 @@ class ScheduleActivity : AppCompatActivity() {
     private val PANEL_DEBUG_PREF = "panel_debug_pref"
     private val PANEL_DEBUG_NO_KEY = "panel_debug_no"
     private var lastPreStartDump: String? = null
+    private lateinit var emptyStateText: TextView
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -226,6 +227,7 @@ class ScheduleActivity : AppCompatActivity() {
         fetchingLayout = findViewById(R.id.fetchingLayout)
         fetchingText = findViewById(R.id.fetchingText)
         fetchingIcon = findViewById(R.id.fetchingIcon)
+        emptyStateText = findViewById(R.id.emptyStateText)
 
         // add a light gray 1dp divider without any XML
         val divider = DividerItemDecoration(this, DividerItemDecoration.VERTICAL)
@@ -963,10 +965,16 @@ class ScheduleActivity : AppCompatActivity() {
     private fun updateScheduleTablePaged() {
         val start = currentPage * maxRowsPerPage
         val end   = minOf(scheduleData.size, start + maxRowsPerPage)
-        scheduleAdapter.update(scheduleData.subList(start, end))
+        scheduleAdapter.update(if (scheduleData.isEmpty()) emptyList() else scheduleData.subList(start, end))
 
-        val totalPages = (scheduleData.size + maxRowsPerPage - 1) / maxRowsPerPage
-        renderPagination(totalPages)
+        val totalPages = if (scheduleData.isEmpty()) 0 else (scheduleData.size + maxRowsPerPage - 1) / maxRowsPerPage
+        if (totalPages == 0) {
+            paginationLayout.visibility = View.GONE
+        } else {
+            renderPagination(totalPages)
+        }
+
+        updateEmptyState()
     }
 
     /**
@@ -1008,6 +1016,12 @@ class ScheduleActivity : AppCompatActivity() {
     private fun updateTimeline() {
 
         runOnUiThread {
+            if (scheduleData.isEmpty()) {
+                Log.e("ScheduleActivity updateTimeline", "No scheduleData to draw!")
+                updateEmptyState()
+                return@runOnUiThread
+            }
+
             timeline1.visibility = View.VISIBLE
             timeline2.visibility = View.VISIBLE
             timeline3.visibility = View.VISIBLE
@@ -1650,6 +1664,44 @@ class ScheduleActivity : AppCompatActivity() {
         val payload = "{\"currentTripLabel\":\"${label.replace("\"", "\\\"")}\"}"
         if (::mqttManager.isInitialized) {
             mqttManager.publish(topic, payload)
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun updateEmptyState() {
+        val isEmpty = scheduleData.isEmpty()
+
+        // Empty-state label
+        emptyStateText.visibility = if (isEmpty) View.VISIBLE else View.GONE
+
+        // Hide timelines & table/pagination if empty
+        if (isEmpty) {
+            timeline1.visibility = View.GONE
+            timeline2.visibility = View.GONE
+            timeline3.visibility = View.GONE
+            scheduleRecycler.visibility = View.GONE
+            paginationLayout.visibility = View.GONE
+
+            // Hide action buttons if nothing to start
+            binding.startRouteButton.visibility = View.GONE
+            binding.testStartRouteButton.visibility = View.GONE
+        } else {
+            // Restore based on current mode
+            if (isTabulatedView) {
+                scheduleRecycler.visibility = View.VISIBLE
+                paginationLayout.visibility = View.VISIBLE
+                timeline1.visibility = View.GONE
+                timeline2.visibility = View.GONE
+                timeline3.visibility = View.GONE
+            } else {
+                scheduleRecycler.visibility = View.GONE
+                paginationLayout.visibility = View.GONE
+                timeline1.visibility = View.VISIBLE
+                timeline2.visibility = View.VISIBLE
+                timeline3.visibility = View.VISIBLE
+            }
+            binding.startRouteButton.visibility = View.VISIBLE
+            binding.testStartRouteButton.visibility = View.VISIBLE
         }
     }
 }
