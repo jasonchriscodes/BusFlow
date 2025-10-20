@@ -27,6 +27,7 @@ import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.autofill.AutofillManager
 import android.widget.EditText
 import android.widget.ImageView
@@ -197,6 +198,7 @@ class MapActivity : AppCompatActivity() {
     private var panelDebugEnabled = true
     private var upcomingStopAddress = "Unknown"
     private var upcomingTimingPoint = "Unknown"
+    private var autoTapArrivalDone = false
 
     companion object {
         const val SERVER_URI = "tcp://43.226.218.97:1883"
@@ -218,6 +220,8 @@ class MapActivity : AppCompatActivity() {
         AndroidGraphicFactory.createInstance(application)
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        autoTapArrivalDone = savedInstanceState?.getBoolean("autoTapArrivalDone") ?: false
 
         hideSystemUI()
 
@@ -524,6 +528,26 @@ class MapActivity : AppCompatActivity() {
             scheduleStatusValueTextView.text = "Calculating..."
             scheduleStatusManager.checkScheduleStatus()
         }
+
+        binding.map.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                // ensure we only do this once and the map is actually visible
+                if (!autoTapArrivalDone && binding.map.width > 0 && binding.map.height > 0) {
+                    autoTapArrivalDone = true
+                    binding.map.viewTreeObserver.removeOnGlobalLayoutListener(this)
+
+                    // only auto-tap if it makes sense
+                    val canConfirm = scheduleList.isNotEmpty() && stops.isNotEmpty()
+                    if (canConfirm && binding.arriveButton.isShown && !isFinishing) {
+                        // small delay so UI settles (optional)
+                        binding.arriveButton.postDelayed({
+                            // will invoke your existing setOnClickListener { confirmArrival() }
+                            binding.arriveButton.performClick()
+                        }, 400)
+                    }
+                }
+            }
+        })
 
         binding.map.model.mapViewPosition.addObserver(object : Observer {
             override fun onChange() {
