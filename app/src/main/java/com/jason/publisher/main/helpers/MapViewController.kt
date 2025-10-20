@@ -598,4 +598,25 @@ class MapViewController(
                     && hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         } ?: false
     }
+
+    /** Adds a single stop marker at (lat, lon) using the given drawable resource. */
+    fun addStopMarker(lat: Double, lon: Double, @DrawableRes iconRes: Int) {
+        // 1) get the drawable from resources
+        val drawable = ResourcesCompat.getDrawable(activity.resources, iconRes, null) ?: return
+
+        // 2) render it into an Android Bitmap (size ~24dp)
+        val sizePx = dpToPx(24)
+        val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        drawable.setBounds(0, 0, sizePx, sizePx)
+        drawable.draw(canvas)
+
+        // 3) wrap as a Mapsforge bitmap and add the marker to the map
+        val mf = AndroidBitmap(bmp)  // org.mapsforge.core.graphics.Bitmap
+        val marker = org.mapsforge.map.layer.overlay.Marker(
+            LatLong(lat, lon), mf, 0, -mf.height / 2
+        )
+        binding.map.layerManager.layers.add(marker)
+        binding.map.invalidate()
+    }
 }

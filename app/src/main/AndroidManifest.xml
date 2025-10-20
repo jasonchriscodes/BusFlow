@@ -97,7 +97,12 @@
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:exported="false" />
-<!--        <activity-->
+        <activity
+            android:name=".main.activity.RepActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|keyboardHidden|screenSize" />
+        <!--        <activity-->
 <!--            android:name=".OfflineActivity"-->
 <!--            android:exported="false"-->
 <!--            android:screenOrientation="landscape" />-->

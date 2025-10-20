@@ -476,12 +476,10 @@ class ScheduleActivity : AppCompatActivity() {
             // Log now (works for Trip or Break)
             logPanelDebugPreStart(no, first)
 
-            if (isBreak(first)) {
-                // (optional) you can pass the number to BreakActivity too if you want
-                launchBreakActivity(first, no)
-            } else {
-                // hand the "no" to MapActivity so it can log the rest
-                launchMapActivity(no)
+            when {
+                isBreak(first)      -> launchBreakActivity(first, no)
+                isReposition(first) -> launchRepActivity(first, no)   // 👈 NEW
+                else                -> launchMapActivity(no)
             }
         }
 
@@ -546,6 +544,54 @@ class ScheduleActivity : AppCompatActivity() {
                 Toast.makeText(this, "Location permission is required to show the map", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+
+    /** Launches RepActivity to handle a single-stop reposition trip. */
+    @RequiresApi(Build.VERSION_CODES.M)
+    @SuppressLint("LongLogTag")
+    private fun launchRepActivity(firstScheduleItem: ScheduleItem, no: Int) {
+        // We expect exactly one stop for REP; use the first if more are present
+        val repStop = firstScheduleItem.busStops.firstOrNull()
+        if (repStop == null) {
+            Toast.makeText(this, "No reposition stop found.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val selectedIdx = routeIndexFromRouteNo(firstScheduleItem.routeNo)
+
+        val intent = Intent(this, RepActivity::class.java).apply {
+            putExtra("AID", aid)
+            putExtra("CONFIG", ArrayList(config))
+            putExtra("JSON_STRING", jsonString)
+
+            putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+            putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+
+            putExtra("SELECTED_ROUTE_INDEX", selectedIdx ?: -1)
+            selectedIdx?.let { idx ->
+                putExtra("SELECTED_ROUTE_DATA", busRouteData[idx])
+            }
+
+            putExtra("EXTRA_PANEL_DEBUG_NO", no)
+
+            // REP stop payload
+            putExtra("REP_STOP_LAT", repStop.latitude ?: 0.0)
+            putExtra("REP_STOP_LON", repStop.longitude ?: 0.0)
+            putExtra("REP_STOP_NAME", repStop.name ?: repStop.abbreviation ?: "Reposition Stop")
+            putExtra("REP_STOP_ADDR", repStop.address ?: repStop.name ?: "Reposition Stop")
+        }
+
+        // pop the first schedule like other flows
+        scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+        isScheduleCacheUpdated = false
+        saveScheduleDataToCache()
+        updateScheduleTablePaged()
+        updateTimeline()
+        rewriteOfflineScheduleData()
+
+        startActivity(intent)
     }
 
     /**
@@ -1537,6 +1583,12 @@ class ScheduleActivity : AppCompatActivity() {
     private fun isBreak(item: com.jason.publisher.main.model.ScheduleItem): Boolean {
         // Accept "Break" or "break"
         return item.dutyName.equals("break", ignoreCase = true)
+    }
+
+    /** Returns true if the schedule item represents a Reposition (REP). */
+    private fun isReposition(item: ScheduleItem): Boolean {
+        return item.dutyName.equals("REP", true)
+                || item.dutyName.contains("reposition", true)
     }
 
     override fun onDestroy() {
