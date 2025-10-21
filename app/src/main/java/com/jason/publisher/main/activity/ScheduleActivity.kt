@@ -50,6 +50,7 @@ import com.jason.publisher.main.model.BusStop
 import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.MqttManager
+import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.NetworkStatusHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -197,6 +198,7 @@ class ScheduleActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityScheduleBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        FileLogger.d("ScheduleActivity", "onCreate")
 
         // initialize them here
         connectionStatusTextView = binding.connectionStatusTextView

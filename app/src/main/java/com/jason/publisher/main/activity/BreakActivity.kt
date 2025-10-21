@@ -17,6 +17,7 @@ import java.util.*
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.jason.publisher.main.ui.BreakUpcomingAdapter
+import com.jason.publisher.main.utils.FileLogger
 
 class BreakActivity : AppCompatActivity() {
 
@@ -41,6 +42,7 @@ class BreakActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_break)
+        FileLogger.d("BreakActivity", "onCreate")
 
         timerText = findViewById(R.id.breakTimerText)
         infoText  = findViewById(R.id.breakInfoText)

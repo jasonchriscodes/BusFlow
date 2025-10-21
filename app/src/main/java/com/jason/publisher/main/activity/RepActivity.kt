@@ -20,6 +20,7 @@ import com.google.android.gms.location.*
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.model.ScheduleItem
+import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.Helper
 import org.mapsforge.core.graphics.Cap
 import org.mapsforge.core.graphics.Style
@@ -74,6 +75,7 @@ class RepActivity : AppCompatActivity() {
         AndroidGraphicFactory.createInstance(application)
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        FileLogger.d("RepActivity", "onCreate")
 
         // ---- read extras ----
         stopLat = intent.getDoubleExtra("REP_STOP_LAT", 0.0)

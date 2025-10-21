@@ -220,6 +220,7 @@ class MapActivity : AppCompatActivity() {
         AndroidGraphicFactory.createInstance(application)
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        FileLogger.d("MapActivity", "onCreate")
 
         autoTapArrivalDone = savedInstanceState?.getBoolean("autoTapArrivalDone") ?: false
 

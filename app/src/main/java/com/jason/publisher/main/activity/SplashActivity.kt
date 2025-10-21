@@ -7,6 +7,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
 import com.jason.publisher.R
+import com.jason.publisher.main.utils.FileLogger
 import pl.droidsonroids.gif.GifDrawable
 import pl.droidsonroids.gif.GifImageView
 
@@ -15,6 +16,7 @@ class SplashActivity : AppCompatActivity() {
         // apply transparent splash theme
         setTheme(R.style.Theme_NavTrack_Splash)
         super.onCreate(savedInstanceState)
+        FileLogger.d("SplashActivity", "onCreate")
 
         if (savedInstanceState == null) { // cold start, not a rotation
             getSharedPreferences("panel_debug_pref", MODE_PRIVATE)

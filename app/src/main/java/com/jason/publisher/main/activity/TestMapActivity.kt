@@ -35,6 +35,7 @@ import com.jason.publisher.main.model.BusStopWithTimingPoint
 import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.LocationManager
+import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.NetworkStatusHelper
 import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
 import kotlinx.coroutines.CoroutineScope
@@ -153,6 +154,7 @@ class TestMapActivity : AppCompatActivity() {
         AndroidGraphicFactory.createInstance(application)
         binding = ActivityTestmapBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        FileLogger.d("TestMapActivity", "onCreate")
 
         // Initialize managers before using them
         initializeManagers()
