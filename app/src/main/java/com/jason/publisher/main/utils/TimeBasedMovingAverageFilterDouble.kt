@@ -19,28 +19,23 @@ class TimeBasedMovingAverageFilterDouble(private val windowMillis: Long) {
         val now = System.currentTimeMillis()
         entries.add(DoubleEntry(now, value))
 
-        // Remove outdated entries beyond the moving window.
         while (entries.isNotEmpty() && now - entries.first().timestamp > windowMillis) {
             entries.removeAt(0)
         }
 
-        // Log all values that are currently in the moving average filter.
         Log.d(TAG, "Current entries used for averaging:")
-        entries.forEach { entry ->
-            Log.d(TAG, "Timestamp: ${entry.timestamp}, Value: ${entry.value}")
-        }
         FileLogger.d(TAG, "Current entries used for averaging:")
+
         entries.forEach { entry ->
-            Log.d(TAG, "Timestamp: ${entry.timestamp}, Value: ${entry.value}")
+            val line = "Timestamp: ${entry.timestamp}, Value: ${entry.value}"
+            Log.d(TAG, line)
+            FileLogger.d(TAG, line)
         }
 
-        // Compute the average.
         val averageResult = average()
 
-        // Log the averaged result.
         Log.d(TAG, "Calculated moving average: $averageResult")
         FileLogger.d(TAG, "Calculated moving average: $averageResult")
-
 
         return averageResult
     }

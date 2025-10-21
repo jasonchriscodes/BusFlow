@@ -1,6 +1,5 @@
 package com.jason.publisher.main.activity
 
-import FileLogger
 import android.annotation.SuppressLint
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
@@ -72,6 +71,7 @@ import com.jason.publisher.main.utils.Helper
 import com.jason.publisher.main.model.AttributesData
 import com.jason.publisher.main.services.ApiServiceBuilder
 import com.jason.publisher.main.services.MqttManager
+import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
 import com.jason.publisher.services.ApiService
 import kotlinx.coroutines.CoroutineScope
@@ -227,6 +227,7 @@ class MapActivity : AppCompatActivity() {
 
         // Add logger
         FileLogger.init(this)
+        FileLogger.markAppOpened("MapActivity")
 
         // Initialize managers before using them
         initializeManagers()
@@ -1931,6 +1932,7 @@ class MapActivity : AppCompatActivity() {
 
     /** Cleans up resources on activity destruction. */
     override fun onDestroy() {
+        FileLogger.markAppClosed("MapActivity")
         super.onDestroy()
         panelDebugEnabled = false
         if (::mqttHelper.isInitialized) mqttHelper.stopAttributePolling()

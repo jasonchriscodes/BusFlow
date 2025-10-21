@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.activity.MapActivity
+import com.jason.publisher.main.utils.FileLogger
 import java.text.SimpleDateFormat
 import java.util.*
 
