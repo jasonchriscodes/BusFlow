@@ -229,7 +229,7 @@ class ScheduleStatusManager(
             FileLogger.d("MapActivity checkScheduleStatus", "Upcoming Stop: ${activity.stopAddress}")
             Log.d("MapActivity checkScheduleStatus", "Upcoming Stop UI Text: ${activity.upcomingBusStopTextView.text}")
             if (activity.currentStopIndex in activity.stops.indices) {
-                FileLogger.d("MapActivity checkScheduleStatus", "Current Stop (index ${activity.currentStopIndex}): ${activity.stops[activity.currentStopIndex].address}")
+                FileLogger.d("MapActivity checkScheduleStatus", "Current Stop (index ${activity.currentStopIndex-1}): ${activity.stops[activity.currentStopIndex-1].address}")
             } else {
                 FileLogger.d("MapActivity checkScheduleStatus", "Current Stop not available; currentStopIndex: ${activity.currentStopIndex}, stops count: ${activity.stops.size}")
             }
