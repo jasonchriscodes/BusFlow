@@ -1,21 +1,44 @@
 package com.jason.publisher.main.activity
 
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.jason.publisher.R
+import com.jason.publisher.main.services.ScreenRecordService
 import com.jason.publisher.main.utils.FileLogger
 import pl.droidsonroids.gif.GifDrawable
 import pl.droidsonroids.gif.GifImageView
+
+private lateinit var mpm: MediaProjectionManager
+private var wantAudio: Boolean = true
 
 class SplashActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // apply transparent splash theme
         setTheme(R.style.Theme_NavTrack_Splash)
         super.onCreate(savedInstanceState)
+
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED) {
+            registerForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { /* granted -> ignore; denied -> you can show a tip */ }
+                .launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        // Initialize BEFORE any FileLogger.d/i/w/e
+        com.jason.publisher.main.utils.FileLogger.init(applicationContext)
+        com.jason.publisher.main.utils.FileLogger.d("SplashActivity", "onCreate")
+
         FileLogger.d("SplashActivity", "onCreate")
 
         if (savedInstanceState == null) { // cold start, not a rotation
@@ -24,6 +47,10 @@ class SplashActivity : AppCompatActivity() {
                 .putInt("panel_debug_no", 0)
                 .apply()
         }
+
+        // Trigger the consent dialog
+        mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        projectionLauncher.launch(mpm.createScreenCaptureIntent())
 
         setContentView(R.layout.activity_splash)
 
@@ -70,6 +97,24 @@ class SplashActivity : AppCompatActivity() {
             it.putExtra("EXTRA_FETCH_ROSTER", fetch)
             startActivity(it)
             finish()
+        }
+    }
+
+    private lateinit var mpm: MediaProjectionManager
+
+
+    // Screen-capture consent result
+    private val projectionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { res ->
+        if (res.resultCode == RESULT_OK && res.data != null) {
+            // Pass the audio decision to the service
+            ScreenRecordService.start(
+                this,
+                res.resultCode,
+                res.data!!,
+                withAudio = wantAudio
+            )
         }
     }
 }
