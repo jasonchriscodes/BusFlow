@@ -22,6 +22,7 @@ import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.Helper
+import com.jason.publisher.main.utils.TripLog
 import org.mapsforge.core.graphics.Cap
 import org.mapsforge.core.graphics.Style
 import org.mapsforge.core.model.LatLong
@@ -131,6 +132,33 @@ class RepActivity : AppCompatActivity() {
             totalStops = 1,
             isRed = false
         )
+
+        val first = intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? ArrayList<ScheduleItem>
+        val item  = first?.firstOrNull()
+
+        TripLog.start(
+            this,
+            TripLog.ActiveTrip(
+                startedAt   = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date()),
+                type        = "reposition",
+                label       = "Reposition: " + (intent.getStringExtra("REP_STOP_NAME") ?: "Unknown"),
+                aid         = intent.getStringExtra("AID"),
+                runNo       = item?.runNo,
+                runName     = item?.runName,
+                startTime   = item?.startTime,
+                endTime     = item?.endTime,
+                fromStop    = item?.busStops?.firstOrNull()?.let { it.abbreviation ?: it.name ?: it.address },
+                toStop      = intent.getStringExtra("REP_STOP_ADDR"),
+                scheduleSize = (intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? ArrayList<ScheduleItem>)?.size ?: 0,
+                routeDataSize = (intent.getSerializableExtra("BUS_ROUTE_DATA") as? ArrayList<*>)?.size ?: 0
+            ),
+            extraDump = mapOf(
+                "repLat" to intent.getDoubleExtra("REP_STOP_LAT", 0.0),
+                "repLon" to intent.getDoubleExtra("REP_STOP_LON", 0.0)
+            )
+        )
+// Explicit human tag:
+        TripLog.mark(this, "user repositioning")
 
         // Back button as in MapActivity
         binding.backButton.setOnClickListener {

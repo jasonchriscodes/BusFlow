@@ -18,6 +18,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.jason.publisher.main.ui.BreakUpcomingAdapter
 import com.jason.publisher.main.utils.FileLogger
+import com.jason.publisher.main.utils.TripLog
 
 class BreakActivity : AppCompatActivity() {
 
@@ -102,6 +103,27 @@ class BreakActivity : AppCompatActivity() {
             upNextHeader.visibility = View.GONE
             upNextRecycler.visibility = View.GONE
         }
+
+        val first = firstList?.firstOrNull()
+        TripLog.start(
+            this,
+            TripLog.ActiveTrip(
+                startedAt   = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date()),
+                type        = "break",
+                label       = breakLabel, // you already build like "09:00 Break BCS → BCS"
+                aid         = intent.getStringExtra("AID"),
+                runNo       = first?.runNo,
+                runName     = first?.runName,
+                startTime   = first?.startTime,
+                endTime     = first?.endTime,
+                fromStop    = first?.busStops?.firstOrNull()?.let { it.abbreviation ?: it.name ?: it.address },
+                toStop      = first?.busStops?.lastOrNull()?.let  { it.abbreviation ?: it.name ?: it.address },
+                scheduleSize = (intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? ArrayList<ScheduleItem>)?.size ?: 0,
+                routeDataSize = 0
+            )
+        )
+// Explicit human tag the testers asked for:
+        TripLog.mark(this, "driver break")
 
         // Build a lightweight MQTT client just for attributes
         mqttManager = MqttManager(

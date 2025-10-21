@@ -52,6 +52,7 @@ import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.MqttManager
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.NetworkStatusHelper
+import com.jason.publisher.main.utils.TripLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -420,6 +421,10 @@ class ScheduleActivity : AppCompatActivity() {
                 }
             }
         }
+
+        FileLogger.d("ScheduleActivity", "STATE_SNAPSHOT | ${Gson().toJson(buildExtraDump())}")
+
+
 
         changeModeButton.setOnClickListener {
 //            Log.d("ChangeModeButton", "Clicked")
@@ -1706,4 +1711,32 @@ class ScheduleActivity : AppCompatActivity() {
             binding.testStartRouteButton.visibility = View.VISIBLE
         }
     }
+
+    private fun firstScheduleOrNull(): ScheduleItem? = scheduleData.firstOrNull()
+
+    private fun buildExtraDump(): Map<String, Any?> = mapOf(
+        "aid" to aid,
+        "configCount" to (config?.size ?: 0),
+        "busRouteDataCount" to (busRouteData.size),
+        "scheduleCount" to (scheduleData.size),
+        "firstSchedule" to firstScheduleOrNull()?.copy(busStops = firstScheduleOrNull()?.busStops?.take(3) ?: emptyList()),
+        // 👇 replace the offending line with this:
+        "firstRouteSummary" to busRouteData.firstOrNull()?.let { rd ->
+            val start = rd.startingPoint.address
+            val end = rd.nextPoints.lastOrNull()?.address ?: "?"
+            "$start → $end"
+        },
+        "stopsCount" to stops.size,
+        "durationsCount" to durationBetweenStops.size
+    )
+
+    override fun onResume() {
+        super.onResume()
+        // If any trip/break/reposition had been started, landing here means it ended.
+        if (TripLog.hasActive(this)) {
+            TripLog.end(this, reason = "ScheduleActivityResumed", extraDump = buildExtraDump())
+        }
+    }
+
+
 }

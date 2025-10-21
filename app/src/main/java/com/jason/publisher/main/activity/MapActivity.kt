@@ -73,6 +73,7 @@ import com.jason.publisher.main.services.ApiServiceBuilder
 import com.jason.publisher.main.services.MqttManager
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
+import com.jason.publisher.main.utils.TripLog
 import com.jason.publisher.services.ApiService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -650,6 +651,32 @@ class MapActivity : AppCompatActivity() {
         if (first != null) {
             sb.appendLine("currentDetailPanel: ic_bus_symbol ${formatPanelLabel(first)}")
         }
+
+        val fromStop = first?.busStops?.firstOrNull()?.let { it.abbreviation ?: it.name ?: it.address }
+        val toStop   = first?.busStops?.lastOrNull()?.let  { it.abbreviation ?: it.name ?: it.address }
+
+        TripLog.start(
+            this,
+            TripLog.ActiveTrip(
+                startedAt   = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date()),
+                type        = "trip",
+                label       = mapController.activeSegment, // your “08:10 RUN … A → B”
+                aid         = aid,
+                runNo       = first?.runNo,
+                runName     = first?.runName,
+                startTime   = first?.startTime,
+                endTime     = first?.endTime,
+                fromStop    = fromStop,
+                toStop      = toStop,
+                scheduleSize = scheduleData.size,
+                routeDataSize = busRouteData.size
+            ),
+            extraDump = mapOf(
+                "configCount" to (config?.size ?: 0),
+                "stopsCount" to (stops.size),
+                "durationsCount" to (durationBetweenStops.size)
+            )
+        )
 
         // detailIconsContainer[0] is "me"; others are other buses
         val container = binding.detailIconsContainer
