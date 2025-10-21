@@ -64,11 +64,11 @@ class BreakActivity : AppCompatActivity() {
         // Build the slice: items until the *next* Break (exclusive)
         val untilNextBreak: List<ScheduleItem> = buildList {
             fullRemaining?.forEach { item ->
-                if (item.dutyName.equals("break", ignoreCase = true)) return@forEach
+                if (item.runName.equals("break", ignoreCase = true)) return@forEach
                 add(item)
             }
         }.let { raw ->
-            val idx = fullRemaining?.indexOfFirst { it.dutyName.equals("break", true) } ?: -1
+            val idx = fullRemaining?.indexOfFirst { it.runName.equals("break", true) } ?: -1
             if (idx in 0..raw.lastIndex) raw.take(idx) else raw
         }
 

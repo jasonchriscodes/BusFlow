@@ -1950,17 +1950,17 @@ class MapActivity : AppCompatActivity() {
         return t.length in 20..40 && t.all { it.isLetterOrDigit() }
     }
 
-    private fun safeDutyName(item: ScheduleItem): String {
-        if (!isTokenLike(item.dutyName)) return item.dutyName
+    private fun saferunName(item: ScheduleItem): String {
+        if (!isTokenLike(item.runName)) return item.runName
         val from = item.busStops.firstOrNull()?.abbreviation ?: item.busStops.firstOrNull()?.name ?: "?"
         val to   = item.busStops.lastOrNull()?.abbreviation  ?: item.busStops.lastOrNull()?.name  ?: "?"
-        return "${item.routeNo} $from → $to"
+        return "${item.runNo} $from → $to"
     }
 
     private fun formatPanelLabel(item: ScheduleItem): String {
         val from = item.busStops.firstOrNull()?.abbreviation ?: item.busStops.firstOrNull()?.name ?: "?"
         val to   = item.busStops.lastOrNull()?.abbreviation  ?: item.busStops.lastOrNull()?.name  ?: "?"
-        return "${item.startTime} ${safeDutyName(item)} $from → $to"
+        return "${item.startTime} ${saferunName(item)} $from → $to"
     }
 
     private fun currentPanelDebugNo(): Int =

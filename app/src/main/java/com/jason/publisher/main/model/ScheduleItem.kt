@@ -2,10 +2,10 @@ package com.jason.publisher.main.model
 import java.io.Serializable
 
 data class ScheduleItem(
-    val routeNo: String,
+    val runNo: String,
     val startTime: String,
     val endTime: String,
-    val dutyName: String,
+    val runName: String,
     val busStops: List<BusScheduleInfo>
 ) : Serializable
 

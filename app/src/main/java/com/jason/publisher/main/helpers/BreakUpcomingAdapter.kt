@@ -36,8 +36,8 @@ class BreakUpcomingAdapter(
         h.txtDuration.text = computeDurationText(it.startTime, it.endTime)
 
         // Duty column
-        h.txtDuty.text = it.dutyName
-        h.txtType.text = if (it.dutyName.equals("break", true)) "Break" else "Trip"
+        h.txtDuty.text = it.runName
+        h.txtType.text = if (it.runName.equals("break", true)) "Break" else "Trip"
 
         // From/To
         val from = it.busStops.firstOrNull()

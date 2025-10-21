@@ -560,7 +560,7 @@ class ScheduleActivity : AppCompatActivity() {
             return
         }
 
-        val selectedIdx = routeIndexFromRouteNo(firstScheduleItem.routeNo)
+        val selectedIdx = routeIndexFromRouteNo(firstScheduleItem.runNo)
 
         val intent = Intent(this, RepActivity::class.java).apply {
             putExtra("AID", aid)
@@ -605,18 +605,18 @@ class ScheduleActivity : AppCompatActivity() {
         if (scheduleData.isNotEmpty()) {
             // Store the first schedule item for the Map
             val firstScheduleItem = scheduleData.first()
-            val selectedIdx = routeIndexFromRouteNo(firstScheduleItem.routeNo)
+            val selectedIdx = routeIndexFromRouteNo(firstScheduleItem.runNo)
             Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
             Log.d("ScheduleActivity startRouteButton before", scheduleData.toString())
 
             // We will still pass the full list (for future trips), AND pass the selected one explicitly.
             val intent = Intent(this, MapActivity::class.java).apply {
                 // timeline labels (unchanged)
-                val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
+                val (workIntervals, runNames) = extractWorkIntervalsAndrunNames()
                 val labels = scheduleData.map { item ->
                     val from = item.busStops.firstOrNull()?.abbreviation ?: "?"
                     val to   = item.busStops.lastOrNull()?.abbreviation  ?: "?"
-                    "${item.startTime} ${safeDutyName(item)} $from → $to"
+                    "${item.startTime} ${saferunName(item)} $from → $to"
                 }
                 putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 
@@ -655,9 +655,9 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /** Map "1" or "Route 1" → 0-based index into busRouteData */
-    private fun routeIndexFromRouteNo(routeNo: String): Int? {
+    private fun routeIndexFromRouteNo(runNo: String): Int? {
         // Accepts "1" or "Route 1" etc.
-        val cleaned = routeNo.trim().lowercase(Locale.ROOT)
+        val cleaned = runNo.trim().lowercase(Locale.ROOT)
         val digits  = cleaned.removePrefix("route").trim()
         val idx     = digits.toIntOrNull()?.minus(1) ?: return null
         return if (idx in busRouteData.indices) idx else null
@@ -1031,9 +1031,9 @@ class ScheduleActivity : AppCompatActivity() {
             }
 
             // 1) extract raw data
-            val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
+            val (workIntervals, runNames) = extractWorkIntervalsAndrunNames()
             Log.d("ScheduleActivity updateTimeline", "🔄 workIntervals=$workIntervals")
-            Log.d("ScheduleActivity updateTimeline", "🔄 dutyNames    =$dutyNames")
+            Log.d("ScheduleActivity updateTimeline", "🔄 runNames    =$runNames")
 
             // 2) decide how many per row
             val maxPerLine = 3
@@ -1043,9 +1043,9 @@ class ScheduleActivity : AppCompatActivity() {
             val intervals2 = workIntervals.drop(maxPerLine).take(maxPerLine)
             val intervals3 = workIntervals.drop(2 * maxPerLine).take(maxPerLine)
 
-            val names1 = dutyNames.take(maxPerLine)
-            val names2 = dutyNames.drop(maxPerLine).take(maxPerLine)
-            val names3 = dutyNames.drop(2 * maxPerLine).take(maxPerLine)
+            val names1 = runNames.take(maxPerLine)
+            val names2 = runNames.drop(maxPerLine).take(maxPerLine)
+            val names3 = runNames.drop(2 * maxPerLine).take(maxPerLine)
 
             Log.d(
                 "ScheduleActivity updateTimeline",
@@ -1117,24 +1117,24 @@ class ScheduleActivity : AppCompatActivity() {
      * Extracts work intervals and duty names from the schedule data dynamically.
      */
     @SuppressLint("LongLogTag")
-    private fun extractWorkIntervalsAndDutyNames(): Pair<List<Pair<String, String>>, List<String>> {
+    private fun extractWorkIntervalsAndrunNames(): Pair<List<Pair<String, String>>, List<String>> {
         val workIntervals = mutableListOf<Pair<String, String>>()
-        val dutyNames = mutableListOf<String>()
+        val runNames = mutableListOf<String>()
 
         for (item in scheduleData) { // ✅ Limit to first 3 entries directly
             val startTime = item.startTime
             val endTime = item.endTime
-            val dutyName = item.dutyName
+            val runName = item.runName
 
             if (startTime.isNotEmpty() && endTime.isNotEmpty()) {
                 workIntervals.add(Pair(startTime, endTime))
-                dutyNames.add(dutyName)
+                runNames.add(runName)
             }
         }
 
-        Log.d("ScheduleActivity extractWorkIntervalsAndDutyNames", "✅ Extracted Work Intervals: $workIntervals")
-        Log.d("ScheduleActivity extractWorkIntervalsAndDutyNames", "✅ Extracted Duty Names: $dutyNames")
-        return Pair(workIntervals, dutyNames)
+        Log.d("ScheduleActivity extractWorkIntervalsAndrunNames", "✅ Extracted Work Intervals: $workIntervals")
+        Log.d("ScheduleActivity extractWorkIntervalsAndrunNames", "✅ Extracted Duty Names: $runNames")
+        return Pair(workIntervals, runNames)
     }
 
     /**
@@ -1263,7 +1263,7 @@ class ScheduleActivity : AppCompatActivity() {
                     val jsonContent = cacheFile.readText()
                     val cachedSchedule =
                         Gson().fromJson(jsonContent, Array<ScheduleItem>::class.java).toList()
-                    scheduleData = cachedSchedule.map { it.copy(dutyName = safeDutyName(it)) }
+                    scheduleData = cachedSchedule.map { it.copy(runName = saferunName(it)) }
 
                     Log.d(
                         "ScheduleActivity loadScheduleDataFromCache",
@@ -1411,7 +1411,7 @@ class ScheduleActivity : AppCompatActivity() {
                     Log.d("MainActivity subscribeSharedData", "busRouteData: $busRouteData")
 
                     // Retrieve `scheduleData` from ThingsBoard
-                    scheduleData = (data.shared?.scheduleData1 ?: emptyList()).map { it.copy(dutyName = safeDutyName(it)) }
+                    scheduleData = (data.shared?.scheduleData1 ?: emptyList()).map { it.copy(runName = saferunName(it)) }
                     Log.d("MainActivity subscribeSharedData", "scheduleData: $scheduleData")
 
                     if (config != null && scheduleData.isNotEmpty()) {
@@ -1596,13 +1596,13 @@ class ScheduleActivity : AppCompatActivity() {
      */
     private fun isBreak(item: com.jason.publisher.main.model.ScheduleItem): Boolean {
         // Accept "Break" or "break"
-        return item.dutyName.equals("break", ignoreCase = true)
+        return item.runName.equals("break", ignoreCase = true)
     }
 
     /** Returns true if the schedule item represents a Reposition (REP). */
     private fun isReposition(item: ScheduleItem): Boolean {
-        return item.dutyName.equals("REP", true)
-                || item.dutyName.contains("reposition", true)
+        return item.runName.equals("REP", true)
+                || item.runName.contains("reposition", true)
     }
 
     override fun onDestroy() {
@@ -1630,14 +1630,14 @@ class ScheduleActivity : AppCompatActivity() {
             ?: item.busStops.firstOrNull()?.name ?: "?"
         val to = item.busStops.lastOrNull()?.abbreviation
             ?: item.busStops.lastOrNull()?.name ?: "?"
-        return "${item.startTime} ${item.dutyName} $from → $to"
+        return "${item.startTime} ${item.runName} $from → $to"
     }
 
     private fun logPanelDebugPreStart(no: Int, first: ScheduleItem) {
         val current = "ic_bus_symbol ${formatPanelLabel(first)}"
         val dump = buildString {
             appendLine("no: $no")
-            appendLine("dutyName: ${first.dutyName}")
+            appendLine("runName: ${first.runName}")
             append("currentDetailPanel: $current")
         }
         if (dump == lastPreStartDump) return
@@ -1651,11 +1651,11 @@ class ScheduleActivity : AppCompatActivity() {
         return t.length in 20..40 && t.all { it.isLetterOrDigit() }
     }
 
-    private fun safeDutyName(item: ScheduleItem): String {
-        if (!isTokenLike(item.dutyName)) return item.dutyName
+    private fun saferunName(item: ScheduleItem): String {
+        if (!isTokenLike(item.runName)) return item.runName
         val from = item.busStops.firstOrNull()?.abbreviation ?: item.busStops.firstOrNull()?.name ?: "?"
         val to   = item.busStops.lastOrNull()?.abbreviation  ?: item.busStops.lastOrNull()?.name  ?: "?"
-        return "${item.routeNo} $from → $to"
+        return "${item.runNo} $from → $to"
     }
 
     private fun publishActiveSegment(label: String) {

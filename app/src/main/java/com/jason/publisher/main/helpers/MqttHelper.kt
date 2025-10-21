@@ -216,8 +216,8 @@ class MqttHelper(
 
                                 // avoid showing a token-like dutyName (e.g., 20–40 alnum chars)
                                 val dutyNameLooksLikeToken =
-                                    first.dutyName.length in 20..40 && first.dutyName.all { it.isLetterOrDigit() }
-                                val duty = if (dutyNameLooksLikeToken) "${first.routeNo} $from → $to" else first.dutyName
+                                    first.runName.length in 20..40 && first.runName.all { it.isLetterOrDigit() }
+                                val duty = if (dutyNameLooksLikeToken) "${first.runNo} $from → $to" else first.runName
 
                                 resolvedLabel = "${first.startTime} $duty $from → $to"
                             }

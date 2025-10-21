@@ -64,11 +64,11 @@ class ScheduleAdapter(
             val real = items[pos - 1]
             val itemHolder = holder as ItemVH
 
-            val routeNo = itemHolder.view.findViewById<TextView>(R.id.routeNo)
+            val runNo = itemHolder.view.findViewById<TextView>(R.id.routeNo)
             val startTime = itemHolder.view.findViewById<TextView>(R.id.startTime)
             val endTime = itemHolder.view.findViewById<TextView>(R.id.endTime)
 
-            routeNo.text = real.routeNo
+            runNo.text = real.runNo
             startTime.text = real.startTime
             endTime.text = real.endTime
         }
