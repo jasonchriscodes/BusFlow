@@ -330,6 +330,12 @@ class MapActivity : AppCompatActivity() {
 
         extractRedBusStops()
 
+        // ✅ Print the stop index → name list at startup
+        logAllStopsWithIndex()
+
+// ✅ Print the red timing-point indices → names
+        logRedStopsWithIndex()
+
         // Initialize UI components
         initializeUIComponents()
 
@@ -744,12 +750,24 @@ class MapActivity : AppCompatActivity() {
         val durations = mutableListOf<Double>()
 
         // Starting point is a stop
-        stops.add(BusStop(latitude = routeData.startingPoint.latitude, longitude = routeData.startingPoint.longitude))
+        stops.add(
+            BusStop(
+                latitude = routeData.startingPoint.latitude,
+                longitude = routeData.startingPoint.longitude,
+                address = routeData.startingPoint.address
+            )
+        )
 
         // Walk each next point
         for (next in routeData.nextPoints) {
             // Each next point is also a stop
-            stops.add(BusStop(latitude = next.latitude, longitude = next.longitude))
+            stops.add(
+                BusStop(
+                    latitude = next.latitude,
+                    longitude = next.longitude,
+                    address = next.address
+                )
+            )
 
             // Build polyline, skipping consecutive duplicates
             var last: Pair<Double, Double>? = null
@@ -2013,5 +2031,56 @@ class MapActivity : AppCompatActivity() {
                 mqttManager.publish(topic, payload)
             }
         } catch (_: Exception) { /* ignore when offline */ }
+    }
+
+    // Pretty lat/lon if we don't have an address
+    private fun Double?.fmt6(): String = if (this == null) "?" else String.format(Locale.US, "%.6f", this)
+
+    // Resolve a display name for a BusStop: address → (fallback) address-from-RouteData → lat,lon
+    private fun stopDisplayName(stop: BusStop): String {
+        stop.address?.let { if (it.isNotBlank()) return it }
+        val addr = findAddressByCoordinates(stop.latitude ?: 0.0, stop.longitude ?: 0.0)
+        if (!addr.isNullOrBlank()) return addr
+        return "${stop.latitude.fmt6()},${stop.longitude.fmt6()}"
+    }
+
+    // Log every stop with its index
+    private fun logAllStopsWithIndex(tag: String = "MapActivity") {
+        if (stops.isEmpty()) {
+            FileLogger.d(tag, "🗺️ Stops: (none)")
+            return
+        }
+        val list = stops.mapIndexed { idx, s -> "[${idx}] ${stopDisplayName(s)}" }
+        FileLogger.d(tag, "🗺️ Stops (${stops.size}): ${list.joinToString(", ")}")
+    }
+
+    // Build the same "lat,lon" key format you stored in redBusStops
+    private fun latLonKey(lat: Double?, lon: Double?): String = "${lat ?: 0.0},${lon ?: 0.0}"
+
+    // Log only red timing-point stops with their indices
+    private fun logRedStopsWithIndex(tag: String = "MapActivity") {
+        if (stops.isEmpty()) {
+            FileLogger.d(tag, "🔴 Red timing points: (no stops loaded)")
+            return
+        }
+        if (redBusStops.isEmpty()) {
+            FileLogger.d(tag, "🔴 Red timing points: (none)")
+            return
+        }
+
+        val redAddrSet = redBusStops.map { it.trim().lowercase(Locale.getDefault()) }.toSet()
+
+        val redIndexed = stops.mapIndexedNotNull { idx, stop ->
+            val addrMatch = stop.address?.trim()?.lowercase(Locale.getDefault())?.let { it in redAddrSet } == true
+            val keyMatch  = latLonKey(stop.latitude, stop.longitude).lowercase(Locale.getDefault()) in redAddrSet
+            if (addrMatch || keyMatch) idx to stopDisplayName(stop) else null
+        }
+
+        if (redIndexed.isEmpty()) {
+            FileLogger.d(tag, "🔴 Red timing points: (none matched against current stops)")
+        } else {
+            val list = redIndexed.joinToString(", ") { (i, name) -> "[${i}] ${name}" }
+            FileLogger.d(tag, "🔴 Red timing points (${redIndexed.size}): $list")
+        }
     }
 }

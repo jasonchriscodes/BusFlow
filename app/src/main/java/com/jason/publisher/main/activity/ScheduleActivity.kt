@@ -1314,11 +1314,23 @@ class ScheduleActivity : AppCompatActivity() {
 
         for (routeData in busRouteData) {
             // Add starting point as the first stop
-            newStops.add(BusStop(latitude = routeData.startingPoint.latitude, longitude = routeData.startingPoint.longitude))
+            newStops.add(
+                BusStop(
+                    latitude = routeData.startingPoint.latitude,
+                    longitude = routeData.startingPoint.longitude,
+                    address = routeData.startingPoint.address
+                )
+            )
 
             for (nextPoint in routeData.nextPoints) {
                 // Add stops
-                newStops.add(BusStop(latitude = nextPoint.latitude, longitude = nextPoint.longitude))
+                newStops.add(
+                    BusStop(
+                        latitude = nextPoint.latitude,
+                        longitude = nextPoint.longitude,
+                        address = nextPoint.address
+                    )
+                )
 
                 // Add route coordinates
                 var last: Pair<Double,Double>? = null
