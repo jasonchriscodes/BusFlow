@@ -751,6 +751,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         binding.startRouteButton.visibility = View.VISIBLE
         binding.testStartRouteButton.visibility = View.VISIBLE
+        hideTestButton()
         if (isTabulatedView) {
             scheduleRecycler.visibility = View.VISIBLE
             paginationLayout.visibility  = View.VISIBLE
@@ -910,6 +911,7 @@ class ScheduleActivity : AppCompatActivity() {
 
                 binding.startRouteButton.visibility = View.VISIBLE
                 binding.testStartRouteButton.visibility = View.VISIBLE
+                hideTestButton()
             }
             .show()
     }
@@ -1721,6 +1723,7 @@ class ScheduleActivity : AppCompatActivity() {
             }
             binding.startRouteButton.visibility = View.VISIBLE
             binding.testStartRouteButton.visibility = View.VISIBLE
+            hideTestButton()
         }
     }
 
@@ -1750,5 +1753,10 @@ class ScheduleActivity : AppCompatActivity() {
         }
     }
 
+    private fun hideTestButton() {
+        if (::binding.isInitialized) {
+            binding.testStartRouteButton.visibility = View.GONE
+        }
+    }
 
 }

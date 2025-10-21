@@ -267,7 +267,8 @@
             android:textSize="18sp"
             android:padding="16dp"
             android:backgroundTint="@color/purple_400"
-            android:textColor="@android:color/white"/>
+            android:textColor="@android:color/white"
+            android:visibility="gone"/>
     </LinearLayout>
 
     <!-- App Version -->
