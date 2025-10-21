@@ -67,6 +67,7 @@ class RepActivity : AppCompatActivity() {
     private var countdownRunnable: Runnable? = null
     private val clock = Handler(Looper.getMainLooper())
     private var clockRunnable: Runnable? = null
+    private var speedKmh: Float = 0f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -130,7 +131,57 @@ class RepActivity : AppCompatActivity() {
         )
 
         // Back button as in MapActivity
-        binding.backButton.setOnClickListener { finish() }
+        binding.backButton.setOnClickListener {
+            if (speedKmh > 5.0f) {  // >5 km/h considered moving
+                Toast.makeText(this, "❌ Bus must be moving slower than 5 km/h before ending the trip.", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+
+            // Number pad confirmation (0000) with autofill disabled, same as MapActivity
+            val dlgBuilder = androidx.appcompat.app.AlertDialog.Builder(this)
+            val numberPadView = layoutInflater.inflate(R.layout.dialog_number_pad, null)
+            val numberPadInput = numberPadView.findViewById<android.widget.EditText>(R.id.numberPadInput)
+
+            // 1) numeric input + mask, not a credential field
+            numberPadInput.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            numberPadInput.transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+
+            // 2) turn off saving & autofill on the field
+            numberPadInput.setSaveEnabled(false)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                numberPadInput.setAutofillHints(null)
+                androidx.core.view.ViewCompat.setImportantForAutofill(numberPadInput, android.view.View.IMPORTANT_FOR_AUTOFILL_NO)
+            }
+            numberPadInput.imeOptions = numberPadInput.imeOptions or
+                    android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+
+            dlgBuilder.setView(numberPadView)
+                .setTitle("Enter Passcode")
+                .setPositiveButton("Confirm") { _, _ ->
+                    val enteredCode = numberPadInput.text.toString()
+                    if (enteredCode == "0000") {
+                        // mirror MapActivity: go back to ScheduleActivity and clear stack
+                        val intent = android.content.Intent(this, com.jason.publisher.main.activity.ScheduleActivity::class.java)
+                        intent.flags = android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        startActivity(intent)
+                        finish()
+                    } else {
+                        Toast.makeText(this, "❌ Incorrect code. Please enter 0000.", Toast.LENGTH_LONG).show()
+                    }
+                }
+                .setNegativeButton("Cancel") { d, _ -> d.dismiss() }
+
+            val dialog = dlgBuilder.create()
+            dialog.setOnShowListener {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    dialog.window?.decorView?.importantForAutofill =
+                        android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+                    // cancel any inline autofill suggestions
+                    getSystemService(android.view.autofill.AutofillManager::class.java)?.cancel()
+                }
+            }
+            dialog.show()
+        }
 
         // Live GPS → draw/shorten the single leg to the stop
         startLocation()
@@ -245,12 +296,15 @@ class RepActivity : AppCompatActivity() {
         callback = object : LocationCallback() {
             override fun onLocationResult(r: LocationResult) {
                 r.lastLocation?.let { loc ->
+                    // keep existing code…
                     val here = LatLong(loc.latitude, loc.longitude)
 
-                    // 🔵 NEW: show/update bus symbol at current tablet location
-                    addOrUpdateBusMarker(here)
+                    // 🔹 Track current speed in km/h for the end-trip guard
+                    if (loc.hasSpeed()) {
+                        speedKmh = (loc.speed * 3.6f)
+                    }
 
-                    // keep the simple “center between current and stop” behaviour
+                    addOrUpdateBusMarker(here)
                     updateLeg(here)
                 }
             }
