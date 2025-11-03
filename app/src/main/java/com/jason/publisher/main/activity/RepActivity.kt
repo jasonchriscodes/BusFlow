@@ -23,6 +23,7 @@ import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.Helper
 import com.jason.publisher.main.utils.TripLog
+import com.jason.publisher.main.utils.hookBatteryToasts
 import org.mapsforge.core.graphics.Cap
 import org.mapsforge.core.graphics.Style
 import org.mapsforge.core.model.LatLong
@@ -77,6 +78,7 @@ class RepActivity : AppCompatActivity() {
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
         FileLogger.d("RepActivity", "onCreate")
+        hookBatteryToasts()
 
         // ---- read extras ----
         stopLat = intent.getDoubleExtra("REP_STOP_LAT", 0.0)

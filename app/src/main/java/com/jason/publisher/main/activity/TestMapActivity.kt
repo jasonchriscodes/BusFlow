@@ -38,6 +38,7 @@ import com.jason.publisher.main.services.LocationManager
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.NetworkStatusHelper
 import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
+import com.jason.publisher.main.utils.hookBatteryToasts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -155,6 +156,7 @@ class TestMapActivity : AppCompatActivity() {
         binding = ActivityTestmapBinding.inflate(layoutInflater)
         setContentView(binding.root)
         FileLogger.d("TestMapActivity", "onCreate")
+        hookBatteryToasts()
 
         // Initialize managers before using them
         initializeManagers()

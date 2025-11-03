@@ -72,8 +72,10 @@ import com.jason.publisher.main.model.AttributesData
 import com.jason.publisher.main.services.ApiServiceBuilder
 import com.jason.publisher.main.services.MqttManager
 import com.jason.publisher.main.utils.FileLogger
+import com.jason.publisher.main.utils.LastLocationStore
 import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
 import com.jason.publisher.main.utils.TripLog
+import com.jason.publisher.main.utils.hookBatteryToasts
 import com.jason.publisher.services.ApiService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -222,6 +224,7 @@ class MapActivity : AppCompatActivity() {
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
         FileLogger.d("MapActivity", "onCreate")
+        hookBatteryToasts()
 
         autoTapArrivalDone = savedInstanceState?.getBoolean("autoTapArrivalDone") ?: false
 
@@ -1791,6 +1794,7 @@ class MapActivity : AppCompatActivity() {
                         scheduleStatusValueTextView.text = "Calculating..."
                         scheduleStatusManager.checkScheduleStatus()
                         updateApiTime()
+                        LastLocationStore.save(this@MapActivity, latitude, longitude)
 
                         binding.map.invalidate() // Refresh map view
                     }

@@ -53,6 +53,7 @@ import com.jason.publisher.main.services.MqttManager
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.NetworkStatusHelper
 import com.jason.publisher.main.utils.TripLog
+import com.jason.publisher.main.utils.hookBatteryToasts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -200,6 +201,7 @@ class ScheduleActivity : AppCompatActivity() {
         binding = ActivityScheduleBinding.inflate(layoutInflater)
         setContentView(binding.root)
         FileLogger.d("ScheduleActivity", "onCreate")
+        hookBatteryToasts()
 
         // initialize them here
         connectionStatusTextView = binding.connectionStatusTextView

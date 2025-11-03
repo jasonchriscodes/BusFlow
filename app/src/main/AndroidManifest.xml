@@ -112,6 +112,19 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection"
             android:stopWithTask="true" />
+        <!-- ACTION_BATTERY_LOW while your process might be dead -->
+        <receiver
+            android:name=".main.utils.BatteryLowManifestReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BATTERY_LOW"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- Dismiss “OK” action from the heads-up -->
+        <receiver
+            android:name=".main.utils.BatteryLowAckReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

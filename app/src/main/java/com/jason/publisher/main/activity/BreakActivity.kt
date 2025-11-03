@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.jason.publisher.main.ui.BreakUpcomingAdapter
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.TripLog
+import com.jason.publisher.main.utils.hookBatteryToasts
 
 class BreakActivity : AppCompatActivity() {
 
@@ -44,6 +45,7 @@ class BreakActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_break)
         FileLogger.d("BreakActivity", "onCreate")
+        hookBatteryToasts()
 
         timerText = findViewById(R.id.breakTimerText)
         infoText  = findViewById(R.id.breakInfoText)
