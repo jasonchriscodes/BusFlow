@@ -16,6 +16,7 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.os.Environment
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.jason.publisher.R
@@ -23,6 +24,7 @@ import java.util.Locale
 import android.os.Handler
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationManagerCompat
+import java.io.File
 
 class ScreenRecordService : Service() {
 
@@ -177,6 +179,7 @@ class ScreenRecordService : Service() {
         )
 
         rec.start()
+        Thread { pruneOldRecordings(maxKeep = 6) }.start()
 
         // start ticking the notification each second
         tickHandler.removeCallbacks(ticker)
@@ -265,6 +268,7 @@ class ScreenRecordService : Service() {
             .build()
     }
 
+    @RequiresApi(Build.VERSION_CODES.M)
     private fun ensureNotificationsEnabled(): Boolean {
         val nm = getSystemService(NotificationManager::class.java)
 
@@ -298,6 +302,57 @@ class ScreenRecordService : Service() {
             }
         }
         return true
+    }
+
+    private fun pruneOldRecordings(maxKeep: Int = 6) {
+        runCatching {
+            if (Build.VERSION.SDK_INT >= 29) {
+                val uri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                val projection = arrayOf(
+                    MediaStore.Video.Media._ID,
+                    MediaStore.Video.Media.DATE_ADDED,
+                    MediaStore.Video.Media.DISPLAY_NAME,
+                    MediaStore.Video.Media.RELATIVE_PATH
+                )
+                // Keep only files we created in Movies/BusFlow with our prefix
+                val selection = "(${MediaStore.Video.Media.RELATIVE_PATH} LIKE ? OR " +
+                        "${MediaStore.Video.Media.RELATIVE_PATH} = ?) AND " +
+                        "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ?"
+                val args = arrayOf("Movies/BusFlow%", "Movies/BusFlow/", "busflow_rec_%")
+                val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} ASC" // oldest first
+
+                val ids = mutableListOf<Long>()
+                contentResolver.query(uri, projection, selection, args, sortOrder)?.use { c ->
+                    val idIdx = c.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+                    while (c.moveToNext()) ids += c.getLong(idIdx)
+                }
+
+                val extras = (ids.size - maxKeep).coerceAtLeast(0)
+                for (i in 0 until extras) {
+                    val delUri = ContentUris.withAppendedId(uri, ids[i])
+                    runCatching { contentResolver.delete(delUri, null, null) }
+                        .onFailure { e -> Log.w("SRService", "Delete failed: $delUri", e) }
+                }
+            } else {
+                // Pre-Q fallback: delete from /Movies/BusFlow by file API
+                val base = Environment
+                    .getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
+                val dir = File(base, "BusFlow")
+                if (dir.exists()) {
+                    val files = dir.listFiles { f ->
+                        f.isFile && f.name.startsWith("busflow_rec_") && f.name.endsWith(".mp4")
+                    }?.sortedBy { it.lastModified() } ?: emptyList()
+
+                    val extras = (files.size - maxKeep).coerceAtLeast(0)
+                    for (i in 0 until extras) {
+                        runCatching { files[i].delete() }
+                            .onFailure { e -> Log.w("SRService", "Delete failed: ${files[i]}", e) }
+                    }
+                }
+            }
+        }.onFailure { e ->
+            Log.w("SRService", "Prune failed", e)
+        }
     }
 }
 
