@@ -110,7 +110,8 @@
         <service
             android:name=".main.services.ScreenRecordService"
             android:exported="false"
-            android:foregroundServiceType="mediaProjection|microphone"/>
+            android:foregroundServiceType="mediaProjection"
+            android:stopWithTask="true" />
     </application>
 
 </manifest>

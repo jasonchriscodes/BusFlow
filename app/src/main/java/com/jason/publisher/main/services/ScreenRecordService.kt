@@ -185,7 +185,19 @@ class ScreenRecordService : Service() {
         tickHandler.removeCallbacks(ticker)
         tickHandler.post(ticker)
 
-        return START_STICKY
+        return START_NOT_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Called when the user swipes your task from Recents
+        // Do the same cleanup you do in onDestroy, then stop.
+        tickHandler.removeCallbacks(ticker)
+        runCatching { recorder?.stop() }
+        runCatching { recorder?.reset(); recorder?.release() }
+        runCatching { vDisplay?.release() }
+        runCatching { projection?.stop() }
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
