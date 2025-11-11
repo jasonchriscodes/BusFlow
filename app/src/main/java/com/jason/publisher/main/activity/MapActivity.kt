@@ -182,7 +182,7 @@ class MapActivity : AppCompatActivity() {
     // for self
     private var prevOwnCoords: Pair<Double,Double>? = null
     private lateinit var mqttHelper: MqttHelper
-    var tokenConfigData = "oRSsbeuqDMSckyckcMyE"
+    var tokenConfigData = "BEXBIArF3URHeYBslJE2"
     val clientKeys       = "latitude,longitude,bearing,speed,direction"
 
     lateinit var mqttManagerConfig: MqttManager
@@ -204,7 +204,7 @@ class MapActivity : AppCompatActivity() {
     private var autoTapArrivalDone = false
 
     companion object {
-        const val SERVER_URI = "tcp://43.226.218.97:1883"
+        const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
         const val CLIENT_ID = "jasonAndroidClientId"
         const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
         const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"

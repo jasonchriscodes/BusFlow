@@ -87,7 +87,7 @@ class ScheduleActivity : AppCompatActivity() {
     private var aid = ""
     private var jsonString = ""
     private var token = ""
-    private var tokenConfigData = "oRSsbeuqDMSckyckcMyE"
+    private var tokenConfigData = "BEXBIArF3URHeYBslJE2"
     private var config: List<BusItem>? = emptyList()
     private var route: List<BusRoute> = emptyList()
     private var stops: List<BusStop> = emptyList()
@@ -132,7 +132,7 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var emptyStateText: TextView
 
     companion object {
-        const val SERVER_URI = "tcp://43.226.218.97:1883"
+        const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
         const val CLIENT_ID = "jasonAndroidClientId"
         const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
         private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
@@ -743,6 +743,9 @@ class ScheduleActivity : AppCompatActivity() {
         }
         // if you used a Handler in startLoadingBar(), cancel it:
         loadingBarHandler.removeCallbacksAndMessages(null)
+        // ✅ Stop “Fetching data …” loop and hide the layout
+        fetchingHandler.removeCallbacksAndMessages(null)
+        fetchingLayout.visibility = View.GONE
 
         scheduleRecycler.visibility = View.GONE
         timeline1.visibility = View.VISIBLE
@@ -857,6 +860,9 @@ class ScheduleActivity : AppCompatActivity() {
 
         // cancel any leftover callbacks
         loadingBarHandler.removeCallbacksAndMessages(null)
+        // ✅ Stop “Fetching data …” loop and hide the layout
+        fetchingHandler.removeCallbacksAndMessages(null)
+        fetchingLayout.visibility = View.GONE
 
         var progress = 0
         @RequiresApi(Build.VERSION_CODES.M)

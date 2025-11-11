@@ -7,7 +7,7 @@ import retrofit2.converter.gson.GsonConverterFactory
  * Builder object for creating instances of Retrofit service interfaces.
  */
 object ApiServiceBuilder {
-    private const val BASE_URL = "http://43.226.218.97:8080/api/v1/"
+    private const val BASE_URL = "https://thingsboard.cloud/api/v1/"
 
     private val retrofit = Retrofit.Builder()
         .baseUrl(BASE_URL)

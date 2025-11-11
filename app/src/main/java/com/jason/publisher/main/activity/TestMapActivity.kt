@@ -137,7 +137,7 @@ class TestMapActivity : AppCompatActivity() {
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
-        const val SERVER_URI = "tcp://43.226.218.97:1883"
+        const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
         const val CLIENT_ID = "jasonAndroidClientId"
         const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
         private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
