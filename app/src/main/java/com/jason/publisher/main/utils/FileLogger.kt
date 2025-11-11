@@ -43,17 +43,16 @@ object FileLogger {
 
     fun init(context: Context) {
         appContext = context.applicationContext
-        // Freeze the session start at first init
-        try {
-            getLogDir().mkdirs()
-        } catch (_: Exception) {
-        }
+        try { getLogDir().mkdirs() } catch (_: Exception) {}
         if (fileDisplayName == null) {
             sessionStart = Date()
             fileDisplayName = "app-log_${nameFmt.format(sessionStart)}.txt"
         }
-        prepareTarget() // create/resolve the file once for this session
+        prepareTarget()
         writeCreationHeader()
+
+        // 🔧 keep only the newest 6 log files
+        Thread { pruneOldLogs(maxKeep = 6) }.start()
     }
 
     fun markAppOpened(extra: String? = null) {
@@ -220,6 +219,58 @@ object FileLogger {
         } catch (e: Exception) {
             Log.e(TAG, "Legacy file error: ${e.message}")
             null
+        }
+    }
+
+    // inside object FileLogger { ... }
+
+    private fun pruneOldLogs(maxKeep: Int = 6) {
+        runCatching {
+            if (Build.VERSION.SDK_INT >= 29) {
+                // MediaStore (Documents/Log)
+                val collection = MediaStore.Files.getContentUri("external")
+                val projection = arrayOf(
+                    MediaStore.Files.FileColumns._ID,
+                    MediaStore.Files.FileColumns.DISPLAY_NAME,
+                    MediaStore.Files.FileColumns.DATE_ADDED,
+                    MediaStore.Files.FileColumns.RELATIVE_PATH
+                )
+                val selection = "(${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ? OR " +
+                        "${MediaStore.Files.FileColumns.RELATIVE_PATH} = ?) AND " +
+                        "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE ?"
+                val args = arrayOf("$RELATIVE_DIR%", "$RELATIVE_DIR/", "app-log_%")
+                val sortOrder = "${MediaStore.Files.FileColumns.DATE_ADDED} ASC" // oldest first
+
+                val ids = mutableListOf<Long>()
+                appContext.contentResolver.query(collection, projection, selection, args, sortOrder)?.use { c ->
+                    val idIdx = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+                    while (c.moveToNext()) ids += c.getLong(idIdx)
+                }
+
+                val extras = (ids.size - maxKeep).coerceAtLeast(0)
+                for (i in 0 until extras) {
+                    val delUri = ContentUris.withAppendedId(collection, ids[i])
+                    runCatching { appContext.contentResolver.delete(delUri, null, null) }
+                        .onFailure { e -> Log.w(TAG, "Delete failed: $delUri", e) }
+                }
+            } else {
+                // Legacy public storage: /Documents/Log
+                val docs = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+                val dir  = File(docs, "Log")
+                if (dir.exists()) {
+                    val files = dir.listFiles { f ->
+                        f.isFile && f.name.startsWith("app-log_") && f.name.endsWith(".txt")
+                    }?.sortedBy { it.lastModified() } ?: emptyList()
+
+                    val extras = (files.size - maxKeep).coerceAtLeast(0)
+                    for (i in 0 until extras) {
+                        runCatching { files[i].delete() }
+                            .onFailure { e -> Log.w(TAG, "Delete failed: ${files[i]}", e) }
+                    }
+                }
+            }
+        }.onFailure { e ->
+            Log.w(TAG, "Prune logs failed", e)
         }
     }
 }
