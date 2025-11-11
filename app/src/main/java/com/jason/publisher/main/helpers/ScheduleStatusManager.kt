@@ -189,33 +189,35 @@ class ScheduleStatusManager(
             // convert to minutes only (drop seconds)
             val deltaMin = deltaSec / 60               // signed minutes
             val absMin   = kotlin.math.abs(deltaMin)   // absolute value
-            val timeDiff = "${absMin}min"
+
+            fun minutesLabel(m: Int) = if (m == 1) "1 min" else "$m min"
+            val timeDiff = minutesLabel(absMin)
 
             val statusText = when {
-                deltaSec >= 120           -> "Very Ahead (~$timeDiff early)"
-                deltaSec in 1..119        -> "Slightly Ahead (~$timeDiff early)"
-                deltaSec in -179..0       -> "On Time (~$timeDiff on time)"
-                deltaSec in -299..-180    -> "Slightly Behind (~$timeDiff late)"
-                deltaSec <= -300          -> "Very Behind (~$timeDiff late)"
-                else                      -> "Unknown"
+                deltaMin >= 2    -> "Very Ahead (~$timeDiff early)"
+                deltaMin == 1    -> "Slightly Ahead (~$timeDiff early)"
+                deltaMin in -2..0-> "On Time (~$timeDiff on time)"
+                deltaMin in -4..-3 -> "Slightly Behind (~$timeDiff late)"
+                deltaMin <= -5   -> "Very Behind (~$timeDiff late)"
+                else             -> "Unknown"
             }
 
             val symbolRes = when {
-                deltaSec >= 120 -> R.drawable.ic_schedule_very_ahead
-                deltaSec in 1..119 -> R.drawable.ic_schedule_slightly_ahead
-                deltaSec in -179..0 -> R.drawable.ic_schedule_on_time
-                deltaSec in -299..-180 -> R.drawable.ic_schedule_slightly_behind
-                deltaSec <= -300 -> R.drawable.ic_schedule_very_behind
-                else -> R.drawable.ic_schedule_on_time
+                deltaMin >= 2       -> R.drawable.ic_schedule_very_ahead
+                deltaMin == 1       -> R.drawable.ic_schedule_slightly_ahead
+                deltaMin in -2..0   -> R.drawable.ic_schedule_on_time
+                deltaMin in -4..-3  -> R.drawable.ic_schedule_slightly_behind
+                deltaMin <= -5      -> R.drawable.ic_schedule_very_behind
+                else                -> R.drawable.ic_schedule_on_time
             }
 
             val colorRes = when {
-                deltaSec >= 120 -> R.color.blind_red            // Very Ahead
-                deltaSec in 1..119 -> R.color.blind_light_orange     // Slightly Ahead
-                deltaSec in -179..0 -> R.color.blind_cyan       // On Time
-                deltaSec in -299..-180 -> R.color.blind_orange   // Slightly Behind
-                deltaSec <= -300 -> R.color.blind_orange          // Very Behind
-                else -> R.color.blind_cyan
+                deltaMin >= 2       -> R.color.blind_red            // Very Ahead
+                deltaMin == 1       -> R.color.blind_light_orange   // Slightly Ahead
+                deltaMin in -2..0   -> R.color.blind_cyan           // On Time
+                deltaMin in -4..-3  -> R.color.blind_orange         // Slightly Behind
+                deltaMin <= -5      -> R.color.blind_orange         // Very Behind
+                else                -> R.color.blind_cyan
             }
 
             activity.runOnUiThread {
