@@ -105,7 +105,7 @@ class ScheduleStatusManager(
             }
             val baseTime = activity.timeManager.parseTimeToday(activity.baseTimeStr)
 
-            var apiTimeStr = binding.ApiTimeValueTextView.text.toString()
+            var apiTimeStr = binding.ApiTimeValueTextView.text.toString().trim()
             val firstAddress = activity.scheduleList.firstOrNull()?.busStops?.firstOrNull()?.address
 
             if (activity.upcomingStopName == firstAddress
@@ -130,7 +130,43 @@ class ScheduleStatusManager(
                 apiTimeStr = adjustedApiTime
             }
 
-            val apiTime = activity.timeManager.parseTimeToday(apiTimeStr)
+            // --- SAFE API time parsing & normalization ---
+            val apiTimeDate: Date? = try {
+                if (apiTimeStr.isEmpty()) {
+                    Log.w("checkScheduleStatus", "API time string is empty")
+                    null
+                } else {
+                    try {
+                        activity.timeManager.parseTimeToday(apiTimeStr)
+                    } catch (e: Exception) {
+                        val fallbackPatterns = listOf("HH:mm:ss", "HH:mm", "yyyy-MM-dd'T'HH:mm:ss'Z'", "yyyy-MM-dd HH:mm:ss")
+                        var parsed: Date? = null
+                        for (p in fallbackPatterns) {
+                            try {
+                                val fmt = SimpleDateFormat(p, Locale.getDefault())
+                                fmt.timeZone = TimeZone.getDefault()
+                                parsed = fmt.parse(apiTimeStr)
+                                if (parsed != null) break
+                            } catch (_: Exception) { }
+                        }
+                        parsed
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("checkScheduleStatus", "Unexpected error parsing API time: $apiTimeStr", e)
+                null
+            }
+
+            if (apiTimeDate == null) {
+                FileLogger.d("MapActivity checkScheduleStatus", "API time parsing failed or empty. apiTimeStr='$apiTimeStr'")
+                activity.runOnUiThread {
+                    binding.scheduleStatusValueTextView.text = "Time sync error"
+                    binding.scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(activity, R.color.blind_orange))
+                }
+                return
+            }
+
+            val apiTime = apiTimeDate
 
             // ✅ Find next stop that is a red timing point
             var redStopIndex = activity.stops.indexOfFirst { stop ->
@@ -168,7 +204,19 @@ class ScheduleStatusManager(
             }
 
             // --- 3. Total time from start to red timing point in seconds (t2) ---
-            val t2 = ((apiTime.time - baseTime.time) / 1000).toDouble()
+            var t2 = ((apiTime.time - baseTime.time) / 1000.0)
+            if (kotlin.math.abs(t2) > 48 * 3600) {
+                FileLogger.d("MapActivity checkScheduleStatus", "API/base time delta absurd (t2=$t2). Treating as time-sync error.")
+                activity.runOnUiThread {
+                    binding.scheduleStatusValueTextView.text = "Time sync error"
+                    binding.scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(activity, R.color.blind_orange))
+                }
+                return
+            }
+            if (t2 <= 0.0) {
+                FileLogger.d("MapActivity checkScheduleStatus", "Computed non-positive t2 ($t2). Adjusting to 1s to avoid divide-by-zero.")
+                t2 = 1.0
+            }
 
             // --- 4. Estimate time to arrival from current position (t1) ---
             val minSpeedMps = 0.1  // Avoid division by zero
