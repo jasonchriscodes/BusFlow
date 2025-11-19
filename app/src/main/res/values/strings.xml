@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">BusFlow-Publisher</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_back">Back</string>
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="fab_chat">button to route chat screen</string>
+    <string name="dummy_length_chat">999</string>
+    <string name="explorer_logo">Explorer Logo</string>
+    <string name="fullers_logo">Fullers Logo</string>
+    <string name="open_local_map">Open Local Map</string>
+</resources>

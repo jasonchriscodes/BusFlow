@@ -1,0 +1,39 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootSplash"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Full-screen GIF -->
+    <pl.droidsonroids.gif.GifImageView
+        android:id="@+id/openerGif"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/busflow_opener_gif"
+        android:scaleType="centerCrop" />
+
+    <!-- Button row, centered -->
+    <LinearLayout
+        android:id="@+id/choiceLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:padding="16dp">
+
+        <Button
+            android:id="@+id/btnFetchRoster"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Fetch Roster"
+            android:layout_marginEnd="500dp"/>
+
+        <Button
+            android:id="@+id/btnUseCache"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Use Cache"/>
+    </LinearLayout>
+
+</FrameLayout>

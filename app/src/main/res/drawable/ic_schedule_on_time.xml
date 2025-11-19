@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Top Arrow (main arrow) rotated 135° -->
+    <item
+        android:gravity="center_vertical"
+        android:right="2dp"
+        android:top="2dp">
+        <rotate
+            android:fromDegrees="90"
+            android:toDegrees="90"
+            android:pivotX="50%"
+            android:pivotY="50%">
+            <vector
+                xmlns:android="http://schemas.android.com/apk/res/android"
+                android:width="48dp"
+                android:height="48dp"
+                android:viewportWidth="24"
+                android:viewportHeight="24">
+                <path
+                    android:fillColor="@color/blind_cyan"
+                    android:strokeWidth="2"
+                    android:pathData="M16,4L8,12l8,8v-5h8v-6h-8V4z"/>
+            </vector>
+        </rotate>
+    </item>
+
+</layer-list>

@@ -1,0 +1,35 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Rotating the canvas 90 degrees -->
+    <group
+        android:pivotX="24"
+        android:pivotY="24"
+        android:rotation="0">
+
+        <!-- White outline for the circle -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M24,1c12.703,0 23,10.297 23,23s-10.297,23 -23,23 -23,-10.297 -23,-23 10.297,-23 23,-23z" />
+
+        <!-- Background circle (inside the white outline) -->
+        <path
+            android:fillColor="#D2B48C"
+            android:pathData="M24,3c11.598,0 21,9.402 21,21s-9.402,21 -21,21 -21,-9.402 -21,-21 9.402,-21 21,-21z" />
+
+        <!-- White triangle (Arrow) inside, moved down slightly -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M24,12 L34,34 L14,34 Z" />
+
+        <!-- Blue triangle inside the white triangle, kept the same -->
+        <path
+            android:fillColor="#D2B48C"
+            android:pathData="M24,29 L34,34 L14,34 Z" />
+
+    </group>
+
+</vector>

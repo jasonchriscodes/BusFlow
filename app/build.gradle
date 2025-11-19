@@ -1,0 +1,129 @@
+import java.util.Properties
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'com.google.gms.google-services'
+    id 'kotlin-parcelize'
+}
+
+// Read properties from environment variables first, fallback to local.properties
+def tomtomApiKey = System.getenv("TOMTOM_API_KEY") ?: ""
+def googleApiKey = System.getenv("GOOGLE_API_KEY") ?: ""
+def openRouteServiceApiKey = System.getenv("OpenRouteService_API_KEY") ?: ""
+def mailerSenderApiKey = System.getenv("MAILERSEND_API_KEY") ?: ""
+def googleAppPass = System.getenv("GOOGLE_APP_PASS") ?: ""
+
+// support local development with local.properties, load it conditionally
+def propertiesFile = file("${rootDir}/local.properties")
+if (propertiesFile.exists()) {
+    def properties = new Properties()
+    propertiesFile.withInputStream { stream ->
+        properties.load(stream)
+    }
+    // Override environment variables with local properties if they exist
+    tomtomApiKey = properties.getProperty("TOMTOM_API_KEY", tomtomApiKey)
+    googleApiKey = properties.getProperty("GOOGLE_API_KEY", googleApiKey)
+    openRouteServiceApiKey = properties.getProperty("OpenRouteService_API_KEY", openRouteServiceApiKey)
+    mailerSenderApiKey = properties.getProperty("MAILERSEND_API_KEY", mailerSenderApiKey)
+    googleAppPass = properties.getProperty("GOOGLE_APP_PASS", googleAppPass)
+}
+
+android {
+    namespace 'com.jason.publisher'
+    compileSdk 33
+
+    defaultConfig {
+        applicationId "com.jason.publisher"
+        minSdk 21
+        targetSdk 33
+        versionCode 1
+        versionName "1.0.1"
+
+        buildConfigField "String", "TOMTOM_API_KEY", "\"${tomtomApiKey}\""
+        buildConfigField "String", "GOOGLE_API_KEY", "\"${googleApiKey}\""
+        buildConfigField "String", "OpenRouteService_API_KEY", "\"${openRouteServiceApiKey}\""
+        buildConfigField "String", "MAILERSEND_API_KEY", "\"${mailerSenderApiKey}\""
+        buildConfigField "String", "GOOGLE_APP_PASS", "\"${googleAppPass}\""
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    buildFeatures {
+        viewBinding true
+    }
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+
+    packagingOptions {
+        // Exclude the conflicting files
+        exclude 'META-INF/NOTICE.md'
+        exclude 'META-INF/LICENSE.md'
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.10.1'
+    implementation 'androidx.appcompat:appcompat:1.5.1'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
+    implementation "org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5"
+    implementation 'org.eclipse.paho:org.eclipse.paho.android.service:1.1.1'
+    implementation 'com.google.code.gson:gson:2.8.9'
+    implementation 'org.osmdroid:osmdroid-android:6.1.14'
+    implementation 'org.apache.commons:commons-math3:3.6.1'
+    implementation 'com.google.firebase:firebase-firestore-ktx:24.8.1'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.mockito:mockito-core:3.11.2'
+    testImplementation 'org.mockito:mockito-inline:3.11.2'
+    testImplementation 'org.robolectric:robolectric:4.6.1'
+    testImplementation 'org.json:json:20180813'
+    testImplementation 'org.powermock:powermock-module-junit4:2.0.9'
+    testImplementation 'org.powermock:powermock-api-mockito2:2.0.9'
+    testImplementation "io.mockk:mockk:1.12.0"
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit:1.5.21"
+    testImplementation "org.mockito.kotlin:mockito-kotlin:3.2.0"
+    androidTestImplementation 'androidx.test.ext:junit:1.1.4'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.0'
+    // chat feature
+    implementation 'de.hdodenhof:circleimageview:2.2.0'
+    implementation 'androidx.cardview:cardview:1.0.0'
+    implementation 'com.squareup.retrofit2:retrofit:2.3.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.3.0'
+    implementation("com.squareup.okhttp3:okhttp:4.12.0") // OkHTTP
+    implementation files('libs/java-sdk-1.0.1.jar')
+    implementation 'com.sun.mail:android-mail:1.6.7'
+    implementation 'com.sun.mail:android-activation:1.6.7'
+
+    //Mapsforge dependencies
+    implementation 'org.mapsforge:mapsforge-core:0.18.0'
+    implementation 'org.mapsforge:mapsforge-map:0.18.0'
+    implementation 'org.mapsforge:mapsforge-map-reader:0.18.0'
+    implementation 'org.mapsforge:mapsforge-themes:0.18.0'
+    implementation 'net.sf.kxml:kxml2:2.3.0'
+    implementation 'org.mapsforge:mapsforge-map-android:0.18.0'
+    implementation 'com.caverock:androidsvg:1.4'
+    implementation 'org.mapsforge:mapsforge-core:0.18.0'
+    implementation 'org.mapsforge:mapsforge-poi:0.18.0'
+    implementation 'org.mapsforge:mapsforge-poi-android:0.18.0'
+    implementation 'org.mapsforge:sqlite-android:0.18.0'
+    implementation 'org.mapsforge:sqlite-android:0.18.0:natives-armeabi-v7a'
+    implementation 'org.mapsforge:sqlite-android:0.18.0:natives-arm64-v8a'
+    implementation 'org.mapsforge:sqlite-android:0.18.0:natives-x86'
+    implementation 'org.mapsforge:sqlite-android:0.18.0:natives-x86_64'
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
+    implementation 'pl.droidsonroids.gif:android-gif-drawable:1.2.+'
+}

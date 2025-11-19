@@ -1,0 +1,48 @@
+<resources>
+    <!-- Base application theme. -->
+    <style name="Theme.NavTrack" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Primary brand color. -->
+<!--        #1D2339-->
+        <item name="colorPrimary">@color/purple_500</item>
+        <item name="colorPrimaryVariant">@color/purple_400</item>
+        <item name="colorPrimarySurface">@color/purple_300</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorOnErrorContainer">@color/lightGrey</item>
+        <!-- Secondary brand color. -->
+        <item name="colorSecondary">@color/teal_200</item>
+        <item name="colorSecondaryVariant">@color/teal_700</item>
+        <item name="colorOnSecondary">@color/black</item>
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <item name="materialButtonStyle">@style/Widget.NavTrack.Button</item>
+    </style>
+
+    <!-- Define the AppBarOverlay style -->
+    <style name="Theme.AppBarOverlay" parent="ThemeOverlay.AppCompat.Dark.ActionBar">
+        <item name="android:textColorPrimary">@color/purple_500</item>
+        <item name="android:textColorSecondary">@color/purple_700</item>
+    </style>
+
+    <!-- Define the PopupOverlay style -->
+    <style name="Theme.PopupOverlay" parent="ThemeOverlay.AppCompat.Light" />
+
+    <style name="ShapeAppearance.NavTrack.Button" parent="ShapeAppearance.MaterialComponents.SmallComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">20dp</item>
+    </style>
+
+    <!-- A MaterialComponents button style that uses that shape -->
+    <style name="Widget.NavTrack.Button" parent="Widget.MaterialComponents.Button">
+        <item name="shapeAppearance">@style/ShapeAppearance.NavTrack.Button</item>
+        <item name="backgroundTint">@color/purple_500</item>
+        <item name="android:textColor">@color/white</item>
+    </style>
+
+    <style name="Theme.NavTrack.Splash" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- make the window itself transparent -->
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:logo">@drawable/ic_logo2</item>
+    </style>
+</resources>

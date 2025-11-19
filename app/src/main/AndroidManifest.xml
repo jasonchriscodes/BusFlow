@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.jason.publisher"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
+
+
+    <application
+        android:name=".App"
+        android:icon="@drawable/ic_logo2"
+        android:roundIcon="@drawable/ic_logo2"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.NavTrack"
+        android:usesCleartextTraffic="true"
+        tools:targetApi="31">
+
+        <!-- FileProvider declaration -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <activity
+            android:name=".FeedbackActivity"
+            android:exported="false" />
+        <activity
+            android:name=".old.TestActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+        <activity
+            android:name=".Contacts.ChatActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+        <activity android:name=".old.LoginActivity"></activity>
+        <activity android:name=".old.RegisterActivity" />
+        <activity
+            android:name=".main.activity.MapActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+        <activity android:name=".main.activity.TestMapActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"/>
+
+        <service android:name="org.eclipse.paho.android.service.MqttService" />
+
+<!--        <activity-->
+<!--            android:name=".SplashScreen"-->
+<!--            android:exported="true"-->
+<!--            android:screenOrientation="landscape">-->
+<!--            <intent-filter>-->
+<!--                <action android:name="android.intent.action.MAIN" />-->
+<!--                <category android:name="android.intent.category.LAUNCHER" />-->
+<!--            </intent-filter>-->
+<!--        </activity>-->
+        <activity
+            android:name=".main.activity.ScheduleActivity"
+            android:exported="true"
+            android:screenOrientation="landscape"/>
+        <activity
+            android:name=".main.activity.SplashActivity"
+            android:exported="true"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.NavTrack.Splash">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".main.activity.BreakActivity"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="false" />
+        <activity
+            android:name=".main.activity.RepActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|keyboardHidden|screenSize" />
+        <!--        <activity-->
+<!--            android:name=".OfflineActivity"-->
+<!--            android:exported="false"-->
+<!--            android:screenOrientation="landscape" />-->
+        <service
+            android:name=".main.services.ScreenRecordService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection"
+            android:stopWithTask="true" />
+        <!-- ACTION_BATTERY_LOW while your process might be dead -->
+        <receiver
+            android:name=".main.utils.BatteryLowManifestReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BATTERY_LOW"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- Dismiss “OK” action from the heads-up -->
+        <receiver
+            android:name=".main.utils.BatteryLowAckReceiver"
+            android:exported="false" />
+    </application>
+
+</manifest>

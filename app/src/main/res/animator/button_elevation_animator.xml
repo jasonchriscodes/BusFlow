@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- pressed or hovered → bigger shadow -->
+    <item android:state_pressed="true">
+        <objectAnimator
+            android:propertyName="translationZ"
+            android:duration="100"
+            android:valueFrom="4dp"
+            android:valueTo="8dp"
+            android:valueType="floatType"/>
+    </item>
+
+    <item android:state_hovered="true">
+        <objectAnimator
+            android:propertyName="translationZ"
+            android:duration="100"
+            android:valueFrom="4dp"
+            android:valueTo="8dp"
+            android:valueType="floatType"/>
+    </item>
+
+    <!-- default → modest shadow -->
+    <item>
+        <objectAnimator
+            android:propertyName="translationZ"
+            android:duration="100"
+            android:valueTo="4dp"
+            android:valueType="floatType"/>
+    </item>
+
+</selector>
