@@ -42,6 +42,8 @@ class MqttHelper(
         private const val MIN_FETCH_INTERVAL_MS = 2_000L
         // include scheduleData in your GET
         private const val CLIENT_KEYS = "latitude,longitude,bearing,speed,direction,scheduleData,currentTripLabel"
+        // Minimum distance change to consider as movement (in meters)
+        private const val MIN_MOVEMENT_DISTANCE = 5.0
     }
 
     // track when we last fetched attributes for each token
@@ -245,20 +247,34 @@ class MqttHelper(
                     return
                 }
 
-                // First time we see this token → record but don’t draw yet
+                // First time we see this token → record and draw immediately
                 val prev = owner.prevCoords[token]
                 if (prev == null) {
                     owner.prevCoords[token] = lat to lon
                     owner.lastSeen[token] = now
-                    if (labelUpdated) {
-                        owner.runOnUiThread { owner.mapController.refreshDetailPanelIcons() }
+                    // Draw marker immediately even on first fetch
+                    owner.runOnUiThread {
+                        val pos = LatLong(lat, lon)
+                        val idx = owner.arrBusData.indexOfFirst { it.accessToken == token }
+                        val slot = ((idx + 2).coerceAtMost(10)).coerceAtLeast(2)
+                        val iconName = "ic_bus_symbol$slot"
+                        val iconRes = owner.resources.getIdentifier(iconName, "drawable", owner.packageName)
+                        val rotated = client.bearing?.let { owner.mapController.rotateDrawable(iconRes, it) }
+                        val marker = Marker(pos, rotated, 0, 0)
+                        binding.map.layerManager.layers.add(marker)
+                        owner.markerBus[token] = marker
+                        binding.map.invalidate()
+                        if (labelUpdated) {
+                            owner.mapController.refreshDetailPanelIcons()
+                        }
                     }
-                    Log.d("MqttHelper getAttributes", "First fetch for $token; awaiting movement")
+                    Log.d("MqttHelper getAttributes", "First fetch for $token; marker created")
                     return
                 }
 
-                // No movement → maybe still refresh panel if label changed
+                // No movement → still update lastSeen and refresh panel if label changed
                 if (prev.first == lat && prev.second == lon) {
+                    owner.lastSeen[token] = now // Update lastSeen even if no movement
                     if (labelUpdated) {
                         owner.runOnUiThread { owner.mapController.refreshDetailPanelIcons() }
                     }
@@ -266,35 +282,48 @@ class MqttHelper(
                 }
 
                 // Movement detected → update marker (and re-rotate), then refresh panel if needed
+                // Check if movement is significant enough (at least 5 meters)
+                val distance = owner.mapController.calculateDistance(prev.first, prev.second, lat, lon)
+                if (distance < MIN_MOVEMENT_DISTANCE && !labelUpdated) {
+                    // Small movement, just update lastSeen
+                    owner.lastSeen[token] = now
+                    return
+                }
+                
                 owner.prevCoords[token] = lat to lon
                 owner.lastSeen[token] = now
 
                 owner.runOnUiThread {
-                    val pos = LatLong(lat, lon)
-                    val existing = owner.markerBus[token]
+                    try {
+                        val pos = LatLong(lat, lon)
+                        val existing = owner.markerBus[token]
 
-                    // slot icon selection stays stable per bus position in arrBusData
-                    val idx = owner.arrBusData.indexOfFirst { it.accessToken == token }
-                    val slot = ((idx + 2).coerceAtMost(10)).coerceAtLeast(2)
-                    val iconName = "ic_bus_symbol$slot"
-                    val iconRes = owner.resources.getIdentifier(iconName, "drawable", owner.packageName)
-                    val rotated = client.bearing?.let { owner.mapController.rotateDrawable(iconRes, it) }
+                        // slot icon selection stays stable per bus position in arrBusData
+                        val idx = owner.arrBusData.indexOfFirst { it.accessToken == token }
+                        val slot = ((idx + 2).coerceAtMost(10)).coerceAtLeast(2)
+                        val iconName = "ic_bus_symbol$slot"
+                        val iconRes = owner.resources.getIdentifier(iconName, "drawable", owner.packageName)
+                        val rotated = client.bearing?.let { owner.mapController.rotateDrawable(iconRes, it) }
 
-                    if (existing == null) {
-                        val marker = Marker(pos, rotated, 0, 0)
-                        binding.map.layerManager.layers.add(marker)
-                        owner.markerBus[token] = marker
-                    } else {
-                        existing.latLong = pos
-                        if (rotated != null) existing.bitmap = rotated
+                        if (existing == null) {
+                            val marker = Marker(pos, rotated, 0, 0)
+                            binding.map.layerManager.layers.add(marker)
+                            owner.markerBus[token] = marker
+                        } else {
+                            existing.latLong = pos
+                            if (rotated != null) existing.bitmap = rotated
+                        }
+
+                        binding.map.invalidate()
+                        owner.mapController.activeBusToken = token
+
+                        // ensure the two-line panel updates when label changed
+                        if (labelUpdated) {
+                            owner.mapController.refreshDetailPanelIcons()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MqttHelper", "Error updating marker: ${e.message}", e)
                     }
-
-                    binding.map.invalidate()
-                    owner.mapController.activeBusToken = token
-
-                    // ensure the two-line panel updates when label changed
-                    if (labelUpdated) owner.mapController.refreshDetailPanelIcons()
-                    else owner.mapController.refreshDetailPanelIcons()
                 }
             }
 

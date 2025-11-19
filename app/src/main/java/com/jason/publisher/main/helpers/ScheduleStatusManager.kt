@@ -171,8 +171,25 @@ class ScheduleStatusManager(
             val t2 = ((apiTime.time - baseTime.time) / 1000).toDouble()
 
             // --- 4. Estimate time to arrival from current position (t1) ---
-            val minSpeedMps = 0.1  // Avoid division by zero
-            val effectiveSpeed = if (activity.smoothedSpeed / 3.6 < minSpeedMps) minSpeedMps else activity.smoothedSpeed / 3.6
+            // Use actual speed if available and reasonable, otherwise use average speed from schedule
+            val minSpeedMps = 0.5  // Minimum speed (0.5 m/s = 1.8 km/h) to avoid division by zero
+            val maxSpeedMps = 30.0 // Maximum speed (30 m/s = 108 km/h) for urban bus
+            
+            // Calculate average speed from schedule if available
+            val avgSpeedFromSchedule = if (d2 > 0 && t2 > 0) {
+                (d2 / t2).coerceIn(minSpeedMps, maxSpeedMps)
+            } else {
+                minSpeedMps
+            }
+            
+            // Use smoothed speed if available and reasonable, otherwise fall back to schedule average
+            val rawSpeedMps = activity.smoothedSpeed / 3.6
+            val effectiveSpeed = when {
+                rawSpeedMps >= minSpeedMps && rawSpeedMps <= maxSpeedMps -> rawSpeedMps
+                rawSpeedMps < minSpeedMps -> avgSpeedFromSchedule // Use schedule average if too slow
+                else -> avgSpeedFromSchedule.coerceAtMost(maxSpeedMps) // Cap at max if too fast
+            }
+            
             val t1 = d1 / effectiveSpeed  // d1 is the distance to the red stop in meters
 
             val predictedArrival = Calendar.getInstance().apply {
@@ -305,7 +322,22 @@ class ScheduleStatusManager(
         val t2 = ((finalStopScheduledTime.time - baseTime.time) / 1000).toDouble()
         Log.d(logTag, "t2 (total scheduled time to final stop): $t2 seconds")
 
-        val speedMetersPerSec = activity.speed / 3.6
+        // Use smoothed speed with fallback to schedule average
+        val minSpeedMps = 0.5
+        val maxSpeedMps = 30.0
+        val avgSpeedFromSchedule = if (d2 > 0 && t2 > 0) {
+            (d2 / t2).coerceIn(minSpeedMps, maxSpeedMps)
+        } else {
+            minSpeedMps
+        }
+        
+        val rawSpeedMps = activity.smoothedSpeed / 3.6
+        val speedMetersPerSec = when {
+            rawSpeedMps >= minSpeedMps && rawSpeedMps <= maxSpeedMps -> rawSpeedMps
+            rawSpeedMps < minSpeedMps -> avgSpeedFromSchedule
+            else -> avgSpeedFromSchedule.coerceAtMost(maxSpeedMps)
+        }
+        
         val t1 = d1 / speedMetersPerSec
         Log.d(logTag, "t1 (estimated time remaining): $t1 seconds")
 

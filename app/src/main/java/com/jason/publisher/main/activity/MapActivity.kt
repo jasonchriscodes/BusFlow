@@ -1731,6 +1731,7 @@ class MapActivity : AppCompatActivity() {
                     if (!hasPassedFirstStop) {
                         if (nearestIndex == 0) {
                             hasPassedFirstStop = true // Mark the first bus stop as passed
+                            nearestRouteIndex = nearestIndex
                             Log.d("MapActivity", "✅ First bus stop passed. Rules activated.")
                         } else {
                             Log.d("MapActivity", "⚠️ Waiting for first bus stop to be passed.")
@@ -1743,41 +1744,63 @@ class MapActivity : AppCompatActivity() {
                         }
                     }
 
-                    // Ignore backward movement
-                    if (nearestIndex < nearestRouteIndex) return
-
-                    // Unlock detection zone logic
-                    val distance = mapController.calculateDistance(lastLatitude, lastLongitude, latitude, longitude)
-                    if (distance > detectionZoneRadius * 2) {
-                        nearestRouteIndex = mapController.findNearestBusRoutePoint(latitude, longitude)
+                    // Allow small backward movement (within 3 points) to handle GPS drift
+                    if (nearestIndex < nearestRouteIndex - 3) {
+                        Log.d("MapActivity", "⚠️ Ignoring large backward movement: $nearestIndex < ${nearestRouteIndex - 3}")
+                        return
                     }
 
-                    // Ignore sudden jumps (skip unexpected spikes)
-                    if (nearestIndex > nearestRouteIndex + jumpThreshold) return
-
-                    // Smooth marker animation for consecutive points
-                    if (nearestIndex >= nearestRouteIndex) {
-                        mapController.animateMarkerThroughPoints(nearestRouteIndex, nearestIndex)
+                    // Update nearestRouteIndex if we've moved significantly
+                    val distanceFromLast = mapController.calculateDistance(
+                        lastValidLatitude, lastValidLongitude, 
+                        latitude, longitude
+                    )
+                    if (distanceFromLast > 10.0) { // Update if moved more than 10 meters
+                        nearestRouteIndex = nearestIndex
                     }
 
-                    // Update the valid position
-                    nearestRouteIndex = nearestIndex
-                    val nearestRoutePoint = route[nearestIndex]
+                    // Allow gradual forward movement (don't block if within reasonable range)
+                    if (nearestIndex > nearestRouteIndex + jumpThreshold * 2) {
+                        Log.d("MapActivity", "⚠️ Ignoring sudden jump: $nearestIndex > ${nearestRouteIndex + jumpThreshold * 2}")
+                        return
+                    }
 
-                    latitude = nearestRoutePoint.latitude ?: latitude
-                    longitude = nearestRoutePoint.longitude ?: longitude
+                    // Update position - use route point if we're close enough, otherwise use GPS
+                    val distanceToRoute = if (nearestIndex < route.size) {
+                        val routePoint = route[nearestIndex]
+                        mapController.calculateDistance(
+                            latitude, longitude,
+                            routePoint.latitude ?: 0.0,
+                            routePoint.longitude ?: 0.0
+                        )
+                    } else {
+                        Double.MAX_VALUE
+                    }
+
+                    // If GPS is close to route, snap to route; otherwise use GPS directly
+                    if (distanceToRoute < 50.0 && nearestIndex < route.size) {
+                        val nearestRoutePoint = route[nearestIndex]
+                        latitude = nearestRoutePoint.latitude ?: latitude
+                        longitude = nearestRoutePoint.longitude ?: longitude
+                        nearestRouteIndex = nearestIndex
+                    } else {
+                        // Use GPS directly if far from route
+                        nearestRouteIndex = nearestIndex
+                    }
+
                     lastValidLatitude = latitude
                     lastValidLongitude = longitude
 
                     // Calculate bearing toward next index
-                    val nextIndex = if (nearestIndex < route.size - 1) nearestIndex + 1 else nearestIndex
-                    val targetPoint = route[nextIndex]
-
-                    bearing = mapController.calculateBearing(
-                        latitude, longitude,
-                        targetPoint.latitude ?: 0.0,
-                        targetPoint.longitude ?: 0.0
-                    )
+                    val nextIndex = if (nearestRouteIndex < route.size - 1) nearestRouteIndex + 1 else nearestRouteIndex
+                    if (nextIndex < route.size) {
+                        val targetPoint = route[nextIndex]
+                        bearing = mapController.calculateBearing(
+                            latitude, longitude,
+                            targetPoint.latitude ?: 0.0,
+                            targetPoint.longitude ?: 0.0
+                        )
+                    }
 
                     Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
                     Log.d("GPS_DEBUG", "Speed: ${location.speed}, Bearing: ${location.bearing}")
@@ -1787,16 +1810,21 @@ class MapActivity : AppCompatActivity() {
 //                    Toast.makeText(this@MapActivity, "Speed: ${location.speed}, Bearing: ${location.bearing}", Toast.LENGTH_LONG).show()
 
                     runOnUiThread {
-                        speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
-                        mapController.updateBusMarkerPosition(latitude, longitude, bearing)
-                        checkPassedStops(latitude, longitude)
-                        updateTimingPointBasedOnLocation(latitude, longitude)
-                        scheduleStatusValueTextView.text = "Calculating..."
-                        scheduleStatusManager.checkScheduleStatus()
-                        updateApiTime()
-                        LastLocationStore.save(this@MapActivity, latitude, longitude)
+                        try {
+                            speedTextView.text = "Speed: ${"%.2f".format(speed)} km/h"
+                            // Always update marker position to prevent stuck symbol
+                            mapController.updateBusMarkerPosition(latitude, longitude, bearing)
+                            checkPassedStops(latitude, longitude)
+                            updateTimingPointBasedOnLocation(latitude, longitude)
+                            scheduleStatusValueTextView.text = "Calculating..."
+                            scheduleStatusManager.checkScheduleStatus()
+                            updateApiTime()
+                            LastLocationStore.save(this@MapActivity, latitude, longitude)
 
-                        binding.map.invalidate() // Refresh map view
+                            binding.map.invalidate() // Refresh map view
+                        } catch (e: Exception) {
+                            Log.e("MapActivity", "Error in location update UI: ${e.message}", e)
+                        }
                     }
 
                     if (firstTime && !forceAheadStatus) {
@@ -1985,7 +2013,26 @@ class MapActivity : AppCompatActivity() {
         FileLogger.markAppClosed("MapActivity")
         super.onDestroy()
         panelDebugEnabled = false
-        if (::mqttHelper.isInitialized) mqttHelper.stopAttributePolling()
+        
+        // Stop location updates
+        if (::fusedLocationClient.isInitialized && ::locationCallback.isInitialized) {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        }
+        
+        // Stop MQTT polling
+        if (::mqttHelper.isInitialized) {
+            mqttHelper.stopAttributePolling()
+        }
+        
+        // Stop activity monitor
+        if (::mapController.isInitialized) {
+            mapController.stopActivityMonitor()
+        }
+        
+        // Cleanup time manager
+        if (::timeManager.isInitialized) {
+            timeManager.cleanup()
+        }
 
         // Remove polyline from Mapsforge map
         routePolyline?.let {
@@ -1993,7 +2040,6 @@ class MapActivity : AppCompatActivity() {
             binding.map.invalidate()
         }
         Log.d("MapActivity", "🗑️ Removed polyline on destroy.")
-        timeManager.currentTimeHandler.removeCallbacks(timeManager.currentTimeRunnable)
     }
 
     private fun isTokenLike(s: String?): Boolean {
@@ -2024,6 +2070,14 @@ class MapActivity : AppCompatActivity() {
         panelDebugEnabled = false
         if (::mqttHelper.isInitialized) mqttHelper.stopAttributePolling()
         // remove any observers/timers you set that could call logPanelDebugFromDetailPanel()
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        // Restart polling when activity resumes
+        if (::mqttHelper.isInitialized && ::mqttManager.isInitialized) {
+            mqttHelper.startAttributePolling()
+        }
     }
 
     private fun publishActiveSegment(label: String) {
