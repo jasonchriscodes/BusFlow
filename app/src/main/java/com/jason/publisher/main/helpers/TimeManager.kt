@@ -96,7 +96,7 @@ class TimeManager(private val owner: MapActivity, private val scheduleStatusMana
                 try {
                     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                     owner.currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
-                    Log.d("MapActivity startStartTime", "Current simulated time: ${owner.currentTimeTextView.text}")
+                    // ✅ OPTIMIZED: Removed verbose logging - time updates every second
 
                     simulatedStartTime.add(Calendar.SECOND, 1)
                     // Schedule next update only if handler is still valid

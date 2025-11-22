@@ -109,10 +109,10 @@ class ScheduleStatusManager(
 
             if (activity.forceAheadStatus) {
                 activity.baseTimeStr = activity.customTime
-                Log.d("MapActivity checkScheduleStatus", "baseTimeStr: ${activity.baseTimeStr}")
+                // ✅ OPTIMIZED: Removed verbose logging
             } else {
                 activity.baseTimeStr = activity.scheduleList.first().startTime + ":00"
-                Log.d("MapActivity checkScheduleStatus", "baseTimeStr: ${activity.baseTimeStr}")
+                // ✅ OPTIMIZED: Removed verbose logging
             }
             val baseTime = activity.timeManager.parseTimeToday(activity.baseTimeStr)
 
@@ -260,20 +260,15 @@ class ScheduleStatusManager(
                         val iconView = activity.findViewById<ImageView>(R.id.scheduleAheadIcon)
                         if (iconView != null) {
                             iconView.setImageResource(symbolRes)
-                            Log.d("ScheduleStatusManager", "✅ UI updated: statusText=$statusText, colorRes=$colorRes, symbolRes=$symbolRes")
                         } else {
-                            Log.w("ScheduleStatusManager", "⚠️ scheduleAheadIcon not found using findViewById, trying binding...")
                             // Fallback: try to access via binding if available
                             try {
                                 val bindingIcon = binding.root.findViewById<ImageView>(R.id.scheduleAheadIcon)
                                 if (bindingIcon != null) {
                                     bindingIcon.setImageResource(symbolRes)
-                                    Log.d("ScheduleStatusManager", "✅ UI updated via binding.root: statusText=$statusText")
-                                } else {
-                                    Log.e("ScheduleStatusManager", "❌ scheduleAheadIcon not found in binding.root either")
                                 }
                             } catch (e3: Exception) {
-                                Log.e("ScheduleStatusManager", "Error accessing icon via binding: ${e3.message}", e3)
+                                Log.e("ScheduleStatusManager", "Error accessing icon: ${e3.message}", e3)
                             }
                         }
                     } catch (e2: Exception) {
@@ -286,27 +281,9 @@ class ScheduleStatusManager(
                 e.printStackTrace()
             }
 
-            FileLogger.d("MapActivity checkScheduleStatus", "======= Schedule Status Debug =======")
-            FileLogger.d("MapActivity checkScheduleStatus", "Current Lat: ${activity.latitude}, Lng: ${activity.longitude}")
-            FileLogger.d("MapActivity checkScheduleStatus", "Upcoming Stop: ${activity.stopAddress}")
-            Log.d("MapActivity checkScheduleStatus", "Upcoming Stop UI Text: ${activity.upcomingBusStopTextView.text}")
-            if (activity.currentStopIndex in activity.stops.indices) {
-                FileLogger.d("MapActivity checkScheduleStatus", "Current Stop (index ${activity.currentStopIndex-1}): ${activity.stops[activity.currentStopIndex-1].address}")
-            } else {
-                FileLogger.d("MapActivity checkScheduleStatus", "Current Stop not available; currentStopIndex: ${activity.currentStopIndex}, stops count: ${activity.stops.size}")
-            }
-            FileLogger.d("MapActivity checkScheduleStatus", "Red Stop Index: $redStopIndex")
-            FileLogger.d("MapActivity checkScheduleStatus", "Red Stop Name: ${redStop.address}")
-            FileLogger.d("MapActivity checkScheduleStatus", "effectiveSpeed (km/h): $effectiveSpeed, effectiveSpeed (m/s): ${effectiveSpeed / 3.6}")
-            FileLogger.d("MapActivity checkScheduleStatus", "Distance to Red Stop (d1): $d1 meters")
-            FileLogger.d("MapActivity checkScheduleStatus", "Total Distance (d2): $d2 meters")
-            Log.d("MapActivity checkScheduleStatus", "Total Time (t2): $t2 seconds")
-            FileLogger.d("MapActivity checkScheduleStatus", "Estimated Time Remaining (t1 = d1 / effectiveSpeed): $t1 seconds")
-            FileLogger.d("MapActivity checkScheduleStatus", "Predicted Arrival: $predictedArrivalStr")
-            FileLogger.d("MapActivity checkScheduleStatus", "API Time: $apiTimeStr")
-            FileLogger.d("MapActivity checkScheduleStatus", "Actual Time: $actualTimeStr")
-            FileLogger.d("MapActivity checkScheduleStatus", "Delta to Timing Point: $deltaSec seconds")
-            FileLogger.d("MapActivity checkScheduleStatus", "Status: $statusText")
+            // ✅ OPTIMIZED: Simplified logging - only log essential status info
+            // Detailed debug info removed to reduce log spam
+            // Status changes are tracked via LifecycleLogger in MapActivity
 
             overrideLateStatusForNextSchedule()
         } catch (e: Exception) {
@@ -334,19 +311,15 @@ class ScheduleStatusManager(
 
         val scheduledTimeForFinalStopStr = activity.scheduleList.first().endTime + ":00"
         val finalStopScheduledTime = activity.timeManager.parseTimeToday(scheduledTimeForFinalStopStr)
-        Log.d(logTag, "Final stop scheduled time: $scheduledTimeForFinalStopStr")
 
         val baseTimeStr = activity.scheduleList.first().startTime + ":00"
         val baseTime = activity.timeManager.parseTimeToday(baseTimeStr)
-        Log.d(logTag, "Base time: $baseTimeStr")
 
         val finalStop = activity.stops.last()
         val stopLat = finalStop.latitude!!
         val stopLon = finalStop.longitude!!
-        Log.d(logTag, "Final stop coordinates: lat=$stopLat, lon=$stopLon")
 
         val d1 = activity.mapController.calculateDistance(activity.latitude, activity.longitude, stopLat, stopLon)
-        Log.d(logTag, "d1 (distance current to final stop): $d1 meters")
 
         val finalStopRouteIndex = activity.route.indexOfLast {
             activity.mapController.calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
@@ -356,14 +329,12 @@ class ScheduleStatusManager(
             val p2 = activity.route[i + 1]
             activity.mapController.calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
         }
-        Log.d(logTag, "d2 (total route distance to final stop): $d2 meters")
         if (d2 == 0.0) {
             Log.e(logTag, "Total route distance is zero; cannot compute predicted arrival.")
             return
         }
 
         val t2 = ((finalStopScheduledTime.time - baseTime.time) / 1000).toDouble()
-        Log.d(logTag, "t2 (total scheduled time to final stop): $t2 seconds")
 
         // Use smoothed speed with fallback to schedule average
         val minSpeedMps = 0.5
@@ -382,7 +353,6 @@ class ScheduleStatusManager(
         }
 
         val t1 = d1 / speedMetersPerSec
-        Log.d(logTag, "t1 (estimated time remaining): $t1 seconds")
 
         val predictedArrival = Calendar.getInstance().apply {
             time = activity.timeManager.simulatedStartTime.time
@@ -390,19 +360,37 @@ class ScheduleStatusManager(
         }
 
         val predictedArrivalLastStop = timeFormat.format(predictedArrival.time)
-        Log.d(logTag, "Predicted arrival at final stop: $predictedArrivalLastStop")
 
         val nextScheduleStartRaw = activity.timeManager.getNextScheduleStartTime() ?: return
         val nextScheduleStartStr = nextScheduleStartRaw + ":00"
         val nextScheduleStartTime = activity.timeManager.parseTimeToday(nextScheduleStartStr)
-        Log.d(logTag, "Next schedule start time: $nextScheduleStartStr")
 
         val deltaNextSec = ((nextScheduleStartTime.time - predictedArrival.time.time) / 1000).toInt()
-        Log.d(logTag, "Delta (next schedule - predicted arrival): $deltaNextSec seconds")
+        // ✅ OPTIMIZED: Removed all verbose logging - only log when status is overridden
 
         if (deltaNextSec in -86400..300) {
             val overrideValue = if (deltaNextSec < 0) (-deltaNextSec) + 300 else deltaNextSec
-            val overrideStatusText = "Late for next run by ${overrideValue}s"
+
+            // ✅ FIX: Format time as "xx mins yy seconds" if >= 60 seconds
+            val overrideStatusText = if (overrideValue >= 60) {
+                val mins = overrideValue / 60
+                val secs = overrideValue % 60
+                if (secs > 0) {
+                    "Late for next run by $mins mins $secs seconds"
+                } else {
+                    "Late for next run by $mins mins"
+                }
+            } else {
+                "Late for next run by ${overrideValue}s"
+            }
+
+            // ✅ FIX: Format log message with "xx mins yy seconds"
+            val logFormattedValue = if (overrideValue >= 60) {
+                com.jason.publisher.main.utils.TimeFormatHelper.formatSecondsForLog(overrideValue)
+            } else {
+                "${overrideValue}s"
+            }
+
             activity.runOnUiThread {
                 try {
                     binding.scheduleStatusValueTextView.text = overrideStatusText
@@ -412,7 +400,7 @@ class ScheduleStatusManager(
                     val iconView = activity.findViewById<ImageView>(R.id.scheduleAheadIcon)
                     if (iconView != null) {
                         iconView.setImageResource(R.drawable.ic_schedule_late)
-                        Log.d(logTag, "✅ Overridden status text: \"$overrideStatusText\" (overrideValue: $overrideValue)")
+                        Log.d(logTag, "✅ Overridden status: \"$overrideStatusText\" ($logFormattedValue)")
                     } else {
                         Log.w(logTag, "⚠️ scheduleAheadIcon not found when updating override status")
                     }

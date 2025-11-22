@@ -175,7 +175,7 @@ class MqttHelper(
         token: String,
         clientKeys: String
     ) {
-        Log.d("MqttHelper getAttributes", "→ getAttributes for token=$token")
+        //Log.d("MqttHelper getAttributes", "→ getAttributes for token=$token")
         val now = System.currentTimeMillis()
 
         // 1) throttle to once every 2 s per bus

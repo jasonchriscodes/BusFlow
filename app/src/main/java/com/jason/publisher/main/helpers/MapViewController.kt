@@ -69,7 +69,7 @@ class MapViewController(
     /** Monitor other buses every second, logging their count and active/inactive status. */
     @SuppressLint("LongLogTag")
     fun startActivityMonitor() {
-        Log.d("MapViewController ActivityMonitor", "▶ startActivityMonitor() called")
+        // ✅ OPTIMIZED: Removed verbose startup log
 
         // Stop existing monitor first
         stopActivityMonitor()
@@ -80,6 +80,7 @@ class MapViewController(
             override fun run() {
                 try {
                     val now = System.currentTimeMillis()
+                    var removedCount = 0
 
                     // 1) remove any buses inactive ≥30s (increased from 10s to prevent premature removal)
                     activity.markerBus.keys
@@ -87,8 +88,6 @@ class MapViewController(
                         .forEach { t ->
                             val last = activity.lastSeen[t] ?: 0L
                             if (last != 0L && now - last >= 30_000L) {
-                                Log.d("MapViewController ActivityMonitor",
-                                    "Removing bus marker for token=$t; inactive for ${now - last}ms")
                                 activity.markerBus[t]?.let { marker ->
                                     binding.map.layerManager.layers.remove(marker)
                                 }
@@ -96,11 +95,14 @@ class MapViewController(
                                 activity.prevCoords.remove(t)
                                 activity.lastSeen.remove(t)
                                 activity.otherBusLabels.remove(t)
+                                removedCount++
                             }
                         }
 
-                    val active = activity.markerBus.keys.filter { it != activity.token }
-                    Log.d("MapViewController ActivityMonitor", "Current active bus markers: $active")
+                    // ✅ OPTIMIZED: Only log when buses are removed or count changes significantly
+                    if (removedCount > 0) {
+                        Log.d("MapViewController", "Removed $removedCount inactive bus marker(s)")
+                    }
 
                     // 2) refresh the map
                     binding.map.invalidate()
