@@ -2,6 +2,7 @@
 package com.jason.publisher.main.helpers
 
 import android.annotation.SuppressLint
+import android.os.Looper
 import android.util.Log
 import android.widget.ImageView
 import androidx.core.content.ContextCompat
@@ -77,8 +78,18 @@ class ScheduleStatusManager(
     fun checkScheduleStatus() {
         // If using mock data and first stop hasn't been passed, show "Please wait..."
         if (activity.forceAheadStatus && !activity.hasPassedFirstStop) {
-            activity.runOnUiThread {
+            try {
                 binding.scheduleStatusValueTextView.text = "Please wait..."
+                Log.d("ScheduleStatusManager", "✅ UI updated: Please wait...")
+            } catch (e: Exception) {
+                Log.e("ScheduleStatusManager", "Error updating 'Please wait' status: ${e.message}", e)
+                activity.runOnUiThread {
+                    try {
+                        binding.scheduleStatusValueTextView.text = "Please wait..."
+                    } catch (e2: Exception) {
+                        Log.e("ScheduleStatusManager", "Error in fallback: ${e2.message}", e2)
+                    }
+                }
             }
             return
         }
@@ -237,10 +248,42 @@ class ScheduleStatusManager(
                 else                -> R.color.blind_cyan
             }
 
-            activity.runOnUiThread {
-                binding.scheduleStatusValueTextView.text = statusText
-                binding.scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(activity, colorRes))
-                activity.findViewById<ImageView>(R.id.scheduleAheadIcon).setImageResource(symbolRes)
+            // Update UI directly (already on main thread from MapActivity)
+            try {
+                // Always use runOnUiThread to ensure we're on the main thread
+                activity.runOnUiThread {
+                    try {
+                        binding.scheduleStatusValueTextView.text = statusText
+                        binding.scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(activity, colorRes))
+
+                        // Try to find icon using findViewById
+                        val iconView = activity.findViewById<ImageView>(R.id.scheduleAheadIcon)
+                        if (iconView != null) {
+                            iconView.setImageResource(symbolRes)
+                            Log.d("ScheduleStatusManager", "✅ UI updated: statusText=$statusText, colorRes=$colorRes, symbolRes=$symbolRes")
+                        } else {
+                            Log.w("ScheduleStatusManager", "⚠️ scheduleAheadIcon not found using findViewById, trying binding...")
+                            // Fallback: try to access via binding if available
+                            try {
+                                val bindingIcon = binding.root.findViewById<ImageView>(R.id.scheduleAheadIcon)
+                                if (bindingIcon != null) {
+                                    bindingIcon.setImageResource(symbolRes)
+                                    Log.d("ScheduleStatusManager", "✅ UI updated via binding.root: statusText=$statusText")
+                                } else {
+                                    Log.e("ScheduleStatusManager", "❌ scheduleAheadIcon not found in binding.root either")
+                                }
+                            } catch (e3: Exception) {
+                                Log.e("ScheduleStatusManager", "Error accessing icon via binding: ${e3.message}", e3)
+                            }
+                        }
+                    } catch (e2: Exception) {
+                        Log.e("ScheduleStatusManager", "Error in UI update: ${e2.message}", e2)
+                        e2.printStackTrace()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ScheduleStatusManager", "Error updating UI: ${e.message}", e)
+                e.printStackTrace()
             }
 
             FileLogger.d("MapActivity checkScheduleStatus", "======= Schedule Status Debug =======")
@@ -358,29 +401,26 @@ class ScheduleStatusManager(
         Log.d(logTag, "Delta (next schedule - predicted arrival): $deltaNextSec seconds")
 
         if (deltaNextSec in -86400..300) {
-            // seconds → minutes
-            val overrideValueSec = if (deltaNextSec < 0) (-deltaNextSec) + 300 else deltaNextSec
-            val overrideMinutes = overrideValueSec / 60
-
-            val overrideLabel = when {
-                overrideMinutes <= 0 -> "< 1 min"
-                overrideMinutes == 1 -> "1 min"
-                else -> "$overrideMinutes min"
-            }
-
-            val overrideStatusText = "Late for next run by $overrideLabel"
+            val overrideValue = if (deltaNextSec < 0) (-deltaNextSec) + 300 else deltaNextSec
+            val overrideStatusText = "Late for next run by ${overrideValue}s"
             activity.runOnUiThread {
-                binding.scheduleStatusValueTextView.text = overrideStatusText
-                binding.scheduleStatusValueTextView.setTextColor(
-                    ContextCompat.getColor(activity, R.color.blind_red)
-                )
-                activity.findViewById<ImageView>(R.id.scheduleAheadIcon)
-                    .setImageResource(R.drawable.ic_schedule_late)
+                try {
+                    binding.scheduleStatusValueTextView.text = overrideStatusText
+                    binding.scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(activity,
+                        R.color.blind_red
+                    ))
+                    val iconView = activity.findViewById<ImageView>(R.id.scheduleAheadIcon)
+                    if (iconView != null) {
+                        iconView.setImageResource(R.drawable.ic_schedule_late)
+                        Log.d(logTag, "✅ Overridden status text: \"$overrideStatusText\" (overrideValue: $overrideValue)")
+                    } else {
+                        Log.w(logTag, "⚠️ scheduleAheadIcon not found when updating override status")
+                    }
+                } catch (e: Exception) {
+                    Log.e(logTag, "Error updating override status: ${e.message}", e)
+                    e.printStackTrace()
+                }
             }
-            Log.d(
-                logTag,
-                "Overridden status text: \"$overrideStatusText\" (overrideValueSec: $overrideValueSec, overrideMinutes: $overrideMinutes)"
-            )
         } else {
             Log.d(logTag, "Delta not within override range; no status override applied.")
         }

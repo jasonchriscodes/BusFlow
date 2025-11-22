@@ -14,6 +14,7 @@ import com.jason.publisher.main.services.ScreenRecordService
 import com.jason.publisher.main.sos.BatteryLowWatcher
 import com.jason.publisher.main.utils.FileLogger
 import android.Manifest
+import android.util.Log
 
 class App : Application(), Application.ActivityLifecycleCallbacks {
 
@@ -24,11 +25,20 @@ class App : Application(), Application.ActivityLifecycleCallbacks {
     // Tracks visible activities to know when the app is effectively closed
     private var liveActivities = 0
 
-    // Delay a bit to ignore config changes/rotations before stopping recorder
+    // Optimize: Increase delay to better handle config changes/rotations
+    // This prevents unnecessary stop/start cycles during screen rotations
     private val killHandler = Handler(Looper.getMainLooper())
+    private val STOP_RECORDING_DELAY_MS = 2000L // Increased from 800ms to 2 seconds
     private val maybeStopRecording = Runnable {
         if (liveActivities == 0) {
-            ScreenRecordService.stop(applicationContext)
+            // Only stop built-in recording if it was enabled
+            // Check if built-in recording is enabled before stopping
+            val prefs = applicationContext.getSharedPreferences("screen_recording_prefs", MODE_PRIVATE)
+            val isBuiltinEnabled = prefs.getBoolean("enable_builtin_recording", false)
+            if (isBuiltinEnabled) {
+                Log.d("App", "No activities alive, stopping screen recording service")
+                ScreenRecordService.stop(applicationContext)
+            }
         }
     }
 
@@ -57,9 +67,10 @@ class App : Application(), Application.ActivityLifecycleCallbacks {
     override fun onActivityDestroyed(a: Activity) {
         liveActivities--
         if (liveActivities <= 0) {
-            // wait a beat to ignore rotation/config switches
+            // Optimize: Wait longer to ignore rotation/config switches
+            // This prevents unnecessary service restarts during screen rotations
             killHandler.removeCallbacks(maybeStopRecording)
-            killHandler.postDelayed(maybeStopRecording, 800)
+            killHandler.postDelayed(maybeStopRecording, STOP_RECORDING_DELAY_MS)
         }
     }
 

@@ -199,6 +199,10 @@ class MapViewController(
             val store = try {
                 MapFile(mapFile)
             } catch (e: Exception) {
+                Log.e("MapViewController", "Error loading map file: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(activity, "Error loading map file: ${e.message}", Toast.LENGTH_LONG).show()
+                }
                 return@launch
             }
             val layer = TileRendererLayer(
@@ -209,18 +213,46 @@ class MapViewController(
             ).apply { setXmlRenderTheme(InternalRenderTheme.DEFAULT) }
 
             withContext(Dispatchers.Main) {
-                if (!binding.map.layerManager.layers.contains(layer))
-                    binding.map.layerManager.layers.add(layer)
+                try {
+                    // ✅ FIX: Ensure map layer is added correctly and map is rendered
+                    // Remove any existing TileRendererLayer first to avoid duplicates
+                    val existingLayers = binding.map.layerManager.layers.filterIsInstance<TileRendererLayer>()
+                    existingLayers.forEach { binding.map.layerManager.layers.remove(it) }
 
-                binding.map.post {
-                    binding.map.model.mapViewPosition.setZoomLevel(15)
-                    binding.map.model.mapViewPosition.setCenter(
-                        LatLong(activity.latitude, activity.longitude)
-                    )
-                    drawDetectionZones(activity.stops)
-                    drawPolyline()
-                    addBusStopMarkers(activity.stops)
-                    addBusMarker(activity.latitude, activity.longitude)
+                    // Store reference to map layer
+                    mapTileLayer = layer
+
+                    // Add the new layer at index 0 (bottom layer, so map tiles render first)
+                    binding.map.layerManager.layers.add(0, layer)
+
+                    binding.map.post {
+                        try {
+                            binding.map.model.mapViewPosition.setZoomLevel(15)
+                            binding.map.model.mapViewPosition.setCenter(
+                                LatLong(activity.latitude, activity.longitude)
+                            )
+                            drawDetectionZones(activity.stops)
+                            drawPolyline()
+                            addBusStopMarkers(activity.stops)
+                            addBusMarker(activity.latitude, activity.longitude)
+
+                            // ✅ CRITICAL: Force map to render by invalidating
+                            binding.map.invalidate()
+
+                            // ✅ FIX: Additional invalidate after a short delay to ensure map renders
+                            binding.map.postDelayed({
+                                binding.map.invalidate()
+                                Log.d("MapViewController", "✅ Map layer added and invalidated")
+                            }, 200)
+                        } catch (e: Exception) {
+                            Log.e("MapViewController", "Error setting up map: ${e.message}", e)
+                            // Ensure map is invalidated even on error
+                            binding.map.invalidate()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("MapViewController", "Error adding map layer: ${e.message}", e)
+                    // Ensure map is invalidated even on error
                     binding.map.invalidate()
                 }
             }
@@ -415,17 +447,46 @@ class MapViewController(
      * Move (or create) the bus marker at [lat],[lon], rotated to [bearing],
      * then spin the map so that "up" is always this bus's heading.
      */
+    // ✅ OPTIMIZATION: Cache last position to avoid unnecessary updates
+    private var lastMarkerLat = Double.NaN
+    private var lastMarkerLon = Double.NaN
+    private var lastMarkerBearing = Float.NaN
+    private var lastMarkerUpdateTime = 0L
+    private val MARKER_UPDATE_MIN_INTERVAL_MS = 100L // Minimum 100ms between marker updates for smooth movement
+
+    // ✅ FIX: Track map layer to ensure it's never removed
+    private var mapTileLayer: TileRendererLayer? = null
+
     fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float) {
         try {
-            // 1) publish telemetry & client-attrs (throttled to avoid excessive calls)
-            mqttHelper.publishTelemetryData()
-            activity.updateClientAttributes()
+            val currentTime = System.currentTimeMillis()
 
-            // 2) build a rotated icon for *this* bus
+            // ✅ OPTIMIZED: Only skip heavy operations if position hasn't changed
+            // But always update marker position and invalidate map to prevent white screen
+            val positionChanged = (lat != lastMarkerLat || lon != lastMarkerLon ||
+                    Math.abs(bearing - lastMarkerBearing) > 1.0f)
+            val timePassed = (currentTime - lastMarkerUpdateTime) >= MARKER_UPDATE_MIN_INTERVAL_MS
+
+            // Always update marker position and map, but skip expensive operations if not needed
+            val shouldDoFullUpdate = positionChanged || timePassed
+
+            if (shouldDoFullUpdate) {
+                lastMarkerLat = lat
+                lastMarkerLon = lon
+                lastMarkerBearing = bearing
+                lastMarkerUpdateTime = currentTime
+
+                // 1) publish telemetry & client-attrs (throttled internally to avoid excessive calls)
+                mqttHelper.publishTelemetryData()
+                activity.updateClientAttributes()
+            }
+
+            // 2) build a rotated icon for *this* bus (always update for smooth rotation)
             val newPos  = LatLong(lat, lon)
             val rotated = rotateDrawable(R.drawable.ic_bus_symbol, bearing)
 
-            // 3) Update existing marker instead of removing/re-adding (more efficient)
+            // 3) ✅ CRITICAL: Always update marker position (even if position hasn't changed much)
+            // This ensures marker and map are always rendered correctly
             if (activity.busMarker != null) {
                 activity.busMarker!!.latLong = newPos
                 activity.busMarker!!.bitmap = rotated
@@ -438,16 +499,40 @@ class MapViewController(
             // 5) spin the *map* so that this bus's bearing is "up"
             binding.map.rotation = -bearing
 
-            // 6) optional: zoom, scale, center
+            // 6) optional: zoom, scale, center (always update to ensure map is visible)
             binding.map.scaleX = 1.9f
             binding.map.scaleY = 1.9f
             binding.map.setCenter(newPos)
 
-            // 7) redraw & update the little detail-panel
+            // ✅ FIX: Ensure map layer exists before invalidating
+            // If map layer is missing, try to reload it
+            val hasMapLayer = binding.map.layerManager.layers.any { it is TileRendererLayer }
+            if (!hasMapLayer && mapTileLayer != null) {
+                Log.w("MapViewController", "⚠️ Map layer missing, re-adding...")
+                try {
+                    if (!binding.map.layerManager.layers.contains(mapTileLayer)) {
+                        binding.map.layerManager.layers.add(0, mapTileLayer)
+                    }
+                } catch (e: Exception) {
+                    Log.e("MapViewController", "Error re-adding map layer: ${e.message}", e)
+                }
+            }
+
+            // 7) ✅ CRITICAL: Always invalidate map to prevent white screen
+            // This ensures map is always rendered, even if position hasn't changed
             binding.map.invalidate()
-            activity.onBusMarkerUpdated()
+
+            if (shouldDoFullUpdate) {
+                activity.onBusMarkerUpdated()
+            }
         } catch (e: Exception) {
             Log.e("MapViewController", "Error updating bus marker: ${e.message}", e)
+            // ✅ FIX: Ensure map is invalidated even on error to prevent white screen
+            try {
+                binding.map.invalidate()
+            } catch (e2: Exception) {
+                Log.e("MapViewController", "Error invalidating map: ${e2.message}", e2)
+            }
         }
     }
 
