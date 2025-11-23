@@ -371,22 +371,18 @@ class ScheduleStatusManager(
         if (deltaNextSec in -86400..300) {
             val overrideValue = if (deltaNextSec < 0) (-deltaNextSec) + 300 else deltaNextSec
 
-            // ✅ FIX: Format time as "xx mins yy seconds" if >= 60 seconds
+            // ✅ FIX: Format time as "xx mins" only (no seconds) if >= 60 seconds
             val overrideStatusText = if (overrideValue >= 60) {
                 val mins = overrideValue / 60
-                val secs = overrideValue % 60
-                if (secs > 0) {
-                    "Late for next run by $mins mins $secs seconds"
-                } else {
-                    "Late for next run by $mins mins"
-                }
+                "Late for next run by $mins mins"
             } else {
                 "Late for next run by ${overrideValue}s"
             }
 
-            // ✅ FIX: Format log message with "xx mins yy seconds"
+            // ✅ FIX: Format log message with "xx mins" only (no seconds)
             val logFormattedValue = if (overrideValue >= 60) {
-                com.jason.publisher.main.utils.TimeFormatHelper.formatSecondsForLog(overrideValue)
+                val mins = overrideValue / 60
+                "$mins mins"
             } else {
                 "${overrideValue}s"
             }
