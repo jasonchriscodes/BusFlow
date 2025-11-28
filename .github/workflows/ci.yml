@@ -1,76 +1,166 @@
-name: Android CI
+name: CI - Build Release & Publish APK to ThingsBoard
 
 on:
-  pull_request:
-    branches:
-      - main
+  push:
+    branches: [ main ]
 
 env:
-  TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
-  GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-  OpenRouteService_API_KEY: ${{ secrets.OpenRouteService_API_KEY }}
-  MAILERSEND_API_KEY: ${{ secrets.MAILERSEND_API_KEY }}
-  GOOGLE_APP_PASS: ${{ secrets.GOOGLE_APP_PASS }}
+  # ThingsBoard secrets are injected from repository Secrets (set TB_HOST, TB_USER, TB_PASS, TARGET_DEVICE_ID)
+  TB_HOST: ${{ secrets.TB_HOST }}
+  TB_USER: ${{ secrets.TB_USER }}
+  TB_PASS: ${{ secrets.TB_PASS }}
+  TARGET_DEVICE_ID: ${{ secrets.TARGET_DEVICE_ID }}
 
 jobs:
-  build:
+  build-publish:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          distribution: temurin
+          java-version: '11'
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x ./gradlew
+      - name: Install utilities (jq, zip, unzip)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq zip unzip
 
-      - name: Fetch latest version from server and increment
+      - name: Build release APK
+        id: build_apk
         run: |
-          latest_version=$(curl -s "http://43.226.218.98:5000/api/latest-version" | jq -r '.version')
-          echo "Latest version: $latest_version"
-          IFS='.' read -r -a version_parts <<< "$latest_version"
-          major=${version_parts[0]}
-          minor=${version_parts[1]}
-          patch=${version_parts[2]}
-          patch=$((patch + 1))
-          new_version="$major.$minor.$patch"
-          echo "new_version=$new_version" >> $GITHUB_ENV
-          echo "New version: $new_version"
-      - name: Update version in build.gradle
-        run: |
-          # Remove dots from versionName to create versionCode
-          version_code=$(echo "$new_version" | sed 's/\.//g')
-          
-          sed -i "s/versionCode .*/versionCode $version_code/" app/build.gradle
-          sed -i "s/versionName \".*\"/versionName \"$new_version\"/" app/build.gradle
-          
-          echo "Updated versionCode: $version_code"
-          echo "Updated versionName: $new_version"
-          
-          grep "versionCode\|versionName" app/build.gradle
-      - name: Update version on the server
-        run: |
-          curl -X POST "http://43.226.218.98:5000/api/update-version" \
-          -H "Content-Type: application/json" \
-          -d '{
-                "version": "'"$new_version"'",
-                "url": "http://43.226.218.98/apk/app-v'"$new_version"'.apk",
-                "release_notes": "Auto incremented version"
-              }'
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+          set -euo pipefail
+          # Adjust the gradle task if your module/task differs
+          ./gradlew clean assembleRelease
+          APK_PATH=$(find . -type f -path "*/app/build/outputs/apk/release/*.apk" | head -n1 || true)
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: Release APK not found. Searched for app/build/outputs/apk/release/*.apk"
+            exit 1
+          fi
+          echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
+          echo "Found APK at $APK_PATH"
+          # export a short sha tag
+          SHORT_SHA=${GITHUB_SHA::7}
+          TAG="release-${SHORT_SHA}"
+          echo "TAG=${TAG}" >> $GITHUB_ENV
+          echo "SHORT_SHA=${SHORT_SHA}" >> $GITHUB_ENV
 
-      - name: Upload APK using Flask API
+      - name: Create annotated git tag locally (for Release)
         run: |
-          response=$(curl -X POST "http://43.226.218.98:5000/api/upload-apk" \
-            -F "file=@app/build/outputs/apk/debug/app-debug.apk" \
-            -F "version=${new_version}" \
-            -F "release_notes=Auto incremented version")
-          echo "Upload response: $response"
-      - name: Verify uploaded version
-        run: curl http://43.226.218.98:5000/api/latest-version
+          # This creates a local tag that actions/create-release can reference
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # tag may already exist (if repeated run); allow non-zero exit
+          TAG=${{ env.TAG }}
+          git tag -a "${TAG}" -m "Automated release ${TAG}" || true
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        with:
+          tag_name: ${{ env.TAG }}
+          release_name: ${{ env.TAG }}
+          body: "Automated release from CI for commit ${GITHUB_SHA}"
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK as release asset
+        id: upload_asset
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ env.APK_PATH }}
+          asset_name: app_${{ env.SHORT_SHA }}.apk
+          asset_content_type: application/vnd.android.package-archive
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get release asset browser_download_url
+        id: get_asset_url
+        run: |
+          set -euo pipefail
+          OWNER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
+          TAG="${{ env.TAG }}"
+          API_URL="https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${TAG}"
+          echo "Querying GitHub API: $API_URL"
+          RELEASE_JSON=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" "$API_URL")
+          ASSET_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[0].browser_download_url')
+          if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
+            echo "ERROR: Could not obtain asset URL. Response:"
+            echo "$RELEASE_JSON"
+            exit 1
+          fi
+          echo "ASSET_URL=$ASSET_URL" >> $GITHUB_ENV
+          echo "ASSET_URL=$ASSET_URL"
+
+      - name: Compute APK SHA256
+        id: compute_sha
+        run: |
+          set -euo pipefail
+          SHASUM=$(sha256sum "${{ env.APK_PATH }}" | awk '{print $1}')
+          echo "APK_SHA256=$SHASUM" >> $GITHUB_ENV
+          echo "APK_SHA256=$SHASUM"
+
+      - name: (Optional) Verify asset URL reachable
+        run: |
+          set -euo pipefail
+          # Hit the asset URL HEAD to make sure it is reachable (will follow redirects)
+          echo "Checking asset URL: ${ASSET_URL}"
+          if ! curl --head --fail --location --max-time 20 "${ASSET_URL}"; then
+            echo "WARNING: Asset URL not reachable from runner."
+            # Do not fail the job here if you prefer; keep as warning. Remove '|| true' to fail.
+          fi
+
+      - name: Login to ThingsBoard Cloud and get JWT
+        id: tb_login
+        run: |
+          set -euo pipefail
+          TBHOST="${TB_HOST:-https://thingsboard.cloud}"
+          echo "Logging into ThingsBoard at $TBHOST"
+          # login returns JSON with token field
+          TOKEN=$(curl -s -X POST "${TBHOST}/api/auth/login" \
+            -H "Content-Type: application/json" \
+            -d "{\"username\":\"${TB_USER}\",\"password\":\"${TB_PASS}\"}" | jq -r .token)
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "ERROR: ThingsBoard login failed. Check TB_USER / TB_PASS secrets."
+            exit 1
+          fi
+          echo "TB_TOKEN=$TOKEN" >> $GITHUB_ENV
+          echo "Logged into ThingsBoard."
+
+      - name: Publish APK metadata to ThingsBoard (Server attribute latest_apk)
+        id: publish_tb
+        run: |
+          set -euo pipefail
+          TBHOST="${TB_HOST:-https://thingsboard.cloud}"
+          DEVICE_ID="${TARGET_DEVICE_ID}"
+          if [ -z "$DEVICE_ID" ] || [ "$DEVICE_ID" = "null" ]; then
+            echo "ERROR: TARGET_DEVICE_ID secret is missing."
+            exit 1
+          fi
+          METADATA=$(jq -n \
+            --arg url "${ASSET_URL}" \
+            --arg ver "${GITHUB_REF##*/}" \
+            --arg sha "sha256:${APK_SHA256}" \
+            --arg commit "${GITHUB_SHA}" \
+            '{"latest_apk": {"url": $url, "version": $ver, "checksum": $sha, "commit": $commit}}')
+          # ThingsBoard expects an array of key/value objects for attributes endpoint
+          ATTR_PAYLOAD=$(jq -n --argjson obj "$METADATA" '[{ "key": "latest_apk", "value": $obj.latest_apk }]')
+          echo "Posting metadata to ThingsBoard for device ${DEVICE_ID}"
+          RESPONSE=$(curl -s -X POST "${TBHOST}/api/plugins/telemetry/DEVICE/${DEVICE_ID}/attributes/SERVER_SCOPE" \
+            -H "Content-Type: application/json" \
+            -H "X-Authorization: Bearer ${TB_TOKEN}" \
+            -d "${ATTR_PAYLOAD}")
+          echo "ThingsBoard response: ${RESPONSE}"
+
+      - name: Cleanup local tag (optional)
+        if: always()
+        run: |
+          TAG="${{ env.TAG }}"
+          git tag -d "${TAG}" || true
