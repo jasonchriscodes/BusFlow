@@ -50,7 +50,10 @@ import com.jason.publisher.main.model.BusStop
 import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.MqttManager
+import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.NetworkStatusHelper
+import com.jason.publisher.main.utils.TripLog
+import com.jason.publisher.main.utils.hookBatteryToasts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -72,26 +75,9 @@ import java.util.Locale
 
 class ScheduleActivity : AppCompatActivity() {
 
-    companion object {
-        const val SERVER_URI = "tcp://43.226.218.97:1883"
-        const val CLIENT_ID = "jasonAndroidClientId"
-        const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
-        private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
-        private const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
-        private const val REQUEST_PERIODIC_TIME = 5000L
-        private const val PUBLISH_POSITION_TIME = 5000L
-        private const val LAST_MSG_KEY = "lastMessageKey"
-        private const val MSG_KEY = "messageKey"
-        private const val SOUND_FILE_NAME = "notif.wav"
-        private const val LOCATION_PERMISSION_REQUEST = 1234
-    }
-
     private lateinit var binding: ActivityScheduleBinding
     lateinit var mqttManagerConfig: MqttManager
-    private var mqttManager: MqttManager = MqttManager(
-                serverUri = SERVER_URI,
-                clientId  = CLIENT_ID
-                    )
+    lateinit var mqttManager: MqttManager
     private lateinit var connectionStatusTextView: TextView
     private val REQUEST_MANAGE_EXTERNAL_STORAGE = 1001
     private val REQUEST_WRITE_PERMISSION = 1002
@@ -101,7 +87,7 @@ class ScheduleActivity : AppCompatActivity() {
     private var aid = ""
     private var jsonString = ""
     private var token = ""
-    private var tokenConfigData = "oRSsbeuqDMSckyckcMyE"
+    private var tokenConfigData = "BEXBIArF3URHeYBslJE2"
     private var config: List<BusItem>? = emptyList()
     private var route: List<BusRoute> = emptyList()
     private var stops: List<BusStop> = emptyList()
@@ -116,6 +102,7 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var timeline2: StyledMultiColorTimeline
     private lateinit var timeline3: StyledMultiColorTimeline
     private val timelineRange = Pair("08:00", "11:10")
+    private lateinit var networkStatusHelper: NetworkStatusHelper
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
     private val loadingBarHandler = Handler(Looper.getMainLooper())
@@ -137,6 +124,26 @@ class ScheduleActivity : AppCompatActivity() {
     private val fetchingHandler = Handler(Looper.getMainLooper())
     private var dotCount = 1
     private lateinit var fetchingIcon: ImageView
+    private lateinit var networkStatusIndicator: View
+    private var fetchRoster = false
+    private val PANEL_DEBUG_PREF = "panel_debug_pref"
+    private val PANEL_DEBUG_NO_KEY = "panel_debug_no"
+    private var lastPreStartDump: String? = null
+    private lateinit var emptyStateText: TextView
+
+    companion object {
+        const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
+        const val CLIENT_ID = "jasonAndroidClientId"
+        const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
+        private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
+        private const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
+        private const val REQUEST_PERIODIC_TIME = 5000L
+        private const val PUBLISH_POSITION_TIME = 5000L
+        private const val LAST_MSG_KEY = "lastMessageKey"
+        private const val MSG_KEY = "messageKey"
+        private const val SOUND_FILE_NAME = "notif.wav"
+        private const val LOCATION_PERMISSION_REQUEST = 1234
+    }
 
 //    private val dummyScheduleData = listOf(
 //        ScheduleItem(
@@ -193,14 +200,21 @@ class ScheduleActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityScheduleBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        FileLogger.d("ScheduleActivity", "onCreate")
+        hookBatteryToasts()
+
+        // initialize them here
+        connectionStatusTextView = binding.connectionStatusTextView
+        networkStatusIndicator = binding.networkStatusIndicator
+        fetchRoster = intent.getBooleanExtra("EXTRA_FETCH_ROSTER", false)
 
         // initialize RecyclerView adapter
         scheduleAdapter = ScheduleAdapter(emptyList(), isDarkMode)
         scheduleRecycler = binding.scheduleRecycler
         scheduleRecycler.apply {
             layoutManager = LinearLayoutManager(this@ScheduleActivity)
-            adapter       = scheduleAdapter
-            visibility    = View.GONE
+            adapter = scheduleAdapter
+            visibility = View.GONE
         }
 
         // Initialize all views up front:
@@ -218,6 +232,7 @@ class ScheduleActivity : AppCompatActivity() {
         fetchingLayout = findViewById(R.id.fetchingLayout)
         fetchingText = findViewById(R.id.fetchingText)
         fetchingIcon = findViewById(R.id.fetchingIcon)
+        emptyStateText = findViewById(R.id.emptyStateText)
 
         // add a light gray 1dp divider without any XML
         val divider = DividerItemDecoration(this, DividerItemDecoration.VERTICAL)
@@ -235,8 +250,8 @@ class ScheduleActivity : AppCompatActivity() {
 
         binding.scheduleRecycler.apply {
             layoutManager = LinearLayoutManager(this@ScheduleActivity)
-            adapter       = scheduleAdapter
-            visibility    = View.GONE
+            adapter = scheduleAdapter
+            visibility = View.GONE
         }
 
         // Load dark mode preference BEFORE setting switch listener, but AFTER initializing buttons
@@ -249,18 +264,19 @@ class ScheduleActivity : AppCompatActivity() {
         darkModeSwitch.setOnCheckedChangeListener { _, isChecked ->
             isDarkMode = isChecked
             applyThemeMode(isDarkMode)
-            getSharedPreferences("prefs", MODE_PRIVATE).edit().putBoolean("dark_mode", isDarkMode).apply()
+            getSharedPreferences("prefs", MODE_PRIVATE).edit().putBoolean("dark_mode", isDarkMode)
+                .apply()
         }
 
         // 0) init your MQTT managers *before* you ever call enterOnlineMode()/fetchConfig()
         mqttManagerConfig = MqttManager(
             serverUri = SERVER_URI,
-            clientId  = CLIENT_ID,
-            username  = tokenConfigData
+            clientId = CLIENT_ID,
+            username = tokenConfigData
         )
         mqttManager = MqttManager(
             serverUri = SERVER_URI,
-            clientId  = CLIENT_ID
+            clientId = CLIENT_ID
         )
 
         // 1. get connectivity service
@@ -269,9 +285,18 @@ class ScheduleActivity : AppCompatActivity() {
 // 2. define the callback
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                // when internet is back
-                runOnUiThread { enterOnlineMode() }
+                if (fetchRoster) {
+                    // only fetch when the user actually asked for fresh data
+                    runOnUiThread { enterOnlineMode() }
+                } else {
+                    // just update your status indicator
+                    runOnUiThread {
+                        connectionStatusTextView.text = "Connected (cache only)"
+                        networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_green)
+                    }
+                }
             }
+
             override fun onLost(network: Network) {
                 // when internet is gone
                 runOnUiThread { enterOfflineMode() }
@@ -289,12 +314,21 @@ class ScheduleActivity : AppCompatActivity() {
             connectivityManager.registerNetworkCallback(request, networkCallback)
         }
 
-// 4. do an initial-mode check
-        if (NetworkStatusHelper.isNetworkAvailable(this)) {
+        // read the user’s choice from the Splash
+        val fetchRoster = intent.getBooleanExtra("EXTRA_FETCH_ROSTER", false)
+// if they tapped “Fetch Roster” *and* we have internet, do a one-time fetch
+        if (fetchRoster && NetworkStatusHelper.isNetworkAvailable(this)) {
             enterOnlineMode()
         } else {
             enterOfflineMode()
         }
+
+        // still register the network-status indicator, but *do not* auto-fetch on reconnect
+        NetworkStatusHelper.setupNetworkStatus(
+            this,
+            binding.connectionStatusTextView,
+            binding.networkStatusIndicator
+        )
 
         // Check and request permission
         requestAllFilesAccessPermission()
@@ -304,10 +338,15 @@ class ScheduleActivity : AppCompatActivity() {
         Log.d("TimeTableActivity", "Fetched AID: $aid")
 
         // Set up network status UI
-        NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
+        NetworkStatusHelper.setupNetworkStatus(
+            this,
+            binding.connectionStatusTextView,
+            binding.networkStatusIndicator
+        )
 
         // Load configuration
-        Configuration.getInstance().load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
+        Configuration.getInstance()
+            .load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
 
         // Connect and subscribe to MQTT
         connectAndSubscribe()
@@ -339,10 +378,14 @@ class ScheduleActivity : AppCompatActivity() {
         )
 
         // 4. Open the .map file off the main thread
-        val mapFile = File(getHiddenFolder(), "new-zealand-2.map")
+        val mapFile = File(getHiddenFolder(), "new-zealand.map")
         if (!mapFile.exists()) {
             Log.e("ScheduleActivity", "Map file not found at: ${mapFile.absolutePath}")
-            Toast.makeText(this, "Offline map unavailable. Other features will still work.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                this,
+                "Offline map unavailable. Other features will still work.",
+                Toast.LENGTH_SHORT
+            ).show()
         } else {
             ioScope.launch {
                 // Open the .map file on IO
@@ -368,13 +411,22 @@ class ScheduleActivity : AppCompatActivity() {
                         preloadMap.layerManager.layers.add(renderer)
                         preloadMap.post {
                             preloadMap.model.mapViewPosition.setZoomLevel(16)
-                            preloadMap.model.mapViewPosition.setCenter(LatLong(-36.855647, 174.765249))
+                            preloadMap.model.mapViewPosition.setCenter(
+                                LatLong(
+                                    -36.855647,
+                                    174.765249
+                                )
+                            )
                             preloadMap.invalidate()
                         }
                     }
                 }
             }
         }
+
+        FileLogger.d("ScheduleActivity", "STATE_SNAPSHOT | ${Gson().toJson(buildExtraDump())}")
+
+
 
         changeModeButton.setOnClickListener {
 //            Log.d("ChangeModeButton", "Clicked")
@@ -414,7 +466,8 @@ class ScheduleActivity : AppCompatActivity() {
 
         // ➊ Immediately ask for location permission on startup
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-            != PackageManager.PERMISSION_GRANTED) {
+            != PackageManager.PERMISSION_GRANTED
+        ) {
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
@@ -424,42 +477,68 @@ class ScheduleActivity : AppCompatActivity() {
 
         // Set up the "Start Route" button
         binding.startRouteButton.setOnClickListener {
-            launchMapActivity()
+            if (scheduleData.isEmpty()) {
+                Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val no = nextPanelDebugNo()
+            val first = scheduleData.first()
+
+            // Log now (works for Trip or Break)
+            logPanelDebugPreStart(no, first)
+
+            when {
+                isBreak(first)      -> launchBreakActivity(first, no)
+                isReposition(first) -> launchRepActivity(first, no)   // 👈 NEW
+                else                -> launchMapActivity(no)
+            }
         }
 
 // Set up the "Test Start Route" button
         binding.testStartRouteButton.setOnClickListener {
-            if (scheduleData.isNotEmpty()) {
-                val firstScheduleItem = scheduleData.first()
-                Log.d("ScheduleActivity testStartRouteButton firstScheduleItem", firstScheduleItem.toString())
-                Log.d("ScheduleActivity testStartRouteButton before", scheduleData.toString())
-
-                // ✅ Actually remove the first item
-//                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
-                updateScheduleTablePaged()
-                updateTimeline()
-                rewriteOfflineScheduleData()
-
-                jsonString = Gson().toJson(busRouteData)
-
-                Log.d("ScheduleActivity testStartRouteButton after", scheduleData.toString())
-
-                val intent = Intent(this, TestMapActivity::class.java).apply {
-                    putExtra("AID", aid)
-                    putExtra("CONFIG", ArrayList(config))
-                    putExtra("JSON_STRING", jsonString)
-                    putExtra("ROUTE", ArrayList(route))
-                    putExtra("STOPS", ArrayList(stops))
-                    putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
-                    putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
-                    putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
-                    putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
-                }
-                startActivity(intent)
-            } else {
+            if (scheduleData.isEmpty()) {
                 Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val no = nextPanelDebugNo()
+            val first = scheduleData.first()
+
+            logPanelDebugPreStart(no, first)
+
+            if (isBreak(first)) {
+                launchBreakActivity(first,no)
+            } else {
+                launchMapActivity(no)
             }
         }
+    }
+
+    /**
+     * Launches BreakActivity for a "Break" item: pops it from the list, persists cache, refreshes UI, and passes current/remaining schedules.
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun launchBreakActivity(firstScheduleItem: ScheduleItem, no: Int) {
+        // remove first item, persist, refresh (your existing code) ...
+        scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+        isScheduleCacheUpdated = false
+        saveScheduleDataToCache()
+        updateScheduleTablePaged()
+        updateTimeline()
+        rewriteOfflineScheduleData()
+
+        val breakLabel = formatPanelLabel(firstScheduleItem) // e.g. "09:00 Break BCS → BCS"
+        getAccessToken()
+
+        val intent = Intent(this, BreakActivity::class.java).apply {
+            putExtra("AID", aid)
+            putExtra("ACCESS_TOKEN", token)
+            putExtra("BREAK_LABEL", breakLabel)
+            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+            putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+            putExtra("EXTRA_PANEL_DEBUG_NO", no)   // <-- same counter
+        }
+        publishActiveSegment(breakLabel)
+        startActivity(intent)
     }
 
     // ➌ Handle the user’s response to your initial permission request
@@ -478,52 +557,119 @@ class ScheduleActivity : AppCompatActivity() {
         }
     }
 
+
+    /** Launches RepActivity to handle a single-stop reposition trip. */
+    @RequiresApi(Build.VERSION_CODES.M)
+    @SuppressLint("LongLogTag")
+    private fun launchRepActivity(firstScheduleItem: ScheduleItem, no: Int) {
+        // We expect exactly one stop for REP; use the first if more are present
+        val repStop = firstScheduleItem.busStops.firstOrNull()
+        if (repStop == null) {
+            Toast.makeText(this, "No reposition stop found.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val selectedIdx = routeIndexFromRouteNo(firstScheduleItem.runNo)
+
+        val intent = Intent(this, RepActivity::class.java).apply {
+            putExtra("AID", aid)
+            putExtra("CONFIG", ArrayList(config))
+            putExtra("JSON_STRING", jsonString)
+
+            putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+            putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+
+            putExtra("SELECTED_ROUTE_INDEX", selectedIdx ?: -1)
+            selectedIdx?.let { idx ->
+                putExtra("SELECTED_ROUTE_DATA", busRouteData[idx])
+            }
+
+            putExtra("EXTRA_PANEL_DEBUG_NO", no)
+
+            // REP stop payload
+            putExtra("REP_STOP_LAT", repStop.latitude ?: 0.0)
+            putExtra("REP_STOP_LON", repStop.longitude ?: 0.0)
+            putExtra("REP_STOP_NAME", repStop.name ?: repStop.abbreviation ?: "Reposition Stop")
+            putExtra("REP_STOP_ADDR", repStop.address ?: repStop.name ?: "Reposition Stop")
+        }
+
+        // pop the first schedule like other flows
+        scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+        isScheduleCacheUpdated = false
+        saveScheduleDataToCache()
+        updateScheduleTablePaged()
+        updateTimeline()
+        rewriteOfflineScheduleData()
+
+        startActivity(intent)
+    }
+
     /**
      * Start MapActivity, carrying over any required extras.
      */
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
-    private fun launchMapActivity() {
+    private fun launchMapActivity(no: Int) {
         if (scheduleData.isNotEmpty()) {
-            val firstScheduleItem = scheduleData.firstOrNull()
-                ?: return Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show() // ✅ Store first schedule item
+            // Store the first schedule item for the Map
+            val firstScheduleItem = scheduleData.first()
+            val selectedIdx = routeIndexFromRouteNo(firstScheduleItem.runNo)
             Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
             Log.d("ScheduleActivity startRouteButton before", scheduleData.toString())
 
-            // ✅ Actually remove the first item
-//                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+            // We will still pass the full list (for future trips), AND pass the selected one explicitly.
+            val intent = Intent(this, MapActivity::class.java).apply {
+                // timeline labels (unchanged)
+                val (workIntervals, runNames) = extractWorkIntervalsAndrunNames()
+                val labels = scheduleData.map { item ->
+                    val from = item.busStops.firstOrNull()?.abbreviation ?: "?"
+                    val to   = item.busStops.lastOrNull()?.abbreviation  ?: "?"
+                    "${item.startTime} ${saferunName(item)} $from → $to"
+                }
+                putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
+
+                // essentials
+                putExtra("AID", aid)
+                putExtra("CONFIG", ArrayList(config))
+                putExtra("JSON_STRING", jsonString)
+
+                // keep sending the *full* sets as before
+                putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
+                putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+
+                // NEW: tell MapActivity which one to use for THIS trip
+                putExtra("SELECTED_ROUTE_INDEX", selectedIdx ?: -1)
+                selectedIdx?.let { idx ->
+                    putExtra("SELECTED_ROUTE_DATA", busRouteData[idx])  // RouteData must be Serializable/Parcelable (you already pass list)
+                }
+                putExtra("EXTRA_PANEL_DEBUG_NO", no)
+            }
+
+            // remove first schedule & persist
+            scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+            isScheduleCacheUpdated = false
+            saveScheduleDataToCache()
             updateScheduleTablePaged()
             updateTimeline()
             rewriteOfflineScheduleData()
 
-            jsonString = Gson().toJson(busRouteData)
+            // And hand over the remaining full schedule
+            intent.putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
 
-            Log.d("ScheduleActivity startRouteButton after", scheduleData.toString())
-
-            val intent = Intent(this, MapActivity::class.java).apply {
-                putExtra("AID", aid)
-                putExtra("CONFIG", ArrayList(config))
-                putExtra("JSON_STRING", jsonString)
-                putExtra("ROUTE", ArrayList(route))
-                putExtra("STOPS", ArrayList(stops))
-                putExtra("DURATION_BETWEEN_BUS_STOP", ArrayList(durationBetweenStops))
-                putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
-                putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
-                putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
-                putExtra("IS_ONLINE", NetworkStatusHelper.isNetworkAvailable(this@ScheduleActivity))
-            }
-
-             // ➊ build labels from your extracted intervals & names
-             val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
-             val labels = workIntervals.mapIndexed { i, (s,e) ->
-                   "$s ${dutyNames[i]} ${scheduleData[i].busStops.first().abbreviation} → " +
-                             scheduleData[i].busStops.last().abbreviation
-                 }
-             intent.putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
             startActivity(intent)
         } else {
             Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /** Map "1" or "Route 1" → 0-based index into busRouteData */
+    private fun routeIndexFromRouteNo(runNo: String): Int? {
+        // Accepts "1" or "Route 1" etc.
+        val cleaned = runNo.trim().lowercase(Locale.ROOT)
+        val digits  = cleaned.removePrefix("route").trim()
+        val idx     = digits.toIntOrNull()?.minus(1) ?: return null
+        return if (idx in busRouteData.indices) idx else null
     }
 
     /**
@@ -597,6 +743,9 @@ class ScheduleActivity : AppCompatActivity() {
         }
         // if you used a Handler in startLoadingBar(), cancel it:
         loadingBarHandler.removeCallbacksAndMessages(null)
+        // ✅ Stop “Fetching data …” loop and hide the layout
+        fetchingHandler.removeCallbacksAndMessages(null)
+        fetchingLayout.visibility = View.GONE
 
         scheduleRecycler.visibility = View.GONE
         timeline1.visibility = View.VISIBLE
@@ -607,6 +756,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         binding.startRouteButton.visibility = View.VISIBLE
         binding.testStartRouteButton.visibility = View.VISIBLE
+        hideTestButton()
         if (isTabulatedView) {
             scheduleRecycler.visibility = View.VISIBLE
             paginationLayout.visibility  = View.VISIBLE
@@ -617,8 +767,6 @@ class ScheduleActivity : AppCompatActivity() {
 
         loadBusDataFromCache()
         loadScheduleDataFromCache()
-
-        updateTimeline()
     }
 
     /**
@@ -712,6 +860,9 @@ class ScheduleActivity : AppCompatActivity() {
 
         // cancel any leftover callbacks
         loadingBarHandler.removeCallbacksAndMessages(null)
+        // ✅ Stop “Fetching data …” loop and hide the layout
+        fetchingHandler.removeCallbacksAndMessages(null)
+        fetchingLayout.visibility = View.GONE
 
         var progress = 0
         @RequiresApi(Build.VERSION_CODES.M)
@@ -768,6 +919,7 @@ class ScheduleActivity : AppCompatActivity() {
 
                 binding.startRouteButton.visibility = View.VISIBLE
                 binding.testStartRouteButton.visibility = View.VISIBLE
+                hideTestButton()
             }
             .show()
     }
@@ -830,10 +982,16 @@ class ScheduleActivity : AppCompatActivity() {
     private fun updateScheduleTablePaged() {
         val start = currentPage * maxRowsPerPage
         val end   = minOf(scheduleData.size, start + maxRowsPerPage)
-        scheduleAdapter.update(scheduleData.subList(start, end))
+        scheduleAdapter.update(if (scheduleData.isEmpty()) emptyList() else scheduleData.subList(start, end))
 
-        val totalPages = (scheduleData.size + maxRowsPerPage - 1) / maxRowsPerPage
-        renderPagination(totalPages)
+        val totalPages = if (scheduleData.isEmpty()) 0 else (scheduleData.size + maxRowsPerPage - 1) / maxRowsPerPage
+        if (totalPages == 0) {
+            paginationLayout.visibility = View.GONE
+        } else {
+            renderPagination(totalPages)
+        }
+
+        updateEmptyState()
     }
 
     /**
@@ -873,56 +1031,91 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     private fun updateTimeline() {
-        if (scheduleData.isEmpty()) {
-            Log.e("ScheduleActivity updateTimeline", "No scheduleData to draw!")
-            return
-        }
 
-        val (workIntervals, dutyNames) = extractWorkIntervalsAndDutyNames()
-        Log.d("ScheduleActivity updateTimeline", "Work intervals: $workIntervals")
+        runOnUiThread {
+            if (scheduleData.isEmpty()) {
+                Log.e("ScheduleActivity updateTimeline", "No scheduleData to draw!")
+                updateEmptyState()
+                return@runOnUiThread
+            }
 
-        val total    = workIntervals.size
-        val partSize = total / 3
+            timeline1.visibility = View.VISIBLE
+            timeline2.visibility = View.VISIBLE
+            timeline3.visibility = View.VISIBLE
+            if (scheduleData.isEmpty()) {
+                Log.e("ScheduleActivity updateTimeline", "No scheduleData to draw!")
+                return@runOnUiThread
+            }
 
-        val intervals1 = workIntervals.subList(0, partSize)
-        val intervals2 = workIntervals.subList(partSize, partSize * 2)
-        val intervals3 = workIntervals.subList(partSize * 2, total)
+            // 1) extract raw data
+            val (workIntervals, runNames) = extractWorkIntervalsAndrunNames()
+            Log.d("ScheduleActivity updateTimeline", "🔄 workIntervals=$workIntervals")
+            Log.d("ScheduleActivity updateTimeline", "🔄 runNames    =$runNames")
 
-        val names1 = dutyNames.subList(0, partSize)
-        val names2 = dutyNames.subList(partSize, partSize * 2)
-        val names3 = dutyNames.subList(partSize * 2, total)
+            // 2) decide how many per row
+            val maxPerLine = 3
 
-        val allBusStops = extractBusStops()
-        val stopSize    = allBusStops.size / 3
-        val busStops1   = allBusStops.subList(0, stopSize)
-        val busStops2   = allBusStops.subList(stopSize, stopSize * 2)
-        val busStops3   = allBusStops.subList(stopSize * 2, allBusStops.size)
+            // slice intervals & names into 3 fixed chunks
+            val intervals1 = workIntervals.take(maxPerLine)
+            val intervals2 = workIntervals.drop(maxPerLine).take(maxPerLine)
+            val intervals3 = workIntervals.drop(2 * maxPerLine).take(maxPerLine)
 
-        // Decide “single-line?” based on count
-        val oneLineThreshold = 4
-        val single1 = intervals1.size <= oneLineThreshold
-        val single2 = intervals2.size <= oneLineThreshold
-        val single3 = intervals3.size <= oneLineThreshold
+            val names1 = runNames.take(maxPerLine)
+            val names2 = runNames.drop(maxPerLine).take(maxPerLine)
+            val names3 = runNames.drop(2 * maxPerLine).take(maxPerLine)
 
-        timeline1.apply {
-            setScheduleData(scheduleData.subList(0, partSize))
-            setTimelineData(intervals1, names1)
-            setBusStops(busStops1)
-            setSingleLineMode(single1)
-        }
+            Log.d(
+                "ScheduleActivity updateTimeline",
+                "🔹 timeline1 intervals=$intervals1, names=$names1"
+            )
+            Log.d(
+                "ScheduleActivity updateTimeline",
+                "🔹 timeline2 intervals=$intervals2, names=$names2"
+            )
+            Log.d(
+                "ScheduleActivity updateTimeline",
+                "🔹 timeline3 intervals=$intervals3, names=$names3"
+            )
 
-        timeline2.apply {
-            setScheduleData(scheduleData.subList(partSize, partSize * 2))
-            setTimelineData(intervals2, names2)
-            setBusStops(busStops2)
-            setSingleLineMode(single2)
-        }
+            // 3) slice the corresponding ScheduleItem lists
+            val items1 = scheduleData.take(maxPerLine)
+            val items2 = scheduleData.drop(maxPerLine).take(maxPerLine)
+            val items3 = scheduleData.drop(2 * maxPerLine).take(maxPerLine)
 
-        timeline3.apply {
-            setScheduleData(scheduleData.subList(partSize * 2, total))
-            setTimelineData(intervals3, names3)
-            setBusStops(busStops3)
-            setSingleLineMode(single3)
+            // 4) extract busStops per line
+            val busStops1 = items1.flatMap { it.busStops }
+            val busStops2 = items2.flatMap { it.busStops }
+            val busStops3 = items3.flatMap { it.busStops }
+
+            Log.d("ScheduleActivity updateTimeline", "🔹 timeline1 busStops=$busStops1")
+            Log.d("ScheduleActivity updateTimeline", "🔹 timeline2 busStops=$busStops2")
+            Log.d("ScheduleActivity updateTimeline", "🔹 timeline3 busStops=$busStops3")
+
+            // 5) decide single‐line mode threshold
+            val oneLineThreshold = 4
+            val single1 = intervals1.size <= oneLineThreshold
+            val single2 = intervals2.size <= oneLineThreshold
+            val single3 = intervals3.size <= oneLineThreshold
+
+            // 6) apply to each StyledMultiColorTimeline
+            timeline1.apply {
+                setScheduleData(items1)
+                setTimelineData(intervals1, names1)
+                setBusStops(busStops1)
+                setSingleLineMode(single1)
+            }
+            timeline2.apply {
+                setScheduleData(items2)
+                setTimelineData(intervals2, names2)
+                setBusStops(busStops2)
+                setSingleLineMode(single2)
+            }
+            timeline3.apply {
+                setScheduleData(items3)
+                setTimelineData(intervals3, names3)
+                setBusStops(busStops3)
+                setSingleLineMode(single3)
+            }
         }
     }
 
@@ -941,24 +1134,24 @@ class ScheduleActivity : AppCompatActivity() {
      * Extracts work intervals and duty names from the schedule data dynamically.
      */
     @SuppressLint("LongLogTag")
-    private fun extractWorkIntervalsAndDutyNames(): Pair<List<Pair<String, String>>, List<String>> {
+    private fun extractWorkIntervalsAndrunNames(): Pair<List<Pair<String, String>>, List<String>> {
         val workIntervals = mutableListOf<Pair<String, String>>()
-        val dutyNames = mutableListOf<String>()
+        val runNames = mutableListOf<String>()
 
         for (item in scheduleData) { // ✅ Limit to first 3 entries directly
             val startTime = item.startTime
             val endTime = item.endTime
-            val dutyName = item.dutyName
+            val runName = item.runName
 
             if (startTime.isNotEmpty() && endTime.isNotEmpty()) {
                 workIntervals.add(Pair(startTime, endTime))
-                dutyNames.add(dutyName)
+                runNames.add(runName)
             }
         }
 
-        Log.d("ScheduleActivity extractWorkIntervalsAndDutyNames", "✅ Extracted Work Intervals: $workIntervals")
-        Log.d("ScheduleActivity extractWorkIntervalsAndDutyNames", "✅ Extracted Duty Names: $dutyNames")
-        return Pair(workIntervals, dutyNames)
+        Log.d("ScheduleActivity extractWorkIntervalsAndrunNames", "✅ Extracted Work Intervals: $workIntervals")
+        Log.d("ScheduleActivity extractWorkIntervalsAndrunNames", "✅ Extracted Duty Names: $runNames")
+        return Pair(workIntervals, runNames)
     }
 
     /**
@@ -1087,8 +1280,7 @@ class ScheduleActivity : AppCompatActivity() {
                     val jsonContent = cacheFile.readText()
                     val cachedSchedule =
                         Gson().fromJson(jsonContent, Array<ScheduleItem>::class.java).toList()
-                    scheduleData = cachedSchedule
-
+                    scheduleData = cachedSchedule.map { it.copy(runName = saferunName(it)) }
 
                     Log.d(
                         "ScheduleActivity loadScheduleDataFromCache",
@@ -1096,8 +1288,10 @@ class ScheduleActivity : AppCompatActivity() {
                     )
 
                     // Use the loaded schedule data
-                    updateScheduleTablePaged()
-                    updateTimeline()
+                    withContext(Dispatchers.Main) {
+                        updateScheduleTablePaged()
+                        updateTimeline()
+                    }
 
                 } catch (e: Exception) {
                     Log.e(
@@ -1130,11 +1324,23 @@ class ScheduleActivity : AppCompatActivity() {
 
         for (routeData in busRouteData) {
             // Add starting point as the first stop
-            newStops.add(BusStop(latitude = routeData.startingPoint.latitude, longitude = routeData.startingPoint.longitude))
+            newStops.add(
+                BusStop(
+                    latitude = routeData.startingPoint.latitude,
+                    longitude = routeData.startingPoint.longitude,
+                    address = routeData.startingPoint.address
+                )
+            )
 
             for (nextPoint in routeData.nextPoints) {
                 // Add stops
-                newStops.add(BusStop(latitude = nextPoint.latitude, longitude = nextPoint.longitude))
+                newStops.add(
+                    BusStop(
+                        latitude = nextPoint.latitude,
+                        longitude = nextPoint.longitude,
+                        address = nextPoint.address
+                    )
+                )
 
                 // Add route coordinates
                 var last: Pair<Double,Double>? = null
@@ -1162,6 +1368,12 @@ class ScheduleActivity : AppCompatActivity() {
      * @return File representing the hidden directory.
      */
     private fun getHiddenFolder(): File {
+        Log.d("storage",
+            "api=${Build.VERSION.SDK_INT}, " +
+                    "target=${applicationInfo.targetSdkVersion}, " +
+                    "allFiles=${if (Build.VERSION.SDK_INT>=30) Environment.isExternalStorageManager() else "n/a"}"
+        )
+
         val externalDocumentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
         val hiddenFolder = File(externalDocumentsDir, ".vlrshiddenfolder")
 
@@ -1228,7 +1440,7 @@ class ScheduleActivity : AppCompatActivity() {
                     Log.d("MainActivity subscribeSharedData", "busRouteData: $busRouteData")
 
                     // Retrieve `scheduleData` from ThingsBoard
-                    scheduleData = data.shared?.scheduleData1 ?: emptyList()
+                    scheduleData = (data.shared?.scheduleData1 ?: emptyList()).map { it.copy(runName = saferunName(it)) }
                     Log.d("MainActivity subscribeSharedData", "scheduleData: $scheduleData")
 
                     if (config != null && scheduleData.isNotEmpty()) {
@@ -1408,6 +1620,20 @@ class ScheduleActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Returns true if this schedule item represents a break (case-insensitive).
+     */
+    private fun isBreak(item: com.jason.publisher.main.model.ScheduleItem): Boolean {
+        // Accept "Break" or "break"
+        return item.runName.equals("break", ignoreCase = true)
+    }
+
+    /** Returns true if the schedule item represents a Reposition (REP). */
+    private fun isReposition(item: ScheduleItem): Boolean {
+        return item.runName.equals("REP", true)
+                || item.runName.contains("reposition", true)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         NetworkStatusHelper.unregisterReceiver(this)
@@ -1419,4 +1645,126 @@ class ScheduleActivity : AppCompatActivity() {
     private fun getAndroidId(): String {
         return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
     }
+
+    private fun nextPanelDebugNo(): Int {
+        val sp = getSharedPreferences(PANEL_DEBUG_PREF, MODE_PRIVATE)
+        val next = sp.getInt(PANEL_DEBUG_NO_KEY, 0) + 1
+        sp.edit().putInt(PANEL_DEBUG_NO_KEY, next).apply()
+        return next
+    }
+
+    // Keep it simple: build the same label your panel shows
+    private fun formatPanelLabel(item: ScheduleItem): String {
+        val from = item.busStops.firstOrNull()?.abbreviation
+            ?: item.busStops.firstOrNull()?.name ?: "?"
+        val to = item.busStops.lastOrNull()?.abbreviation
+            ?: item.busStops.lastOrNull()?.name ?: "?"
+        return "${item.startTime} ${item.runName} $from → $to"
+    }
+
+    private fun logPanelDebugPreStart(no: Int, first: ScheduleItem) {
+        val current = "ic_bus_symbol ${formatPanelLabel(first)}"
+        val dump = buildString {
+            appendLine("no: $no")
+            appendLine("runName: ${first.runName}")
+            append("currentDetailPanel: $current")
+        }
+        if (dump == lastPreStartDump) return
+        lastPreStartDump = dump
+        Log.d("PanelDebug", dump)
+    }
+
+    private fun isTokenLike(s: String?): Boolean {
+        if (s.isNullOrBlank()) return false
+        val t = s.trim()
+        return t.length in 20..40 && t.all { it.isLetterOrDigit() }
+    }
+
+    private fun saferunName(item: ScheduleItem): String {
+        if (!isTokenLike(item.runName)) return item.runName
+        val from = item.busStops.firstOrNull()?.abbreviation ?: item.busStops.firstOrNull()?.name ?: "?"
+        val to   = item.busStops.lastOrNull()?.abbreviation  ?: item.busStops.lastOrNull()?.name  ?: "?"
+        return "${item.runNo} $from → $to"
+    }
+
+    private fun publishActiveSegment(label: String) {
+        val topic = "v1/devices/me/attributes"
+        // CHANGE activeSegment → currentTripLabel
+        val payload = "{\"currentTripLabel\":\"${label.replace("\"", "\\\"")}\"}"
+        if (::mqttManager.isInitialized) {
+            mqttManager.publish(topic, payload)
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun updateEmptyState() {
+        val isEmpty = scheduleData.isEmpty()
+
+        // Empty-state label
+        emptyStateText.visibility = if (isEmpty) View.VISIBLE else View.GONE
+
+        // Hide timelines & table/pagination if empty
+        if (isEmpty) {
+            timeline1.visibility = View.GONE
+            timeline2.visibility = View.GONE
+            timeline3.visibility = View.GONE
+            scheduleRecycler.visibility = View.GONE
+            paginationLayout.visibility = View.GONE
+
+            // Hide action buttons if nothing to start
+            binding.startRouteButton.visibility = View.GONE
+            binding.testStartRouteButton.visibility = View.GONE
+        } else {
+            // Restore based on current mode
+            if (isTabulatedView) {
+                scheduleRecycler.visibility = View.VISIBLE
+                paginationLayout.visibility = View.VISIBLE
+                timeline1.visibility = View.GONE
+                timeline2.visibility = View.GONE
+                timeline3.visibility = View.GONE
+            } else {
+                scheduleRecycler.visibility = View.GONE
+                paginationLayout.visibility = View.GONE
+                timeline1.visibility = View.VISIBLE
+                timeline2.visibility = View.VISIBLE
+                timeline3.visibility = View.VISIBLE
+            }
+            binding.startRouteButton.visibility = View.VISIBLE
+            binding.testStartRouteButton.visibility = View.VISIBLE
+            hideTestButton()
+        }
+    }
+
+    private fun firstScheduleOrNull(): ScheduleItem? = scheduleData.firstOrNull()
+
+    private fun buildExtraDump(): Map<String, Any?> = mapOf(
+        "aid" to aid,
+        "configCount" to (config?.size ?: 0),
+        "busRouteDataCount" to (busRouteData.size),
+        "scheduleCount" to (scheduleData.size),
+        "firstSchedule" to firstScheduleOrNull()?.copy(busStops = firstScheduleOrNull()?.busStops?.take(3) ?: emptyList()),
+        // 👇 replace the offending line with this:
+        "firstRouteSummary" to busRouteData.firstOrNull()?.let { rd ->
+            val start = rd.startingPoint.address
+            val end = rd.nextPoints.lastOrNull()?.address ?: "?"
+            "$start → $end"
+        },
+        "stopsCount" to stops.size,
+        "durationsCount" to durationBetweenStops.size
+    )
+
+    override fun onResume() {
+        super.onResume()
+        // If any trip/break/reposition had been started, landing here means it ended.
+        if (TripLog.hasActive(this)) {
+            TripLog.end(this, reason = "ScheduleActivityResumed", extraDump = buildExtraDump())
+        }
+    }
+
+    private fun hideTestButton() {
+        if (::binding.isInitialized) {
+            binding.testStartRouteButton.visibility = View.GONE
+        }
+    }
+
 }

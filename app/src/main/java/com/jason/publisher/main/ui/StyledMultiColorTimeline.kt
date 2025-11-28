@@ -111,7 +111,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                         "startTime=$startTime, " +
                         "firstStopAbbr=$firstStopAbbr, " +
                         "lastStopAbbr=${item?.busStops?.lastOrNull()?.abbreviation ?: "?"}, " +
-                        "source ScheduleItem=${item?.dutyName} [busStops: ${item?.busStops?.map { it.abbreviation }}]"
+                        "source ScheduleItem=${item?.runName} [busStops: ${item?.busStops?.map { it.abbreviation }}]"
             )
 
             val box = LinearLayout(context).apply {

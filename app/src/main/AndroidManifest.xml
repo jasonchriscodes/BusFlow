@@ -18,11 +18,12 @@
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
-
-
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
 
 
     <application
+        android:name=".App"
         android:icon="@drawable/ic_logo2"
         android:roundIcon="@drawable/ic_logo2"
         android:allowBackup="true"
@@ -92,10 +93,38 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-<!--        <activity-->
+        <activity
+            android:name=".main.activity.BreakActivity"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="false" />
+        <activity
+            android:name=".main.activity.RepActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|keyboardHidden|screenSize" />
+        <!--        <activity-->
 <!--            android:name=".OfflineActivity"-->
 <!--            android:exported="false"-->
 <!--            android:screenOrientation="landscape" />-->
+        <service
+            android:name=".main.services.ScreenRecordService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection"
+            android:stopWithTask="true" />
+        <!-- ACTION_BATTERY_LOW while your process might be dead -->
+        <receiver
+            android:name=".main.utils.BatteryLowManifestReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BATTERY_LOW"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- Dismiss “OK” action from the heads-up -->
+        <receiver
+            android:name=".main.utils.BatteryLowAckReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

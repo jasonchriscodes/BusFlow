@@ -1,9 +1,11 @@
 package com.jason.publisher.main.helpers
 
 import android.annotation.SuppressLint
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.annotation.RequiresApi
 import com.google.gson.Gson
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
@@ -39,16 +41,13 @@ class MqttHelper(
     companion object {
         private const val MIN_FETCH_INTERVAL_MS = 2_000L
         // include scheduleData in your GET
-        private const val CLIENT_KEYS = "latitude,longitude,bearing,speed,direction,scheduleData"
+        private const val CLIENT_KEYS = "latitude,longitude,bearing,speed,direction,scheduleData,currentTripLabel"
+        // Minimum distance change to consider as movement (in meters)
+        private const val MIN_MOVEMENT_DISTANCE = 5.0
     }
 
     // track when we last fetched attributes for each token
     private val lastFetchTime = mutableMapOf<String, Long>()
-
-    /** Cleanly disconnect the MQTT client */
-    fun disconnect() {
-        mqttManager.disconnect()
-    }
 
     /**
      * Fetches the configuration data and initializes the config variable.
@@ -111,21 +110,60 @@ class MqttHelper(
         }
     }
 
-    /**
-     * Sends data attributes to the server periodically.
-     */
-    fun sendRequestAttributes() {
-        val handler = Handler(Looper.getMainLooper())
-        handler.postDelayed(object : Runnable {
-            override fun run() {
-                owner.arrBusData.forEach { bus ->
-                    if (owner.markerBus.containsKey(bus.accessToken)) {
-                        getAttributes(apiService, bus.accessToken, clientKeys)
-                    }
-                }
-                handler.postDelayed(this, MIN_FETCH_INTERVAL_MS)
+//    /**
+//     * Sends data attributes to the server periodically.
+//     */
+//    fun sendRequestAttributes() {
+//        val handler = Handler(Looper.getMainLooper())
+//        handler.postDelayed(object : Runnable {
+//            override fun run() {
+//                owner.arrBusData.forEach { bus ->
+//                    if (owner.markerBus.containsKey(bus.accessToken)) {
+//                        getAttributes(apiService, bus.accessToken, clientKeys)
+//                    }
+//                }
+//                handler.postDelayed(this, MIN_FETCH_INTERVAL_MS)
+//            }
+//        }, MIN_FETCH_INTERVAL_MS)
+//    }
+
+    // ----------------------------------------------------------------
+    // 1) cancellable poller
+    // ----------------------------------------------------------------
+    private var pollingHandler: Handler? = null
+    private val pollRunnable = object : Runnable {
+        override fun run() {
+            owner.arrBusData.forEach { bus ->
+                getAttributes(apiService, bus.accessToken, clientKeys)
             }
-        }, MIN_FETCH_INTERVAL_MS)
+            pollingHandler?.postDelayed(this, MIN_FETCH_INTERVAL_MS)
+        }
+    }
+
+    /** Start or re-start the 2 s polling loop. */
+    fun startAttributePolling() {
+        stopAttributePolling()
+        pollingHandler = Handler(Looper.getMainLooper())
+        pollingHandler!!.postDelayed(pollRunnable, MIN_FETCH_INTERVAL_MS)
+    }
+
+    /** Immediately stop the 2 s polling loop. */
+    fun stopAttributePolling() {
+        pollingHandler?.removeCallbacksAndMessages(null)
+    }
+
+    // ----------------------------------------------------------------
+    // 2) one-off full refresh on reconnect
+    // ----------------------------------------------------------------
+    /**
+     * Clears throttling timestamps and fetches attributes
+     * for every bus exactly once.
+     */
+    fun refreshAllAttributes() {
+        lastFetchTime.clear()
+        owner.arrBusData.forEach { bus ->
+            getAttributes(apiService, bus.accessToken, clientKeys)
+        }
     }
 
     /**
@@ -137,7 +175,7 @@ class MqttHelper(
         token: String,
         clientKeys: String
     ) {
-        Log.d("MqttHelper getAttributes", "→ getAttributes for token=$token")
+        //Log.d("MqttHelper getAttributes", "→ getAttributes for token=$token")
         val now = System.currentTimeMillis()
 
         // 1) throttle to once every 2 s per bus
@@ -145,96 +183,147 @@ class MqttHelper(
         if (now - last < MIN_FETCH_INTERVAL_MS) return
         lastFetchTime[token] = now
 
-        Log.d("MqttHelper getAttributes", "→ getAttributes for token=$token")
         apiService.getAttributes(
             "${ApiService.BASE_URL}$token/attributes",
             "application/json",
             CLIENT_KEYS
         ).enqueue(object : Callback<ClientAttributesResponse> {
+            @RequiresApi(Build.VERSION_CODES.M)
             @SuppressLint("LongLogTag")
             override fun onResponse(
                 call: Call<ClientAttributesResponse>,
                 response: Response<ClientAttributesResponse>
             ) {
                 val client = response.body()?.client ?: return
-                // parse scheduleData JSON if present
-                val scheduleJson = client.scheduleData
-                if (!scheduleJson.isNullOrEmpty()) {
-                    // turn it back into a list of ScheduleItem
-                    val otherSched = Gson().fromJson(
-                        scheduleJson,
-                        Array<ScheduleItem>::class.java
-                    ).toList()
-                    // build the “label” just like you do for self:
-                    val first = otherSched.firstOrNull()
-                    val label = first?.let {
-                        val abbrs = it.busStops
-                        "${it.startTime} ${it.dutyName} ${abbrs.first().abbreviation} → ${abbrs.last().abbreviation}"
-                    } ?: token
-                    // keep it around
-                    owner.otherBusLabels[token] = label
+
+                // ---------- NEW: resolve a stable label for "other bus" ----------
+                var labelUpdated = false
+                var resolvedLabel: String? = null
+
+                // 1) Prefer the stable label published by the other tablet
+                val labelFromPeer = client.currentTripLabel
+                if (!labelFromPeer.isNullOrBlank()) {
+                    resolvedLabel = labelFromPeer
+                } else {
+                    // 2) Fallback: reconstruct from the *first* item of their scheduleData
+                    val scheduleJson = client.scheduleData
+                    if (!scheduleJson.isNullOrBlank()) {
+                        try {
+                            val arr = Gson().fromJson(scheduleJson, Array<ScheduleItem>::class.java).toList()
+                            arr.firstOrNull()?.let { first ->
+                                val from = first.busStops.firstOrNull()?.abbreviation
+                                    ?: first.busStops.firstOrNull()?.name ?: "?"
+                                val to = first.busStops.lastOrNull()?.abbreviation
+                                    ?: first.busStops.lastOrNull()?.name ?: "?"
+
+                                // avoid showing a token-like dutyName (e.g., 20–40 alnum chars)
+                                val dutyNameLooksLikeToken =
+                                    first.runName.length in 20..40 && first.runName.all { it.isLetterOrDigit() }
+                                val duty = if (dutyNameLooksLikeToken) "${first.runNo} $from → $to" else first.runName
+
+                                resolvedLabel = "${first.startTime} $duty $from → $to"
+                            }
+                        } catch (_: Exception) { /* ignore */ }
+                    }
                 }
+
+                resolvedLabel?.let { lbl ->
+                    if (owner.otherBusLabels[token] != lbl) {
+                        owner.otherBusLabels[token] = lbl
+                        labelUpdated = true
+                    }
+                }
+                // ------------------------------------------------------------------
 
                 val lat = client.latitude
                 val lon = client.longitude
 
-                // 1) ignore really invalid coords
+                // If no usable coords but label changed, still refresh the panel once.
                 if (lat == 0.0 && lon == 0.0) {
+                    if (labelUpdated) {
+                        owner.runOnUiThread { owner.mapController.refreshDetailPanelIcons() }
+                    }
                     Log.d("MqttHelper getAttributes", "Ignoring $token at (0,0)")
                     return
                 }
 
-                // 2) have we ever seen this token before?
+                // First time we see this token → record and draw immediately
                 val prev = owner.prevCoords[token]
                 if (prev == null) {
-                    // first time we see it — just record, don't draw
                     owner.prevCoords[token] = lat to lon
                     owner.lastSeen[token] = now
-                    Log.d("MqttHelper getAttributes", "First fetch for $token; awaiting movement")
+                    // Draw marker immediately even on first fetch
+                    owner.runOnUiThread {
+                        val pos = LatLong(lat, lon)
+                        val idx = owner.arrBusData.indexOfFirst { it.accessToken == token }
+                        val slot = ((idx + 2).coerceAtMost(10)).coerceAtLeast(2)
+                        val iconName = "ic_bus_symbol$slot"
+                        val iconRes = owner.resources.getIdentifier(iconName, "drawable", owner.packageName)
+                        val rotated = client.bearing?.let { owner.mapController.rotateDrawable(iconRes, it) }
+                        val marker = Marker(pos, rotated, 0, 0)
+                        binding.map.layerManager.layers.add(marker)
+                        owner.markerBus[token] = marker
+                        binding.map.invalidate()
+                        if (labelUpdated) {
+                            owner.mapController.refreshDetailPanelIcons()
+                        }
+                    }
+                    Log.d("MqttHelper getAttributes", "First fetch for $token; marker created")
                     return
                 }
 
-                // 3) coords unchanged? update timestamp, do nothing else
+                // No movement → still update lastSeen and refresh panel if label changed
                 if (prev.first == lat && prev.second == lon) {
+                    owner.lastSeen[token] = now // Update lastSeen even if no movement
+                    if (labelUpdated) {
+                        owner.runOnUiThread { owner.mapController.refreshDetailPanelIcons() }
+                    }
+                    return
+                }
+
+                // Movement detected → update marker (and re-rotate), then refresh panel if needed
+                // Check if movement is significant enough (at least 5 meters)
+                val distance = owner.mapController.calculateDistance(prev.first, prev.second, lat, lon)
+                if (distance < MIN_MOVEMENT_DISTANCE && !labelUpdated) {
+                    // Small movement, just update lastSeen
                     owner.lastSeen[token] = now
                     return
                 }
 
-                // 4) movement detected! record new pos and draw/update marker
                 owner.prevCoords[token] = lat to lon
                 owner.lastSeen[token] = now
 
                 owner.runOnUiThread {
-                    val pos      = LatLong(lat, lon)
-                    val existing = owner.markerBus[token]
+                    try {
+                        val pos = LatLong(lat, lon)
+                        val existing = owner.markerBus[token]
 
-                    // figure out which ic_bus_symbolN to use (N = 2..10)
-                    // we look up the position in arrBusData so that each bus stays on its own slot
-                    val idx  = owner.arrBusData.indexOfFirst { it.accessToken == token }
-                    val slot = ((idx + 2).coerceAtMost(10)).coerceAtLeast(2)
-                    val iconName = "ic_bus_symbol$slot"
-                    val iconRes  = owner.resources.getIdentifier(iconName, "drawable", owner.packageName)
-                    val rotated  = client.bearing?.let { owner.mapController.rotateDrawable(iconRes, it) }
+                        // slot icon selection stays stable per bus position in arrBusData
+                        val idx = owner.arrBusData.indexOfFirst { it.accessToken == token }
+                        val slot = ((idx + 2).coerceAtMost(10)).coerceAtLeast(2)
+                        val iconName = "ic_bus_symbol$slot"
+                        val iconRes = owner.resources.getIdentifier(iconName, "drawable", owner.packageName)
+                        val rotated = client.bearing?.let { owner.mapController.rotateDrawable(iconRes, it) }
 
-                    if (existing == null) {
-                        // first time: create a new, rotated marker
-                        val marker = Marker(pos, rotated, 0, 0)
-                        binding.map.layerManager.layers.add(marker)
-                        owner.markerBus[token] = marker
-                    } else {
-                        // already on-screen → move *and* re-rotate
-                        existing.apply {
-                            latLong = pos
-                            if (rotated != null) {
-                                // swap in the newly rotated bitmap
-                                bitmap = rotated
-                            }
+                        if (existing == null) {
+                            val marker = Marker(pos, rotated, 0, 0)
+                            binding.map.layerManager.layers.add(marker)
+                            owner.markerBus[token] = marker
+                        } else {
+                            existing.latLong = pos
+                            if (rotated != null) existing.bitmap = rotated
                         }
-                    }
 
-                    binding.map.invalidate()
-                    owner.mapController.activeBusToken = token
-                    owner.mapController.refreshDetailPanelIcons()
+                        binding.map.invalidate()
+                        owner.mapController.activeBusToken = token
+
+                        // ensure the two-line panel updates when label changed
+                        if (labelUpdated) {
+                            owner.mapController.refreshDetailPanelIcons()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MqttHelper", "Error updating marker: ${e.message}", e)
+                    }
                 }
             }
 
@@ -265,7 +354,6 @@ class MqttHelper(
      * Publishes telemetry data including latitude, longitude, bearing, speed, direction, and aid.
      */
     fun publishTelemetryData() {
-        if (!mqttManager.isMqttConnect()) return
         val json = JSONObject().apply {
             put("latitude", owner.latitude)
             put("longitude", owner.longitude)

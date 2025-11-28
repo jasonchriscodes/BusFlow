@@ -23,7 +23,7 @@ import java.io.IOException
 class MqttManager(
     serverUri: String,
     clientId: String,
-    private var username: String = "oRSsbeuqDMSckyckcMyE" // Config Data
+    private var username: String = "BEXBIArF3URHeYBslJE2" // Config Data
 ) {
     private val persistence = MemoryPersistence()
     private val mqttClient = MqttClient(serverUri, clientId, persistence)
@@ -43,7 +43,7 @@ class MqttManager(
      * Function to fetch shared attributes from ThingsBoard
      */
     fun fetchSharedAttributes(deviceToken: String, callback: (List<BusItem>) -> Unit) {
-        val url = "http://43.226.218.97:8080/api/v1/$deviceToken/attributes?sharedKeys=config"
+        val url = "https://thingsboard.cloud/api/v1/$deviceToken/attributes?sharedKeys=config"
 
         val request = Request.Builder()
             .url(url)

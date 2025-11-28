@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.Drawable
+import android.net.NetworkCapabilities
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -18,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.DrawableRes
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.jason.publisher.R
@@ -60,68 +63,66 @@ class MapViewController(
     var activeSegment: String? = null
     var activeBusToken: String? = null
 
-    /**
-     * Returns the index of the closest point on the route, that point itself,
-     * and the distance (in metres) from the given LatLong to that point.
-     */
-    fun findNearestBusRoutePointWithDistance(latLng: LatLong)
-            : Triple<Int, LatLong, Double> {
-        var bestIdx = 0
-        var bestDist = Double.MAX_VALUE
-
-        activity.route.forEachIndexed { i, pt ->
-            val routePt = LatLong(pt.latitude!!, pt.longitude!!)
-            val d = calculateDistance(
-                latLng.latitude, latLng.longitude,
-                routePt.latitude,  routePt.longitude
-            )
-            if (d < bestDist) {
-                bestDist = d
-                bestIdx  = i
-            }
-        }
-
-        val bestPoint = LatLong(
-            activity.route[bestIdx].latitude!!,
-            activity.route[bestIdx].longitude!!
-        )
-        return Triple(bestIdx, bestPoint, bestDist)
-    }
+    private var activityMonitorHandler: Handler? = null
+    private var activityMonitorRunnable: Runnable? = null
 
     /** Monitor other buses every second, logging their count and active/inactive status. */
     @SuppressLint("LongLogTag")
     fun startActivityMonitor() {
-        Log.d("MapViewController ActivityMonitor", "▶ startActivityMonitor() called")
-        val handler = Handler(Looper.getMainLooper())
-        handler.post(object : Runnable {
+        // ✅ OPTIMIZED: Removed verbose startup log
+
+        // Stop existing monitor first
+        stopActivityMonitor()
+
+        activityMonitorHandler = Handler(Looper.getMainLooper())
+        activityMonitorRunnable = object : Runnable {
             @SuppressLint("LongLogTag")
             override fun run() {
-                val now = System.currentTimeMillis()
+                try {
+                    val now = System.currentTimeMillis()
+                    var removedCount = 0
 
-                // 1) remove any buses inactive ≥10s
-                activity.markerBus.keys
-                    .filter { it != activity.token }
-                    .forEach { t ->
-                        val last = activity.lastSeen[t] ?: 0L
-                        if (last != 0L && now - last >= 10_000L) {
-                            Log.d("MapViewController ActivityMonitor",
-                                "Removing bus marker for token=$t; inactive for ${now - last}ms")
-                            binding.map.layerManager.layers.remove(activity.markerBus[t])
-                            activity.markerBus.remove(t)
-                            activity.prevCoords.remove(t)
+                    // 1) remove any buses inactive ≥30s (increased from 10s to prevent premature removal)
+                    activity.markerBus.keys
+                        .filter { it != activity.token }
+                        .forEach { t ->
+                            val last = activity.lastSeen[t] ?: 0L
+                            if (last != 0L && now - last >= 30_000L) {
+                                activity.markerBus[t]?.let { marker ->
+                                    binding.map.layerManager.layers.remove(marker)
+                                }
+                                activity.markerBus.remove(t)
+                                activity.prevCoords.remove(t)
+                                activity.lastSeen.remove(t)
+                                activity.otherBusLabels.remove(t)
+                                removedCount++
+                            }
                         }
+
+                    // ✅ OPTIMIZED: Only log when buses are removed or count changes significantly
+                    if (removedCount > 0) {
+                        Log.d("MapViewController", "Removed $removedCount inactive bus marker(s)")
                     }
 
-                val active = activity.markerBus.keys.filter { it != activity.token }
-                Log.d("MapViewController ActivityMonitor", "Current active bus markers: $active")
+                    // 2) refresh the map
+                    binding.map.invalidate()
 
-                // 2) refresh the map
-                binding.map.invalidate()
-
-                // 3) schedule next check in 1s
-                handler.postDelayed(this, 1_000L)
+                    // 3) schedule next check in 1s only if handler is still valid
+                    activityMonitorHandler?.postDelayed(this, 1_000L)
+                } catch (e: Exception) {
+                    Log.e("MapViewController", "Error in activity monitor: ${e.message}", e)
+                }
             }
-        })
+        }
+        activityMonitorHandler?.post(activityMonitorRunnable!!)
+    }
+
+    /**
+     * Stop the activity monitor
+     */
+    fun stopActivityMonitor() {
+        activityMonitorHandler?.removeCallbacksAndMessages(null)
+        activityMonitorRunnable = null
     }
 
     /**
@@ -200,6 +201,10 @@ class MapViewController(
             val store = try {
                 MapFile(mapFile)
             } catch (e: Exception) {
+                Log.e("MapViewController", "Error loading map file: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(activity, "Error loading map file: ${e.message}", Toast.LENGTH_LONG).show()
+                }
                 return@launch
             }
             val layer = TileRendererLayer(
@@ -210,18 +215,46 @@ class MapViewController(
             ).apply { setXmlRenderTheme(InternalRenderTheme.DEFAULT) }
 
             withContext(Dispatchers.Main) {
-                if (!binding.map.layerManager.layers.contains(layer))
-                    binding.map.layerManager.layers.add(layer)
+                try {
+                    // ✅ FIX: Ensure map layer is added correctly and map is rendered
+                    // Remove any existing TileRendererLayer first to avoid duplicates
+                    val existingLayers = binding.map.layerManager.layers.filterIsInstance<TileRendererLayer>()
+                    existingLayers.forEach { binding.map.layerManager.layers.remove(it) }
 
-                binding.map.post {
-                    binding.map.model.mapViewPosition.setZoomLevel(15)
-                    binding.map.model.mapViewPosition.setCenter(
-                        LatLong(activity.latitude, activity.longitude)
-                    )
-                    drawDetectionZones(activity.stops)
-                    drawPolyline()
-                    addBusStopMarkers(activity.stops)
-                    addBusMarker(activity.latitude, activity.longitude)
+                    // Store reference to map layer
+                    mapTileLayer = layer
+
+                    // Add the new layer at index 0 (bottom layer, so map tiles render first)
+                    binding.map.layerManager.layers.add(0, layer)
+
+                    binding.map.post {
+                        try {
+                            binding.map.model.mapViewPosition.setZoomLevel(15)
+                            binding.map.model.mapViewPosition.setCenter(
+                                LatLong(activity.latitude, activity.longitude)
+                            )
+                            drawDetectionZones(activity.stops)
+                            drawPolyline()
+                            addBusStopMarkers(activity.stops)
+                            addBusMarker(activity.latitude, activity.longitude)
+
+                            // ✅ CRITICAL: Force map to render by invalidating
+                            binding.map.invalidate()
+
+                            // ✅ FIX: Additional invalidate after a short delay to ensure map renders
+                            binding.map.postDelayed({
+                                binding.map.invalidate()
+                                Log.d("MapViewController", "✅ Map layer added and invalidated")
+                            }, 200)
+                        } catch (e: Exception) {
+                            Log.e("MapViewController", "Error setting up map: ${e.message}", e)
+                            // Ensure map is invalidated even on error
+                            binding.map.invalidate()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("MapViewController", "Error adding map layer: ${e.message}", e)
+                    // Ensure map is invalidated even on error
                     binding.map.invalidate()
                 }
             }
@@ -341,25 +374,49 @@ class MapViewController(
         binding.map.invalidate()
     }
 
+    private var animationHandler: Handler? = null
+    private var animationRunnable: Runnable? = null
+
     /**
      * Smoothly animate the marker's movement instead of jumping suddenly.
      */
     fun animateMarkerThroughPoints(startIndex: Int, endIndex: Int) {
-        val handler = Handler(Looper.getMainLooper())
-        val pts = activity.route.subList(startIndex, endIndex + 1)
+        // Cancel any existing animation
+        animationHandler?.removeCallbacksAndMessages(null)
+
+        val pts = activity.route.subList(startIndex, minOf(endIndex + 1, activity.route.size))
+        if (pts.isEmpty()) return
 
         var step = 0
         val total = pts.size
-        handler.post(object : Runnable {
+        animationHandler = Handler(Looper.getMainLooper())
+        animationRunnable = object : Runnable {
             override fun run() {
-                if (step < total) {
-                    val p = pts[step]
-                    updateBusMarkerPosition(p.latitude!!, p.longitude!!, activity.bearing)
-                    step++
-                    handler.postDelayed(this, 500)
+                try {
+                    if (step < total) {
+                        val p = pts[step]
+                        // Update marker directly without triggering full update cycle
+                        val newPos = LatLong(p.latitude!!, p.longitude!!)
+                        activity.busMarker?.let { marker ->
+                            marker.latLong = newPos
+                            binding.map.setCenter(newPos)
+                            binding.map.invalidate()
+                        }
+                        step++
+                        animationHandler?.postDelayed(this, 100) // Faster animation (100ms instead of 500ms)
+                    } else {
+                        // Animation complete, ensure final position is set
+                        if (pts.isNotEmpty()) {
+                            val finalP = pts[total - 1]
+                            updateBusMarkerPosition(finalP.latitude!!, finalP.longitude!!, activity.bearing)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("MapViewController", "Error in animation: ${e.message}", e)
                 }
             }
-        })
+        }
+        animationHandler?.post(animationRunnable!!)
     }
 
     /** Calculates distance between two lat/lon points in meters */
@@ -390,35 +447,95 @@ class MapViewController(
 
     /**
      * Move (or create) the bus marker at [lat],[lon], rotated to [bearing],
-     * then spin the map so that “up” is always this bus’s heading.
+     * then spin the map so that "up" is always this bus's heading.
      */
+    // ✅ OPTIMIZATION: Cache last position to avoid unnecessary updates
+    private var lastMarkerLat = Double.NaN
+    private var lastMarkerLon = Double.NaN
+    private var lastMarkerBearing = Float.NaN
+    private var lastMarkerUpdateTime = 0L
+    private val MARKER_UPDATE_MIN_INTERVAL_MS = 100L // Minimum 100ms between marker updates for smooth movement
+
+    // ✅ FIX: Track map layer to ensure it's never removed
+    private var mapTileLayer: TileRendererLayer? = null
+
     fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float) {
-        // 1) publish telemetry & client-attrs
-        mqttHelper.publishTelemetryData()
-        activity.updateClientAttributes()
+        try {
+            val currentTime = System.currentTimeMillis()
 
-        // 2) build a rotated icon for *this* bus
-        val newPos  = LatLong(lat, lon)
-        val rotated = rotateDrawable(R.drawable.ic_bus_symbol, bearing)
+            // ✅ OPTIMIZED: Only skip heavy operations if position hasn't changed
+            // But always update marker position and invalidate map to prevent white screen
+            val positionChanged = (lat != lastMarkerLat || lon != lastMarkerLon ||
+                    Math.abs(bearing - lastMarkerBearing) > 1.0f)
+            val timePassed = (currentTime - lastMarkerUpdateTime) >= MARKER_UPDATE_MIN_INTERVAL_MS
 
-        // 3) remove the old marker (if any)
-        activity.busMarker?.let { binding.map.layerManager.layers.remove(it) }
+            // Always update marker position and map, but skip expensive operations if not needed
+            val shouldDoFullUpdate = positionChanged || timePassed
 
-        // 4) add the new, rotated marker
-        activity.busMarker = Marker(newPos, rotated, 0, 0)
-        binding.map.layerManager.layers.add(activity.busMarker)
+            if (shouldDoFullUpdate) {
+                lastMarkerLat = lat
+                lastMarkerLon = lon
+                lastMarkerBearing = bearing
+                lastMarkerUpdateTime = currentTime
 
-        // 5) spin the *map* so that this bus’s bearing is “up”
-        binding.map.rotation = -bearing
+                // 1) publish telemetry & client-attrs (throttled internally to avoid excessive calls)
+                mqttHelper.publishTelemetryData()
+                activity.updateClientAttributes()
+            }
 
-        // 6) optional: zoom, scale, center
-        binding.map.scaleX = 1.9f
-        binding.map.scaleY = 1.9f
-        binding.map.setCenter(newPos)
+            // 2) build a rotated icon for *this* bus (always update for smooth rotation)
+            val newPos  = LatLong(lat, lon)
+            val rotated = rotateDrawable(R.drawable.ic_bus_symbol, bearing)
 
-        // 7) redraw & update the little detail-panel
-        binding.map.invalidate()
-        activity.onBusMarkerUpdated()
+            // 3) ✅ CRITICAL: Always update marker position (even if position hasn't changed much)
+            // This ensures marker and map are always rendered correctly
+            if (activity.busMarker != null) {
+                activity.busMarker!!.latLong = newPos
+                activity.busMarker!!.bitmap = rotated
+            } else {
+                // 4) Create new marker if it doesn't exist
+                activity.busMarker = Marker(newPos, rotated, 0, 0)
+                binding.map.layerManager.layers.add(activity.busMarker)
+            }
+
+            // 5) spin the *map* so that this bus's bearing is "up"
+            binding.map.rotation = -bearing
+
+            // 6) optional: zoom, scale, center (always update to ensure map is visible)
+            binding.map.scaleX = 1.9f
+            binding.map.scaleY = 1.9f
+            binding.map.setCenter(newPos)
+
+            // ✅ FIX: Ensure map layer exists before invalidating
+            // If map layer is missing, try to reload it
+            val hasMapLayer = binding.map.layerManager.layers.any { it is TileRendererLayer }
+            if (!hasMapLayer && mapTileLayer != null) {
+                Log.w("MapViewController", "⚠️ Map layer missing, re-adding...")
+                try {
+                    if (!binding.map.layerManager.layers.contains(mapTileLayer)) {
+                        binding.map.layerManager.layers.add(0, mapTileLayer)
+                    }
+                } catch (e: Exception) {
+                    Log.e("MapViewController", "Error re-adding map layer: ${e.message}", e)
+                }
+            }
+
+            // 7) ✅ CRITICAL: Always invalidate map to prevent white screen
+            // This ensures map is always rendered, even if position hasn't changed
+            binding.map.invalidate()
+
+            if (shouldDoFullUpdate) {
+                activity.onBusMarkerUpdated()
+            }
+        } catch (e: Exception) {
+            Log.e("MapViewController", "Error updating bus marker: ${e.message}", e)
+            // ✅ FIX: Ensure map is invalidated even on error to prevent white screen
+            try {
+                binding.map.invalidate()
+            } catch (e2: Exception) {
+                Log.e("MapViewController", "Error invalidating map: ${e2.message}", e2)
+            }
+        }
     }
 
     /** Rotates any vector‐drawable @id by `angle`° around its center. */
@@ -457,6 +574,7 @@ class MapViewController(
      * Retrieves default configuration values for the activity,
      * such as adding other-bus markers.
      */
+    @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     fun getDefaultConfigValue() {
         activity.arrBusData.forEachIndexed { idx, bus ->
@@ -520,6 +638,7 @@ class MapViewController(
 
 
     /** Call this any time you re-draw or move markers on the map */
+    @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     fun refreshDetailPanelIcons() {
         activity.runOnUiThread {
@@ -527,47 +646,51 @@ class MapViewController(
 
             val zoom = binding.map.model.mapViewPosition.zoomLevel.toDouble()
             val bb   = binding.map.boundingBox
-
-            // 1) your own bus always first
             val selfToken = activity.token
 
-            // 2) then any other markers currently on‐screen
+            // Other buses that are currently drawn AND on screen
             val visibleOthers = activity.markerBus
-                .filter { it.key != selfToken
-                        && bb.contains(it.value.latLong.latitude, it.value.latLong.longitude)
-                }
+                .filter { (t, m) -> t != selfToken &&
+                        bb.contains(m.latLong.latitude, m.latLong.longitude) }
                 .keys
                 .toList()
 
-            // 3) full display order: self @ idx=0, others @ idx=1,2,3…
-            val displayOrder = listOf(selfToken) + visibleOthers
+            // If zoomed way in or there are no other online/visible buses → show only self
+            val displayOrder = if (zoom > 25.0 || visibleOthers.isEmpty()) {
+                listOf(selfToken)
+            } else {
+                // Prefer the active bus if it's visible, else take the first visible other
+                val prioritized = activeBusToken?.takeIf { it in visibleOthers }
+                    ?: visibleOthers.first()
+                listOf(selfToken, prioritized) + visibleOthers.filter { it != prioritized }
+            }
 
             displayOrder.forEachIndexed { idx, token ->
-                // when zoomed in past 25, skip everything except your own bus (idx==0)
-                if (zoom > 25.0 && idx >= 1) return@forEachIndexed
+                // If we're in deep zoom or there are no others, skip any non-self rows
+                if (idx >= 1 && (zoom > 25.0 || visibleOthers.isEmpty())) return@forEachIndexed
 
-                // pick the right icon name…
-                val iconName = if (idx == 0) {
-                    "ic_bus_symbol"
+                val iconName = if (idx == 0) "ic_bus_symbol"
+                else "ic_bus_symbol${(idx + 1).coerceAtMost(10)}"
+                val iconRes  = activity.resources.getIdentifier(iconName, "drawable", activity.packageName)
+
+                // Labels:
+                // - self: current trip label if available
+                // - others: stored label only; if missing/blank, skip (no "---")
+                val label: String = if (token == selfToken) {
+                    activeSegment ?: selfToken
                 } else {
-                    "ic_bus_symbol${(idx+1).coerceAtMost(10)}"
-                }
-                val iconRes = activity.resources.getIdentifier(iconName, "drawable", activity.packageName)
-
-                // …and label
-                val label = if (token == selfToken) {
-                    activeSegment ?: token
-                } else {
-                    activity.otherBusLabels[token] ?: token
+                    val lbl = activity.otherBusLabels[token]
+                    if (lbl.isNullOrBlank()) return@forEachIndexed
+                    lbl
                 }
 
-                // inflate a row
                 val row = LinearLayout(activity).apply {
                     orientation = LinearLayout.HORIZONTAL
-                    gravity     = Gravity.CENTER_VERTICAL
+                    gravity = Gravity.CENTER_VERTICAL
                     val pad = dpToPx(8)
                     setPadding(pad, pad/2, pad, pad/2)
                 }
+
                 val iv = ImageView(activity).apply {
                     setImageResource(iconRes)
                     layoutParams = LinearLayout.LayoutParams(dpToPx(16), dpToPx(16))
@@ -577,19 +700,65 @@ class MapViewController(
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     setPadding(dpToPx(8), 0, 0, 0)
                 }
+
                 row.addView(iv)
                 row.addView(tv)
                 detailContainer.addView(row)
 
-                // divider under every row except the last
                 if (idx < displayOrder.lastIndex) {
                     detailContainer.addView(View(activity).apply {
-                        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dpToPx(1))
-                            .apply { topMargin = dpToPx(4); bottomMargin = dpToPx(4) }
+                        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dpToPx(1)).apply {
+                            topMargin = dpToPx(4); bottomMargin = dpToPx(4)
+                        }
                         setBackgroundColor(Color.LTGRAY)
                     })
                 }
             }
+
+            if (visibleOthers.isEmpty() && !isReallyOnline()) {
+                val hint = TextView(activity).apply {
+                    text = "Other bus tracking is not available in offline mode"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    setTextColor(Color.GRAY)
+                    setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(8))
+                    gravity = Gravity.CENTER
+                }
+                detailContainer.addView(hint)
+            }
         }
+    }
+
+    /**
+     * Returns true if the system’s current network is both capable of, and validated for, Internet.
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun isReallyOnline(): Boolean {
+        val cm = activity.connectivityManager
+        val net = cm.activeNetwork ?: return false
+        return cm.getNetworkCapabilities(net)?.run {
+            hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    && hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        } ?: false
+    }
+
+    /** Adds a single stop marker at (lat, lon) using the given drawable resource. */
+    fun addStopMarker(lat: Double, lon: Double, @DrawableRes iconRes: Int) {
+        // 1) get the drawable from resources
+        val drawable = ResourcesCompat.getDrawable(activity.resources, iconRes, null) ?: return
+
+        // 2) render it into an Android Bitmap (size ~24dp)
+        val sizePx = dpToPx(24)
+        val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        drawable.setBounds(0, 0, sizePx, sizePx)
+        drawable.draw(canvas)
+
+        // 3) wrap as a Mapsforge bitmap and add the marker to the map
+        val mf = AndroidBitmap(bmp)  // org.mapsforge.core.graphics.Bitmap
+        val marker = org.mapsforge.map.layer.overlay.Marker(
+            LatLong(lat, lon), mf, 0, -mf.height / 2
+        )
+        binding.map.layerManager.layers.add(marker)
+        binding.map.invalidate()
     }
 }
