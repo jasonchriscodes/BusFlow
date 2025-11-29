@@ -167,9 +167,9 @@ jobs:
           TOKEN=$(curl -s -X POST "${TBHOST}/api/auth/login" \
             -H "Content-Type: application/json" \
             -d "{\"username\":\"${TB_USER}\",\"password\":\"${TB_PASS}\"}" | jq -r .token)
-          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-            echo "ERROR: ThingsBoard login failed. Check TB_USER / TB_PASS secrets."
-            exit 1
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; thenecho "ERROR: ThingsBoard login failed. Response from login:"curl -s -X POST "${TBHOST}/api/auth/login" \
+              -H "Content-Type: application/json" \
+              -d "{\"username\":\"${TB_USER}\",\"password\":\"${TB_PASS}\"}"exit 1
           fi
           echo "TB_TOKEN=$TOKEN" >> "$GITHUB_ENV"
           echo "Logged into ThingsBoard."
