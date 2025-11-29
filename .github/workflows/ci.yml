@@ -16,6 +16,7 @@ env:
   MAILERSEND_API_KEY: ${{ secrets.MAILERSEND_API_KEY }}
   GOOGLE_APP_PASS: ${{ secrets.GOOGLE_APP_PASS }}
 
+  # ThingsBoard secrets (Settings → Secrets and variables → Actions)
   TB_HOST: ${{ secrets.TB_HOST }}
   TB_USER: ${{ secrets.TB_USER }}
   TB_PASS: ${{ secrets.TB_PASS }}
@@ -33,6 +34,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Make gradlew executable (fix permission denied)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f ./gradlew ]; then
+            chmod +x ./gradlew
+          else
+            echo "ERROR: ./gradlew not found in repo root"
+            exit 1
+          fi
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -40,7 +52,9 @@ jobs:
           java-version: "17"
 
       - name: Install utilities (jq)
+        shell: bash
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y jq
 
@@ -50,18 +64,21 @@ jobs:
         run: |
           set -euo pipefail
 
-          chmod +x ./gradlew
-
+          # Try release first, then always build debug as fallback
           ./gradlew clean assembleRelease --stacktrace || true
           ./gradlew assembleDebug --stacktrace
 
-          APK_SOURCE_PATH="$(find . -type f -path "*/app/build/outputs/apk/release/*.apk" -print -quit || true)"
-          if [ -z "$APK_SOURCE_PATH" ]; then
-            APK_SOURCE_PATH="$(find . -type f -path "*/app/build/outputs/apk/debug/*.apk" -print -quit || true)"
-          fi
+          RELEASE_APK="$(find . -type f -path "*/app/build/outputs/apk/release/*.apk" -print -quit 2>/dev/null || true)"
+          DEBUG_APK="$(find . -type f -path "*/app/build/outputs/apk/debug/*.apk" -print -quit 2>/dev/null || true)"
 
-          if [ -z "$APK_SOURCE_PATH" ]; then
-            echo "ERROR: APK not found."
+          if [[ -n "$RELEASE_APK" ]]; then
+            APK_SOURCE_PATH="$RELEASE_APK"
+            BUILD_VARIANT="release"
+          elif [[ -n "$DEBUG_APK" ]]; then
+            APK_SOURCE_PATH="$DEBUG_APK"
+            BUILD_VARIANT="debug"
+          else
+            echo "ERROR: APK not found in release or debug outputs."
             find app/build -maxdepth 6 -type f -print || true
             exit 1
           fi
@@ -69,24 +86,35 @@ jobs:
           SHORT_SHA="${GITHUB_SHA::7}"
           TAG="release-${SHORT_SHA}"
 
-          # Copy to a predictable filename for release + OTA
-          RELEASE_APK="app_${SHORT_SHA}.apk"
-          cp "$APK_SOURCE_PATH" "$RELEASE_APK"
+          RELEASE_APK_NAME="app_${SHORT_SHA}_${BUILD_VARIANT}.apk"
+          cp "$APK_SOURCE_PATH" "$RELEASE_APK_NAME"
 
-          APK_SHA256="$(sha256sum "$RELEASE_APK" | awk '{print $1}')"
-          SHA_FILE="${RELEASE_APK}.sha256"
-          echo "${APK_SHA256}  ${RELEASE_APK}" > "${SHA_FILE}"
+          APK_SHA256="$(sha256sum "$RELEASE_APK_NAME" | awk '{print $1}')"
+          SHA_FILE="${RELEASE_APK_NAME}.sha256"
+          echo "${APK_SHA256}  ${RELEASE_APK_NAME}" > "${SHA_FILE}"
 
           echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_ENV"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
-          echo "APK_PATH=$RELEASE_APK" >> "$GITHUB_ENV"
+          echo "BUILD_VARIANT=$BUILD_VARIANT" >> "$GITHUB_ENV"
+          echo "APK_PATH=$RELEASE_APK_NAME" >> "$GITHUB_ENV"
           echo "APK_SHA256=$APK_SHA256" >> "$GITHUB_ENV"
           echo "SHA_FILE=$SHA_FILE" >> "$GITHUB_ENV"
 
-          echo "Built: $RELEASE_APK"
+          echo "Using APK: $APK_SOURCE_PATH"
+          echo "Packaged as: $RELEASE_APK_NAME"
           echo "sha256: $APK_SHA256"
 
-      # Create/update a GitHub Release per commit on main
+      # --- Release steps only on push to main ---
+      - name: Create annotated git tag locally (for Release)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "Automated release ${TAG}" || true
+          git push origin "${TAG}" || true
+
       - name: Create GitHub Release + upload APK assets
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
@@ -95,6 +123,7 @@ jobs:
           name: ${{ env.TAG }}
           body: |
             Automated release from CI for commit ${{ github.sha }}
+            variant:${{ env.BUILD_VARIANT }}
             sha256:${{ env.APK_SHA256 }}
           files: |
             ${{ env.APK_PATH }}
@@ -111,13 +140,14 @@ jobs:
           TBHOST="${TB_HOST:-https://thingsboard.cloud}"
           TBHOST="${TBHOST%/}"
 
+          echo "Logging into ThingsBoard at ${TBHOST}"
           LOGIN_RESP="$(curl -sS -X POST "${TBHOST}/api/auth/login" \
             -H "Content-Type: application/json" \
             -d "{\"username\":\"${TB_USER}\",\"password\":\"${TB_PASS}\"}")"
 
           TB_TOKEN="$(echo "${LOGIN_RESP}" | jq -r '.token // .accessToken // empty')"
           if [[ -z "${TB_TOKEN}" ]]; then
-            echo "ERROR: ThingsBoard login failed:"
+            echo "ERROR: ThingsBoard login failed. Response:"
             echo "${LOGIN_RESP}"
             exit 1
           fi
@@ -140,18 +170,25 @@ jobs:
 
           APK_PATH="${APK_PATH:?APK_PATH missing}"
           APK_SHA256="${APK_SHA256:?APK_SHA256 missing}"
+          TB_TOKEN="${TB_TOKEN:?TB_TOKEN missing}"
+
+          if [[ ! -f "${APK_PATH}" ]]; then
+            echo "ERROR: APK file not found: ${APK_PATH}"
+            exit 1
+          fi
 
           # 1) Get deviceProfileId from the target device
           DEVICE_JSON="$(curl -sS -H "X-Authorization: Bearer ${TB_TOKEN}" \
             "${TBHOST}/api/device/${DEVICE_ID}")"
+
           DEVICE_PROFILE_ID="$(echo "${DEVICE_JSON}" | jq -r '.deviceProfileId.id // empty')"
           if [[ -z "${DEVICE_PROFILE_ID}" ]]; then
-            echo "ERROR: Could not read deviceProfileId:"
+            echo "ERROR: Could not read deviceProfileId from device:"
             echo "${DEVICE_JSON}"
             exit 1
           fi
 
-          # 2) Create OTA package info (title+version+type+deviceProfileId)
+          # 2) Create OTA package info
           OTA_INFO="$(jq -n \
             --arg title "${TITLE}" \
             --arg version "${VERSION}" \
@@ -172,7 +209,7 @@ jobs:
           if [[ "${CREATE_CODE}" == "200" || "${CREATE_CODE}" == "201" ]]; then
             OTA_ID="$(echo "${CREATE_JSON}" | jq -r '.id.id // empty')"
           else
-            # If it already exists (rerun), search for it (your TB swagger UI shows exact params for your version)
+            echo "Create OTA package returned HTTP ${CREATE_CODE}; trying to find existing package..."
             LIST_JSON="$(curl -sS -H "X-Authorization: Bearer ${TB_TOKEN}" \
               "${TBHOST}/api/otaPackages?pageSize=50&page=0&textSearch=${VERSION}")"
             OTA_ID="$(echo "${LIST_JSON}" | jq -r --arg t "${TITLE}" --arg v "${VERSION}" \
@@ -186,8 +223,7 @@ jobs:
             exit 1
           fi
 
-          # 3) Upload package data (binary) to OTA package
-          # Endpoint form is documented in Swagger as: POST /api/otaPackage/{otaPackageId}{?checksum,checksumAlgorithm} :contentReference[oaicite:2]{index=2}
+          # 3) Upload the APK binary to that OTA package
           curl -sS -X POST \
             "${TBHOST}/api/otaPackage/${OTA_ID}?checksumAlgorithm=SHA256&checksum=${APK_SHA256}" \
             -H "X-Authorization: Bearer ${TB_TOKEN}" \
@@ -196,3 +232,8 @@ jobs:
 
           echo "✅ Uploaded to ThingsBoard OTA Updates: title=${TITLE}, version=${VERSION}, id=${OTA_ID}"
 
+      - name: Cleanup local tag (optional)
+        if: always()
+        shell: bash
+        run: |
+          git tag -d "${{ env.TAG }}" || true
