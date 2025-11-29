@@ -160,47 +160,68 @@ jobs:
       - name: Login to ThingsBoard Cloud and get JWT
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: tb_login
+        shell: bash
         run: |
           set -euo pipefail
+
           TBHOST="${TB_HOST:-https://thingsboard.cloud}"
-          echo "Logging into ThingsBoard at $TBHOST"
-          TOKEN=$(curl -s -X POST "${TBHOST}/api/auth/login" \
+          TBHOST="${TBHOST%/}"
+
+          echo "Logging into ThingsBoard at ${TBHOST}"
+
+          LOGIN_RESP="$(curl -sS -X POST "${TBHOST}/api/auth/login" \
             -H "Content-Type: application/json" \
-            -d "{\"username\":\"${TB_USER}\",\"password\":\"${TB_PASS}\"}" | jq -r .token)
-          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; thenecho "ERROR: ThingsBoard login failed. Response from login:"curl -s -X POST "${TBHOST}/api/auth/login" \
-              -H "Content-Type: application/json" \
-              -d "{\"username\":\"${TB_USER}\",\"password\":\"${TB_PASS}\"}"exit 1
+            -d "{\"username\":\"${TB_USER}\",\"password\":\"${TB_PASS}\"}")"
+
+          TB_TOKEN="$(echo "${LOGIN_RESP}" | jq -r '.token // .accessToken // empty')"
+
+          if [[ -z "${TB_TOKEN}" ]]; then
+            echo "ERROR: ThingsBoard login failed. Response:"
+            echo "${LOGIN_RESP}"
+            exit 1
           fi
-          echo "TB_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+          echo "TB_TOKEN=${TB_TOKEN}" >> "${GITHUB_ENV}"
           echo "Logged into ThingsBoard."
 
       - name: Publish APK metadata to ThingsBoard (Server attribute latest_apk)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: publish_tb
+        shell: bash
         run: |
           set -euo pipefail
+
           TBHOST="${TB_HOST:-https://thingsboard.cloud}"
-          DEVICE_ID="${TARGET_DEVICE_ID}"
-          if [ -z "$DEVICE_ID" ] || [ "$DEVICE_ID" = "null" ]; then
+          TBHOST="${TBHOST%/}"
+
+          DEVICE_ID="${TARGET_DEVICE_ID:-}"
+          if [[ -z "${DEVICE_ID}" || "${DEVICE_ID}" == "null" ]]; then
             echo "ERROR: TARGET_DEVICE_ID secret is missing."
             exit 1
           fi
 
-          ATTR_PAYLOAD=$(jq -n \
+          if [[ -z "${TB_TOKEN:-}" ]]; then
+            echo "ERROR: TB_TOKEN is missing (tb_login did not run or failed)."
+            exit 1
+          fi
+
+          ATTR_PAYLOAD="$(jq -n \
             --arg url "${ASSET_URL}" \
-            --arg ver "${{ env.TAG }}" \
+            --arg ver "${TAG}" \
             --arg sha "sha256:${APK_SHA256}" \
             --arg commit "${GITHUB_SHA}" \
-            '[{key:"latest_apk", value:{url:$url, version:$ver, checksum:$sha, commit:$commit}}]')
+            '{latest_apk: {url:$url, version:$ver, checksum:$sha, commit:$commit}}')"
 
           echo "Posting metadata to ThingsBoard for device ${DEVICE_ID}"
-          RESPONSE=$(curl -s -X POST "${TBHOST}/api/plugins/telemetry/DEVICE/${DEVICE_ID}/attributes/SERVER_SCOPE" \
+          RESPONSE="$(curl -sS -X POST "${TBHOST}/api/plugins/telemetry/DEVICE/${DEVICE_ID}/attributes/SERVER_SCOPE" \
             -H "Content-Type: application/json" \
             -H "X-Authorization: Bearer ${TB_TOKEN}" \
-            -d "${ATTR_PAYLOAD}")
+            -d "${ATTR_PAYLOAD}")"
+
           echo "ThingsBoard response: ${RESPONSE}"
 
       - name: Cleanup local tag (optional)
         if: always()
         run: |
           git tag -d "${{ env.TAG }}" || true
+
