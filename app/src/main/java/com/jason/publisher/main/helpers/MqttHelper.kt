@@ -12,6 +12,7 @@ import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.activity.MapActivity
 import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.model.ScheduleItem
+import com.jason.publisher.main.utils.LifecycleLogger
 import com.jason.publisher.services.ClientAttributesResponse
 import com.jason.publisher.services.ApiService
 import com.jason.publisher.main.services.MqttManager
@@ -252,6 +253,16 @@ class MqttHelper(
                 if (prev == null) {
                     owner.prevCoords[token] = lat to lon
                     owner.lastSeen[token] = now
+                    // ✅ ENHANCED: Log bus detection with destination info
+                    val label = resolvedLabel ?: owner.otherBusLabels[token] ?: "Unknown"
+                    val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
+                    LifecycleLogger.logOtherBusDetected(
+                        token = token,
+                        label = label,
+                        destination = destination,
+                        lat = lat,
+                        lon = lon
+                    )
                     // Draw marker immediately even on first fetch
                     owner.runOnUiThread {
                         val pos = LatLong(lat, lon)

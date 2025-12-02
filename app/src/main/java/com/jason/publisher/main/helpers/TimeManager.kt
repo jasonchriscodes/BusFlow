@@ -169,18 +169,29 @@ class TimeManager(private val owner: MapActivity, private val scheduleStatusMana
 
     /**
      * function to update the currentTimeTextView
+     * ✅ FIX: Also update simulatedStartTime to keep it in sync with real tablet time
      */
     fun startCurrentTimeUpdater() {
         // Stop any existing timer first
         stopCurrentTime()
 
+        // ✅ FIX: Sync simulatedStartTime with current tablet time at initialization
+        val now = Date()
+        simulatedStartTime.time = now
+
         currentTimeHandler = Handler(Looper.getMainLooper())
         currentTimeRunnable = object : Runnable {
             override fun run() {
                 try {
+                    val now = Date()
                     val currentTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                    val nowStr = currentTimeFormat.format(Date())
+                    val nowStr = currentTimeFormat.format(now)
                     owner.currentTimeTextView.text = nowStr
+
+                    // ✅ FIX: Update simulatedStartTime to keep it in sync with real time
+                    // This ensures calculations use the same time as displayed in UI
+                    simulatedStartTime.time = now
+
                     // Schedule next update only if handler is still valid
                     currentTimeHandler?.postDelayed(this, 1000)
                 } catch (e: Exception) {

@@ -88,8 +88,22 @@ class MapViewController(
                         .forEach { t ->
                             val last = activity.lastSeen[t] ?: 0L
                             if (last != 0L && now - last >= 30_000L) {
-                                activity.markerBus[t]?.let { marker ->
-                                    binding.map.layerManager.layers.remove(marker)
+                                // ✅ ENHANCED: Log bus removal with destination info
+                                val label = activity.otherBusLabels[t] ?: "Unknown"
+                                val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
+                                val marker = activity.markerBus[t]
+                                val lat = marker?.latLong?.latitude
+                                val lon = marker?.latLong?.longitude
+
+                                com.jason.publisher.main.utils.LifecycleLogger.logOtherBusRemoved(
+                                    token = t,
+                                    label = label,
+                                    destination = destination,
+                                    reason = "timeout"
+                                )
+
+                                marker?.let {
+                                    binding.map.layerManager.layers.remove(it)
                                 }
                                 activity.markerBus.remove(t)
                                 activity.prevCoords.remove(t)

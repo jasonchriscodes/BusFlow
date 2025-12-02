@@ -22,6 +22,7 @@ import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.Helper
+import com.jason.publisher.main.utils.LifecycleLogger
 import com.jason.publisher.main.utils.TripLog
 import com.jason.publisher.main.utils.hookBatteryToasts
 import org.mapsforge.core.graphics.Cap
@@ -87,6 +88,16 @@ class RepActivity : AppCompatActivity() {
         stopAddr = intent.getStringExtra("REP_STOP_ADDR") ?: stopName
         @Suppress("UNCHECKED_CAST")
         scheduleList = (intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? ArrayList<ScheduleItem>) ?: arrayListOf()
+
+        // ✅ ENHANCED: Log activity entry
+        LifecycleLogger.logActivityEntry("RepActivity", mapOf(
+            "repStopName" to stopName,
+            "repStopAddr" to stopAddr,
+            "repStopLat" to stopLat,
+            "repStopLon" to stopLon,
+            "scheduleStartTime" to (scheduleList.firstOrNull()?.startTime ?: "Unknown"),
+            "scheduleEndTime" to (scheduleList.firstOrNull()?.endTime ?: "Unknown")
+        ))
 
         // ---- UI changes ----
         // Label “Upcoming Stop” → “Reposition Stop”
@@ -490,4 +501,3 @@ class RepActivity : AppCompatActivity() {
         mapView.invalidate()
     }
 }
-

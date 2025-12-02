@@ -245,6 +245,8 @@ class MapActivity : AppCompatActivity() {
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
         FileLogger.d("MapActivity", "onCreate")
+        // ✅ FIX: Reset final stop message flag for new trip
+        hasShownFinalStopMessage = false
         hookBatteryToasts()
 
         autoTapArrivalDone = savedInstanceState?.getBoolean("autoTapArrivalDone") ?: false
@@ -302,6 +304,19 @@ class MapActivity : AppCompatActivity() {
         val upcomingStopInfo = stops.getOrNull(1)?.address ?: "Unknown"
         LifecycleLogger.logMapActivityOpen(routeInfo, currentStopInfo, upcomingStopInfo)
 
+        // ✅ ENHANCED: Log detailed activity entry
+        val firstSchedule = scheduleList.firstOrNull()
+        LifecycleLogger.logActivityEntry("MapActivity", mapOf(
+            "routeName" to (firstSchedule?.runName ?: "Unknown"),
+            "stopsCount" to stops.size,
+            "routePointsCount" to route.size,
+            "firstStop" to (stops.firstOrNull()?.address ?: "Unknown"),
+            "lastStop" to (stops.lastOrNull()?.address ?: "Unknown"),
+            "startTime" to (firstSchedule?.startTime ?: "Unknown"),
+            "endTime" to (firstSchedule?.endTime ?: "Unknown"),
+            "scheduleDataSize" to scheduleData.size
+        ))
+
         val selfLabel = scheduleList.firstOrNull()?.let { formatPanelLabel(it) }
         mapController.activeSegment = selfLabel // let the controller draw using this exact text
         selfLabel?.let {
@@ -354,11 +369,8 @@ class MapActivity : AppCompatActivity() {
         // Initialize UI components
         initializeUIComponents()
 
-        // Start the current time counter
-//        startCurrentTimeUpdater()
-
-        // start the simulated clock
-        timeManager.startStartTime()
+        // ✅ FIX: Start the current time counter using tablet time instead of schedule start time
+        timeManager.startCurrentTimeUpdater()
 
         // Start the next trip countdown updater
         timeManager.startNextTripCountdownUpdater()
@@ -1431,6 +1443,9 @@ class MapActivity : AppCompatActivity() {
     val passedStops = mutableListOf<BusStop>() // Track stops that have been passed
     var currentStopIndex = 0 // Keep track of the current stop in order
     private var hasPassedFirstStopAgain = false
+    private var hasShownFinalStopMessage = false // ✅ FIX: Flag to ensure final stop message only shows once
+    // ✅ ENHANCED: Store latest ETA calculation data for logging
+    var latestETAData: Map<String, Any?>? = null
     private val isCircularRoute: Boolean
         get() = stops.isNotEmpty() && stops.first().address == stops.last().address
 
@@ -1457,8 +1472,9 @@ class MapActivity : AppCompatActivity() {
             }
         }
 
-        // ✅ OPTIMIZED: Only log when a new stop is passed (not every check)
+        // ✅ FIX: Update detection zones immediately when stops are auto-passed
         if (newStopPassed) {
+            mapController.drawDetectionZones(stops) // Redraw zones to show passed stops as green
             val passedStop = passedStops.lastOrNull()
             Log.d("MapActivity", "✅ Stop passed: ${passedStop?.address}")
         }
@@ -1475,7 +1491,11 @@ class MapActivity : AppCompatActivity() {
             // update UI to "end of route" and fire the summary dialog:
             // Already on main thread from updateUIElements()
             upcomingBusStopTextView.text = "End of Route"
-            Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+            // ✅ FIX: Only show final stop message once
+            if (!hasShownFinalStopMessage) {
+                Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+                hasShownFinalStopMessage = true
+            }
             showSummaryDialog()
             return
         }
@@ -1511,7 +1531,11 @@ class MapActivity : AppCompatActivity() {
                     // Trip ends after second pass of the first stop
                     upcomingStop = "End of Route"
                     upcomingBusStopTextView.text = "End of Route"
-                    Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+                    // ✅ FIX: Only show final stop message once
+                    if (!hasShownFinalStopMessage) {
+                        Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+                        hasShownFinalStopMessage = true
+                    }
                     showSummaryDialog()
                     return
                 } else {
@@ -1528,6 +1552,27 @@ class MapActivity : AppCompatActivity() {
                 FileLogger.d(
                     "MapActivity checkPassedStops",
                     "✅ Arrived at: $stopAddress"
+                )
+
+                // ✅ ENHANCED: Log detailed bus stop pass with ETA data
+                val currentStopName = stops.getOrNull(currentStopIndex - 1)?.address ?: "Unknown"
+                val upcomingStopName = stops.getOrNull(currentStopIndex)?.address ?: "Unknown"
+                val etaData = latestETAData
+                LifecycleLogger.logBusStopPass(
+                    upcomingStop = upcomingStopName,
+                    currentStop = currentStopName,
+                    lat = currentLat,
+                    lon = currentLon,
+                    speed = speed,
+                    d1 = (etaData?.get("d1") as? Double),
+                    d2 = (etaData?.get("d2") as? Double),
+                    t1 = (etaData?.get("t1") as? Double),
+                    t2 = (etaData?.get("t2") as? Double),
+                    effectiveSpeed = (etaData?.get("effectiveSpeed") as? Double),
+                    scheduleStatusText = (etaData?.get("scheduleStatusText") as? String),
+                    timingPointTime = (etaData?.get("timingPointTime") as? String),
+                    predictedArrival = (etaData?.get("predictedArrival") as? String),
+                    deltaSec = (etaData?.get("deltaSec") as? Int)
                 )
 
                 // ✅ Add this block to track and update detection zones
@@ -1554,7 +1599,11 @@ class MapActivity : AppCompatActivity() {
                 if (currentStopIndex >= stops.size) {
                     upcomingStop = "End of Route"
                     upcomingBusStopTextView.text = "End of Route"
-                    Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+                    // ✅ FIX: Only show final stop message once
+                    if (!hasShownFinalStopMessage) {
+                        Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+                        hasShownFinalStopMessage = true
+                    }
 
                     // ✅ Trigger trip completion dialog
                     showSummaryDialog()
@@ -1908,7 +1957,6 @@ class MapActivity : AppCompatActivity() {
      * Only updates UI if enough time has passed since last update
      * NOTE: Marker position is updated separately in real-time, not here
      */
-    @SuppressLint("NewApi")
     private fun updateUIElementsThrottled() {
         try {
             // Ensure we're on the main thread

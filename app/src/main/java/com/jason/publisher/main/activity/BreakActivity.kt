@@ -18,6 +18,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.jason.publisher.main.ui.BreakUpcomingAdapter
 import com.jason.publisher.main.utils.FileLogger
+import com.jason.publisher.main.utils.LifecycleLogger
 import com.jason.publisher.main.utils.TripLog
 import com.jason.publisher.main.utils.hookBatteryToasts
 
@@ -60,6 +61,15 @@ class BreakActivity : AppCompatActivity() {
             finish()
             return
         }
+
+        // ✅ ENHANCED: Log activity entry
+        val breakDuration = "${breakItem.startTime} - ${breakItem.endTime}"
+        LifecycleLogger.logActivityEntry("BreakActivity", mapOf(
+            "breakDuration" to breakDuration,
+            "breakLabel" to breakLabel,
+            "startTime" to breakItem.startTime,
+            "endTime" to breakItem.endTime
+        ))
 
         // Grab the remaining day schedule (already passed into the Intent by ScheduleActivity)
         val fullRemaining = intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? ArrayList<ScheduleItem>

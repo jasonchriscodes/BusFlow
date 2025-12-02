@@ -53,6 +53,7 @@ import com.jason.publisher.main.services.MqttManager
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.NetworkStatusHelper
 import com.jason.publisher.main.utils.TripLog
+import com.jason.publisher.main.utils.LifecycleLogger
 import com.jason.publisher.main.utils.hookBatteryToasts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -348,6 +349,14 @@ class ScheduleActivity : AppCompatActivity() {
         Configuration.getInstance()
             .load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
 
+        // ✅ ENHANCED: Log activity entry with available data
+        LifecycleLogger.logActivityEntry("ScheduleActivity", mapOf(
+            "scheduleCount" to scheduleData.size,
+            "routeCount" to busRouteData.size,
+            "aid" to aid,
+            "firstTripInfo" to (scheduleData.firstOrNull()?.let { "${it.startTime} ${it.runName}" } ?: "N/A")
+        ))
+
         // Connect and subscribe to MQTT
         connectAndSubscribe()
 
@@ -518,13 +527,25 @@ class ScheduleActivity : AppCompatActivity() {
      */
     @RequiresApi(Build.VERSION_CODES.M)
     private fun launchBreakActivity(firstScheduleItem: ScheduleItem, no: Int) {
-        // remove first item, persist, refresh (your existing code) ...
-        scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
-        isScheduleCacheUpdated = false
-        saveScheduleDataToCache()
-        updateScheduleTablePaged()
-        updateTimeline()
-        rewriteOfflineScheduleData()
+        // ✅ FIX: Check for empty scheduleData and active trips before removing
+        if (scheduleData.isEmpty()) {
+            Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // ✅ FIX: Check if there's an active trip - don't remove from cache if trip is unfinished
+        val hasActiveTrip = TripLog.hasActive(this)
+        if (!hasActiveTrip) {
+            // remove first item, persist, refresh (your existing code) ...
+            scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+            isScheduleCacheUpdated = false
+            saveScheduleDataToCache()
+            updateScheduleTablePaged()
+            updateTimeline()
+            rewriteOfflineScheduleData()
+        } else {
+            Log.w("ScheduleActivity", "⚠️ Active trip detected, keeping first schedule in cache")
+        }
 
         val breakLabel = formatPanelLabel(firstScheduleItem) // e.g. "09:00 Break BCS → BCS"
         getAccessToken()
@@ -646,16 +667,30 @@ class ScheduleActivity : AppCompatActivity() {
                 putExtra("EXTRA_PANEL_DEBUG_NO", no)
             }
 
-            // remove first schedule & persist
-            scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
-            isScheduleCacheUpdated = false
-            saveScheduleDataToCache()
-            updateScheduleTablePaged()
-            updateTimeline()
-            rewriteOfflineScheduleData()
+            // ✅ FIX: Check for empty scheduleData and active trips before removing
+            if (scheduleData.isEmpty()) {
+                Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+                return
+            }
 
-            // And hand over the remaining full schedule
-            intent.putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+            // ✅ FIX: Check if there's an active trip - don't remove from cache if trip is unfinished
+            val hasActiveTrip = TripLog.hasActive(this)
+            if (hasActiveTrip) {
+                Log.w("ScheduleActivity", "⚠️ Active trip detected, keeping first schedule in cache")
+                // Don't remove from scheduleData, but still pass remaining schedules
+                intent.putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+            } else {
+                // remove first schedule & persist
+                scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+                isScheduleCacheUpdated = false
+                saveScheduleDataToCache()
+                updateScheduleTablePaged()
+                updateTimeline()
+                rewriteOfflineScheduleData()
+
+                // And hand over the remaining full schedule
+                intent.putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+            }
 
             startActivity(intent)
         } else {
