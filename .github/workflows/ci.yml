@@ -58,27 +58,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Build APK (Release then Debug fallback)
+      - name: Build APK (Debug)
         id: build_apk
         shell: bash
         run: |
           set -euo pipefail
+          chmod +x ./gradlew
 
-          # Try release first, then always build debug as fallback
-          ./gradlew clean assembleRelease --stacktrace || true
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew clean assembleDebug --stacktrace
 
-          RELEASE_APK="$(find . -type f -path "*/app/build/outputs/apk/release/*.apk" -print -quit 2>/dev/null || true)"
-          DEBUG_APK="$(find . -type f -path "*/app/build/outputs/apk/debug/*.apk" -print -quit 2>/dev/null || true)"
-
-          if [[ -n "$RELEASE_APK" ]]; then
-            APK_SOURCE_PATH="$RELEASE_APK"
-            BUILD_VARIANT="release"
-          elif [[ -n "$DEBUG_APK" ]]; then
-            APK_SOURCE_PATH="$DEBUG_APK"
-            BUILD_VARIANT="debug"
-          else
-            echo "ERROR: APK not found in release or debug outputs."
+          APK_SOURCE_PATH="$(find . -type f -path "*/app/build/outputs/apk/debug/*.apk" -print -quit 2>/dev/null || true)"
+          if [[ -z "$APK_SOURCE_PATH" ]]; then
+            echo "ERROR: Debug APK not found."
             find app/build -maxdepth 6 -type f -print || true
             exit 1
           fi
@@ -86,7 +77,7 @@ jobs:
           SHORT_SHA="${GITHUB_SHA::7}"
           TAG="release-${SHORT_SHA}"
 
-          RELEASE_APK_NAME="app_${SHORT_SHA}_${BUILD_VARIANT}.apk"
+          RELEASE_APK_NAME="app_${SHORT_SHA}_debug.apk"
           cp "$APK_SOURCE_PATH" "$RELEASE_APK_NAME"
 
           APK_SHA256="$(sha256sum "$RELEASE_APK_NAME" | awk '{print $1}')"
@@ -95,7 +86,7 @@ jobs:
 
           echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_ENV"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
-          echo "BUILD_VARIANT=$BUILD_VARIANT" >> "$GITHUB_ENV"
+          echo "BUILD_VARIANT=debug" >> "$GITHUB_ENV"
           echo "APK_PATH=$RELEASE_APK_NAME" >> "$GITHUB_ENV"
           echo "APK_SHA256=$APK_SHA256" >> "$GITHUB_ENV"
           echo "SHA_FILE=$SHA_FILE" >> "$GITHUB_ENV"
