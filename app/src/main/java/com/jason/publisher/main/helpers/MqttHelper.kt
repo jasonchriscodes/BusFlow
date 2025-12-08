@@ -201,32 +201,14 @@ class MqttHelper(
                 var labelUpdated = false
                 var resolvedLabel: String? = null
 
-                // 1) Prefer the stable label published by the other tablet
+                // 1) Prefer the stable label published by the other tablet (currentTripLabel)
+                // This is the current active schedule, not the first item in scheduleData
                 val labelFromPeer = client.currentTripLabel
                 if (!labelFromPeer.isNullOrBlank()) {
                     resolvedLabel = labelFromPeer
-                } else {
-                    // 2) Fallback: reconstruct from the *first* item of their scheduleData
-                    val scheduleJson = client.scheduleData
-                    if (!scheduleJson.isNullOrBlank()) {
-                        try {
-                            val arr = Gson().fromJson(scheduleJson, Array<ScheduleItem>::class.java).toList()
-                            arr.firstOrNull()?.let { first ->
-                                val from = first.busStops.firstOrNull()?.abbreviation
-                                    ?: first.busStops.firstOrNull()?.name ?: "?"
-                                val to = first.busStops.lastOrNull()?.abbreviation
-                                    ?: first.busStops.lastOrNull()?.name ?: "?"
-
-                                // avoid showing a token-like dutyName (e.g., 20–40 alnum chars)
-                                val dutyNameLooksLikeToken =
-                                    first.runName.length in 20..40 && first.runName.all { it.isLetterOrDigit() }
-                                val duty = if (dutyNameLooksLikeToken) "${first.runNo} $from → $to" else first.runName
-
-                                resolvedLabel = "${first.startTime} $duty $from → $to"
-                            }
-                        } catch (_: Exception) { /* ignore */ }
-                    }
                 }
+                // ✅ FIX: Don't fallback to first schedule item - it might not be the current trip
+                // Only use currentTripLabel to ensure we show the correct current schedule
 
                 resolvedLabel?.let { lbl ->
                     if (owner.otherBusLabels[token] != lbl) {
@@ -239,12 +221,23 @@ class MqttHelper(
                 val lat = client.latitude
                 val lon = client.longitude
 
-                // If no usable coords but label changed, still refresh the panel once.
+                // ✅ FIX: If no usable coords, don't create/update marker and clean up if exists
                 if (lat == 0.0 && lon == 0.0) {
-                    if (labelUpdated) {
-                        owner.runOnUiThread { owner.mapController.refreshDetailPanelIcons() }
+                    // Remove marker if it exists (invalid coordinates)
+                    owner.runOnUiThread {
+                        owner.markerBus[token]?.let { marker ->
+                            binding.map.layerManager.layers.remove(marker)
+                            owner.markerBus.remove(token)
+                            owner.prevCoords.remove(token)
+                            owner.lastSeen.remove(token)
+                            owner.otherBusLabels.remove(token)
+                            binding.map.invalidate()
+                        }
+                        if (labelUpdated) {
+                            owner.mapController.refreshDetailPanelIcons()
+                        }
                     }
-                    Log.d("MqttHelper getAttributes", "Ignoring $token at (0,0)")
+                    Log.d("MqttHelper getAttributes", "Ignoring $token at (0,0) - removed if exists")
                     return
                 }
 

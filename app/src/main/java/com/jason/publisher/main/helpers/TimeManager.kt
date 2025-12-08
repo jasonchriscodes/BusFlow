@@ -66,6 +66,7 @@ class TimeManager(private val owner: MapActivity, private val scheduleStatusMana
 
     /**
      * Starts the simulated clock using the startTime of the first ScheduleItem in scheduleList.
+     * ✅ REVERT: Back to original implementation using schedule start time
      */
     fun startStartTime() {
         val scheduleList = owner.scheduleList
@@ -74,16 +75,16 @@ class TimeManager(private val owner: MapActivity, private val scheduleStatusMana
             return
         }
 
-        // Extract the first schedule start time (e.g., "11:15")
-        val startTimeStr = scheduleList.first().startTime
-        val timeParts = startTimeStr.split(":")
-        if (timeParts.size != 2) {
-            Log.e("MapActivity", "❌ Invalid start time format in scheduleList: $startTimeStr")
+        // ✅ REVERT: Initialize simulatedStartTime with schedule start time (original behavior)
+        val firstSchedule = scheduleList.first()
+        val startTimeParts = firstSchedule.startTime.split(":")
+        if (startTimeParts.size != 2) {
+            Log.e("MapActivity", "❌ Invalid start time format: ${firstSchedule.startTime}")
             return
         }
 
-        simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
-        simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
+        simulatedStartTime.set(Calendar.HOUR_OF_DAY, startTimeParts[0].toInt())
+        simulatedStartTime.set(Calendar.MINUTE, startTimeParts[1].toInt())
         simulatedStartTime.set(Calendar.SECOND, 0)
 
         // Stop any existing timer first
@@ -96,7 +97,6 @@ class TimeManager(private val owner: MapActivity, private val scheduleStatusMana
                 try {
                     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                     owner.currentTimeTextView.text = timeFormat.format(simulatedStartTime.time)
-                    // ✅ OPTIMIZED: Removed verbose logging - time updates every second
 
                     simulatedStartTime.add(Calendar.SECOND, 1)
                     // Schedule next update only if handler is still valid
@@ -169,29 +169,18 @@ class TimeManager(private val owner: MapActivity, private val scheduleStatusMana
 
     /**
      * function to update the currentTimeTextView
-     * ✅ FIX: Also update simulatedStartTime to keep it in sync with real tablet time
      */
     fun startCurrentTimeUpdater() {
         // Stop any existing timer first
         stopCurrentTime()
 
-        // ✅ FIX: Sync simulatedStartTime with current tablet time at initialization
-        val now = Date()
-        simulatedStartTime.time = now
-
         currentTimeHandler = Handler(Looper.getMainLooper())
         currentTimeRunnable = object : Runnable {
             override fun run() {
                 try {
-                    val now = Date()
                     val currentTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                    val nowStr = currentTimeFormat.format(now)
+                    val nowStr = currentTimeFormat.format(Date())
                     owner.currentTimeTextView.text = nowStr
-
-                    // ✅ FIX: Update simulatedStartTime to keep it in sync with real time
-                    // This ensures calculations use the same time as displayed in UI
-                    simulatedStartTime.time = now
-
                     // Schedule next update only if handler is still valid
                     currentTimeHandler?.postDelayed(this, 1000)
                 } catch (e: Exception) {
@@ -229,6 +218,7 @@ class TimeManager(private val owner: MapActivity, private val scheduleStatusMana
     /**
      * Returns the start time for the next schedule.
      * Assumes that the scheduleData list is sorted chronologically.
+     * ✅ REVERT: Back to original implementation before plan changes
      */
     fun getNextScheduleStartTime(): String? {
         val flat = (owner.scheduleData as? List<Any> ?: emptyList()).flatMap {
@@ -238,6 +228,7 @@ class TimeManager(private val owner: MapActivity, private val scheduleStatusMana
                 else            -> emptyList()
             }
         }
+        // ✅ REVERT: Original implementation - return second item if available
         return if (flat.size > 1) flat[1].startTime else null
     }
 

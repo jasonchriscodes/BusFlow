@@ -369,8 +369,9 @@ class MapActivity : AppCompatActivity() {
         // Initialize UI components
         initializeUIComponents()
 
-        // ✅ FIX: Start the current time counter using tablet time instead of schedule start time
-        timeManager.startCurrentTimeUpdater()
+        // Start the current time counter
+        // Use startStartTime() which updates simulatedStartTime for calculations
+        timeManager.startStartTime()
 
         // Start the next trip countdown updater
         timeManager.startNextTripCountdownUpdater()
@@ -1933,8 +1934,12 @@ class MapActivity : AppCompatActivity() {
 
     /**
      * Smoothly updates the speed using an time‑based filter moving average.
+     * ✅ FIX: Use minValidValue = 1.8 km/h (0.5 m/s) to filter out stopped bus at red lights
      */
-    private val speedFilter = TimeBasedMovingAverageFilterDouble(windowMillis = 15000)
+    private val speedFilter = TimeBasedMovingAverageFilterDouble(
+        windowMillis = 15000,
+        minValidValue = 1.8  // 1.8 km/h = 0.5 m/s - filter out very low speeds when bus is stopped
+    )
     // For example, a window of 15000 ms (15 seconds):
     fun updateSpeed(newSpeed: Float) {
         // The filter expects a Double value; newSpeed is given in km/h.
