@@ -82,12 +82,43 @@ class MapViewController(
                     val now = System.currentTimeMillis()
                     var removedCount = 0
 
-                    // 1) remove any buses inactive ≥30s (increased from 10s to prevent premature removal)
+                    // ✅ FIX: Get valid bus tokens from arrBusData to ensure we only track valid buses
+                    val validBusTokens = activity.arrBusData.map { it.accessToken }.toSet()
+
+                    // 1) remove any buses that are no longer in arrBusData (orphaned markers)
                     activity.markerBus.keys
-                        .filter { it != activity.token }
+                        .filter { it != activity.token && it !in validBusTokens }
+                        .forEach { t ->
+                            val label = activity.otherBusLabels[t] ?: "Unknown"
+                            val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
+                            val marker = activity.markerBus[t]
+
+                            com.jason.publisher.main.utils.LifecycleLogger.logOtherBusRemoved(
+                                token = t,
+                                label = label,
+                                destination = destination,
+                                reason = "not_in_arrBusData"
+                            )
+
+                            marker?.let {
+                                binding.map.layerManager.layers.remove(it)
+                            }
+                            activity.markerBus.remove(t)
+                            activity.prevCoords.remove(t)
+                            activity.lastSeen.remove(t)
+                            activity.otherBusLabels.remove(t)
+                            removedCount++
+                        }
+
+                    // 2) ✅ FIX: remove any buses inactive ≥2 minutes (reduced from 5 minutes for faster cleanup)
+                    // Bus that was started but app was closed will have currentTripLabel but no recent location updates
+                    activity.markerBus.keys
+                        .filter { it != activity.token && it in validBusTokens }
                         .forEach { t ->
                             val last = activity.lastSeen[t] ?: 0L
-                            if (last != 0L && now - last >= 30_000L) {
+                            // ✅ FIX: Use 2 minutes to quickly remove buses that closed app
+                            // This ensures buses that were started but app was closed are removed quickly
+                            if (last != 0L && now - last >= 2 * 60 * 1000L) {
                                 // ✅ ENHANCED: Log bus removal with destination info
                                 val label = activity.otherBusLabels[t] ?: "Unknown"
                                 val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
@@ -99,7 +130,7 @@ class MapViewController(
                                     token = t,
                                     label = label,
                                     destination = destination,
-                                    reason = "timeout"
+                                    reason = "inactive_2min"
                                 )
 
                                 marker?.let {
@@ -662,10 +693,17 @@ class MapViewController(
             val bb   = binding.map.boundingBox
             val selfToken = activity.token
 
-            // Other buses that are currently drawn AND on screen
+            // ✅ FIX: Other buses that are currently drawn, on screen, exist in arrBusData, AND have valid label
+            // This ensures we only show buses that are actually in the system and have started a trip
+            val validBusTokens = activity.arrBusData.map { it.accessToken }.toSet()
             val visibleOthers = activity.markerBus
-                .filter { (t, m) -> t != selfToken &&
-                        bb.contains(m.latLong.latitude, m.latLong.longitude) }
+                .filter { (t, m) ->
+                    t != selfToken &&
+                            t in validBusTokens &&  // ✅ FIX: Only show buses that exist in arrBusData
+                            bb.contains(m.latLong.latitude, m.latLong.longitude) &&
+                            // ✅ FIX: Only show buses that have a valid label (have started a trip)
+                            !activity.otherBusLabels[t].isNullOrBlank()
+                }
                 .keys
                 .toList()
 

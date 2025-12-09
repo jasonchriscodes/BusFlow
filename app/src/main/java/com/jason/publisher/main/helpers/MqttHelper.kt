@@ -45,6 +45,9 @@ class MqttHelper(
         private const val CLIENT_KEYS = "latitude,longitude,bearing,speed,direction,scheduleData,currentTripLabel"
         // Minimum distance change to consider as movement (in meters)
         private const val MIN_MOVEMENT_DISTANCE = 5.0
+        // ✅ FIX: Maximum time (2 minutes) before considering a bus inactive
+        // Bus that hasn't sent location update in 2 minutes is considered inactive
+        private const val MAX_INACTIVE_TIME_MS = 2 * 60 * 1000L  // 2 minutes
     }
 
     // track when we last fetched attributes for each token
@@ -98,11 +101,19 @@ class MqttHelper(
                     getAttributes(apiService, bus.accessToken, clientKeys)
                 }
 
-                // remove dropped-out buses
-                val toRemove = owner.markerBus.keys - newArr.map { it.accessToken }.toSet()
+                // ✅ FIX: remove dropped-out buses and clean up all tracking data
+                // Also remove buses that are no longer in arrBusData (orphaned from ThingsBoard)
+                val newArrTokens = newArr.map { it.accessToken }.toSet()
+                val toRemove = owner.markerBus.keys.filter {
+                    it != owner.token && it !in newArrTokens
+                }
                 toRemove.forEach { token ->
                     binding.map.layerManager.layers.remove(owner.markerBus[token])
                     owner.markerBus.remove(token)
+                    owner.prevCoords.remove(token)
+                    owner.lastSeen.remove(token)
+                    owner.otherBusLabels.remove(token)
+                    Log.d("MqttHelper subscribeSharedData", "Removed bus $token - no longer in arrBusData")
                 }
 
                 owner.arrBusData = newArr
@@ -201,14 +212,14 @@ class MqttHelper(
                 var labelUpdated = false
                 var resolvedLabel: String? = null
 
-                // 1) Prefer the stable label published by the other tablet (currentTripLabel)
-                // This is the current active schedule, not the first item in scheduleData
+                // ✅ FIX: Only use currentTripLabel - bus must have started a trip to be shown
+                // Don't use fallback to scheduleData because bus that hasn't started shouldn't be displayed
                 val labelFromPeer = client.currentTripLabel
                 if (!labelFromPeer.isNullOrBlank()) {
                     resolvedLabel = labelFromPeer
                 }
-                // ✅ FIX: Don't fallback to first schedule item - it might not be the current trip
-                // Only use currentTripLabel to ensure we show the correct current schedule
+                // Note: We don't fallback to scheduleData because bus that hasn't started
+                // shouldn't be shown on the map. Only buses with active trips are displayed.
 
                 resolvedLabel?.let { lbl ->
                     if (owner.otherBusLabels[token] != lbl) {
@@ -238,6 +249,81 @@ class MqttHelper(
                         }
                     }
                     Log.d("MqttHelper getAttributes", "Ignoring $token at (0,0) - removed if exists")
+                    return
+                }
+
+                // ✅ FIX: Don't show bus that hasn't started (no currentTripLabel)
+                // Only show buses that have actually started a trip and published currentTripLabel
+                if (resolvedLabel.isNullOrBlank()) {
+                    // Bus hasn't started yet - remove marker if exists
+                    owner.runOnUiThread {
+                        owner.markerBus[token]?.let { marker ->
+                            binding.map.layerManager.layers.remove(marker)
+                            owner.markerBus.remove(token)
+                            owner.prevCoords.remove(token)
+                            owner.lastSeen.remove(token)
+                            owner.otherBusLabels.remove(token)
+                            binding.map.invalidate()
+                        }
+                        owner.mapController.refreshDetailPanelIcons()
+                    }
+                    Log.d("MqttHelper getAttributes", "Ignoring $token - bus hasn't started yet (no currentTripLabel)")
+                    return
+                }
+
+                // ✅ FIX: Check if bus is still active (has sent location update recently)
+                // Bus that was started but app was closed will have currentTripLabel but no recent updates
+                val lastSeenTime = owner.lastSeen[token] ?: 0L
+                if (lastSeenTime > 0L && (now - lastSeenTime) > MAX_INACTIVE_TIME_MS) {
+                    // Bus hasn't sent update in 2 minutes - consider it inactive and remove
+                    owner.runOnUiThread {
+                        owner.markerBus[token]?.let { marker ->
+                            binding.map.layerManager.layers.remove(marker)
+                            owner.markerBus.remove(token)
+                            owner.prevCoords.remove(token)
+                            owner.lastSeen.remove(token)
+                            owner.otherBusLabels.remove(token)
+                            binding.map.invalidate()
+                        }
+                        owner.mapController.refreshDetailPanelIcons()
+                    }
+                    Log.d("MqttHelper getAttributes", "Removing $token - bus inactive (no update in ${(now - lastSeenTime) / 1000}s)")
+                    return
+                }
+
+                // ✅ FIX: If bus already exists in markerBus but coordinates haven't changed,
+                // it might be a stale bus (app was closed). Don't update lastSeen if coordinates are stale.
+                val existingPrev = owner.prevCoords[token]
+                if (existingPrev != null && existingPrev.first == lat && existingPrev.second == lon) {
+                    // Coordinates haven't changed - this might be stale data from ThingsBoard
+                    // Only update lastSeen if it's a recent first-time fetch (within last 30 seconds)
+                    if (lastSeenTime == 0L) {
+                        // First time seeing this bus with stale coordinates - set lastSeen but don't create marker yet
+                        // Wait for next update to see if coordinates change
+                        owner.lastSeen[token] = now
+                        Log.d("MqttHelper getAttributes", "First fetch for $token with stale coordinates - waiting for movement")
+                        return
+                    } else if ((now - lastSeenTime) > 30_000L) {
+                        // Coordinates haven't changed in 30 seconds - likely stale, remove
+                        owner.runOnUiThread {
+                            owner.markerBus[token]?.let { marker ->
+                                binding.map.layerManager.layers.remove(marker)
+                                owner.markerBus.remove(token)
+                                owner.prevCoords.remove(token)
+                                owner.lastSeen.remove(token)
+                                owner.otherBusLabels.remove(token)
+                                binding.map.invalidate()
+                            }
+                            owner.mapController.refreshDetailPanelIcons()
+                        }
+                        Log.d("MqttHelper getAttributes", "Removing $token - stale coordinates (no movement in 30s)")
+                        return
+                    }
+                    // Coordinates are same but recent - just update lastSeen and return (no marker update needed)
+                    owner.lastSeen[token] = now
+                    if (labelUpdated) {
+                        owner.runOnUiThread { owner.mapController.refreshDetailPanelIcons() }
+                    }
                     return
                 }
 
