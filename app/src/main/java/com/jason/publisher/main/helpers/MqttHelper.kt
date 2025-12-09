@@ -256,6 +256,7 @@ class MqttHelper(
                 // Only show buses that have actually started a trip and published currentTripLabel
                 if (resolvedLabel.isNullOrBlank()) {
                     // Bus hasn't started yet - remove marker if exists
+                    val hadMarker = owner.markerBus.containsKey(token)
                     owner.runOnUiThread {
                         owner.markerBus[token]?.let { marker ->
                             binding.map.layerManager.layers.remove(marker)
@@ -267,7 +268,24 @@ class MqttHelper(
                         }
                         owner.mapController.refreshDetailPanelIcons()
                     }
-                    Log.d("MqttHelper getAttributes", "Ignoring $token - bus hasn't started yet (no currentTripLabel)")
+                    return
+                }
+
+                // ✅ FIX: Don't show buses with "Break" labels - remove marker if exists
+                if (resolvedLabel.contains("Break", ignoreCase = true)) {
+                    // Bus is on break - remove marker if exists
+                    val hadMarker = owner.markerBus.containsKey(token)
+                    owner.runOnUiThread {
+                        owner.markerBus[token]?.let { marker ->
+                            binding.map.layerManager.layers.remove(marker)
+                            owner.markerBus.remove(token)
+                            owner.prevCoords.remove(token)
+                            owner.lastSeen.remove(token)
+                            owner.otherBusLabels.remove(token)
+                            binding.map.invalidate()
+                        }
+                        owner.mapController.refreshDetailPanelIcons()
+                    }
                     return
                 }
 
@@ -328,8 +346,25 @@ class MqttHelper(
                 }
 
                 // First time we see this token → record and draw immediately
+                // ✅ FIX: Only create marker if bus has started (has currentTripLabel) and is not on Break
                 val prev = owner.prevCoords[token]
                 if (prev == null) {
+                    // ✅ FIX: Don't create marker if bus hasn't started yet
+                    if (resolvedLabel.isNullOrBlank()) {
+                        // Bus hasn't started - just record coordinates but don't create marker
+                        owner.prevCoords[token] = lat to lon
+                        owner.lastSeen[token] = now
+                        return
+                    }
+
+                    // ✅ FIX: Don't create marker if bus is on Break
+                    if (resolvedLabel.contains("Break", ignoreCase = true)) {
+                        // Bus is on break - just record coordinates but don't create marker
+                        owner.prevCoords[token] = lat to lon
+                        owner.lastSeen[token] = now
+                        return
+                    }
+
                     owner.prevCoords[token] = lat to lon
                     owner.lastSeen[token] = now
                     // ✅ ENHANCED: Log bus detection with destination info
@@ -342,7 +377,7 @@ class MqttHelper(
                         lat = lat,
                         lon = lon
                     )
-                    // Draw marker immediately even on first fetch
+                    // Draw marker immediately only if bus has started
                     owner.runOnUiThread {
                         val pos = LatLong(lat, lon)
                         val idx = owner.arrBusData.indexOfFirst { it.accessToken == token }
@@ -358,13 +393,28 @@ class MqttHelper(
                             owner.mapController.refreshDetailPanelIcons()
                         }
                     }
-                    Log.d("MqttHelper getAttributes", "First fetch for $token; marker created")
+                    Log.d("MqttHelper getAttributes", "First fetch for $token; marker created (bus has started)")
                     return
                 }
 
                 // No movement → still update lastSeen and refresh panel if label changed
                 if (prev.first == lat && prev.second == lon) {
                     owner.lastSeen[token] = now // Update lastSeen even if no movement
+                    // ✅ FIX: If label changed to "Break", remove marker
+                    if (labelUpdated && resolvedLabel.contains("Break", ignoreCase = true)) {
+                        owner.runOnUiThread {
+                            owner.markerBus[token]?.let { marker ->
+                                binding.map.layerManager.layers.remove(marker)
+                                owner.markerBus.remove(token)
+                                owner.prevCoords.remove(token)
+                                owner.lastSeen.remove(token)
+                                owner.otherBusLabels.remove(token)
+                                binding.map.invalidate()
+                            }
+                            owner.mapController.refreshDetailPanelIcons()
+                        }
+                        return
+                    }
                     if (labelUpdated) {
                         owner.runOnUiThread { owner.mapController.refreshDetailPanelIcons() }
                     }
@@ -377,6 +427,22 @@ class MqttHelper(
                 if (distance < MIN_MOVEMENT_DISTANCE && !labelUpdated) {
                     // Small movement, just update lastSeen
                     owner.lastSeen[token] = now
+                    return
+                }
+
+                // ✅ FIX: If label changed to "Break", remove marker instead of updating
+                if (resolvedLabel.contains("Break", ignoreCase = true)) {
+                    owner.runOnUiThread {
+                        owner.markerBus[token]?.let { marker ->
+                            binding.map.layerManager.layers.remove(marker)
+                            owner.markerBus.remove(token)
+                            owner.prevCoords.remove(token)
+                            owner.lastSeen.remove(token)
+                            owner.otherBusLabels.remove(token)
+                            binding.map.invalidate()
+                        }
+                        owner.mapController.refreshDetailPanelIcons()
+                    }
                     return
                 }
 

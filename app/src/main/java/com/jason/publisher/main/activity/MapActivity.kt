@@ -1072,7 +1072,6 @@ class MapActivity : AppCompatActivity() {
     /**
      * Call this function when the simulation finishes.
      */
-    @RequiresApi(Build.VERSION_CODES.M)
     private fun showSummaryDialog() {
         // Flatten scheduleData into a List<ScheduleItem>
         val flatSchedule = (scheduleData as? List<Any> ?: emptyList()).flatMap { element ->
@@ -1110,15 +1109,15 @@ class MapActivity : AppCompatActivity() {
         // Customize the dialog's background and text colors
         dialog.window?.setBackgroundDrawableResource(R.color.colorMain)
         dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.setTextColor(
-            resources.getColor(R.color.white, null)
+            ResourcesCompat.getColor(resources, R.color.white, null)
         )
         dialog.findViewById<TextView>(android.R.id.message)?.setTextColor(
-            resources.getColor(R.color.white, null)
+            ResourcesCompat.getColor(resources, R.color.white, null)
         )
         // Style the positive button similar to your simulation button
         dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)?.apply {
-            setBackgroundTintList(ColorStateList.valueOf(resources.getColor(R.color.purple_400, null)))
-            setTextColor(resources.getColor(R.color.white, null))
+            backgroundTintList = ColorStateList.valueOf(ResourcesCompat.getColor(resources, R.color.purple_400, null))
+            setTextColor(ResourcesCompat.getColor(resources, R.color.white, null))
         }
     }
 
@@ -1451,7 +1450,6 @@ class MapActivity : AppCompatActivity() {
         get() = stops.isNotEmpty() && stops.first().address == stops.last().address
 
 
-    @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     private fun checkPassedStops(currentLat: Double, currentLon: Double) {
         if (stops.isEmpty()) {
@@ -1764,7 +1762,6 @@ class MapActivity : AppCompatActivity() {
             maxWaitTime = 3000 // Maximum wait time 3 seconds
         }
         locationCallback = object : LocationCallback() {
-            @RequiresApi(Build.VERSION_CODES.M)
             override fun onLocationResult(locationResult: LocationResult) {
                 locationResult.lastLocation?.let { location ->
 

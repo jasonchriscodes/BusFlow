@@ -110,7 +110,45 @@ class MapViewController(
                             removedCount++
                         }
 
-                    // 2) ✅ FIX: remove any buses inactive ≥2 minutes (reduced from 5 minutes for faster cleanup)
+                    // 2a) ✅ FIX: Remove buses that don't have valid currentTripLabel (haven't started)
+                    // This ensures buses that haven't started are removed even if they have markers
+                    activity.markerBus.keys
+                        .filter { it != activity.token && it in validBusTokens }
+                        .forEach { t ->
+                            val label = activity.otherBusLabels[t]
+                            if (label.isNullOrBlank()) {
+                                // Bus doesn't have currentTripLabel - remove marker
+                                val marker = activity.markerBus[t]
+                                marker?.let {
+                                    binding.map.layerManager.layers.remove(it)
+                                }
+                                activity.markerBus.remove(t)
+                                activity.prevCoords.remove(t)
+                                activity.lastSeen.remove(t)
+                                activity.otherBusLabels.remove(t)
+                                removedCount++
+                            } else if (label.contains("Break", ignoreCase = true)) {
+                                // ✅ FIX: Remove buses with "Break" labels - they shouldn't be displayed
+                                val marker = activity.markerBus[t]
+                                val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
+                                com.jason.publisher.main.utils.LifecycleLogger.logOtherBusRemoved(
+                                    token = t,
+                                    label = label,
+                                    destination = destination,
+                                    reason = "break_schedule"
+                                )
+                                marker?.let {
+                                    binding.map.layerManager.layers.remove(it)
+                                }
+                                activity.markerBus.remove(t)
+                                activity.prevCoords.remove(t)
+                                activity.lastSeen.remove(t)
+                                activity.otherBusLabels.remove(t)
+                                removedCount++
+                            }
+                        }
+
+                    // 2b) ✅ FIX: remove any buses inactive ≥2 minutes (reduced from 5 minutes for faster cleanup)
                     // Bus that was started but app was closed will have currentTripLabel but no recent location updates
                     activity.markerBus.keys
                         .filter { it != activity.token && it in validBusTokens }
@@ -696,30 +734,66 @@ class MapViewController(
             // ✅ FIX: Other buses that are currently drawn, on screen, exist in arrBusData, AND have valid label
             // This ensures we only show buses that are actually in the system and have started a trip
             val validBusTokens = activity.arrBusData.map { it.accessToken }.toSet()
+
             val visibleOthers = activity.markerBus
                 .filter { (t, m) ->
                     t != selfToken &&
                             t in validBusTokens &&  // ✅ FIX: Only show buses that exist in arrBusData
                             bb.contains(m.latLong.latitude, m.latLong.longitude) &&
                             // ✅ FIX: Only show buses that have a valid label (have started a trip)
-                            !activity.otherBusLabels[t].isNullOrBlank()
+                            !activity.otherBusLabels[t].isNullOrBlank() &&
+                            // ✅ FIX: Filter out Break schedules - don't show buses that are on break
+                            !activity.otherBusLabels[t]!!.contains("Break", ignoreCase = true)
                 }
                 .keys
                 .toList()
 
             // If zoomed way in or there are no other online/visible buses → show only self
-            val displayOrder = if (zoom > 25.0 || visibleOthers.isEmpty()) {
+            val displayOrderRaw = if (zoom > 25.0 || visibleOthers.isEmpty()) {
                 listOf(selfToken)
             } else {
                 // Prefer the active bus if it's visible, else take the first visible other
                 val prioritized = activeBusToken?.takeIf { it in visibleOthers }
-                    ?: visibleOthers.first()
-                listOf(selfToken, prioritized) + visibleOthers.filter { it != prioritized }
+                    ?: visibleOthers.firstOrNull()
+                if (prioritized != null) {
+                    listOf(selfToken, prioritized) + visibleOthers.filter { it != prioritized }
+                } else {
+                    listOf(selfToken)
+                }
+            }
+
+            // ✅ FIX: Remove duplicate tokens from displayOrder to prevent duplicate panels
+            val displayOrderDistinct = displayOrderRaw.distinct()
+            if (displayOrderDistinct.size != displayOrderRaw.size) {
+                Log.w("MapViewController refreshDetailPanelIcons", "⚠️ WARNING: Found duplicate tokens in displayOrder! Raw: $displayOrderRaw, Distinct: $displayOrderDistinct")
+            }
+
+            // ✅ FIX: Remove other buses that have the same label as self bus to prevent duplicate panels
+            val selfLabel = activeSegment ?: selfToken
+            // Always filter out other buses with the same label as self bus to prevent duplicate panels
+            val displayOrder = if (selfLabel.isNotBlank()) {
+                // Normalize labels for comparison (trim whitespace, case-insensitive)
+                val normalizedSelfLabel = selfLabel.trim()
+                // Filter out other buses that have the same label as self bus
+                val filtered = displayOrderDistinct.filter { token ->
+                    if (token == selfToken) {
+                        true // Always include self bus
+                    } else {
+                        val otherLabel = activity.otherBusLabels[token]?.trim() ?: ""
+                        // Only include other bus if its label is different from self bus label (case-insensitive comparison)
+                        !otherLabel.equals(normalizedSelfLabel, ignoreCase = true)
+                    }
+                }
+                filtered
+            } else {
+                displayOrderDistinct
             }
 
             displayOrder.forEachIndexed { idx, token ->
                 // If we're in deep zoom or there are no others, skip any non-self rows
-                if (idx >= 1 && (zoom > 25.0 || visibleOthers.isEmpty())) return@forEachIndexed
+                if (idx >= 1 && (zoom > 25.0 || visibleOthers.isEmpty())) {
+                    return@forEachIndexed
+                }
 
                 val iconName = if (idx == 0) "ic_bus_symbol"
                 else "ic_bus_symbol${(idx + 1).coerceAtMost(10)}"
@@ -729,10 +803,21 @@ class MapViewController(
                 // - self: current trip label if available
                 // - others: stored label only; if missing/blank, skip (no "---")
                 val label: String = if (token == selfToken) {
-                    activeSegment ?: selfToken
+                    val selfLbl = activeSegment ?: selfToken
+                    // ✅ FIX: Skip Break schedules for self bus too - don't display them in the panel
+                    if (selfLbl.contains("Break", ignoreCase = true)) {
+                        return@forEachIndexed
+                    }
+                    selfLbl
                 } else {
                     val lbl = activity.otherBusLabels[token]
-                    if (lbl.isNullOrBlank()) return@forEachIndexed
+                    if (lbl.isNullOrBlank()) {
+                        return@forEachIndexed
+                    }
+                    // ✅ FIX: Skip Break schedules - don't display them in the panel
+                    if (lbl.contains("Break", ignoreCase = true)) {
+                        return@forEachIndexed
+                    }
                     lbl
                 }
 
