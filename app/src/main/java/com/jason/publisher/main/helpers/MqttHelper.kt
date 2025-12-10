@@ -118,6 +118,9 @@ class MqttHelper(
 
                 owner.arrBusData = newArr
                 binding.map.invalidate()
+                // ✅ FIX: Refresh detail panel after arrBusData is updated
+                // This ensures detail panel shows all buses that are in the system
+                owner.mapController.refreshDetailPanelIcons()
             }
         }
     }
@@ -222,9 +225,15 @@ class MqttHelper(
                 // shouldn't be shown on the map. Only buses with active trips are displayed.
 
                 resolvedLabel?.let { lbl ->
+                    val wasEmpty = owner.otherBusLabels[token].isNullOrBlank()
                     if (owner.otherBusLabels[token] != lbl) {
                         owner.otherBusLabels[token] = lbl
                         labelUpdated = true
+                        // ✅ FIX: If this is the first time we set a label for this bus, refresh detail panel
+                        // This ensures detail panel shows the bus even if marker hasn't been created yet
+                        if (wasEmpty) {
+                            owner.runOnUiThread { owner.mapController.refreshDetailPanelIcons() }
+                        }
                     }
                 }
                 // ------------------------------------------------------------------
@@ -354,6 +363,10 @@ class MqttHelper(
                         // Bus hasn't started - just record coordinates but don't create marker
                         owner.prevCoords[token] = lat to lon
                         owner.lastSeen[token] = now
+                        // ✅ FIX: Refresh detail panel even if bus hasn't started (to remove it if it was there)
+                        if (labelUpdated) {
+                            owner.runOnUiThread { owner.mapController.refreshDetailPanelIcons() }
+                        }
                         return
                     }
 
@@ -362,6 +375,10 @@ class MqttHelper(
                         // Bus is on break - just record coordinates but don't create marker
                         owner.prevCoords[token] = lat to lon
                         owner.lastSeen[token] = now
+                        // ✅ FIX: Refresh detail panel even if bus is on break (to remove it if it was there)
+                        if (labelUpdated) {
+                            owner.runOnUiThread { owner.mapController.refreshDetailPanelIcons() }
+                        }
                         return
                     }
 
@@ -389,9 +406,9 @@ class MqttHelper(
                         binding.map.layerManager.layers.add(marker)
                         owner.markerBus[token] = marker
                         binding.map.invalidate()
-                        if (labelUpdated) {
-                            owner.mapController.refreshDetailPanelIcons()
-                        }
+                        // ✅ FIX: Always refresh detail panel when marker is created for a new bus
+                        // This ensures detail panel shows all active buses, even if label wasn't updated
+                        owner.mapController.refreshDetailPanelIcons()
                     }
                     Log.d("MqttHelper getAttributes", "First fetch for $token; marker created (bus has started)")
                     return

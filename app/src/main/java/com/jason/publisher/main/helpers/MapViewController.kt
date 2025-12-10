@@ -735,6 +735,7 @@ class MapViewController(
             // This ensures we only show buses that are actually in the system and have started a trip
             val validBusTokens = activity.arrBusData.map { it.accessToken }.toSet()
 
+            // ✅ FIX: visibleOthers - buses that are visible on the map (within bounding box)
             val visibleOthers = activity.markerBus
                 .filter { (t, m) ->
                     t != selfToken &&
@@ -748,15 +749,31 @@ class MapViewController(
                 .keys
                 .toList()
 
-            // If zoomed way in or there are no other online/visible buses → show only self
-            val displayOrderRaw = if (zoom > 25.0 || visibleOthers.isEmpty()) {
+            // ✅ FIX: allActiveOthers - ALL buses that have started (for detail panel), not just visible ones
+            // Detail panel should show all active buses based on otherBusLabels
+            // Only show buses that have a valid label (have started a trip) and are not on Break
+            val allActiveOthers = activity.otherBusLabels
+                .filter { (t, label) ->
+                    t != selfToken &&
+                            t in validBusTokens &&
+                            // ✅ FIX: Only show buses that have a valid label (have started a trip)
+                            !label.isNullOrBlank() &&
+                            // ✅ FIX: Filter out Break schedules - don't show buses that are on break
+                            !label.contains("Break", ignoreCase = true)
+                }
+                .keys
+                .toList()
+
+            // ✅ FIX: Use allActiveOthers for detail panel (not just visible ones)
+            // If zoomed way in or there are no other active buses → show only self
+            val displayOrderRaw = if (zoom > 25.0 || allActiveOthers.isEmpty()) {
                 listOf(selfToken)
             } else {
-                // Prefer the active bus if it's visible, else take the first visible other
-                val prioritized = activeBusToken?.takeIf { it in visibleOthers }
-                    ?: visibleOthers.firstOrNull()
+                // Prefer the active bus if it's in allActiveOthers, else take the first active other
+                val prioritized = activeBusToken?.takeIf { it in allActiveOthers }
+                    ?: allActiveOthers.firstOrNull()
                 if (prioritized != null) {
-                    listOf(selfToken, prioritized) + visibleOthers.filter { it != prioritized }
+                    listOf(selfToken, prioritized) + allActiveOthers.filter { it != prioritized }
                 } else {
                     listOf(selfToken)
                 }
@@ -768,30 +785,13 @@ class MapViewController(
                 Log.w("MapViewController refreshDetailPanelIcons", "⚠️ WARNING: Found duplicate tokens in displayOrder! Raw: $displayOrderRaw, Distinct: $displayOrderDistinct")
             }
 
-            // ✅ FIX: Remove other buses that have the same label as self bus to prevent duplicate panels
-            val selfLabel = activeSegment ?: selfToken
-            // Always filter out other buses with the same label as self bus to prevent duplicate panels
-            val displayOrder = if (selfLabel.isNotBlank()) {
-                // Normalize labels for comparison (trim whitespace, case-insensitive)
-                val normalizedSelfLabel = selfLabel.trim()
-                // Filter out other buses that have the same label as self bus
-                val filtered = displayOrderDistinct.filter { token ->
-                    if (token == selfToken) {
-                        true // Always include self bus
-                    } else {
-                        val otherLabel = activity.otherBusLabels[token]?.trim() ?: ""
-                        // Only include other bus if its label is different from self bus label (case-insensitive comparison)
-                        !otherLabel.equals(normalizedSelfLabel, ignoreCase = true)
-                    }
-                }
-                filtered
-            } else {
-                displayOrderDistinct
-            }
+            // ✅ FIX: Show all active buses in detail panel, even if they have the same label
+            // Detail panel should display all buses that have started, not filter by label
+            val displayOrder = displayOrderDistinct
 
             displayOrder.forEachIndexed { idx, token ->
                 // If we're in deep zoom or there are no others, skip any non-self rows
-                if (idx >= 1 && (zoom > 25.0 || visibleOthers.isEmpty())) {
+                if (idx >= 1 && (zoom > 25.0 || allActiveOthers.isEmpty())) {
                     return@forEachIndexed
                 }
 
@@ -852,7 +852,7 @@ class MapViewController(
                 }
             }
 
-            if (visibleOthers.isEmpty() && !isReallyOnline()) {
+            if (allActiveOthers.isEmpty() && !isReallyOnline()) {
                 val hint = TextView(activity).apply {
                     text = "Other bus tracking is not available in offline mode"
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
