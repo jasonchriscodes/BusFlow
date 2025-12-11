@@ -128,22 +128,14 @@ class MapViewController(
                                 activity.otherBusLabels.remove(t)
                                 removedCount++
                             } else if (label.contains("Break", ignoreCase = true)) {
-                                // ✅ FIX: Remove buses with "Break" labels - they shouldn't be displayed
+                                // ✅ FIX: Remove marker for buses on break but keep label for detail panel
+                                // Bus on break should appear in detail panel but not on map
                                 val marker = activity.markerBus[t]
-                                val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
-                                com.jason.publisher.main.utils.LifecycleLogger.logOtherBusRemoved(
-                                    token = t,
-                                    label = label,
-                                    destination = destination,
-                                    reason = "break_schedule"
-                                )
                                 marker?.let {
                                     binding.map.layerManager.layers.remove(it)
                                 }
                                 activity.markerBus.remove(t)
-                                activity.prevCoords.remove(t)
-                                activity.lastSeen.remove(t)
-                                activity.otherBusLabels.remove(t)
+                                // ✅ FIX: Keep otherBusLabels, prevCoords, and lastSeen for detail panel
                                 removedCount++
                             }
                         }
@@ -751,18 +743,24 @@ class MapViewController(
 
             // ✅ FIX: allActiveOthers - ALL buses that have started (for detail panel), not just visible ones
             // Detail panel should show all active buses based on otherBusLabels
-            // Only show buses that have a valid label (have started a trip) and are not on Break
-            val allActiveOthers = activity.otherBusLabels
-                .filter { (t, label) ->
-                    t != selfToken &&
-                            t in validBusTokens &&
-                            // ✅ FIX: Only show buses that have a valid label (have started a trip)
-                            !label.isNullOrBlank() &&
-                            // ✅ FIX: Filter out Break schedules - don't show buses that are on break
-                            !label.contains("Break", ignoreCase = true)
-                }
-                .keys
-                .toList()
+            // Only show buses that have a valid label (have started a trip)
+            // ✅ FIX: In offline mode, don't show other buses - they can't be tracked
+            val allActiveOthers = if (isReallyOnline()) {
+                activity.otherBusLabels
+                    .filter { (t, label) ->
+                        t != selfToken &&
+                                t in validBusTokens &&
+                                // ✅ FIX: Only show buses that have a valid label (have started a trip)
+                                !label.isNullOrBlank()
+                        // ✅ FIX: Don't filter Break schedules - bus on break should still be shown in detail panel
+                        // Break buses are tracked but marker is not shown on map
+                    }
+                    .keys
+                    .toList()
+            } else {
+                // ✅ FIX: In offline mode, return empty list - no other buses can be tracked
+                emptyList()
+            }
 
             // ✅ FIX: Use allActiveOthers for detail panel (not just visible ones)
             // If zoomed way in or there are no other active buses → show only self
@@ -804,20 +802,14 @@ class MapViewController(
                 // - others: stored label only; if missing/blank, skip (no "---")
                 val label: String = if (token == selfToken) {
                     val selfLbl = activeSegment ?: selfToken
-                    // ✅ FIX: Skip Break schedules for self bus too - don't display them in the panel
-                    if (selfLbl.contains("Break", ignoreCase = true)) {
-                        return@forEachIndexed
-                    }
+                    // ✅ FIX: Show self bus even if on Break - it's still an active trip
                     selfLbl
                 } else {
                     val lbl = activity.otherBusLabels[token]
                     if (lbl.isNullOrBlank()) {
                         return@forEachIndexed
                     }
-                    // ✅ FIX: Skip Break schedules - don't display them in the panel
-                    if (lbl.contains("Break", ignoreCase = true)) {
-                        return@forEachIndexed
-                    }
+                    // ✅ FIX: Show other buses even if on Break - they're still active and should be tracked
                     lbl
                 }
 

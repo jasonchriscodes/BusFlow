@@ -280,19 +280,18 @@ class MqttHelper(
                     return
                 }
 
-                // ✅ FIX: Don't show buses with "Break" labels - remove marker if exists
+                // ✅ FIX: Bus on break - remove marker from map but keep label in otherBusLabels for detail panel
+                // This allows bus on break to be tracked in detail panel but not shown on map
                 if (resolvedLabel.contains("Break", ignoreCase = true)) {
-                    // Bus is on break - remove marker if exists
-                    val hadMarker = owner.markerBus.containsKey(token)
+                    // Bus is on break - remove marker from map but keep label for detail panel
                     owner.runOnUiThread {
                         owner.markerBus[token]?.let { marker ->
                             binding.map.layerManager.layers.remove(marker)
                             owner.markerBus.remove(token)
-                            owner.prevCoords.remove(token)
-                            owner.lastSeen.remove(token)
-                            owner.otherBusLabels.remove(token)
                             binding.map.invalidate()
                         }
+                        // ✅ FIX: Keep otherBusLabels so bus on break appears in detail panel
+                        // Don't remove prevCoords, lastSeen, or otherBusLabels
                         owner.mapController.refreshDetailPanelIcons()
                     }
                     return
@@ -370,15 +369,13 @@ class MqttHelper(
                         return
                     }
 
-                    // ✅ FIX: Don't create marker if bus is on Break
+                    // ✅ FIX: Don't create marker if bus is on Break, but keep label for detail panel
                     if (resolvedLabel.contains("Break", ignoreCase = true)) {
-                        // Bus is on break - just record coordinates but don't create marker
+                        // Bus is on break - record coordinates and label but don't create marker
                         owner.prevCoords[token] = lat to lon
                         owner.lastSeen[token] = now
-                        // ✅ FIX: Refresh detail panel even if bus is on break (to remove it if it was there)
-                        if (labelUpdated) {
-                            owner.runOnUiThread { owner.mapController.refreshDetailPanelIcons() }
-                        }
+                        // ✅ FIX: Refresh detail panel so bus on break appears
+                        owner.runOnUiThread { owner.mapController.refreshDetailPanelIcons() }
                         return
                     }
 
@@ -417,17 +414,15 @@ class MqttHelper(
                 // No movement → still update lastSeen and refresh panel if label changed
                 if (prev.first == lat && prev.second == lon) {
                     owner.lastSeen[token] = now // Update lastSeen even if no movement
-                    // ✅ FIX: If label changed to "Break", remove marker
+                    // ✅ FIX: If label changed to "Break", remove marker but keep label for detail panel
                     if (labelUpdated && resolvedLabel.contains("Break", ignoreCase = true)) {
                         owner.runOnUiThread {
                             owner.markerBus[token]?.let { marker ->
                                 binding.map.layerManager.layers.remove(marker)
                                 owner.markerBus.remove(token)
-                                owner.prevCoords.remove(token)
-                                owner.lastSeen.remove(token)
-                                owner.otherBusLabels.remove(token)
                                 binding.map.invalidate()
                             }
+                            // ✅ FIX: Keep otherBusLabels so bus on break appears in detail panel
                             owner.mapController.refreshDetailPanelIcons()
                         }
                         return
@@ -447,17 +442,15 @@ class MqttHelper(
                     return
                 }
 
-                // ✅ FIX: If label changed to "Break", remove marker instead of updating
+                // ✅ FIX: If label changed to "Break", remove marker but keep label for detail panel
                 if (resolvedLabel.contains("Break", ignoreCase = true)) {
                     owner.runOnUiThread {
                         owner.markerBus[token]?.let { marker ->
                             binding.map.layerManager.layers.remove(marker)
                             owner.markerBus.remove(token)
-                            owner.prevCoords.remove(token)
-                            owner.lastSeen.remove(token)
-                            owner.otherBusLabels.remove(token)
                             binding.map.invalidate()
                         }
+                        // ✅ FIX: Keep otherBusLabels so bus on break appears in detail panel
                         owner.mapController.refreshDetailPanelIcons()
                     }
                     return
