@@ -1,25 +1,22 @@
 package com.jason.publisher.main.activity
 
 import android.annotation.SuppressLint
-import android.os.Bundle
-import android.os.CountDownTimer
-import android.os.Handler
-import android.os.Looper
+import android.os.*
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.jason.publisher.R
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.MqttManager
-import java.text.SimpleDateFormat
-import java.util.*
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.jason.publisher.main.ui.BreakUpcomingAdapter
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.TripLog
 import com.jason.publisher.main.utils.hookBatteryToasts
+import java.text.SimpleDateFormat
+import java.util.*
 
 class BreakActivity : AppCompatActivity() {
 
@@ -27,12 +24,15 @@ class BreakActivity : AppCompatActivity() {
     private lateinit var infoText: TextView
     private lateinit var endAtText: TextView
     private lateinit var doneBtn: Button
-    private var cd: CountDownTimer? = null
 
-    // Toggle this later when you want to use the ScheduleItem endTime
+    private var cd: CountDownTimer? = null
+    private lateinit var mqttManager: MqttManager
+
+    private val heartbeatHandler = Handler(Looper.getMainLooper())
+    private lateinit var breakLabel: String
+
     private val USE_DYNAMIC = false
     private val FALLBACK_SECONDS = 30L
-    private lateinit var mqttManager: MqttManager
 
     companion object {
         const val SERVER_URI = MapActivity.SERVER_URI
@@ -44,6 +44,7 @@ class BreakActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_break)
+
         FileLogger.d("BreakActivity", "onCreate")
         hookBatteryToasts()
 
@@ -52,129 +53,148 @@ class BreakActivity : AppCompatActivity() {
         endAtText = findViewById(R.id.breakEndAtText)
         doneBtn   = findViewById(R.id.breakDoneBtn)
 
-        val firstList = intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? ArrayList<ScheduleItem>
-        val token      = intent.getStringExtra("ACCESS_TOKEN") ?: return
-        val breakLabel = intent.getStringExtra("BREAK_LABEL") ?: "Break"
-        val breakItem = firstList?.firstOrNull()
-        if (breakItem == null) {
+        val token = intent.getStringExtra("ACCESS_TOKEN")
+        if (token.isNullOrBlank()) {
+            FileLogger.e("BreakActivity", "ACCESS_TOKEN missing")
             finish()
             return
         }
 
-        // Grab the remaining day schedule (already passed into the Intent by ScheduleActivity)
-        val fullRemaining = intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? ArrayList<ScheduleItem>
+        breakLabel = intent.getStringExtra("BREAK_LABEL") ?: "Break"
+
+        val firstList =
+            intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? ArrayList<ScheduleItem>
+        val breakItem = firstList?.firstOrNull()
+
+        if (breakItem == null) {
+            FileLogger.e("BreakActivity", "FIRST_SCHEDULE_ITEM empty")
+            finish()
+            return
+        }
+
+        // ===== Upcoming list =====
+        val fullRemaining =
+            intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? ArrayList<ScheduleItem>
+                ?: arrayListOf()
+
+        if (fullRemaining.isEmpty()) {
+            FileLogger.e("BreakActivity", "FULL_SCHEDULE_DATA EMPTY")
+        }
+
         val upNextHeader = findViewById<TextView>(R.id.upNextHeader)
         val upNextRecycler = findViewById<RecyclerView>(R.id.upNextRecycler)
 
-        // Build the slice: items until the *next* Break (exclusive)
-        val untilNextBreak: List<ScheduleItem> = buildList {
-            fullRemaining?.forEach { item ->
-                if (item.runName.equals("break", ignoreCase = true)) return@forEach
-                add(item)
+        val untilNextBreak = buildList {
+            fullRemaining.forEach {
+                if (it.runName.equals("break", true)) return@forEach
+                add(it)
             }
-        }.let { raw ->
-            val idx = fullRemaining?.indexOfFirst { it.runName.equals("break", true) } ?: -1
-            if (idx in 0..raw.lastIndex) raw.take(idx) else raw
         }
 
-        // If there’s something to show, reveal the header + list
-        if (!untilNextBreak.isNullOrEmpty()) {
+        if (untilNextBreak.isNotEmpty()) {
             upNextHeader.visibility = View.VISIBLE
             upNextRecycler.apply {
                 visibility = View.VISIBLE
                 layoutManager = LinearLayoutManager(this@BreakActivity)
-                adapter = BreakUpcomingAdapter(untilNextBreak) // <-- new adapter
+                adapter = BreakUpcomingAdapter(untilNextBreak)
                 setHasFixedSize(true)
-                addItemDecoration(
-                    androidx.recyclerview.widget.DividerItemDecoration(
-                        this@BreakActivity,
-                        androidx.recyclerview.widget.DividerItemDecoration.VERTICAL
-                    ).apply {
-                        val d = object : android.graphics.drawable.ColorDrawable(
-                            android.graphics.Color.parseColor("#33FFFFFF") // ← light white
-                        ) {
-                            override fun getIntrinsicHeight(): Int =
-                                (resources.displayMetrics.density).toInt().coerceAtLeast(1)
-                        }
-                        setDrawable(d)
-                    }
-                )
             }
         } else {
-            // Nothing before the next Break — keep it hidden.
             upNextHeader.visibility = View.GONE
             upNextRecycler.visibility = View.GONE
         }
 
-        val first = firstList?.firstOrNull()
+        // ===== Trip Log =====
         TripLog.start(
             this,
             TripLog.ActiveTrip(
-                startedAt   = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date()),
-                type        = "break",
-                label       = breakLabel, // you already build like "09:00 Break BCS → BCS"
-                aid         = intent.getStringExtra("AID"),
-                runNo       = first?.runNo,
-                runName     = first?.runName,
-                startTime   = first?.startTime,
-                endTime     = first?.endTime,
-                fromStop    = first?.busStops?.firstOrNull()?.let { it.abbreviation ?: it.name ?: it.address },
-                toStop      = first?.busStops?.lastOrNull()?.let  { it.abbreviation ?: it.name ?: it.address },
-                scheduleSize = (intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? ArrayList<ScheduleItem>)?.size ?: 0,
+                startedAt = SimpleDateFormat(
+                    "yyyy-MM-dd HH:mm:ss.SSS",
+                    Locale.getDefault()
+                ).format(Date()),
+                type = "break",
+                label = breakLabel,
+                aid = intent.getStringExtra("AID"),
+                runNo = breakItem.runNo,
+                runName = breakItem.runName,
+                startTime = breakItem.startTime,
+                endTime = breakItem.endTime,
+                fromStop = breakItem.busStops?.firstOrNull()?.name,
+                toStop = breakItem.busStops?.lastOrNull()?.name,
+                scheduleSize = fullRemaining.size,
                 routeDataSize = 0
             )
         )
-// Explicit human tag the testers asked for:
         TripLog.mark(this, "driver break")
 
-        // Build a lightweight MQTT client just for attributes
+        // ===== MQTT =====
         mqttManager = MqttManager(
             serverUri = SERVER_URI,
             clientId  = "$CLIENT_ID-break",
             username  = token
         )
 
-        // 1) Hardcoded 30s for testing, 2) later switch to dynamic endTime
-        val durationMs: Long = if (!USE_DYNAMIC) {
-            FALLBACK_SECONDS * 1000L
-        } else {
-            computeRemainingMillis(breakItem.endTime).takeIf { it > 0 } ?: (FALLBACK_SECONDS * 1000L)
-        }
-
-        // Show "Break until" based on now + duration we’re actually using
-        val endAt = System.currentTimeMillis() + durationMs
-        val fmt = SimpleDateFormat("HH:mm:ss")
-        endAtText.text = "Break until ${fmt.format(Date(endAt))}"
-
-        if (durationMs <= 0L) {
-            showFinished()
-        } else {
-            cd = object : CountDownTimer(durationMs, 1000L) {
-                override fun onTick(ms: Long) { timerText.text = formatHMS(ms) }
-                override fun onFinish()      { showFinished() }
-            }.start()
-        }
-
-        // Simply pop back to ScheduleActivity on click
-        doneBtn.setOnClickListener { finish() }
         mqttManager.connect { ok ->
             if (ok) {
-                publishBreakAttributes(breakLabel)
-
-                // (Optional) nudge once more after a short delay to defeat race conditions
-                Handler(Looper.getMainLooper()).postDelayed({
-                    publishBreakAttributes(breakLabel)
-                }, 300)
+                FileLogger.d("BreakActivity", "MQTT connected")
+                publishBreakAttributes()
+                heartbeatHandler.post(heartbeatRunnable)
+            } else {
+                FileLogger.e("BreakActivity", "MQTT connect failed")
             }
+        }
+
+        // ===== Timer =====
+        val durationMs = if (!USE_DYNAMIC) {
+            FALLBACK_SECONDS * 1000L
+        } else {
+            computeRemainingMillis(breakItem.endTime)
+                .takeIf { it > 0 } ?: (FALLBACK_SECONDS * 1000L)
+        }
+
+        val endAt = System.currentTimeMillis() + durationMs
+        endAtText.text = "Break until ${
+            SimpleDateFormat("HH:mm:ss").format(Date(endAt))
+        }"
+
+        if (durationMs > 0) {
+            cd = object : CountDownTimer(durationMs, 1000) {
+                override fun onTick(ms: Long) {
+                    timerText.text = formatHMS(ms)
+                }
+                override fun onFinish() {
+                    showFinished()
+                }
+            }.start()
+        } else {
+            showFinished()
+        }
+
+        doneBtn.setOnClickListener { finish() }
+    }
+
+    // ===== MQTT payload =====
+    private fun publishBreakAttributes() {
+        val payload = """
+            {
+              "currentTripLabel": "${breakLabel.replace("\"", "\\\"")}",
+              "activityState": "BREAK",
+              "updatedAt": ${System.currentTimeMillis()}
+            }
+        """.trimIndent()
+
+        try {
+            mqttManager.publish(ATTR_TOPIC, payload)
+        } catch (e: Exception) {
+            FileLogger.e("BreakActivity", "Publish failed: ${e.message}")
         }
     }
 
-    private fun publishBreakAttributes(label: String) {
-        // Make sure MqttHelper is requesting "currentTripLabel" key (it is).
-        val payload = "{\"currentTripLabel\":\"${label.replace("\"", "\\\"")}\"}"
-        try {
-            mqttManager.publish(ATTR_TOPIC, payload)
-        } catch (_: Exception) { /* ignore */ }
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            publishBreakAttributes()
+            heartbeatHandler.postDelayed(this, 15_000)
+        }
     }
 
     private fun showFinished() {
@@ -185,19 +205,21 @@ class BreakActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         cd?.cancel()
+        heartbeatHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
-        try { mqttManager.disconnect() } catch (_: Exception) {}
+        // ❗ DO NOT DISCONNECT MQTT HERE
     }
 
     private fun formatHMS(ms: Long): String {
         var sec = ms / 1000
-        val h = sec / 3600; sec %= 3600
+        val h = sec / 3600
+        sec %= 3600
         val m = sec / 60
         val s = sec % 60
-        return if (h > 0) "%02d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
+        return if (h > 0) "%02d:%02d:%02d".format(h, m, s)
+        else "%02d:%02d".format(m, s)
     }
 
-    // Dynamic path (when USE_DYNAMIC = true)
     private fun computeRemainingMillis(endHHmm: String): Long {
         val now = Calendar.getInstance()
         val endCal = now.clone() as Calendar
@@ -207,7 +229,6 @@ class BreakActivity : AppCompatActivity() {
         endCal.set(Calendar.MINUTE, parts[1])
         endCal.set(Calendar.SECOND, 0)
         endCal.set(Calendar.MILLISECOND, 0)
-        val diff = endCal.timeInMillis - now.timeInMillis
-        return if (diff > 0) diff else 0L
+        return (endCal.timeInMillis - now.timeInMillis).coerceAtLeast(0)
     }
 }
