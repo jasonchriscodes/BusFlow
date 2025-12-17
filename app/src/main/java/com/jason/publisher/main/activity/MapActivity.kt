@@ -1,8 +1,6 @@
 package com.jason.publisher.main.activity
 
 import android.annotation.SuppressLint
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Context
 import android.os.Bundle
 import android.os.Handler
@@ -15,15 +13,12 @@ import java.text.SimpleDateFormat
 import java.util.*
 import android.content.Intent
 import android.content.res.ColorStateList
-import android.graphics.Bitmap
-import android.graphics.Color
 import android.location.Location
 import android.net.ConnectivityManager
 import android.net.Network
 import android.os.Build
 import android.text.InputType
 import android.text.method.PasswordTransformationMethod
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewTreeObserver
@@ -32,10 +27,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
-import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
-import androidx.core.content.ContextCompat
-import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.ViewCompat
 import com.jason.publisher.main.model.BusItem
 import com.jason.publisher.main.model.BusStop
@@ -46,29 +38,20 @@ import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.LocationManager
 import com.jason.publisher.main.utils.NetworkStatusHelper
 import org.json.JSONArray
-import org.mapsforge.core.model.LatLong
-import org.mapsforge.map.android.graphics.AndroidBitmap
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
-import org.mapsforge.map.android.util.AndroidUtil
-import org.mapsforge.map.layer.renderer.TileRendererLayer
-import org.mapsforge.map.reader.MapFile
-import org.mapsforge.map.rendertheme.InternalRenderTheme
-import java.io.File
-import java.lang.Math.atan2
-import java.lang.Math.cos
-import java.lang.Math.sin
-import java.lang.Math.sqrt
 import com.google.android.gms.location.*
 import com.google.gson.Gson
 import com.jason.publisher.LocationListener
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
+import com.jason.publisher.main.helpers.MapHelper.computeEtaSeconds
+import com.jason.publisher.main.helpers.MapHelper.remainingMetersFromRouteIndex
 import com.jason.publisher.main.helpers.MapViewController
 import com.jason.publisher.main.helpers.MqttHelper
 import com.jason.publisher.main.helpers.ScheduleStatusManager
 import com.jason.publisher.main.helpers.TimeManager
-import com.jason.publisher.main.utils.Helper
 import com.jason.publisher.main.model.AttributesData
+import com.jason.publisher.main.realtime.LiveModeGuard
 import com.jason.publisher.main.services.ApiServiceBuilder
 import com.jason.publisher.main.services.MqttManager
 import com.jason.publisher.main.utils.FileLogger
@@ -80,15 +63,11 @@ import com.jason.publisher.services.ApiService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.mapsforge.map.model.MapViewPosition
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import java.lang.Math.abs
 import org.mapsforge.map.model.common.Observer
-import java.lang.Math.min
 
 class MapActivity : AppCompatActivity() {
 
@@ -320,6 +299,10 @@ class MapActivity : AppCompatActivity() {
             Log.w("MapActivity", "⚠️ No selectedRouteData; leaving existing route/stops as-is")
         }
 
+        Handler(Looper.getMainLooper()).postDelayed({
+            updateEtaUi()
+        }, 800)
+
         /** If we have a selected route, derive the map vectors from it */
         selectedRouteData?.let { rd ->
             val (r, s, d) = processSingleRouteData(rd)
@@ -390,7 +373,6 @@ class MapActivity : AppCompatActivity() {
                             // only start polling if mqttManager is ready
                             if (::mqttManager.isInitialized) {
                                 mqttHelper.refreshAllAttributes()
-                                mqttHelper.startAttributePolling()
                             }
                             // and redraw your detail panel
                             mapController.getDefaultConfigValue()
@@ -881,7 +863,7 @@ class MapActivity : AppCompatActivity() {
         var totalDurationUntilArrive =
             busStopIndex?.let { getTotalDurationUpToIndex(it, durationBetweenStops) }
 
-        val firstSchedule = scheduleList.first()
+        val firstSchedule = requireSchedule()
         val startTimeParts = firstSchedule.startTime.split(":")
         if (startTimeParts.size != 2) return
 
@@ -990,7 +972,7 @@ class MapActivity : AppCompatActivity() {
     private fun extractRedBusStops() {
         redBusStops.clear()
         if (scheduleList.isNotEmpty()) {
-            val firstSchedule = scheduleList.first()
+            val firstSchedule = requireSchedule()
             Log.d("TestMapActivity extractRedBusStops firstSchedule", "$firstSchedule")
 
             // take the first ScheduleItem’s busStops and turn each into a "lat,lon" string
@@ -1148,7 +1130,7 @@ class MapActivity : AppCompatActivity() {
 
         if (busRouteData.isEmpty() || scheduleList.isEmpty()) return
 
-        val firstSchedule = scheduleList.first()
+        val firstSchedule = requireSchedule()
         val startTimeParts = firstSchedule.startTime.split(":")
         if (startTimeParts.size != 2) return
 
@@ -1224,7 +1206,7 @@ class MapActivity : AppCompatActivity() {
         scheduleList: List<ScheduleItem>
     ): List<Int> {
         if (scheduleList.isEmpty() || timingList.isEmpty()) return emptyList()
-        val scheduledAddresses = scheduleList.first().busStops.map { it.address?.toLowerCase() }
+        val scheduledAddresses = requireSchedule().busStops.map { it.address?.toLowerCase() }
         return timingList.withIndex()
             .filter { it.value.address?.toLowerCase() in scheduledAddresses }
             .map { it.index }
@@ -1286,7 +1268,7 @@ class MapActivity : AppCompatActivity() {
      */
     private fun isBusStopInScheduleList(address: String?, scheduleList: List<ScheduleItem>): Boolean {
         if (address == null || scheduleList.isEmpty()) return false
-        val busStops = scheduleList.first().busStops
+        val busStops = requireSchedule().busStops
         return busStops.any { it.address.equals(address, ignoreCase = true) }
     }
 
@@ -1301,7 +1283,7 @@ class MapActivity : AppCompatActivity() {
         currentIndex: Int
     ): Int? {
         if (scheduleList.isEmpty()) return null
-        val busStops = scheduleList.first().busStops.map { it.address }
+        val busStops = requireSchedule().busStops.map { it.address }
         // Get all indices in timingList that are scheduled (i.e. address in busStops)
         val scheduledIndices = timingList.withIndex()
             .filter { entry ->
@@ -1314,12 +1296,42 @@ class MapActivity : AppCompatActivity() {
         return scheduledIndices.firstOrNull { it > currentIndex }
     }
 
+    private fun requireSchedule(): ScheduleItem {
+        return scheduleList.firstOrNull()
+            ?: throw IllegalStateException("scheduleList EMPTY – trip lifecycle invalid")
+    }
+
+
+    private fun updateEtaUi() {
+        if (route.isEmpty() || stops.isEmpty()) return
+
+        val idx = nearestRouteIndex.coerceIn(0, route.lastIndex)
+        val remainingMeters = remainingMetersFromRouteIndex(route, idx)
+
+        val nextStop = stops.getOrNull(currentStopIndex)
+        val distToNextStop = if (nextStop?.latitude != null && nextStop.longitude != null) {
+            mapController.calculateDistance(latitude, longitude, nextStop.latitude, nextStop.longitude!!)
+        } else 9999.0
+
+        val speedMps = (smoothedSpeed / 3.6).toDouble()
+
+        val etaSec = computeEtaSeconds(remainingMeters, speedMps, distToNextStop)
+
+        val mm = etaSec / 60
+        val ss = etaSec % 60
+        runOnUiThread {
+            binding.nextTripCountdownTextView.text = "ETA ${mm}m ${ss}s"
+        }
+    }
+
+
+
     /** Updates timing point based on current bus location */
     @SuppressLint("LongLogTag")
     private fun updateTimingPointBasedOnLocation(currentLat: Double, currentLon: Double) {
         if (scheduleList.isEmpty()) return
 
-        val firstSchedule = scheduleList.first()
+        val firstSchedule = requireSchedule()
         val stopList = firstSchedule.busStops
 
         if (stopList.isEmpty()) {
@@ -1373,7 +1385,7 @@ class MapActivity : AppCompatActivity() {
     @SuppressLint("LongLogTag")
     private fun initializeTimingPoint() {
         if (scheduleList.isNotEmpty()) {
-            val firstSchedule = scheduleList.first()
+            val firstSchedule = requireSchedule()
             val firstTimingPoint = firstSchedule.busStops.firstOrNull()?.time + ":00" ?: "Unknown"
 
             timingPointValueTextView.text = firstTimingPoint
@@ -1649,7 +1661,7 @@ class MapActivity : AppCompatActivity() {
 
         // Reset the simulated clock to the schedule's start time (if available)
         if (scheduleList.isNotEmpty()) {
-            val startTimeStr = scheduleList.first().startTime  // e.g. "08:00"
+            val startTimeStr = requireSchedule().startTime  // e.g. "08:00"
             val timeParts = startTimeStr.split(":")
             if (timeParts.size == 2) {
                 timeManager.simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
@@ -1659,8 +1671,8 @@ class MapActivity : AppCompatActivity() {
         }
 
         // Reset any other state you maintain.
-        upcomingStop = if (scheduleList.isNotEmpty() && scheduleList.first().busStops.isNotEmpty())
-            scheduleList.first().busStops.first().time + ":00" else "Unknown"
+        upcomingStop = if (scheduleList.isNotEmpty() && requireSchedule().busStops.isNotEmpty())
+            requireSchedule().busStops.first().time + ":00" else "Unknown"
         timingPointValueTextView.text = upcomingStop
 
         // If you keep track of passed stops, clear them.
@@ -1794,6 +1806,7 @@ class MapActivity : AppCompatActivity() {
                         scheduleStatusValueTextView.text = "Calculating..."
                         scheduleStatusManager.checkScheduleStatus()
                         updateApiTime()
+                        updateEtaUi()
                         LastLocationStore.save(this@MapActivity, latitude, longitude)
 
                         binding.map.invalidate() // Refresh map view
@@ -1843,6 +1856,9 @@ class MapActivity : AppCompatActivity() {
     @SuppressLint("LongLogTag")
     fun updateClientAttributes() {
         // before you build & post…
+        if(!LiveModeGuard.allowLiveNetworking(NetworkStatusHelper.isNetworkAvailable(this))){
+            return
+        }
         val curr = latitude to longitude
         if (prevOwnCoords == curr) {
             Log.d("MapActivity updateClientAttributes",
@@ -1947,7 +1963,7 @@ class MapActivity : AppCompatActivity() {
         tripEndTimeTextView = binding.tripEndTimeTextView
         // Hardcoded values for testing
         if (scheduleList.isNotEmpty()) {
-            val scheduleItem = scheduleList.first()
+            val scheduleItem = requireSchedule()
 
             // Extract stop names and times dynamically
             val stopsInfo = scheduleItem.busStops.joinToString(", ") { "${it.name} - ${it.time}" }
@@ -1979,6 +1995,8 @@ class MapActivity : AppCompatActivity() {
             else                         -> super.onKeyDown(keyCode, event)
         }
     }
+    
+
 
     /** Cleans up resources on activity destruction. */
     override fun onDestroy() {
@@ -2027,6 +2045,10 @@ class MapActivity : AppCompatActivity() {
     }
 
     private fun publishActiveSegment(label: String) {
+        if (!LiveModeGuard.allowLiveNetworking(NetworkStatusHelper.isNetworkAvailable(this))) {
+            Log.d("LiveGuard", "offlineScheduleMode/offlineInternet → skip publish currentTripLabel")
+            return
+        }
         val topic = "v1/devices/me/attributes"
         // CHANGE activeSegment → currentTripLabel
         val payload = "{\"currentTripLabel\":\"${label.replace("\"", "\\\"")}\"}"
@@ -2087,4 +2109,6 @@ class MapActivity : AppCompatActivity() {
             FileLogger.d(tag, "🔴 Red timing points (${redIndexed.size}): $list")
         }
     }
+    
+    
 }

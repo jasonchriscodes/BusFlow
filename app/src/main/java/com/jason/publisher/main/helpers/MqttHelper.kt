@@ -6,23 +6,23 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresApi
+import android.content.Context
 import com.google.gson.Gson
-import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.activity.MapActivity
 import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.model.ScheduleItem
+import com.jason.publisher.main.realtime.LiveModeGuard
 import com.jason.publisher.services.ClientAttributesResponse
 import com.jason.publisher.services.ApiService
 import com.jason.publisher.main.services.MqttManager
-import org.checkerframework.checker.units.qual.min
+import com.jason.publisher.main.utils.NetworkStatusHelper
 import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.layer.overlay.Marker
-import kotlin.math.min
 
 /**
  * Helper to encapsulate all MQTT-related logic extracted from MapActivity.
@@ -138,12 +138,25 @@ class MqttHelper(
         }
     }
 
+    private fun allowLive(): Boolean {
+        val hasInternet = NetworkStatusHelper.isNetworkAvailable(owner)
+        return LiveModeGuard.allowLiveNetworking(hasInternet)
+    }
+
+
+
+
     /** Start or re-start the 2 s polling loop. */
     fun startAttributePolling() {
+        if (!allowLive()) {
+            Log.d("LiveGuard", "offlineScheduleMode / no internet → skip polling")
+            return
+        }
         stopAttributePolling()
         pollingHandler = Handler(Looper.getMainLooper())
         pollingHandler!!.postDelayed(pollRunnable, MIN_FETCH_INTERVAL_MS)
     }
+
 
     /** Immediately stop the 2 s polling loop. */
     fun stopAttributePolling() {
