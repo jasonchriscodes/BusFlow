@@ -292,9 +292,26 @@ class MapActivity : AppCompatActivity() {
         val timelineLabels = intent.getStringArrayListExtra("TIMELINE_LABELS") ?: emptyList<String>()
         panelDebugNo = intent.getIntExtra("EXTRA_PANEL_DEBUG_NO", 0)
 
-        // ✅ OPTIMIZED: Simplified logging - only log essential data summary
-        Log.d("MapActivity", "onCreate | aid=$aid | routePoints=${route.size} | stops=${stops.size} | schedules=${scheduleList.size}")
-        FileLogger.d("MapActivity", "onCreate | aid=$aid | routePoints=${route.size} | stops=${stops.size} | schedules=${scheduleList.size}")
+        Log.d("MapActivity onCreate retrieve", "Received aid: $aid")
+        Log.d("MapActivity onCreate retrieve", "Received config: ${config.toString()}")
+//        Log.d("MapActivity onCreate retrieve", "Received jsonString: $jsonString")
+        Log.d("MapActivity onCreate retrieve", "Received route: ${route.toString()}")
+        Log.d("MapActivity onCreate retrieve", "Received stops: ${stops.toString()}")
+        Log.d("MapActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
+        Log.d("MapActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
+        Log.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
+        Log.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
+        Log.d("MapActivity onCreate retrieve", "▶ Received timelineLabels = $timelineLabels")
+
+        FileLogger.d("MapActivity onCreate retrieve", "Received aid: $aid")
+        FileLogger.d("MapActivity onCreate retrieve", "Received config: ${config.toString()}")
+//        FileLogger.d("MapActivity onCreate retrieve", "Received jsonString: $jsonString")
+        FileLogger.d("MapActivity onCreate retrieve", "Received route: ${route.toString()}")
+        FileLogger.d("MapActivity onCreate retrieve", "Received stops: ${stops.toString()}")
+        FileLogger.d("MapActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
+        FileLogger.d("MapActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
+        FileLogger.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
+        FileLogger.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
 
         // ✅ FIX: Log MapActivity opened with route info AFTER scheduleList is initialized
         val routeInfo = scheduleList.firstOrNull()?.let {
@@ -324,6 +341,7 @@ class MapActivity : AppCompatActivity() {
             Handler(Looper.getMainLooper()).postDelayed({ publishActiveSegment(it) }, 1200) // nudge once more
         }
         mapController.refreshDetailPanelIcons()
+        logPanelDetailTextOnly()
 
         // Prefer the exact RouteData sent via Intent, else index, else first
         @Suppress("DEPRECATION") // for getSerializableExtra() on older APIs
@@ -423,6 +441,7 @@ class MapActivity : AppCompatActivity() {
                             // and redraw your detail panel
                             mapController.getDefaultConfigValue()
                             mapController.refreshDetailPanelIcons()
+                            logPanelDetailTextOnly()
                             // Log immediately
                             if (!hasDumpedPanelLog) {
                                 logPanelDebugFromDetailPanel()
@@ -466,6 +485,7 @@ class MapActivity : AppCompatActivity() {
                     mapController.getDefaultConfigValue()
                     mapController.activeSegment = selfLabel
                     mapController.refreshDetailPanelIcons()
+                    logPanelDetailTextOnly()
 
                     // Log immediately
                     logPanelDebugFromDetailPanel()
@@ -501,6 +521,7 @@ class MapActivity : AppCompatActivity() {
                     mapController.getDefaultConfigValue()
                     mapController.activeSegment = selfLabel
                     mapController.refreshDetailPanelIcons()
+                    logPanelDetailTextOnly()
 
                     // disable any UI that needs live data
                     binding.startSimulationButton.isEnabled = false
@@ -602,6 +623,7 @@ class MapActivity : AppCompatActivity() {
                 }
                 runOnUiThread {
                     mapController.refreshDetailPanelIcons()
+                    logPanelDetailTextOnly()
                     // ✅ OPTIMIZED: Only log panel debug when zoom changes
                     if (zoomChanged) {
                         logPanelDebugFromDetailPanel()
@@ -689,6 +711,59 @@ class MapActivity : AppCompatActivity() {
 
     // ✅ OPTIMIZED: Track if trip has been logged to prevent duplicate TripLog.start() calls
     private var tripLogStarted = false
+
+    // Add this method inside MapActivity (near other logging helpers)
+
+    private fun logPanelDetailTextOnly() {
+        // Ensure we run on UI thread
+        runOnUiThread {
+            try {
+                val container = binding.detailIconsContainer
+                val lines = mutableListOf<String>()
+
+                for (i in 0 until container.childCount) {
+                    val child = container.getChildAt(i)
+                    when (child) {
+                        is android.widget.TextView -> {
+                            child.text?.toString()?.takeIf { it.isNotBlank() }?.let { lines.add(it) }
+                        }
+                        is android.widget.LinearLayout -> {
+                            for (j in 0 until child.childCount) {
+                                val sub = child.getChildAt(j)
+                                if (sub is android.widget.TextView) {
+                                    sub.text?.toString()?.takeIf { it.isNotBlank() }?.let { lines.add(it) }
+                                }
+                            }
+                        }
+                        else -> {
+                            // fallback: search descendants for TextView
+                            fun findTextViews(v: android.view.View) {
+                                if (v is android.widget.TextView) {
+                                    v.text?.toString()?.takeIf { it.isNotBlank() }?.let { lines.add(it) }
+                                } else if (v is android.view.ViewGroup) {
+                                    for (k in 0 until v.childCount) findTextViews(v.getChildAt(k))
+                                }
+                            }
+                            findTextViews(child)
+                        }
+                    }
+                }
+
+                val sb = StringBuilder()
+                sb.appendLine("no: ${currentPanelDebugNo()}")
+                sb.appendLine("runName: ${scheduleList.firstOrNull()?.runName ?: "?"}")
+                sb.appendLine("panelDetail:")
+                lines.forEach { sb.appendLine(it) }
+
+                val dump = sb.toString().trimEnd()
+                if (dump == lastPanelDump) return@runOnUiThread
+                lastPanelDump = dump
+                android.util.Log.d("PanelDebug", dump)
+            } catch (e: Exception) {
+                android.util.Log.e("PanelDebug", "Error logging detail panel: ${e.message}", e)
+            }
+        }
+    }
 
     @SuppressLint("LongLogTag")
     private fun logPanelDebugFromDetailPanel() {
