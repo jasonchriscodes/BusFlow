@@ -2368,6 +2368,8 @@ class MapActivity : AppCompatActivity() {
         super.onDestroy()
         panelDebugEnabled = false
 
+        clearActiveSegmentAndRefresh()
+
         // Stop location updates
         if (::fusedLocationClient.isInitialized && ::locationCallback.isInitialized) {
             fusedLocationClient.removeLocationUpdates(locationCallback)
