@@ -74,6 +74,7 @@ class MqttHelper(
     /**
      * Connects to the MQTT broker and subscribes to shared data topic.
      */
+    @RequiresApi(Build.VERSION_CODES.M)
     fun connectAndSubscribe() {
         mqttManager.connect { isConnected ->
             if (isConnected) {
@@ -88,6 +89,8 @@ class MqttHelper(
     /**
      * Subscribes to shared data from the server.
      */
+    @RequiresApi(Build.VERSION_CODES.M)
+    @SuppressLint("LongLogTag")
     private fun subscribeSharedData() {
         mqttManager.subscribe(MapActivity.SUB_MSG_TOPIC) { message ->
             owner.runOnUiThread {
@@ -234,6 +237,34 @@ class MqttHelper(
                         if (wasEmpty) {
                             owner.runOnUiThread { owner.mapController.refreshDetailPanelIcons() }
                         }
+                    }
+                    try {
+                        owner.panelDebounceRunnable?.let {
+                            owner.panelDebounceHandler.removeCallbacks(
+                                it
+                            )
+                        }
+                        owner.panelDebounceRunnable = Runnable {
+                            try {
+                                owner.runOnUiThread {
+                                    try {
+                                        owner.mapController.refreshDetailPanelIcons()
+                                    } catch (e: Exception) {
+                                        Log.w("MqttHelper", "refreshDetailPanelIcons failed: ${e.message}")
+                                    }
+                                    try {
+                                        owner.logPanelDetailTextOnly()
+                                    } catch (e: Exception) {
+                                        Log.w("MqttHelper", "logPanelDetailTextOnly failed: ${e.message}")
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w("MqttHelper", "panel debounce runnable failed: ${e.message}")
+                            }
+                        }
+                        owner.panelDebounceHandler.postDelayed(owner.panelDebounceRunnable!!, 180L)
+                    } catch (e: Exception) {
+                        Log.w("MqttHelper", "scheduling panel debounce failed: ${e.message}")
                     }
                 }
                 // ------------------------------------------------------------------

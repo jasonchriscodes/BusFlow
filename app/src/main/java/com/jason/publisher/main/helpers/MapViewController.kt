@@ -764,12 +764,10 @@ class MapViewController(
 
             // ✅ FIX: Use allActiveOthers for detail panel (not just visible ones)
             // If zoomed way in or there are no other active buses → show only self
-            val displayOrderRaw = if (zoom > 25.0 || allActiveOthers.isEmpty()) {
+            val displayOrderRaw = if (zoom > 25.0) {
                 listOf(selfToken)
             } else {
-                // Prefer the active bus if it's in allActiveOthers, else take the first active other
-                val prioritized = activeBusToken?.takeIf { it in allActiveOthers }
-                    ?: allActiveOthers.firstOrNull()
+                val prioritized = activeBusToken?.takeIf { it in allActiveOthers } ?: allActiveOthers.firstOrNull()
                 if (prioritized != null) {
                     listOf(selfToken, prioritized) + allActiveOthers.filter { it != prioritized }
                 } else {
@@ -828,6 +826,8 @@ class MapViewController(
                     text = label
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     setPadding(dpToPx(8), 0, 0, 0)
+                    // store the token on the view for logging use (not shown to user)
+                    tag = token
                 }
 
                 row.addView(iv)
@@ -842,6 +842,17 @@ class MapViewController(
                         setBackgroundColor(Color.LTGRAY)
                     })
                 }
+                try {
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        try {
+                            activity.logPanelDetailTextOnly()
+                        } catch (e: Exception) {
+                            Log.w("MapViewController", "Failed to call logPanelDetailTextOnly(): ${e.message}")
+                        }
+                    }, 120L)
+                } catch (e: Exception) {
+                Log.w("MapViewController", "postDelayed logPanelDetailTextOnly failed: ${e.message}")
+            }
             }
 
             if (allActiveOthers.isEmpty() && !isReallyOnline()) {

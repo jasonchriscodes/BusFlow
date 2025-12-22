@@ -223,6 +223,8 @@ class MapActivity : AppCompatActivity() {
     // Location update throttling
     private var lastLocationUpdateTime = 0L
     private val LOCATION_UPDATE_THROTTLE_MS = 2000L // Minimum 2 seconds between location-based UI updates
+    val panelDebounceHandler: Handler = Handler(Looper.getMainLooper())
+    var panelDebounceRunnable: Runnable? = null
 
     companion object {
         const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
@@ -341,7 +343,6 @@ class MapActivity : AppCompatActivity() {
             Handler(Looper.getMainLooper()).postDelayed({ publishActiveSegment(it) }, 1200) // nudge once more
         }
         mapController.refreshDetailPanelIcons()
-        logPanelDetailTextOnly()
 
         // Prefer the exact RouteData sent via Intent, else index, else first
         @Suppress("DEPRECATION") // for getSerializableExtra() on older APIs
@@ -441,7 +442,6 @@ class MapActivity : AppCompatActivity() {
                             // and redraw your detail panel
                             mapController.getDefaultConfigValue()
                             mapController.refreshDetailPanelIcons()
-                            logPanelDetailTextOnly()
                             // Log immediately
                             if (!hasDumpedPanelLog) {
                                 logPanelDebugFromDetailPanel()
@@ -485,7 +485,6 @@ class MapActivity : AppCompatActivity() {
                     mapController.getDefaultConfigValue()
                     mapController.activeSegment = selfLabel
                     mapController.refreshDetailPanelIcons()
-                    logPanelDetailTextOnly()
 
                     // Log immediately
                     logPanelDebugFromDetailPanel()
@@ -521,7 +520,6 @@ class MapActivity : AppCompatActivity() {
                     mapController.getDefaultConfigValue()
                     mapController.activeSegment = selfLabel
                     mapController.refreshDetailPanelIcons()
-                    logPanelDetailTextOnly()
 
                     // disable any UI that needs live data
                     binding.startSimulationButton.isEnabled = false
@@ -623,7 +621,6 @@ class MapActivity : AppCompatActivity() {
                 }
                 runOnUiThread {
                     mapController.refreshDetailPanelIcons()
-                    logPanelDetailTextOnly()
                     // ✅ OPTIMIZED: Only log panel debug when zoom changes
                     if (zoomChanged) {
                         logPanelDebugFromDetailPanel()
@@ -668,6 +665,8 @@ class MapActivity : AppCompatActivity() {
             dlgBuilder.setView(numberPadView)
                 .setTitle("Enter Passcode")
                 .setPositiveButton("Confirm") { _, _ ->
+                    // ensure attribute is cleared (defensive — also called at final stop)
+                    clearActiveSegmentAndRefresh()
                     val enteredCode = numberPadInput.text.toString()
                     if (enteredCode == "0000") {
                         val intent = Intent(this, ScheduleActivity::class.java)
@@ -714,8 +713,7 @@ class MapActivity : AppCompatActivity() {
 
     // Add this method inside MapActivity (near other logging helpers)
 
-    private fun logPanelDetailTextOnly() {
-        // Ensure we run on UI thread
+    fun logPanelDetailTextOnly() {
         runOnUiThread {
             try {
                 val container = binding.detailIconsContainer
@@ -725,21 +723,44 @@ class MapActivity : AppCompatActivity() {
                     val child = container.getChildAt(i)
                     when (child) {
                         is android.widget.TextView -> {
-                            child.text?.toString()?.takeIf { it.isNotBlank() }?.let { lines.add(it) }
+                            val label = child.text?.toString()?.takeIf { it.isNotBlank() } ?: continue
+                            val token = child.tag as? String
+                            val aid = when {
+                                token == null -> "unknown"
+                                token == this.token -> this.aid
+                                else -> this.arrBusData.find { it.accessToken == token }?.aid ?: token.takeLast(6)
+                            }
+                            lines.add("$label  [aid=$aid]")
                         }
                         is android.widget.LinearLayout -> {
+                            // look for a TextView child and use its tag
                             for (j in 0 until child.childCount) {
                                 val sub = child.getChildAt(j)
                                 if (sub is android.widget.TextView) {
-                                    sub.text?.toString()?.takeIf { it.isNotBlank() }?.let { lines.add(it) }
+                                    val label = sub.text?.toString()?.takeIf { it.isNotBlank() } ?: continue
+                                    val token = sub.tag as? String
+                                    val aid = when {
+                                        token == null -> "unknown"
+                                        token == this.token -> this.aid
+                                        else -> this.arrBusData.find { it.accessToken == token }?.aid ?: token.takeLast(6)
+                                    }
+                                    lines.add("$label  [aid=$aid]")
+                                    break
                                 }
                             }
                         }
                         else -> {
-                            // fallback: search descendants for TextView
+                            // fallback: find TextViews and try to read their tag if present
                             fun findTextViews(v: android.view.View) {
                                 if (v is android.widget.TextView) {
-                                    v.text?.toString()?.takeIf { it.isNotBlank() }?.let { lines.add(it) }
+                                    val label = v.text?.toString()?.takeIf { it.isNotBlank() } ?: return
+                                    val token = v.tag as? String
+                                    val aid = when {
+                                        token == null -> "unknown"
+                                        token == this@MapActivity.token -> this@MapActivity.aid
+                                        else -> this@MapActivity.arrBusData.find { it.accessToken == token }?.aid ?: token.takeLast(6)
+                                    }
+                                    lines.add("$label  [aid=$aid]")
                                 } else if (v is android.view.ViewGroup) {
                                     for (k in 0 until v.childCount) findTextViews(v.getChildAt(k))
                                 }
@@ -1558,14 +1579,11 @@ class MapActivity : AppCompatActivity() {
             .takeIf { it >= 0 } ?: stops.size
 
         if (currentStopIndex >= stops.size) {
-            // ✅ OPTIMIZED: Log trip completion using LifecycleLogger
             val routeName = scheduleList.firstOrNull()?.runName ?: "Unknown"
             LifecycleLogger.logTripComplete(routeName, "AllStopsPassed")
 
             // update UI to "end of route" and fire the summary dialog:
-            // Already on main thread from updateUIElements()
             upcomingBusStopTextView.text = "End of Route"
-            // ✅ FIX: Only show final stop message once
             if (!hasShownFinalStopMessage) {
                 Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
                 hasShownFinalStopMessage = true
@@ -2425,15 +2443,49 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
+    private fun clearActiveSegmentAndRefresh() {
+        try {
+            // publish empty currentTripLabel to ThingsBoard
+            publishActiveSegment("") // re-uses your existing publishActiveSegment
+
+            // ask server to re-broadcast and trigger a refresh so other tablets update quickly
+            try {
+                if (::mqttHelper.isInitialized) mqttHelper.requestAdminMessage()
+            } catch (e: Exception) {
+                Log.w("MapActivity", "requestAdminMessage failed: ${e.message}")
+            }
+
+            // force a short-delayed attribute refresh (cooperate with your existing debounce)
+            Handler(Looper.getMainLooper()).postDelayed({
+                try {
+                    if (::mqttHelper.isInitialized) mqttHelper.refreshAllAttributes()
+                } catch (e: Exception) {
+                    Log.w("MapActivity", "refreshAllAttributes failed: ${e.message}")
+                }
+            }, 200L)
+        } catch (e: Exception) {
+            Log.w("MapActivity", "clearActiveSegmentAndRefresh error: ${e.message}")
+        }
+    }
     private fun publishActiveSegment(label: String) {
         val topic = "v1/devices/me/attributes"
-        // CHANGE activeSegment → currentTripLabel
         val payload = "{\"currentTripLabel\":\"${label.replace("\"", "\\\"")}\"}"
+        if (::mqttManager.isInitialized) {
+            mqttManager.publish(topic, payload)
+        }
+
+        // Ask server to re-publish shared data and force a quick attribute refresh
+        // so other tablets observe the change promptly.
         try {
-            if (::mqttManager.isInitialized) {
-                mqttManager.publish(topic, payload)
-            }
-        } catch (_: Exception) { /* ignore when offline */ }
+            // 1) request admin message (your app already supports requestAdminMessage)
+            if (::mqttHelper.isInitialized) mqttHelper.requestAdminMessage()
+            // 2) also trigger a direct attributes refresh (HTTP) after a short delay
+            Handler(Looper.getMainLooper()).postDelayed({
+                try { if (::mqttHelper.isInitialized) mqttHelper.refreshAllAttributes() } catch (e: Exception) { Log.w("MapActivity","refreshAllAttributes failed: ${e.message}") }
+            }, 200L)
+        } catch (e: Exception) {
+            Log.w("MapActivity", "publishActiveSegment follow-up failed: ${e.message}")
+        }
     }
 
     // Pretty lat/lon if we don't have an address
