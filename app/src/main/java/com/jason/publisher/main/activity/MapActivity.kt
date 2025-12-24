@@ -2445,30 +2445,57 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Clear the shared currentTripLabel on the server and coerce other tablets to refresh.
+     * Also refresh the local panel UI & panel log after a small delay to give the server time to process.
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
     private fun clearActiveSegmentAndRefresh() {
         try {
-            // publish empty currentTripLabel to ThingsBoard
-            publishActiveSegment("") // re-uses your existing publishActiveSegment
-
-            // ask server to re-broadcast and trigger a refresh so other tablets update quickly
+            // 1) publish empty label to clear server-side client attribute
             try {
-                if (::mqttHelper.isInitialized) mqttHelper.requestAdminMessage()
+                publishActiveSegment("") // re-uses your existing publisher
             } catch (e: Exception) {
-                Log.w("MapActivity", "requestAdminMessage failed: ${e.message}")
+                Log.w("MapActivity", "publishActiveSegment(\"\") failed: ${e.message}")
             }
 
-            // force a short-delayed attribute refresh (cooperate with your existing debounce)
-            Handler(Looper.getMainLooper()).postDelayed({
-                try {
-                    if (::mqttHelper.isInitialized) mqttHelper.refreshAllAttributes()
-                } catch (e: Exception) {
-                    Log.w("MapActivity", "refreshAllAttributes failed: ${e.message}")
+            // 2) ask ThingsBoard to re-broadcast and then force a poll/refresh
+            try {
+                if (::mqttHelper.isInitialized) {
+                    // this triggers any admin broadcast side-effects you use
+                    try { mqttHelper.requestAdminMessage() } catch (e: Exception) {
+                        Log.w("MapActivity", "requestAdminMessage failed: ${e.message}")
+                    }
+
+                    // give the server a moment to process the publish, then refresh attributes
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        try {
+                            if (::mqttHelper.isInitialized) {
+                                mqttHelper.refreshAllAttributes()
+                            }
+                        } catch (e: Exception) {
+                            Log.w("MapActivity", "refreshAllAttributes failed: ${e.message}")
+                        }
+
+                        // Refresh local UI and log after the attribute refresh attempt
+                        try { mapController.refreshDetailPanelIcons() } catch (e: Exception) { /* ignore */ }
+                        try { logPanelDetailTextOnly() } catch (e: Exception) { /* ignore */ }
+                    }, 200L)
+                    return
                 }
-            }, 200L)
+            } catch (e: Exception) {
+                Log.w("MapActivity", "mqttHelper interaction failed: ${e.message}")
+            }
+
+            // If mqttHelper not initialized or above failed, still refresh UI locally
+            try { mapController.refreshDetailPanelIcons() } catch (e: Exception) { /* ignore */ }
+            try { logPanelDetailTextOnly() } catch (e: Exception) { /* ignore */ }
+
         } catch (e: Exception) {
-            Log.w("MapActivity", "clearActiveSegmentAndRefresh error: ${e.message}")
+            Log.w("MapActivity", "clearActiveSegmentAndRefresh failed: ${e.message}")
         }
     }
+
     private fun publishActiveSegment(label: String) {
         val topic = "v1/devices/me/attributes"
         val payload = "{\"currentTripLabel\":\"${label.replace("\"", "\\\"")}\"}"

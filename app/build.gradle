@@ -98,6 +98,7 @@ dependencies {
     testImplementation "org.mockito.kotlin:mockito-kotlin:3.2.0"
     androidTestImplementation 'androidx.test.ext:junit:1.1.4'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.0'
+
     // chat feature
     implementation 'de.hdodenhof:circleimageview:2.2.0'
     implementation 'androidx.cardview:cardview:1.0.0'
@@ -126,4 +127,5 @@ dependencies {
     implementation 'org.mapsforge:sqlite-android:0.18.0:natives-x86_64'
     implementation 'com.google.android.gms:play-services-location:21.0.1'
     implementation 'pl.droidsonroids.gif:android-gif-drawable:1.2.+'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.8.0"
 }
