@@ -2203,10 +2203,15 @@ class MapActivity : AppCompatActivity() {
      */
     @SuppressLint("LongLogTag")
     fun updateClientAttributes() {
-        // before you build & post…
+        // Validation: make sure token has been set
+        if (token.isBlank()) {
+            return
+        }
+
+        // Validation: make sure only update when the coordinate change
         val curr = latitude to longitude
         if (prevOwnCoords == curr) {
-            // ✅ OPTIMIZED: Removed verbose logging - only log when location changes
+            // No log needed for optimization
             return
         } else {
             prevOwnCoords = curr
@@ -2232,7 +2237,7 @@ class MapActivity : AppCompatActivity() {
         val call = apiService.postAttributes(url, "application/json", attributesData)
         call.enqueue(object : Callback<Void> {
             override fun onResponse(call: Call<Void>, response: Response<Void>) {
-                // ✅ OPTIMIZED: Only log errors, not successful responses
+                // For optimization, only log errors, not successful responses
                 if (!response.isSuccessful) {
                     Log.w("MapActivity", "postAttrs failed: code=${response.code()}")
                 }
