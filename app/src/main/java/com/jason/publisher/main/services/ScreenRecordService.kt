@@ -25,6 +25,7 @@ import android.os.Handler
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationManagerCompat
 import java.io.File
+import java.io.FileDescriptor
 
 class ScreenRecordService : Service() {
 
@@ -48,6 +49,9 @@ class ScreenRecordService : Service() {
             val i = Intent(ctx, ScreenRecordService::class.java).apply { action = ACTION_STOP }
             if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i) else ctx.startService(i)
         }
+
+        // Optimize: Update notification every 5 seconds instead of 1 second to reduce overhead
+        const val NOTIFICATION_UPDATE_INTERVAL = 5000L
     }
 
     private var recorder: MediaRecorder? = null
@@ -59,8 +63,6 @@ class ScreenRecordService : Service() {
     private var startedWallClockMs: Long = 0L
     private var startedElapsedMs: Long = 0L
     private val tickHandler = Handler(Looper.getMainLooper())
-    // Optimize: Update notification every 5 seconds instead of 1 second to reduce overhead
-    private val NOTIFICATION_UPDATE_INTERVAL = 5000L
     private val ticker = object : Runnable {
         @RequiresApi(Build.VERSION_CODES.N)
         override fun run() {
@@ -73,7 +75,7 @@ class ScreenRecordService : Service() {
     private var cachedOpenPi: PendingIntent? = null
     private var cachedStopPi: PendingIntent? = null
 
-    @RequiresApi(Build.VERSION_CODES.M)
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!ensureNotificationsEnabled()) return START_NOT_STICKY
         val inIntent = intent ?: return START_NOT_STICKY
@@ -86,10 +88,8 @@ class ScreenRecordService : Service() {
         startedWallClockMs = System.currentTimeMillis()
         startedElapsedMs = SystemClock.elapsedRealtime()
 
-        if (Build.VERSION.SDK_INT >= 26) {
-            val ch = getSystemService(NotificationManager::class.java).getNotificationChannel(CH_ID)
-            Log.d("SRService", "areEnabled=${NotificationManagerCompat.from(this).areNotificationsEnabled()} chImp=${ch?.importance}")
-        }
+        val ch = getSystemService(NotificationManager::class.java).getNotificationChannel(CH_ID)
+        Log.d("SRService", "areEnabled=${NotificationManagerCompat.from(this).areNotificationsEnabled()} chImp=${ch?.importance}")
 
         // Foreground RIGHT AWAY (required)
         val initial = buildNotification(elapsedSec = 0)
@@ -114,11 +114,10 @@ class ScreenRecordService : Service() {
         } ?: return START_NOT_STICKY
 
         val wantAudio = inIntent.getBooleanExtra("withAudio", true)
-        val hasAudioPerm = if (Build.VERSION.SDK_INT >= 23) {
+        val hasAudioPerm =
             checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        } else true
 
-        val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         projection = mpm.getMediaProjection(code, data) ?: return START_NOT_STICKY
 
         // auto-stop service if user hits system "Stop sharing"
@@ -142,17 +141,22 @@ class ScreenRecordService : Service() {
         val height = (metrics.heightPixels * scaleFactor).toInt()
         val dpi = (metrics.densityDpi * scaleFactor).toInt()
 
-        val outUri = contentResolver.insert(
-            MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-            ContentValues().apply {
-                put(MediaStore.Video.Media.DISPLAY_NAME, "busflow_rec_${System.currentTimeMillis()}.mp4")
-                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/BusFlow")
-            }
-        ) ?: return START_NOT_STICKY
+        val outputFd: FileDescriptor
+        try {
+            val outUri = contentResolver.insert(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                ContentValues().apply {
+                    put(MediaStore.Video.Media.DISPLAY_NAME, "busflow_rec_${System.currentTimeMillis()}.mp4")
+                    put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                    put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/BusFlow")
+                }
+            ) ?: return START_NOT_STICKY
 
-        val outputFd = contentResolver.openFileDescriptor(outUri, "w")?.fileDescriptor
-            ?: return START_NOT_STICKY
+            outputFd = contentResolver.openFileDescriptor(outUri, "w")?.fileDescriptor
+                ?: return START_NOT_STICKY
+        } catch (_: Exception) {
+            return START_NOT_STICKY
+        }
 
         fun buildRecorder(needAudio: Boolean): Pair<MediaRecorder, Boolean> {
             var audioEnabled = needAudio && hasAudioPerm
@@ -307,7 +311,7 @@ class ScreenRecordService : Service() {
 
         // Remove notification
         if (Build.VERSION.SDK_INT >= 24) {
-            stopForeground(Service.STOP_FOREGROUND_REMOVE)
+            stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
             @Suppress("DEPRECATION") stopForeground(true)
         }
@@ -399,7 +403,7 @@ class ScreenRecordService : Service() {
             .build()
     }
 
-    @RequiresApi(Build.VERSION_CODES.M)
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun ensureNotificationsEnabled(): Boolean {
         val nm = getSystemService(NotificationManager::class.java)
 
@@ -416,22 +420,21 @@ class ScreenRecordService : Service() {
         }
 
         // Channel-level toggle (O+)
-        if (Build.VERSION.SDK_INT >= 26) {
-            val ch = nm.getNotificationChannel(CH_ID)
-            if (ch == null) {
-                // create if missing
-                createNotifChannel()
-            } else if (ch.importance == NotificationManager.IMPORTANCE_NONE) {
-                // Open channel settings
-                val i = Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
-                    putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
-                    putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, CH_ID)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                startActivity(i)
-                return false
+        val ch = nm.getNotificationChannel(CH_ID)
+        if (ch == null) {
+            // create if missing
+            createNotifChannel()
+        } else if (ch.importance == NotificationManager.IMPORTANCE_NONE) {
+            // Open channel settings
+            val i = Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+                putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, CH_ID)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
+            startActivity(i)
+            return false
         }
+
         return true
     }
 
