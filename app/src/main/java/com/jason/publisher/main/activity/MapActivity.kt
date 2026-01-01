@@ -1,9 +1,6 @@
 package com.jason.publisher.main.activity
 
 import android.annotation.SuppressLint
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
-import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -15,15 +12,12 @@ import java.text.SimpleDateFormat
 import java.util.*
 import android.content.Intent
 import android.content.res.ColorStateList
-import android.graphics.Bitmap
-import android.graphics.Color
 import android.location.Location
 import android.net.ConnectivityManager
 import android.net.Network
 import android.os.Build
 import android.text.InputType
 import android.text.method.PasswordTransformationMethod
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewTreeObserver
@@ -32,9 +26,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
-import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
-import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.ViewCompat
 import com.jason.publisher.main.model.BusItem
@@ -46,18 +38,7 @@ import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.LocationManager
 import com.jason.publisher.main.utils.NetworkStatusHelper
 import org.json.JSONArray
-import org.mapsforge.core.model.LatLong
-import org.mapsforge.map.android.graphics.AndroidBitmap
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
-import org.mapsforge.map.android.util.AndroidUtil
-import org.mapsforge.map.layer.renderer.TileRendererLayer
-import org.mapsforge.map.reader.MapFile
-import org.mapsforge.map.rendertheme.InternalRenderTheme
-import java.io.File
-import java.lang.Math.atan2
-import java.lang.Math.cos
-import java.lang.Math.sin
-import java.lang.Math.sqrt
 import com.google.android.gms.location.*
 import com.google.gson.Gson
 import com.jason.publisher.LocationListener
@@ -67,7 +48,6 @@ import com.jason.publisher.main.helpers.MapViewController
 import com.jason.publisher.main.helpers.MqttHelper
 import com.jason.publisher.main.helpers.ScheduleStatusManager
 import com.jason.publisher.main.helpers.TimeManager
-import com.jason.publisher.main.utils.Helper
 import com.jason.publisher.main.model.AttributesData
 import com.jason.publisher.main.services.ApiServiceBuilder
 import com.jason.publisher.main.services.MqttManager
@@ -81,15 +61,12 @@ import com.jason.publisher.services.ApiService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.mapsforge.map.model.MapViewPosition
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
-import java.lang.Math.abs
 import org.mapsforge.map.model.common.Observer
-import java.lang.Math.min
+import java.util.Locale
+import java.util.Locale.getDefault
 
 class MapActivity : AppCompatActivity() {
 
@@ -152,7 +129,7 @@ class MapActivity : AppCompatActivity() {
     private lateinit var actualTimeRunnable: Runnable
     private lateinit var actualTimeTextView: TextView
     private lateinit var timingPointValueTextView: TextView
-    private lateinit var ApiTimeValueTextView: TextView
+    private lateinit var apiTimeValueTextView: TextView
     lateinit var scheduleStatusValueTextView: TextView
     private lateinit var thresholdRangeValueTextView: TextView
 
@@ -193,7 +170,7 @@ class MapActivity : AppCompatActivity() {
     private lateinit var scheduleStatusManager: ScheduleStatusManager
     val otherBusLabels = mutableMapOf<String,String>()
     val connectivityManager by lazy(LazyThreadSafetyMode.NONE) {
-        getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
     }
     private lateinit var connectionStatusTextView: TextView
     private lateinit var networkStatusIndicator: View
@@ -297,23 +274,23 @@ class MapActivity : AppCompatActivity() {
         Log.d("MapActivity onCreate retrieve", "Received aid: $aid")
         Log.d("MapActivity onCreate retrieve", "Received config: ${config.toString()}")
 //        Log.d("MapActivity onCreate retrieve", "Received jsonString: $jsonString")
-        Log.d("MapActivity onCreate retrieve", "Received route: ${route.toString()}")
-        Log.d("MapActivity onCreate retrieve", "Received stops: ${stops.toString()}")
-        Log.d("MapActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
-        Log.d("MapActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
-        Log.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
-        Log.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
+        Log.d("MapActivity onCreate retrieve", "Received route: $route")
+        Log.d("MapActivity onCreate retrieve", "Received stops: $stops")
+        Log.d("MapActivity onCreate retrieve", "Received durationBetweenStops: $durationBetweenStops")
+        Log.d("MapActivity onCreate retrieve", "Received busRouteData: $busRouteData")
+        Log.d("MapActivity onCreate retrieve", "Received scheduleList: $scheduleList")
+        Log.d("MapActivity onCreate retrieve", "Received scheduleData: $scheduleData")
         Log.d("MapActivity onCreate retrieve", "▶ Received timelineLabels = $timelineLabels")
 
         FileLogger.d("MapActivity onCreate retrieve", "Received aid: $aid")
         FileLogger.d("MapActivity onCreate retrieve", "Received config: ${config.toString()}")
 //        FileLogger.d("MapActivity onCreate retrieve", "Received jsonString: $jsonString")
-        FileLogger.d("MapActivity onCreate retrieve", "Received route: ${route.toString()}")
-        FileLogger.d("MapActivity onCreate retrieve", "Received stops: ${stops.toString()}")
-        FileLogger.d("MapActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
-        FileLogger.d("MapActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
-        FileLogger.d("MapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
-        FileLogger.d("MapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
+        FileLogger.d("MapActivity onCreate retrieve", "Received route: $route")
+        FileLogger.d("MapActivity onCreate retrieve", "Received stops: $stops")
+        FileLogger.d("MapActivity onCreate retrieve", "Received durationBetweenStops: $durationBetweenStops")
+        FileLogger.d("MapActivity onCreate retrieve", "Received busRouteData: $busRouteData")
+        FileLogger.d("MapActivity onCreate retrieve", "Received scheduleList: $scheduleList")
+        FileLogger.d("MapActivity onCreate retrieve", "Received scheduleData: $scheduleData")
 
         // ✅ FIX: Log MapActivity opened with route info AFTER scheduleList is initialized
         val routeInfo = scheduleList.firstOrNull()?.let {
@@ -547,7 +524,7 @@ class MapActivity : AppCompatActivity() {
         startLocationUpdate()
 
         // Mock data to check scheduleStatusValueTextView
-        if (forceAheadStatus == true) {
+        if (forceAheadStatus) {
             Log.d("ForceAheadDebug", "Inside forceAheadStatus at 08:00:00")
 
             //Example
@@ -575,7 +552,7 @@ class MapActivity : AppCompatActivity() {
 
             // Manually set dummy values to simulate schedule status in advance
             timingPointValueTextView.text = "22:21:00"     // scheduledTimeStr
-            ApiTimeValueTextView.text = "22:21:00"         // apiTimeStr
+            apiTimeValueTextView.text = "22:21:00"         // apiTimeStr
             customTime = "22:15:00"                    // actualTimeStr
             // result
 
@@ -652,7 +629,7 @@ class MapActivity : AppCompatActivity() {
             numberPadInput.transformationMethod = PasswordTransformationMethod.getInstance()
 
             // 2) Turn off saving & autofill on the exact field.
-            numberPadInput.setSaveEnabled(false)
+            numberPadInput.isSaveEnabled = false
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 numberPadInput.setAutofillHints(null) // not emptyArray()
                 ViewCompat.setImportantForAutofill(numberPadInput, View.IMPORTANT_FOR_AUTOFILL_NO)
@@ -722,26 +699,26 @@ class MapActivity : AppCompatActivity() {
                 for (i in 0 until container.childCount) {
                     val child = container.getChildAt(i)
                     when (child) {
-                        is android.widget.TextView -> {
+                        is TextView -> {
                             val label = child.text?.toString()?.takeIf { it.isNotBlank() } ?: continue
                             val token = child.tag as? String
-                            val aid = when {
-                                token == null -> "unknown"
-                                token == this.token -> this.aid
+                            val aid = when (token) {
+                                null -> "unknown"
+                                this.token -> this.aid
                                 else -> this.arrBusData.find { it.accessToken == token }?.aid ?: token.takeLast(6)
                             }
                             lines.add("$label  [aid=$aid]")
                         }
-                        is android.widget.LinearLayout -> {
+                        is LinearLayout -> {
                             // look for a TextView child and use its tag
                             for (j in 0 until child.childCount) {
                                 val sub = child.getChildAt(j)
-                                if (sub is android.widget.TextView) {
+                                if (sub is TextView) {
                                     val label = sub.text?.toString()?.takeIf { it.isNotBlank() } ?: continue
                                     val token = sub.tag as? String
-                                    val aid = when {
-                                        token == null -> "unknown"
-                                        token == this.token -> this.aid
+                                    val aid = when (token) {
+                                        null -> "unknown"
+                                        this.token -> this.aid
                                         else -> this.arrBusData.find { it.accessToken == token }?.aid ?: token.takeLast(6)
                                     }
                                     lines.add("$label  [aid=$aid]")
@@ -751,13 +728,13 @@ class MapActivity : AppCompatActivity() {
                         }
                         else -> {
                             // fallback: find TextViews and try to read their tag if present
-                            fun findTextViews(v: android.view.View) {
-                                if (v is android.widget.TextView) {
+                            fun findTextViews(v: View) {
+                                if (v is TextView) {
                                     val label = v.text?.toString()?.takeIf { it.isNotBlank() } ?: return
                                     val token = v.tag as? String
-                                    val aid = when {
-                                        token == null -> "unknown"
-                                        token == this@MapActivity.token -> this@MapActivity.aid
+                                    val aid = when (token) {
+                                        null -> "unknown"
+                                        this@MapActivity.token -> this@MapActivity.aid
                                         else -> this@MapActivity.arrBusData.find { it.accessToken == token }?.aid ?: token.takeLast(6)
                                     }
                                     lines.add("$label  [aid=$aid]")
@@ -779,9 +756,9 @@ class MapActivity : AppCompatActivity() {
                 val dump = sb.toString().trimEnd()
                 if (dump == lastPanelDump) return@runOnUiThread
                 lastPanelDump = dump
-                android.util.Log.d("PanelDebug", dump)
+                Log.d("PanelDebug", dump)
             } catch (e: Exception) {
-                android.util.Log.e("PanelDebug", "Error logging detail panel: ${e.message}", e)
+                Log.e("PanelDebug", "Error logging detail panel: ${e.message}", e)
             }
         }
     }
@@ -798,15 +775,15 @@ class MapActivity : AppCompatActivity() {
             sb.appendLine("currentDetailPanel: ic_bus_symbol ${formatPanelLabel(first)}")
         }
 
-        val fromStop = first?.busStops?.firstOrNull()?.let { it.abbreviation ?: it.name ?: it.address }
-        val toStop   = first?.busStops?.lastOrNull()?.let  { it.abbreviation ?: it.name ?: it.address }
+        val fromStop = first?.busStops?.firstOrNull()?.abbreviation
+        val toStop   = first?.busStops?.lastOrNull()?.abbreviation
 
         // ✅ OPTIMIZED: Only call TripLog.start() once per trip (not every time panel debug is logged)
         if (!tripLogStarted) {
             TripLog.start(
                 this,
                 TripLog.ActiveTrip(
-                    startedAt   = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date()),
+                    startedAt   = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", getDefault()).format(Date()),
                     type        = "trip",
                     label       = mapController.activeSegment, // your "08:10 RUN … A → B"
                     aid         = aid,
@@ -834,8 +811,7 @@ class MapActivity : AppCompatActivity() {
             for (i in 1 until container.childCount) {
                 val row = container.getChildAt(i) as? LinearLayout ?: continue
                 val text = (0 until row.childCount)
-                    .mapNotNull { j -> (row.getChildAt(j) as? TextView)?.text?.toString() }
-                    .firstOrNull()
+                    .firstNotNullOfOrNull { j -> (row.getChildAt(j) as? TextView)?.text?.toString() }
                 if (!text.isNullOrBlank()) {
                     val iconName = "ic_bus_symbol${kotlin.math.min(i + 1, 10)}"
                     sb.appendLine("otherDetailPanel: \"$iconName\" $text")
@@ -992,7 +968,7 @@ class MapActivity : AppCompatActivity() {
 
             if (nearestStop.address != null) {
                 stopAddress = nearestStop.address.toString()
-                upcomingBusStopTextView.text = "$stopAddress"
+                upcomingBusStopTextView.text = stopAddress
                 Log.d("MapActivity confirmArrival", "✅ Updated Address: $stopAddress")
             } else {
                 Log.w("MapActivity confirmArrival", "⚠️ Address Not Found for Nearest Stop")
@@ -1017,11 +993,11 @@ class MapActivity : AppCompatActivity() {
         // 5) continue with API‑time, schedule status updates, live GPS restart…
         // 🔹 Ensure schedule status updates correctly
         Log.d("MapActivity confirmArrival", "🔄 Updating API Time...")
-        var busStopIndex = getBusStopIndex(latitude, longitude, stops)
+        val busStopIndex = getBusStopIndex(latitude, longitude, stops)
         currentStopIndex = maxOf(0, getBusStopIndex(latitude, longitude, stops))
 
-        var totalDurationUntilArrive =
-            busStopIndex?.let { getTotalDurationUpToIndex(it, durationBetweenStops) }
+        val totalDurationUntilArrive =
+            getTotalDurationUpToIndex(busStopIndex, durationBetweenStops)
 
         val firstSchedule = scheduleList.first()
         val startTimeParts = firstSchedule.startTime.split(":")
@@ -1044,9 +1020,9 @@ class MapActivity : AppCompatActivity() {
         val additionalSeconds = (totalDurationUntilArrive * 60).toInt()
         startCalendar.add(Calendar.SECOND, additionalSeconds)
 
-        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
         lockedApiTime = timeFormat.format(startCalendar.time)
-        ApiTimeValueTextView.text = lockedApiTime
+        apiTimeValueTextView.text = lockedApiTime
         updateApiTime()
 
         Log.d("MapActivity confirmArrival", "🔄 Initializing Timing Point...")
@@ -1059,7 +1035,7 @@ class MapActivity : AppCompatActivity() {
         scheduleStatusManager.checkScheduleStatus()   // Immediately refresh the schedule status
         Log.d("MapActivity confirmArrival", "✅ Schedule Status Checked")
 
-        Log.d("MapActivity confirmArrival", "✅ Arrival confirmed at: ${stopAddress}")
+        Log.d("MapActivity confirmArrival", "✅ Arrival confirmed at: $stopAddress")
 
         startLocationUpdate()   // ✅ Continue marker updates
         Log.d("MapActivity confirmArrival", "✅ Tracking resumed after arrival confirmation.")
@@ -1097,25 +1073,25 @@ class MapActivity : AppCompatActivity() {
      */
     fun findAddressByCoordinates(latitude: Double, longitude: Double): String? {
         // Check starting point first
-        busRouteData?.forEach { routeData ->
-            if (abs(routeData.startingPoint.latitude - latitude) < 0.0001 &&
-                abs(routeData.startingPoint.longitude - longitude) < 0.0001
+        busRouteData.forEach { routeData ->
+            if (kotlin.math.abs(routeData.startingPoint.latitude - latitude) < 0.0001 &&
+                kotlin.math.abs(routeData.startingPoint.longitude - longitude) < 0.0001
             ) {
                 return routeData.startingPoint.address
             }
 
             // Iterate through next points
             routeData.nextPoints.forEach { nextPoint ->
-                if (abs(nextPoint.latitude - latitude) < 0.0001 &&
-                    abs(nextPoint.longitude - longitude) < 0.0001
+                if (kotlin.math.abs(nextPoint.latitude - latitude) < 0.0001 &&
+                    kotlin.math.abs(nextPoint.longitude - longitude) < 0.0001
                 ) {
                     return nextPoint.address
                 }
 
                 // Iterate through routeCoordinates inside each nextPoint
                 nextPoint.routeCoordinates.forEach { coordinates ->
-                    if (abs(coordinates[1] - latitude) < 0.0001 &&
-                        abs(coordinates[0] - longitude) < 0.0001
+                    if (kotlin.math.abs(coordinates[1] - latitude) < 0.0001 &&
+                        kotlin.math.abs(coordinates[0] - longitude) < 0.0001
                     ) {
                         return nextPoint.address
                     }
@@ -1140,7 +1116,7 @@ class MapActivity : AppCompatActivity() {
                 ?.map { "${it.latitude},${it.longitude}" }
                 ?.let { redBusStops.addAll(it) }
 
-            val stops = firstSchedule.busStops.mapNotNull { it.address }
+            val stops = firstSchedule.busStops.map { it.address }
             redBusStops.addAll(stops)
             Log.d("TestMapActivity extractRedBusStops stops", "$stops")
         }
@@ -1254,7 +1230,7 @@ class MapActivity : AppCompatActivity() {
     private fun updateApiTime() {
         // If locked, simply reuse the locked value — only if upcomingStopName matches the first timing point
         if (apiTimeLocked && lockedApiTime != null) {
-            val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
 
             // Parse the locked time into a Calendar object
             val lockedCal = Calendar.getInstance().apply {
@@ -1277,10 +1253,10 @@ class MapActivity : AppCompatActivity() {
 
                 val updatedFinalApiTime = timeFormat.format(lockedCal.time)
                 // Already on main thread from updateUIElements()
-                ApiTimeValueTextView.text = updatedFinalApiTime
+                apiTimeValueTextView.text = updatedFinalApiTime
             } else {
                 // Already on main thread from updateUIElements()
-                ApiTimeValueTextView.text = lockedApiTime
+                apiTimeValueTextView.text = lockedApiTime
             }
             return
         }
@@ -1316,10 +1292,10 @@ class MapActivity : AppCompatActivity() {
                 if (totalDurationMinutes != null) {
                     val additionalSeconds = (totalDurationMinutes * 60).toInt()
                     startCalendar.add(Calendar.SECOND, additionalSeconds)
-                    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                    val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
                     val updatedApiTime = timeFormat.format(startCalendar.time)
                     // Already on main thread
-                    ApiTimeValueTextView.text = updatedApiTime
+                    apiTimeValueTextView.text = updatedApiTime
                 }
             }
             return
@@ -1334,10 +1310,10 @@ class MapActivity : AppCompatActivity() {
                 if (fallbackDuration != null) {
                     val additionalSeconds = (fallbackDuration * 60).toInt()
                     startCalendar.add(Calendar.SECOND, additionalSeconds)
-                    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                    val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
                     val updatedApiTime = timeFormat.format(startCalendar.time)
                     // Already on main thread
-                    ApiTimeValueTextView.text = updatedApiTime
+                    apiTimeValueTextView.text = updatedApiTime
                 }
             }
             return
@@ -1347,12 +1323,12 @@ class MapActivity : AppCompatActivity() {
         val additionalSeconds = (totalDurationMinutes * 60).toInt()
         startCalendar.add(Calendar.SECOND, additionalSeconds)
 
-        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
         val updatedApiTime = timeFormat.format(startCalendar.time)
 
         // Always update API time (removed condition that was preventing updates)
         // Already on main thread from updateUIElements()
-        ApiTimeValueTextView.text = updatedApiTime
+        apiTimeValueTextView.text = updatedApiTime
         // ✅ OPTIMIZED: Only log significant API time updates (not every call)
         // Detailed info available in LifecycleLogger
 
@@ -1374,9 +1350,9 @@ class MapActivity : AppCompatActivity() {
         scheduleList: List<ScheduleItem>
     ): List<Int> {
         if (scheduleList.isEmpty() || timingList.isEmpty()) return emptyList()
-        val scheduledAddresses = scheduleList.first().busStops.map { it.address?.toLowerCase() }
+        val scheduledAddresses = scheduleList.first().busStops.map { it.address.lowercase(getDefault()) }
         return timingList.withIndex()
-            .filter { it.value.address?.toLowerCase() in scheduledAddresses }
+            .filter { it.value.address?.lowercase(getDefault()) in scheduledAddresses }
             .map { it.index }
             .sorted()
     }
@@ -1519,7 +1495,10 @@ class MapActivity : AppCompatActivity() {
     private fun initializeTimingPoint() {
         if (scheduleList.isNotEmpty()) {
             val firstSchedule = scheduleList.first()
-            val firstTimingPoint = firstSchedule.busStops.firstOrNull()?.time + ":00" ?: "Unknown"
+            var firstTimingPoint = "Unknown"
+            firstSchedule.busStops.firstOrNull()?.let {
+                firstTimingPoint = (it.time + ":00")
+            }
 
             timingPointValueTextView.text = firstTimingPoint
             upcomingStop = firstTimingPoint // Set the upcoming stop initially
@@ -1529,13 +1508,6 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Finds and logs the nearest bus stop that has been passed.
-     * After passing a stop, it moves to the next stop in the list.
-     *
-     * @param currentLat The current latitude of the bus.
-     * @param currentLon The current longitude of the bus.
-     */
     val passedStops = mutableListOf<BusStop>() // Track stops that have been passed
     var currentStopIndex = 0 // Keep track of the current stop in order
     private var hasPassedFirstStopAgain = false
@@ -1545,7 +1517,13 @@ class MapActivity : AppCompatActivity() {
     private val isCircularRoute: Boolean
         get() = stops.isNotEmpty() && stops.first().address == stops.last().address
 
-
+    /**
+     * Finds and logs the nearest bus stop that has been passed.
+     * After passing a stop, it moves to the next stop in the list.
+     *
+     * @param currentLat The current latitude of the bus.
+     * @param currentLon The current longitude of the bus.
+     */
     @SuppressLint("LongLogTag")
     private fun checkPassedStops(currentLat: Double, currentLon: Double) {
         if (stops.isEmpty()) {
@@ -1612,7 +1590,7 @@ class MapActivity : AppCompatActivity() {
 
         if (distance <= busStopRadius) {
             // Update UI directly (already on main thread from updateUIElements)
-            upcomingBusStopTextView.text = "$stopAddress"
+            upcomingBusStopTextView.text = stopAddress
             upcomingStop = stopAddress
             // ✅ OPTIMIZED: Only log when stop is actually passed (not every distance check)
             // Detailed logging moved to LifecycleLogger
@@ -1639,7 +1617,7 @@ class MapActivity : AppCompatActivity() {
             // 🔹 Check if the bus is inside the detection area
             if (isBusInDetectionArea(currentLat, currentLon, stopLat, stopLon)) {
                 // Update UI directly (already on main thread)
-                upcomingBusStopTextView.text = "$stopAddress"
+                upcomingBusStopTextView.text = stopAddress
                 upcomingStop = stopAddress
                 FileLogger.d(
                     "MapActivity checkPassedStops",
@@ -1703,7 +1681,7 @@ class MapActivity : AppCompatActivity() {
             } else {
                 val upcomingStop = stops[currentStopIndex]
                 val upcomingStopName = getUpcomingBusStopName(upcomingStop.latitude ?: 0.0, upcomingStop.longitude ?: 0.0)
-                upcomingBusStopTextView.text = "$upcomingStopName"
+                upcomingBusStopTextView.text = upcomingStopName
             }
 
             // Build timing list and update API time only if the stop exists in it
@@ -1717,13 +1695,13 @@ class MapActivity : AppCompatActivity() {
             if (currentStopIndex < stops.size) {
                 val upcomingStop = stops[currentStopIndex]
                 upcomingStopName = getUpcomingBusStopName(upcomingStop.latitude ?: 0.0, upcomingStop.longitude ?: 0.0)
-                upcomingBusStopTextView.text = "$upcomingStopName"
+                upcomingBusStopTextView.text = upcomingStopName
             } else if (distance > busStopRadius) {
                 Log.w("MapActivity checkPassedStops", "⚠️ Warning: No bus stop detected within expected range!")
             }
         } else {
             upcomingStopName = getUpcomingBusStopName(stopLat, stopLon)
-            upcomingBusStopTextView.text = "$upcomingStopName"
+            upcomingBusStopTextView.text = upcomingStopName
             upcomingStop = upcomingStopName
             // ✅ OPTIMIZED: Removed verbose logging - distance info available in LifecycleLogger
         }
@@ -2094,7 +2072,7 @@ class MapActivity : AppCompatActivity() {
 
             // Explicitly update currentTimeTextView from TimeManager (only if changed)
             if (::currentTimeTextView.isInitialized) {
-                val timeFormat = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+                val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
                 val currentTimeText = timeFormat.format(timeManager.simulatedStartTime.time)
                 if (currentTimeText != lastCurrentTimeText) {
                     currentTimeTextView.text = currentTimeText
@@ -2105,19 +2083,19 @@ class MapActivity : AppCompatActivity() {
             // Explicitly update nextTripCountdownTextView (only if changed)
             if (::nextTripCountdownTextView.isInitialized) {
                 try {
-                    val currentTime = timeManager.simulatedStartTime.clone() as java.util.Calendar
+                    val currentTime = timeManager.simulatedStartTime.clone() as Calendar
                     val nextTripStartTime = timeManager.getNextScheduleStartTime()
 
                     val nextTripText = if (nextTripStartTime != null) {
                         val timeParts = nextTripStartTime.split(":").map { it.toInt() }
-                        val nextTripCalendar = java.util.Calendar.getInstance().apply {
-                            set(java.util.Calendar.YEAR, currentTime.get(java.util.Calendar.YEAR))
-                            set(java.util.Calendar.MONTH, currentTime.get(java.util.Calendar.MONTH))
-                            set(java.util.Calendar.DAY_OF_MONTH, currentTime.get(java.util.Calendar.DAY_OF_MONTH))
-                            set(java.util.Calendar.HOUR_OF_DAY, timeParts[0])
-                            set(java.util.Calendar.MINUTE, timeParts[1])
-                            set(java.util.Calendar.SECOND, 0)
-                            if (timeInMillis <= currentTime.timeInMillis) add(java.util.Calendar.DATE, 1)
+                        val nextTripCalendar = Calendar.getInstance().apply {
+                            set(Calendar.YEAR, currentTime.get(Calendar.YEAR))
+                            set(Calendar.MONTH, currentTime.get(Calendar.MONTH))
+                            set(Calendar.DAY_OF_MONTH, currentTime.get(Calendar.DAY_OF_MONTH))
+                            set(Calendar.HOUR_OF_DAY, timeParts[0])
+                            set(Calendar.MINUTE, timeParts[1])
+                            set(Calendar.SECOND, 0)
+                            if (timeInMillis <= currentTime.timeInMillis) add(Calendar.DATE, 1)
                         }
                         val diff = nextTripCalendar.timeInMillis - currentTime.timeInMillis
                         if (diff > 0) {
@@ -2177,7 +2155,7 @@ class MapActivity : AppCompatActivity() {
             // ✅ OPTIMIZED: Use LifecycleLogger for location updates (throttled to every 10 seconds)
             val upcomingStopName = upcomingBusStopTextView.text?.toString() ?: "Unknown"
             val currentStopName = stops.getOrNull(currentStopIndex)?.address ?: "Unknown"
-            val etaText = ApiTimeValueTextView.text?.toString() ?: null
+            val etaText = apiTimeValueTextView.text?.toString()
             val statusText = scheduleStatusValueTextView.text?.toString() ?: "Unknown"
             LifecycleLogger.logLocationUpdate(
                 latitude, longitude, speed,
@@ -2236,7 +2214,6 @@ class MapActivity : AppCompatActivity() {
 
         val url = ApiService.BASE_URL + "$token/attributes"
         val scheduleJson = Gson().toJson(scheduleData)
-        // this remains the ORIGINAL first item passed in via intent
         val currentLabel = scheduleList.firstOrNull()?.let { formatPanelLabel(it) }
 
         val attributesData = AttributesData(
@@ -2246,7 +2223,8 @@ class MapActivity : AppCompatActivity() {
             bearingCustomer = null,
             speed           = speed,
             direction       = direction,
-            scheduleData    = scheduleJson
+            scheduleData    = scheduleJson,
+            currentTripLabel = currentLabel,
         )
 
         Log.d("MapActivity updateClientAttributes", "Posting client-attrs for aid=$aid → $attributesData")
@@ -2340,7 +2318,7 @@ class MapActivity : AppCompatActivity() {
         }
         actualTimeTextView = binding.actualTimeValueTextView
         timingPointValueTextView = binding.timingPointValueTextView
-        ApiTimeValueTextView = binding.ApiTimeValueTextView
+        apiTimeValueTextView = binding.ApiTimeValueTextView
         scheduleStatusValueTextView = binding.scheduleStatusValueTextView
         thresholdRangeValueTextView = binding.thresholdRangeValueTextView
         speedTextView = binding.speedTextView
@@ -2363,6 +2341,7 @@ class MapActivity : AppCompatActivity() {
     }
 
     /** Cleans up resources on activity destruction. */
+    @RequiresApi(Build.VERSION_CODES.M)
     override fun onDestroy() {
         FileLogger.markAppClosed("MapActivity")
         super.onDestroy()
@@ -2478,8 +2457,8 @@ class MapActivity : AppCompatActivity() {
                         }
 
                         // Refresh local UI and log after the attribute refresh attempt
-                        try { mapController.refreshDetailPanelIcons() } catch (e: Exception) { /* ignore */ }
-                        try { logPanelDetailTextOnly() } catch (e: Exception) { /* ignore */ }
+                        try { mapController.refreshDetailPanelIcons() } catch (_: Exception) { /* ignore */ }
+                        try { logPanelDetailTextOnly() } catch (_: Exception) { /* ignore */ }
                     }, 200L)
                     return
                 }
@@ -2488,8 +2467,8 @@ class MapActivity : AppCompatActivity() {
             }
 
             // If mqttHelper not initialized or above failed, still refresh UI locally
-            try { mapController.refreshDetailPanelIcons() } catch (e: Exception) { /* ignore */ }
-            try { logPanelDetailTextOnly() } catch (e: Exception) { /* ignore */ }
+            try { mapController.refreshDetailPanelIcons() } catch (_: Exception) { /* ignore */ }
+            try { logPanelDetailTextOnly() } catch (_: Exception) { /* ignore */ }
 
         } catch (e: Exception) {
             Log.w("MapActivity", "clearActiveSegmentAndRefresh failed: ${e.message}")
@@ -2552,18 +2531,18 @@ class MapActivity : AppCompatActivity() {
             return
         }
 
-        val redAddrSet = redBusStops.map { it.trim().lowercase(Locale.getDefault()) }.toSet()
+        val redAddrSet = redBusStops.map { it.trim().lowercase(getDefault()) }.toSet()
 
         val redIndexed = stops.mapIndexedNotNull { idx, stop ->
-            val addrMatch = stop.address?.trim()?.lowercase(Locale.getDefault())?.let { it in redAddrSet } == true
-            val keyMatch  = latLonKey(stop.latitude, stop.longitude).lowercase(Locale.getDefault()) in redAddrSet
+            val addrMatch = stop.address?.trim()?.lowercase(getDefault())?.let { it in redAddrSet } == true
+            val keyMatch  = latLonKey(stop.latitude, stop.longitude).lowercase(getDefault()) in redAddrSet
             if (addrMatch || keyMatch) idx to stopDisplayName(stop) else null
         }
 
         if (redIndexed.isEmpty()) {
             FileLogger.d(tag, "🔴 Red timing points: (none matched against current stops)")
         } else {
-            val list = redIndexed.joinToString(", ") { (i, name) -> "[${i}] ${name}" }
+            val list = redIndexed.joinToString(", ") { (i, name) -> "[${i}] $name" }
             FileLogger.d(tag, "🔴 Red timing points (${redIndexed.size}): $list")
         }
     }
