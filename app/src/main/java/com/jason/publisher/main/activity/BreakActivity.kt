@@ -2,9 +2,11 @@ package com.jason.publisher.main.activity
 
 import android.annotation.SuppressLint
 import android.os.*
+import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -15,6 +17,7 @@ import com.jason.publisher.main.ui.BreakUpcomingAdapter
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.TripLog
 import com.jason.publisher.main.utils.hookBatteryToasts
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -31,15 +34,15 @@ class BreakActivity : AppCompatActivity() {
     private val heartbeatHandler = Handler(Looper.getMainLooper())
     private lateinit var breakLabel: String
 
-    private val USE_DYNAMIC = false
-    private val FALLBACK_SECONDS = 30L
-
     companion object {
         const val SERVER_URI = MapActivity.SERVER_URI
         const val CLIENT_ID  = MapActivity.CLIENT_ID
         private const val ATTR_TOPIC = "v1/devices/me/attributes"
+        private const val USE_DYNAMIC = false
+        private const val FALLBACK_SECONDS = 30L
     }
 
+    @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("SimpleDateFormat")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,8 +122,8 @@ class BreakActivity : AppCompatActivity() {
                 runName = breakItem.runName,
                 startTime = breakItem.startTime,
                 endTime = breakItem.endTime,
-                fromStop = breakItem.busStops?.firstOrNull()?.name,
-                toStop = breakItem.busStops?.lastOrNull()?.name,
+                fromStop = breakItem.busStops.firstOrNull()?.name,
+                toStop = breakItem.busStops.lastOrNull()?.name,
                 scheduleSize = fullRemaining.size,
                 routeDataSize = 0
             )
@@ -130,7 +133,7 @@ class BreakActivity : AppCompatActivity() {
         // ===== MQTT =====
         mqttManager = MqttManager(
             serverUri = SERVER_URI,
-            clientId  = "$CLIENT_ID-break",
+            clientId  = CLIENT_ID,
             username  = token
         )
 
@@ -170,7 +173,9 @@ class BreakActivity : AppCompatActivity() {
             showFinished()
         }
 
-        doneBtn.setOnClickListener { finish() }
+        doneBtn.setOnClickListener {
+            finish()
+        }
     }
 
     // ===== MQTT payload =====
@@ -190,6 +195,62 @@ class BreakActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Clear the shared currentTripLabel on the server and coerce other tablets to refresh.
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun clearActiveSegmentAndRefresh() {
+        try {
+            // 1) publish empty label to clear server-side client attribute
+            try {
+                val payload = "{\"currentTripLabel\":\"\", \"activityState\":\"\"}"
+                if (::mqttManager.isInitialized) {
+                    mqttManager.publish(ATTR_TOPIC, payload)
+                }
+
+                // Ask server to re-publish shared data and force a quick attribute refresh
+                // so other tablets observe the change promptly.
+                try {
+                    requestAdminMessage()
+                } catch (e: Exception) {
+                    Log.w("BreakActivity", "publishActiveSegment follow-up failed: ${e.message}")
+                }
+            } catch (e: Exception) {
+                Log.w("BreakActivity", "publishActiveSegment(\"\") failed: ${e.message}")
+            }
+
+            // 2) ask ThingsBoard to re-broadcast and then force a poll/refresh
+            try {
+                // this triggers any admin broadcast side-effects you use
+                try { requestAdminMessage() } catch (e: Exception) {
+                    Log.w("BreakActivity", "requestAdminMessage failed: ${e.message}")
+                }
+                return
+            } catch (e: Exception) {
+                Log.w("BreakActivity", "mqttHelper interaction failed: ${e.message}")
+            }
+
+        } catch (e: Exception) {
+            Log.w("BreakActivity", "clearActiveSegmentAndRefresh failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Requests admin messages periodically.
+     */
+    fun requestAdminMessage() {
+        val jsonObject = JSONObject().apply {
+            put("sharedKeys", "message,busRoute,busStop,config")
+        }
+        mqttManager.publish(MapActivity.PUB_MSG_TOPIC, jsonObject.toString())
+        Handler(Looper.getMainLooper()).post(object : Runnable {
+            override fun run() {
+                mqttManager.publish(MapActivity.PUB_MSG_TOPIC, jsonObject.toString())
+                Handler(Looper.getMainLooper()).postDelayed(this, MapActivity.REQUEST_PERIODIC_TIME)
+            }
+        })
+    }
+
     private val heartbeatRunnable = object : Runnable {
         override fun run() {
             publishBreakAttributes()
@@ -203,9 +264,12 @@ class BreakActivity : AppCompatActivity() {
         doneBtn.visibility = View.VISIBLE
     }
 
+    @RequiresApi(Build.VERSION_CODES.M)
     override fun onDestroy() {
         cd?.cancel()
         heartbeatHandler.removeCallbacksAndMessages(null)
+        // Update the segment's attribute post-break
+        clearActiveSegmentAndRefresh()
         super.onDestroy()
         // ❗ DO NOT DISCONNECT MQTT HERE
     }

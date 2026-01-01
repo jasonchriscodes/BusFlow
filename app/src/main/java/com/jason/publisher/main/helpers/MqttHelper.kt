@@ -7,23 +7,19 @@ import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresApi
 import com.google.gson.Gson
-import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.activity.MapActivity
 import com.jason.publisher.main.model.Bus
-import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.utils.LifecycleLogger
 import com.jason.publisher.services.ClientAttributesResponse
 import com.jason.publisher.services.ApiService
 import com.jason.publisher.main.services.MqttManager
-import org.checkerframework.checker.units.qual.min
 import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.layer.overlay.Marker
-import kotlin.math.min
 
 /**
  * Helper to encapsulate all MQTT-related logic extracted from MapActivity.
@@ -292,20 +288,19 @@ class MqttHelper(
                     return
                 }
 
-                // ✅ FIX: Don't show bus that hasn't started (no currentTripLabel)
+                // Don't show bus that hasn't started (no currentTripLabel)
                 // Only show buses that have actually started a trip and published currentTripLabel
                 if (resolvedLabel.isNullOrBlank()) {
                     // Bus hasn't started yet - remove marker if exists
-                    val hadMarker = owner.markerBus.containsKey(token)
                     owner.runOnUiThread {
                         owner.markerBus[token]?.let { marker ->
                             binding.map.layerManager.layers.remove(marker)
                             owner.markerBus.remove(token)
-                            owner.prevCoords.remove(token)
-                            owner.lastSeen.remove(token)
-                            owner.otherBusLabels.remove(token)
                             binding.map.invalidate()
                         }
+                        owner.prevCoords.remove(token)
+                        owner.lastSeen.remove(token)
+                        owner.otherBusLabels.remove(token)
                         owner.mapController.refreshDetailPanelIcons()
                     }
                     return
@@ -389,7 +384,7 @@ class MqttHelper(
                 val prev = owner.prevCoords[token]
                 if (prev == null) {
                     // ✅ FIX: Don't create marker if bus hasn't started yet
-                    if (resolvedLabel.isNullOrBlank()) {
+                    if (resolvedLabel.isBlank()) {
                         // Bus hasn't started - just record coordinates but don't create marker
                         owner.prevCoords[token] = lat to lon
                         owner.lastSeen[token] = now
@@ -412,8 +407,9 @@ class MqttHelper(
 
                     owner.prevCoords[token] = lat to lon
                     owner.lastSeen[token] = now
-                    // ✅ ENHANCED: Log bus detection with destination info
-                    val label = resolvedLabel ?: owner.otherBusLabels[token] ?: "Unknown"
+
+                    // Log bus detection with destination info
+                    val label = resolvedLabel
                     val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
                     LifecycleLogger.logOtherBusDetected(
                         token = token,

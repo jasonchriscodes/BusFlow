@@ -324,7 +324,7 @@ class MapActivity : AppCompatActivity() {
         // Prefer the exact RouteData sent via Intent, else index, else first
         @Suppress("DEPRECATION") // for getSerializableExtra() on older APIs
         selectedRouteData =
-            (intent.getSerializableExtra("SELECTED_ROUTE_DATA") as? RouteData)
+            intent.getParcelableExtra<RouteData>("SELECTED_ROUTE_DATA")
                 ?: run {
                     // Fallback to index if only SELECTED_ROUTE_INDEX was sent
                     val idx = intent.getIntExtra("SELECTED_ROUTE_INDEX", -1)
