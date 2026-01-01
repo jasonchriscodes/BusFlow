@@ -21,14 +21,11 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
-import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.activity.MapActivity
-import com.jason.publisher.main.helpers.MqttHelper
 import com.jason.publisher.main.model.BusStop
-import org.json.JSONArray
 import org.mapsforge.core.graphics.Bitmap as MfBitmap
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidBitmap
@@ -42,7 +39,6 @@ import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.InternalRenderTheme
 import java.io.File
 import java.lang.Math.*
-import java.util.*
 import kotlin.math.sqrt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,7 +46,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mapsforge.core.graphics.Style
+import kotlin.math.abs
 import kotlin.math.pow
+import androidx.core.graphics.createBitmap
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.min
+import kotlin.math.sin
 
 class MapViewController(
     private val activity: MapActivity,
@@ -215,7 +217,7 @@ class MapViewController(
         ).toInt()
 
         // 3) create a real Android Bitmap and draw the vector into it
-        val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val bmp = createBitmap(sizePx, sizePx)
         val canvas = Canvas(bmp)
         drawable.setBounds(0, 0, sizePx, sizePx)
         drawable.draw(canvas)
@@ -239,7 +241,7 @@ class MapViewController(
             val paint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
                 color = Color.BLUE
                 strokeWidth = 4f
-                setStyle(org.mapsforge.core.graphics.Style.STROKE)
+                setStyle(Style.STROKE)
             }
 
             routePolyline = Polyline(paint, AndroidGraphicFactory.INSTANCE).apply {
@@ -304,10 +306,9 @@ class MapViewController(
 
                     binding.map.post {
                         try {
-                            binding.map.model.mapViewPosition.setZoomLevel(15)
-                            binding.map.model.mapViewPosition.setCenter(
+                            binding.map.model.mapViewPosition.zoomLevel = 15
+                            binding.map.model.mapViewPosition.center =
                                 LatLong(activity.latitude, activity.longitude)
-                            )
                             drawDetectionZones(activity.stops)
                             drawPolyline()
                             addBusStopMarkers(activity.stops)
@@ -365,7 +366,7 @@ class MapViewController(
 
     /** Adds bus stops to the map. */
     @SuppressLint("LongLogTag")
-    fun addBusStopMarkers(busStops: List<com.jason.publisher.main.model.BusStop>) {
+    fun addBusStopMarkers(busStops: List<BusStop>) {
         val total = busStops.size
         // desired symbol square in dp
         val desiredDp = 30
@@ -382,7 +383,7 @@ class MapViewController(
                 )
 
             // 2) prepare a square bitmap
-            val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+            val bmp = createBitmap(sizePx, sizePx)
             val canvas = Canvas(bmp)
 
             // 3) compute a centered, aspect-correct destination rect
@@ -504,8 +505,8 @@ class MapViewController(
         val φ2 = toRadians(lat2)
         val dφ = toRadians(lat2 - lat1)
         val dλ = toRadians(lon2 - lon1)
-        val a = sin(dφ/2).pow(2) + cos(φ1)*cos(φ2)*sin(dλ/2).pow(2)
-        val c = 2 * atan2(sqrt(a), sqrt(1-a))
+        val a = sin(dφ / 2).pow(2) + cos(φ1) *cos(φ2)*sin(dλ/2).pow(2)
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return R * c
     }
 
@@ -541,7 +542,7 @@ class MapViewController(
             // ✅ OPTIMIZED: Only skip heavy operations if position hasn't changed
             // But always update marker position and invalidate map to prevent white screen
             val positionChanged = (lat != lastMarkerLat || lon != lastMarkerLon ||
-                    Math.abs(bearing - lastMarkerBearing) > 1.0f)
+                    abs(bearing - lastMarkerBearing) > 1.0f)
             val timePassed = (currentTime - lastMarkerUpdateTime) >= MARKER_UPDATE_MIN_INTERVAL_MS
 
             // Always update marker position and map, but skip expensive operations if not needed
@@ -622,7 +623,7 @@ class MapViewController(
             activity.resources.displayMetrics
         ).toInt()
 
-        val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val bmp = createBitmap(sizePx, sizePx)
         val canvas = Canvas(bmp)
         // rotate around the center
         canvas.rotate(angle, sizePx / 2f, sizePx / 2f)
@@ -704,7 +705,7 @@ class MapViewController(
     private fun drawableToBitmap(@DrawableRes id: Int, sizeDp: Int): Bitmap {
         val drawable = ResourcesCompat.getDrawable(activity.resources, id, null)!!
         val sizePx = dpToPx(sizeDp)
-        val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val bmp = createBitmap(sizePx, sizePx)
         val canvas = Canvas(bmp)
         drawable.setBounds(0, 0, sizePx, sizePx)
         drawable.draw(canvas)
@@ -751,7 +752,7 @@ class MapViewController(
                         t != selfToken &&
                                 t in validBusTokens &&
                                 // ✅ FIX: Only show buses that have a valid label (have started a trip)
-                                !label.isNullOrBlank()
+                                label.isNotBlank()
                         // ✅ FIX: Don't filter Break schedules - bus on break should still be shown in detail panel
                         // Break buses are tracked but marker is not shown on map
                     }
@@ -826,6 +827,7 @@ class MapViewController(
                     text = label
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     setPadding(dpToPx(8), 0, 0, 0)
+                    setTextColor(Color.BLACK)
                     // store the token on the view for logging use (not shown to user)
                     tag = token
                 }
@@ -851,8 +853,8 @@ class MapViewController(
                         }
                     }, 120L)
                 } catch (e: Exception) {
-                Log.w("MapViewController", "postDelayed logPanelDetailTextOnly failed: ${e.message}")
-            }
+                    Log.w("MapViewController", "postDelayed logPanelDetailTextOnly failed: ${e.message}")
+                }
             }
 
             if (allActiveOthers.isEmpty() && !isReallyOnline()) {
@@ -888,14 +890,14 @@ class MapViewController(
 
         // 2) render it into an Android Bitmap (size ~24dp)
         val sizePx = dpToPx(24)
-        val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val bmp = createBitmap(sizePx, sizePx)
         val canvas = Canvas(bmp)
         drawable.setBounds(0, 0, sizePx, sizePx)
         drawable.draw(canvas)
 
         // 3) wrap as a Mapsforge bitmap and add the marker to the map
         val mf = AndroidBitmap(bmp)  // org.mapsforge.core.graphics.Bitmap
-        val marker = org.mapsforge.map.layer.overlay.Marker(
+        val marker = Marker(
             LatLong(lat, lon), mf, 0, -mf.height / 2
         )
         binding.map.layerManager.layers.add(marker)
