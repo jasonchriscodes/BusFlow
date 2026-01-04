@@ -1834,14 +1834,12 @@ class MapActivity : AppCompatActivity() {
         }
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
-                locationResult.lastLocation?.let { location ->
+                // Failsafe to prevent location update when this activity is closed
+                if (this@MapActivity.isDestroyed) {
+                    return
+                }
 
-//                    Log.d("GPS_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}, Accuracy: ${location.accuracy}")
-//                    Log.d("GPS_DEBUG", "Speed: ${location.speed}, Bearing: ${location.bearing}")
-//
-//                    showCustomToast("Latitude: ${latitude}, Longitude: ${longitude}, LocAccuracy: ${location.accuracy}, Speed: ${speed}, Bearing: ${bearing}, BearAccuracy: ${location.bearingAccuracyDegrees}")
-//                    Toast.makeText(this@MapActivity, "Lat: ${location.latitude}, Lon: ${location.longitude}, LocAcc: ${location.accuracy}, Speed: ${location.speed}, Bear: ${location.bearing}, BearAcc: ${location.bearingAccuracyDegrees}", Toast.LENGTH_LONG).show()
-//                    Toast.makeText(this@MapActivity, "Speed: ${location.speed}, Bearing: ${location.bearing}", Toast.LENGTH_LONG).show()
+                locationResult.lastLocation?.let { location ->
 
                     if (!isManualMode) {
                         latitude = location.latitude
