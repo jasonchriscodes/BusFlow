@@ -40,6 +40,11 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.gson.Gson
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityScheduleBinding
+import com.jason.publisher.main.helpers.MqttConfigHelper
+import com.jason.publisher.main.helpers.MqttHelper.Companion.CLIENT_ID
+import com.jason.publisher.main.helpers.MqttHelper.Companion.PUB_MSG_TOPIC
+import com.jason.publisher.main.helpers.MqttHelper.Companion.SERVER_URI
+import com.jason.publisher.main.helpers.MqttHelper.Companion.SUB_MSG_TOPIC
 import com.jason.publisher.main.ui.StyledMultiColorTimeline
 import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.model.BusDataCache
@@ -77,7 +82,7 @@ import java.util.Locale
 class ScheduleActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityScheduleBinding
-    lateinit var mqttManagerConfig: MqttManager
+    val mqttConfigHelper = MqttConfigHelper()
     lateinit var mqttManager: MqttManager
     private lateinit var connectionStatusTextView: TextView
     private val REQUEST_MANAGE_EXTERNAL_STORAGE = 1001
@@ -88,7 +93,6 @@ class ScheduleActivity : AppCompatActivity() {
     private var aid = ""
     private var jsonString = ""
     private var token = ""
-    private var tokenConfigData = "BEXBIArF3URHeYBslJE2"
     private var config: List<BusItem>? = emptyList()
     private var route: List<BusRoute> = emptyList()
     private var stops: List<BusStop> = emptyList()
@@ -133,11 +137,6 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var emptyStateText: TextView
 
     companion object {
-        const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
-        const val CLIENT_ID = "jasonAndroidClientId"
-        const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
-        private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
-        private const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
         private const val REQUEST_PERIODIC_TIME = 5000L
         private const val PUBLISH_POSITION_TIME = 5000L
         private const val LAST_MSG_KEY = "lastMessageKey"
@@ -270,18 +269,13 @@ class ScheduleActivity : AppCompatActivity() {
         }
 
         // 0) init your MQTT managers *before* you ever call enterOnlineMode()/fetchConfig()
-        mqttManagerConfig = MqttManager(
-            serverUri = SERVER_URI,
-            clientId = CLIENT_ID,
-            username = tokenConfigData
-        )
         mqttManager = MqttManager(
             serverUri = SERVER_URI,
             clientId = CLIENT_ID
         )
 
         // 1. get connectivity service
-        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
 
 // 2. define the callback
         networkCallback = object : ConnectivityManager.NetworkCallback() {
@@ -548,7 +542,7 @@ class ScheduleActivity : AppCompatActivity() {
         }
 
         val breakLabel = formatPanelLabel(firstScheduleItem) // e.g. "09:00 Break BCS → BCS"
-        getAccessToken()
+        token = mqttConfigHelper.getAccessToken(aid, config.orEmpty())
 
         val intent = Intent(this, BreakActivity::class.java).apply {
             putExtra("AID", aid)
@@ -609,10 +603,10 @@ class ScheduleActivity : AppCompatActivity() {
             putExtra("EXTRA_PANEL_DEBUG_NO", no)
 
             // REP stop payload
-            putExtra("REP_STOP_LAT", repStop.latitude ?: 0.0)
-            putExtra("REP_STOP_LON", repStop.longitude ?: 0.0)
-            putExtra("REP_STOP_NAME", repStop.name ?: repStop.abbreviation ?: "Reposition Stop")
-            putExtra("REP_STOP_ADDR", repStop.address ?: repStop.name ?: "Reposition Stop")
+            putExtra("REP_STOP_LAT", repStop.latitude)
+            putExtra("REP_STOP_LON", repStop.longitude)
+            putExtra("REP_STOP_NAME", repStop.name)
+            putExtra("REP_STOP_ADDR", repStop.address)
         }
 
         // pop the first schedule like other flows
@@ -832,9 +826,11 @@ class ScheduleActivity : AppCompatActivity() {
         startLoadingBar()
         startFetchingAnimation()
 
-        fetchConfig { success ->
+        mqttConfigHelper.fetchConfig { configList ->
+            val success = configList.isNotEmpty()
             if (success) {
-                getAccessToken()
+                config = configList
+                token = mqttConfigHelper.getAccessToken(aid, config.orEmpty())
                 mqttManager = MqttManager(
                     serverUri = SERVER_URI,
                     clientId = CLIENT_ID,
@@ -1211,21 +1207,6 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /**
-     * Retrieves the access token for the current device's Android ID from the configuration list.
-     */
-    @SuppressLint("HardwareIds", "LongLogTag")
-    private fun getAccessToken() {
-        val listConfig = config
-        Log.d("MainActivity getAccessToken config", config.toString())
-        for (configItem in listConfig.orEmpty()) {
-            if (configItem.aid == aid) {
-                token = configItem.accessToken
-                break
-            }
-        }
-    }
-
-    /**
      * Requests admin messages periodically.
      */
     private fun requestAdminMessage() {
@@ -1234,31 +1215,12 @@ class ScheduleActivity : AppCompatActivity() {
         val jsonStringSharedKeys = jsonObject.toString()
         val handler = Handler(Looper.getMainLooper())
         mqttManager.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
-//        mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
         handler.post(object : Runnable {
             override fun run() {
                 mqttManager.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
-//                mqttManagerConfig.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
                 handler.postDelayed(this, REQUEST_PERIODIC_TIME)
             }
         })
-    }
-
-    /** Fetches the configuration data and initializes the config variable. */
-    @SuppressLint("LongLogTag")
-    private fun fetchConfig(callback: (Boolean) -> Unit) {
-        Log.d("MainActivity fetchConfig", "Fetching config...")
-
-        mqttManagerConfig.fetchSharedAttributes(tokenConfigData) { listConfig ->
-            runOnUiThread {
-                if (listConfig.isNotEmpty()) {
-                    config = listConfig
-                    callback(true)
-                } else {
-                    callback(false)
-                }
-            }
-        }
     }
 
     /**
@@ -1443,6 +1405,7 @@ class ScheduleActivity : AppCompatActivity() {
      */
     @SuppressLint("LongLogTag")
     private fun subscribeSharedData() {
+        Log.d("ScheduleActivity", mqttManager.getUsername())
         mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
             runOnUiThread {
                 try {
@@ -1657,7 +1620,7 @@ class ScheduleActivity : AppCompatActivity() {
     /**
      * Returns true if this schedule item represents a break (case-insensitive).
      */
-    private fun isBreak(item: com.jason.publisher.main.model.ScheduleItem): Boolean {
+    private fun isBreak(item: ScheduleItem): Boolean {
         // Accept "Break" or "break"
         return item.runName.equals("break", ignoreCase = true)
     }

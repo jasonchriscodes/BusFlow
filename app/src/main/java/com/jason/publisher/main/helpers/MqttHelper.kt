@@ -30,42 +30,32 @@ class MqttHelper(
     private val binding: ActivityMapBinding
 ) {
     // Configured managers passed in or initialized in MapActivity
-    private val mqttManagerConfig: MqttManager get() = owner.mqttManagerConfig
     private val mqttManager: MqttManager get() = owner.mqttManager
     private val apiService: ApiService get() = owner.apiService
     private val clientKeys: String get() = owner.clientKeys
 
     companion object {
-        private const val MIN_FETCH_INTERVAL_MS = 2_000L
-        // include scheduleData in your GET
+        const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
+        const val CLIENT_ID = "jasonAndroidClientId"
+        /** Topic path for updating attributes */
+        const val ATTR_TOPIC = "v1/devices/me/attributes"
+        /** Topic path for requesting admin message */
+        const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
+        /** Topic path for subscribing to shared data */
+        const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
         private const val CLIENT_KEYS = "latitude,longitude,bearing,speed,direction,scheduleData,currentTripLabel"
-        // Minimum distance change to consider as movement (in meters)
+        const val REQUEST_PERIODIC_TIME = 1000L
+        private const val MIN_FETCH_INTERVAL_MS = 2_000L
+        /** Minimum distance change to consider as movement (in meters) */
         private const val MIN_MOVEMENT_DISTANCE = 5.0
-        // ✅ FIX: Maximum time (2 minutes) before considering a bus inactive
-        // Bus that hasn't sent location update in 2 minutes is considered inactive
+        /** Maximum time (2 minutes) before considering a bus inactive.
+         * Bus that hasn't sent location update in 2 minutes is considered inactive.
+         */
         private const val MAX_INACTIVE_TIME_MS = 2 * 60 * 1000L  // 2 minutes
     }
 
     // track when we last fetched attributes for each token
     private val lastFetchTime = mutableMapOf<String, Long>()
-
-    /**
-     * Fetches the configuration data and initializes the config variable.
-     */
-    fun fetchConfig(callback: (Boolean) -> Unit) {
-        Log.d("MapActivity fetchConfig", "Fetching config...")
-        mqttManagerConfig.fetchSharedAttributes(owner.tokenConfigData) { listConfig ->
-            if (listConfig.isNotEmpty()) {
-                owner.config = listConfig
-                Log.d("MapActivity fetchConfig", "Config received: ${'$'}{owner.config}")
-                callback(true)
-            } else {
-                owner.config = emptyList()
-                Log.e("MapActivity fetchConfig", "Failed to initialize config. No bus information available.")
-                callback(false)
-            }
-        }
-    }
 
     /**
      * Connects to the MQTT broker and subscribes to shared data topic.
@@ -88,7 +78,7 @@ class MqttHelper(
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     private fun subscribeSharedData() {
-        mqttManager.subscribe(MapActivity.SUB_MSG_TOPIC) { message ->
+        mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
             owner.runOnUiThread {
                 val data = Gson().fromJson(message, Bus::class.java)
                 val newConfig = data.shared?.config?.busConfig ?: return@runOnUiThread
@@ -534,11 +524,11 @@ class MqttHelper(
         val jsonObject = JSONObject().apply {
             put("sharedKeys", "message,busRoute,busStop,config")
         }
-        mqttManager.publish(MapActivity.PUB_MSG_TOPIC, jsonObject.toString())
+        mqttManager.publish(PUB_MSG_TOPIC, jsonObject.toString())
         Handler(Looper.getMainLooper()).post(object : Runnable {
             override fun run() {
-                mqttManager.publish(MapActivity.PUB_MSG_TOPIC, jsonObject.toString())
-                Handler(Looper.getMainLooper()).postDelayed(this, MapActivity.REQUEST_PERIODIC_TIME)
+                mqttManager.publish(PUB_MSG_TOPIC, jsonObject.toString())
+                Handler(Looper.getMainLooper()).postDelayed(this, REQUEST_PERIODIC_TIME)
             }
         })
     }

@@ -45,6 +45,7 @@ import com.jason.publisher.LocationListener
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.helpers.MapViewController
+import com.jason.publisher.main.helpers.MqttConfigHelper
 import com.jason.publisher.main.helpers.MqttHelper
 import com.jason.publisher.main.helpers.ScheduleStatusManager
 import com.jason.publisher.main.helpers.TimeManager
@@ -160,10 +161,9 @@ class MapActivity : AppCompatActivity() {
     // for self
     private var prevOwnCoords: Pair<Double,Double>? = null
     private lateinit var mqttHelper: MqttHelper
-    var tokenConfigData = "BEXBIArF3URHeYBslJE2"
     val clientKeys       = "latitude,longitude,bearing,speed,direction"
 
-    lateinit var mqttManagerConfig: MqttManager
+    val mqttConfigHelper = MqttConfigHelper()
     lateinit var mqttManager:        MqttManager
     lateinit var timeManager: TimeManager
     lateinit var mapController: MapViewController
@@ -207,9 +207,6 @@ class MapActivity : AppCompatActivity() {
         const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
         const val CLIENT_ID = "jasonAndroidClientId"
         const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
-        const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
-        const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
-        const val REQUEST_PERIODIC_TIME = 1000L
         private const val PUBLISH_POSITION_TIME = 1000L
         private const val LAST_MSG_KEY = "lastMessageKey"
         private const val MSG_KEY = "messageKey"
@@ -238,13 +235,6 @@ class MapActivity : AppCompatActivity() {
 
         // Initialize managers before using them
         initializeManagers()
-
-        // before creating the helper, set up the config‐fetching client:
-        mqttManagerConfig = MqttManager(
-            serverUri = SERVER_URI,
-            clientId  = "$CLIENT_ID-config",
-            username  = tokenConfigData
-        )
 
         // ── ADD THIS: initialize mqttManager for offline use ──
         mqttManager = MqttManager(
@@ -397,10 +387,12 @@ class MapActivity : AppCompatActivity() {
                     )
 
                     // re-fetch config (to repopulate arrBusData & token)
-                    mqttHelper.fetchConfig { success ->
+                    mqttConfigHelper.fetchConfig { configList ->
+                        val success = configList.isNotEmpty()
                         if (success) {
                             // rebuild your MQTT client with the new token
-                            getAccessToken()
+                            config = configList
+                            token = mqttConfigHelper.getAccessToken(aid, config.orEmpty())
                             mqttManager = MqttManager(
                                 serverUri = SERVER_URI,
                                 clientId  = CLIENT_ID,
@@ -448,11 +440,12 @@ class MapActivity : AppCompatActivity() {
 
         // 2) Now fetch the shared config from your server (ThingsBoard)
         // Always switch back to the main thread before touching any views:
-        mqttHelper.fetchConfig { success ->
-            // now you’re inside the callback, and `success` is in scope
+        mqttConfigHelper.fetchConfig { configList ->
+            val success = configList.isNotEmpty()
             runOnUiThread {
                 if (success) {
-                    getAccessToken()
+                    config = configList
+                    token = mqttConfigHelper.getAccessToken(aid, config.orEmpty())
                     mqttManager = MqttManager(
                         serverUri = SERVER_URI,
                         clientId  = CLIENT_ID,
@@ -906,21 +899,6 @@ class MapActivity : AppCompatActivity() {
 
         // Return as (polyline, stops, durations)
         return Triple(route, stops, durations)
-    }
-
-    /**
-     * Retrieves the access token for the current device's Android ID from the configuration list.
-     */
-    @SuppressLint("HardwareIds")
-    private fun getAccessToken() {
-        val listConfig = config
-        Log.d("getAccessToken config", config.toString())
-        for (configItem in listConfig.orEmpty()) {
-            if (configItem.aid == aid) {
-                token = configItem.accessToken
-                break
-            }
-        }
     }
 
     /**

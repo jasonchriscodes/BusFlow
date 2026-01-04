@@ -11,6 +11,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.jason.publisher.R
+import com.jason.publisher.main.helpers.MqttHelper.Companion.ATTR_TOPIC
+import com.jason.publisher.main.helpers.MqttHelper.Companion.PUB_MSG_TOPIC
+import com.jason.publisher.main.helpers.MqttHelper.Companion.REQUEST_PERIODIC_TIME
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.MqttManager
 import com.jason.publisher.main.ui.BreakUpcomingAdapter
@@ -37,7 +40,6 @@ class BreakActivity : AppCompatActivity() {
     companion object {
         const val SERVER_URI = MapActivity.SERVER_URI
         const val CLIENT_ID  = MapActivity.CLIENT_ID
-        private const val ATTR_TOPIC = "v1/devices/me/attributes"
         private const val USE_DYNAMIC = false
         private const val FALLBACK_SECONDS = 30L
     }
@@ -242,11 +244,11 @@ class BreakActivity : AppCompatActivity() {
         val jsonObject = JSONObject().apply {
             put("sharedKeys", "message,busRoute,busStop,config")
         }
-        mqttManager.publish(MapActivity.PUB_MSG_TOPIC, jsonObject.toString())
+        mqttManager.publish(PUB_MSG_TOPIC, jsonObject.toString())
         Handler(Looper.getMainLooper()).post(object : Runnable {
             override fun run() {
-                mqttManager.publish(MapActivity.PUB_MSG_TOPIC, jsonObject.toString())
-                Handler(Looper.getMainLooper()).postDelayed(this, MapActivity.REQUEST_PERIODIC_TIME)
+                mqttManager.publish(PUB_MSG_TOPIC, jsonObject.toString())
+                Handler(Looper.getMainLooper()).postDelayed(this, REQUEST_PERIODIC_TIME)
             }
         })
     }

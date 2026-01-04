@@ -19,6 +19,9 @@ import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.hookBatteryToasts
 import pl.droidsonroids.gif.GifDrawable
 import pl.droidsonroids.gif.GifImageView
+import androidx.core.content.edit
+import com.jason.publisher.main.services.ClientAttributesService
+import androidx.core.net.toUri
 
 // Optimize: Default audio to false to reduce CPU/GPU load during screen recording
 // Audio encoding adds significant overhead, so make it opt-in
@@ -52,23 +55,23 @@ class SplashActivity : AppCompatActivity() {
         }
 
         // Initialize BEFORE any FileLogger.d/i/w/e
-        com.jason.publisher.main.utils.FileLogger.init(applicationContext)
-        com.jason.publisher.main.utils.FileLogger.d("SplashActivity", "onCreate")
+        FileLogger.init(applicationContext)
+        FileLogger.d("SplashActivity", "onCreate")
 
         FileLogger.d("SplashActivity", "onCreate")
         hookBatteryToasts()
 
         if (savedInstanceState == null) { // cold start, not a rotation
             getSharedPreferences("panel_debug_pref", MODE_PRIVATE)
-                .edit()
-                .putInt("panel_debug_no", 0)
-                .apply()
+                .edit {
+                    putInt("panel_debug_no", 0)
+                }
         }
 
         // ✅ OPTIMIZED: Screen recording permission tetap ditampilkan seperti awal
         // Tapi dengan optimasi di ScreenRecordService agar tidak lag
         // Optimasi: audio disabled by default, lower bitrate, reduced frame rate, dll
-        mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         try {
             val captureIntent = mpm.createScreenCaptureIntent()
             projectionLauncher.launch(captureIntent)
@@ -85,6 +88,9 @@ class SplashActivity : AppCompatActivity() {
         }
 
         setContentView(R.layout.activity_splash)
+
+        // Start the ClientAttributesService to handle attributes-updating when the app is closed
+        startService(Intent(baseContext, ClientAttributesService::class.java))
 
         // full-screen immersive mode
         window.decorView.systemUiVisibility = (
@@ -134,7 +140,7 @@ class SplashActivity : AppCompatActivity() {
 
     // Screen-capture consent result
     private val projectionLauncher = registerForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+        ActivityResultContracts.StartActivityForResult()
     ) { res ->
         if (res.resultCode == RESULT_OK && res.data != null) {
             // Pass the audio decision to the service
@@ -167,17 +173,17 @@ class SplashActivity : AppCompatActivity() {
                 Log.w("SplashActivity", "⚠️ Screen recorder app not found: $packageName")
                 try {
                     val marketIntent = Intent(Intent.ACTION_VIEW).apply {
-                        data = Uri.parse("market://details?id=$packageName")
+                        data = "market://details?id=$packageName".toUri()
                         setPackage("com.android.vending")
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                     startActivity(marketIntent)
                     Log.d("SplashActivity", "Opened Play Store for screen recorder app")
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     // Play Store not available, try web browser
                     try {
                         val webIntent = Intent(Intent.ACTION_VIEW).apply {
-                            data = Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+                            data = "https://play.google.com/store/apps/details?id=$packageName".toUri()
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
                         startActivity(webIntent)
@@ -202,10 +208,10 @@ class SplashActivity : AppCompatActivity() {
          * @param enable true to enable built-in recording, false to disable (recommended)
          */
         fun setBuiltinRecordingEnabled(context: Context, enable: Boolean) {
-            context.getSharedPreferences(PREFS_SCREEN_RECORDING, Context.MODE_PRIVATE)
-                .edit()
-                .putBoolean(KEY_ENABLE_BUILTIN_RECORDING, enable)
-                .apply()
+            context.getSharedPreferences(PREFS_SCREEN_RECORDING, MODE_PRIVATE)
+                .edit {
+                    putBoolean(KEY_ENABLE_BUILTIN_RECORDING, enable)
+                }
             Log.d("SplashActivity", "Built-in screen recording ${if (enable) "ENABLED" else "DISABLED"}")
         }
 
@@ -217,11 +223,11 @@ class SplashActivity : AppCompatActivity() {
          * @param packageName Optional: package name of the screen recorder app (default: AZ Screen Recorder)
          */
         fun setThirdPartyRecordingEnabled(context: Context, enable: Boolean, packageName: String = AZ_SCREEN_RECORDER_PACKAGE) {
-            context.getSharedPreferences(PREFS_SCREEN_RECORDING, Context.MODE_PRIVATE)
-                .edit()
-                .putBoolean(KEY_ENABLE_3RD_PARTY_RECORDING, enable)
-                .putString(KEY_3RD_PARTY_PACKAGE, packageName)
-                .apply()
+            context.getSharedPreferences(PREFS_SCREEN_RECORDING, MODE_PRIVATE)
+                .edit {
+                    putBoolean(KEY_ENABLE_3RD_PARTY_RECORDING, enable)
+                    putString(KEY_3RD_PARTY_PACKAGE, packageName)
+                }
             Log.d("SplashActivity", "3rd party screen recording ${if (enable) "ENABLED" else "DISABLED"} with package: $packageName")
         }
 
@@ -229,7 +235,7 @@ class SplashActivity : AppCompatActivity() {
          * Check if built-in recording is enabled
          */
         fun isBuiltinRecordingEnabled(context: Context): Boolean {
-            return context.getSharedPreferences(PREFS_SCREEN_RECORDING, Context.MODE_PRIVATE)
+            return context.getSharedPreferences(PREFS_SCREEN_RECORDING, MODE_PRIVATE)
                 .getBoolean(KEY_ENABLE_BUILTIN_RECORDING, false)
         }
 
@@ -237,7 +243,7 @@ class SplashActivity : AppCompatActivity() {
          * Check if 3rd party recording is enabled
          */
         fun isThirdPartyRecordingEnabled(context: Context): Boolean {
-            return context.getSharedPreferences(PREFS_SCREEN_RECORDING, Context.MODE_PRIVATE)
+            return context.getSharedPreferences(PREFS_SCREEN_RECORDING, MODE_PRIVATE)
                 .getBoolean(KEY_ENABLE_3RD_PARTY_RECORDING, false)
         }
     }

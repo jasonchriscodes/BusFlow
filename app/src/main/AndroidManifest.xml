@@ -58,7 +58,7 @@
             android:name=".Contacts.ChatActivity"
             android:exported="false"
             android:screenOrientation="landscape" />
-        <activity android:name=".old.LoginActivity"></activity>
+        <activity android:name=".old.LoginActivity" />
         <activity android:name=".old.RegisterActivity" />
         <activity
             android:name=".main.activity.MapActivity"
@@ -70,15 +70,15 @@
 
         <service android:name="org.eclipse.paho.android.service.MqttService" />
 
-<!--        <activity-->
-<!--            android:name=".SplashScreen"-->
-<!--            android:exported="true"-->
-<!--            android:screenOrientation="landscape">-->
-<!--            <intent-filter>-->
-<!--                <action android:name="android.intent.action.MAIN" />-->
-<!--                <category android:name="android.intent.category.LAUNCHER" />-->
-<!--            </intent-filter>-->
-<!--        </activity>-->
+        <!--        <activity-->
+        <!--            android:name=".SplashScreen"-->
+        <!--            android:exported="true"-->
+        <!--            android:screenOrientation="landscape">-->
+        <!--            <intent-filter>-->
+        <!--                <action android:name="android.intent.action.MAIN" />-->
+        <!--                <category android:name="android.intent.category.LAUNCHER" />-->
+        <!--            </intent-filter>-->
+        <!--        </activity>-->
         <activity
             android:name=".main.activity.ScheduleActivity"
             android:exported="true"
@@ -104,14 +104,18 @@
             android:screenOrientation="landscape"
             android:configChanges="orientation|keyboardHidden|screenSize" />
         <!--        <activity-->
-<!--            android:name=".OfflineActivity"-->
-<!--            android:exported="false"-->
-<!--            android:screenOrientation="landscape" />-->
+        <!--            android:name=".OfflineActivity"-->
+        <!--            android:exported="false"-->
+        <!--            android:screenOrientation="landscape" />-->
         <service
             android:name=".main.services.ScreenRecordService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection"
             android:stopWithTask="true" />
+        <service
+            android:name=".main.services.ClientAttributesService"
+            android:exported="false"
+            android:stopWithTask="false" />
         <!-- ACTION_BATTERY_LOW while your process might be dead -->
         <receiver
             android:name=".main.utils.BatteryLowManifestReceiver"
