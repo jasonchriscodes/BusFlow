@@ -284,12 +284,13 @@ class MapViewController(
                 }
                 return@launch
             }
+            val renderTheme = InternalRenderTheme.OSMARENDER
             val layer = TileRendererLayer(
                 cache,
                 store,
                 binding.map.model.mapViewPosition,
                 AndroidGraphicFactory.INSTANCE
-            ).apply { setXmlRenderTheme(InternalRenderTheme.DEFAULT) }
+            ).apply { setXmlRenderTheme(renderTheme) }
 
             withContext(Dispatchers.Main) {
                 try {
