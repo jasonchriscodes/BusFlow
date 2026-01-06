@@ -49,6 +49,7 @@ import org.mapsforge.core.graphics.Style
 import kotlin.math.abs
 import kotlin.math.pow
 import androidx.core.graphics.createBitmap
+import org.mapsforge.map.android.rendertheme.AssetsRenderTheme
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.min
@@ -284,7 +285,12 @@ class MapViewController(
                 }
                 return@launch
             }
-            val renderTheme = InternalRenderTheme.OSMARENDER
+//            val renderTheme = InternalRenderTheme.OSMARENDER
+            val renderTheme = AssetsRenderTheme(
+                activity.assets,
+                "",
+                "custom_render_theme.xml"
+            )
             val layer = TileRendererLayer(
                 cache,
                 store,
