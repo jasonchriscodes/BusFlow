@@ -480,20 +480,25 @@ class ScheduleActivity : AppCompatActivity() {
 
         // Set up the "Start Route" button
         binding.startRouteButton.setOnClickListener {
-            if (scheduleData.isEmpty()) {
-                Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            val no = nextPanelDebugNo()
-            val first = scheduleData.first()
+            try {
+                if (scheduleData.isEmpty()) {
+                    Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                val no = nextPanelDebugNo()
+                val first = scheduleData.first()
 
-            // Log now (works for Trip or Break)
-            logPanelDebugPreStart(no, first)
+                // Log now (works for Trip or Break)
+                logPanelDebugPreStart(no, first)
 
-            when {
-                isBreak(first)      -> launchBreakActivity(first, no)
-                isReposition(first) -> launchRepActivity(first, no)   // 👈 NEW
-                else                -> launchMapActivity(no)
+                when {
+                    isBreak(first)      -> launchBreakActivity(first, no)
+                    isReposition(first) -> launchRepActivity(first, no)
+                    else                -> launchMapActivity(no)
+                }
+            } catch (e: Exception) {
+                FileLogger.e("ScheduleActivity", "Error in startRouteButton: ${e.message}")
+                Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
 
