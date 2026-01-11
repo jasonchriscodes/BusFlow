@@ -27,6 +27,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.ViewCompat
 import com.jason.publisher.main.model.BusItem
@@ -112,6 +113,8 @@ class MapActivity : AppCompatActivity() {
     private lateinit var scheduleStatusText: TextView
     private lateinit var timingPointandStopsTextView: TextView
     private lateinit var tripEndTimeTextView: TextView
+
+    private var tripEndDialog: AlertDialog? = null
 
     private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
     var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
@@ -612,7 +615,7 @@ class MapActivity : AppCompatActivity() {
             }
 
             // Show number pad confirmation dialog
-            val dlgBuilder = androidx.appcompat.app.AlertDialog.Builder(this)
+            val dlgBuilder = AlertDialog.Builder(this)
             val numberPadView = layoutInflater.inflate(R.layout.dialog_number_pad, null)
             val numberPadInput = numberPadView.findViewById<EditText>(R.id.numberPadInput)
 
@@ -1123,6 +1126,10 @@ class MapActivity : AppCompatActivity() {
      * Call this function when the simulation finishes.
      */
     private fun showSummaryDialog() {
+        if (tripEndDialog?.isShowing ?: false) {
+            return
+        }
+
         // Flatten scheduleData into a List<ScheduleItem>
         val flatSchedule = (scheduleData as? List<Any> ?: emptyList()).flatMap { element ->
             when (element) {
@@ -1146,7 +1153,7 @@ class MapActivity : AppCompatActivity() {
         // late notification: You are $restMinutes minute(s) for your next trip. Please notify operations of late departure.
         // break (lunch break):  You are $restMinutes minute(s) for your break time.
         // end of shift: You have completed last run of the day.
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+        tripEndDialog = AlertDialog.Builder(this)
             .setTitle("Trip Completed")
             .setMessage(messageText)
             .setPositiveButton("View Next Trip") { dialog, _ ->
@@ -1154,18 +1161,18 @@ class MapActivity : AppCompatActivity() {
                 startActivity(Intent(this, ScheduleActivity::class.java))
             }
             .create()
-        dialog.show()
+        tripEndDialog?.show()
 
         // Customize the dialog's background and text colors
-        dialog.window?.setBackgroundDrawableResource(R.color.colorMain)
-        dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.setTextColor(
+        tripEndDialog?.window?.setBackgroundDrawableResource(R.color.colorMain)
+        tripEndDialog?.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.setTextColor(
             ResourcesCompat.getColor(resources, R.color.white, null)
         )
-        dialog.findViewById<TextView>(android.R.id.message)?.setTextColor(
+        tripEndDialog?.findViewById<TextView>(android.R.id.message)?.setTextColor(
             ResourcesCompat.getColor(resources, R.color.white, null)
         )
         // Style the positive button similar to your simulation button
-        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)?.apply {
+        tripEndDialog?.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)?.apply {
             backgroundTintList = ColorStateList.valueOf(ResourcesCompat.getColor(resources, R.color.purple_400, null))
             setTextColor(ResourcesCompat.getColor(resources, R.color.white, null))
         }
