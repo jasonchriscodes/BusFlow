@@ -1,15 +1,12 @@
-// ScheduleStatusManager.kt
 package com.jason.publisher.main.helpers
 
 import android.annotation.SuppressLint
-import android.os.Looper
 import android.util.Log
 import android.widget.ImageView
 import androidx.core.content.ContextCompat
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.activity.MapActivity
-import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.LifecycleLogger
 import java.text.SimpleDateFormat
 import java.util.*
@@ -227,8 +224,7 @@ class ScheduleStatusManager(
                 deltaMin == 1    -> "Slightly Ahead (~$timeDiff early)"
                 deltaMin in -2..0-> "On Time (~$timeDiff on time)"
                 deltaMin in -4..-3 -> "Slightly Behind (~$timeDiff late)"
-                deltaMin <= -5   -> "Very Behind (~$timeDiff late)"
-                else             -> "Unknown"
+                else   -> "Very Behind (~$timeDiff late)"
             }
 
             val symbolRes = when {
@@ -236,8 +232,7 @@ class ScheduleStatusManager(
                 deltaMin == 1       -> R.drawable.ic_schedule_slightly_ahead
                 deltaMin in -2..0   -> R.drawable.ic_schedule_on_time
                 deltaMin in -4..-3  -> R.drawable.ic_schedule_slightly_behind
-                deltaMin <= -5      -> R.drawable.ic_schedule_very_behind
-                else                -> R.drawable.ic_schedule_on_time
+                else      -> R.drawable.ic_schedule_very_behind
             }
 
             val colorRes = when {
@@ -245,8 +240,7 @@ class ScheduleStatusManager(
                 deltaMin == 1       -> R.color.blind_light_orange   // Slightly Ahead
                 deltaMin in -2..0   -> R.color.blind_cyan           // On Time
                 deltaMin in -4..-3  -> R.color.blind_orange         // Slightly Behind
-                deltaMin <= -5      -> R.color.blind_orange         // Very Behind
-                else                -> R.color.blind_cyan
+                else      -> R.color.blind_orange         // Very Behind
             }
 
             // Update UI directly (already on main thread from MapActivity)
@@ -382,19 +376,16 @@ class ScheduleStatusManager(
             add(Calendar.SECOND, t1.toInt())
         }
 
-        val predictedArrivalLastStop = timeFormat.format(predictedArrival.time)
-
-        val nextScheduleStartRaw = activity.timeManager.getNextScheduleStartTime() ?: return
-        val nextScheduleStartStr = nextScheduleStartRaw + ":00"
+        val nextScheduleStartRaw = activity.timeManager.getNextScheduleStartTime(activity.scheduleData) ?: return
+        val nextScheduleStartStr = "$nextScheduleStartRaw:00"
         val nextScheduleStartTime = activity.timeManager.parseTimeToday(nextScheduleStartStr)
 
         val deltaNextSec = ((nextScheduleStartTime.time - predictedArrival.time.time) / 1000).toInt()
-        // ✅ OPTIMIZED: Removed all verbose logging - only log when status is overridden
 
         if (deltaNextSec in -86400..300) {
             val overrideValue = if (deltaNextSec < 0) (-deltaNextSec) + 300 else deltaNextSec
 
-            // ✅ FIX: Format time as "xx mins" only (no seconds) if >= 60 seconds
+            // Format time as "xx mins" only (no seconds) if >= 60 seconds
             val overrideStatusText = if (overrideValue >= 60) {
                 val mins = overrideValue / 60
                 "Late for next run by $mins mins"
@@ -402,7 +393,7 @@ class ScheduleStatusManager(
                 "Late for next run by ${overrideValue}s"
             }
 
-            // ✅ FIX: Format log message with "xx mins" only (no seconds)
+            // Format log message with "xx mins" only (no seconds)
             val logFormattedValue = if (overrideValue >= 60) {
                 val mins = overrideValue / 60
                 "$mins mins"

@@ -26,6 +26,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.res.ResourcesCompat
@@ -129,8 +130,6 @@ class MapActivity : AppCompatActivity() {
     lateinit var scheduleData: List<ScheduleItem>
     val redBusStops = mutableSetOf<String>()
 
-    private lateinit var actualTimeHandler: Handler
-    private lateinit var actualTimeRunnable: Runnable
     private lateinit var actualTimeTextView: TextView
     private lateinit var timingPointValueTextView: TextView
     private lateinit var apiTimeValueTextView: TextView
@@ -168,7 +167,9 @@ class MapActivity : AppCompatActivity() {
 
     val mqttConfigHelper = MqttConfigHelper()
     lateinit var mqttManager:        MqttManager
-    lateinit var timeManager: TimeManager
+    val timeManager: TimeManager by viewModels {
+        TimeManager.provideFactory()
+    }
     lateinit var mapController: MapViewController
     private lateinit var scheduleStatusManager: ScheduleStatusManager
     val otherBusLabels = mutableMapOf<String,String>()
@@ -247,7 +248,6 @@ class MapActivity : AppCompatActivity() {
 
         // Initialize Managers before using it
         scheduleStatusManager = ScheduleStatusManager(this, binding)
-        timeManager = TimeManager(this, scheduleStatusManager)
         mqttHelper = MqttHelper(this, binding)
         mapController  = MapViewController(this, binding, mqttHelper, binding.detailIconsContainer)
 
@@ -360,10 +360,16 @@ class MapActivity : AppCompatActivity() {
 
         // Start the current time counter
         // Use startStartTime() which updates simulatedStartTime for calculations
-        timeManager.startStartTime()
+        timeManager.startStartTime(scheduleList)
 
         // Start the next trip countdown updater
-        timeManager.startNextTripCountdownUpdater()
+        timeManager.startNextTripCountdownUpdater(scheduleData) { updatedNextTrip ->
+            nextTripCountdownTextView.text = updatedNextTrip
+        }
+
+        timeManager.currentTime.observe(this) {
+            currentTimeTextView.text = it
+        }
 
         updateApiTime() // Ensure API time is updated at the start
 
@@ -553,7 +559,11 @@ class MapActivity : AppCompatActivity() {
             // result
 
             timeManager.stopCurrentTime()
-            timeManager.startCustomTime(customTime)
+            timeManager.startCustomTime(customTime) { updatedCustomTime ->
+                // Update schedule status based on the new simulated time
+                scheduleStatusValueTextView.text = "Calculating..."
+                scheduleStatusManager.checkScheduleStatus()
+            }
 //            startActualTimeUpdater()
 
             // Trigger visual change to test schedule status UI
@@ -2063,7 +2073,7 @@ class MapActivity : AppCompatActivity() {
                 val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
                 val currentTimeText = timeFormat.format(timeManager.simulatedStartTime.time)
                 if (currentTimeText != lastCurrentTimeText) {
-                    currentTimeTextView.text = currentTimeText
+                    timeManager.updateCurrentTime(currentTimeText)
                     lastCurrentTimeText = currentTimeText
                 }
             }
@@ -2072,7 +2082,7 @@ class MapActivity : AppCompatActivity() {
             if (::nextTripCountdownTextView.isInitialized) {
                 try {
                     val currentTime = timeManager.simulatedStartTime.clone() as Calendar
-                    val nextTripStartTime = timeManager.getNextScheduleStartTime()
+                    val nextTripStartTime = timeManager.getNextScheduleStartTime(scheduleData)
 
                     val nextTripText = if (nextTripStartTime != null) {
                         val timeParts = nextTripStartTime.split(":").map { it.toInt() }
@@ -2323,6 +2333,7 @@ class MapActivity : AppCompatActivity() {
         networkStatusIndicator     = binding.networkStatusIndicator
     }
 
+    @SuppressLint("MissingSuperCall")
     override fun onBackPressed() { /* no-op */ }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -2358,9 +2369,7 @@ class MapActivity : AppCompatActivity() {
         }
 
         // Cleanup time manager
-        if (::timeManager.isInitialized) {
-            timeManager.cleanup()
-        }
+        timeManager.cleanup()
 
         // Stop periodic UI update
         stopPeriodicUIUpdate()
