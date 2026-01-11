@@ -1515,10 +1515,15 @@ class MapActivity : AppCompatActivity() {
             return
         }
 
-        // ─── NEW: figure out where you are on the polyline ───
+        // Don't check if the coordinate is not ready yet
+        if (currentLat == 0.0 && currentLon == 0.0) {
+            return
+        }
+
+        // Figure out where you are on the polyline
         val nearestRouteIdx = mapController.findNearestBusRoutePoint(currentLat, currentLon)
 
-        // ─── NEW: auto-pass any stops whose route-index ≤ your position ───
+        // Auto-pass any stops whose route-index ≤ your position
         var newStopPassed = false
         stops.forEach { stop ->
             val idx = route.indexOfFirst {
