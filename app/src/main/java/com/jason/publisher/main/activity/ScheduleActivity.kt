@@ -3,7 +3,6 @@ package com.jason.publisher.main.activity
 import ScheduleAdapter
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -97,6 +96,11 @@ class ScheduleActivity : AppCompatActivity() {
     private var route: List<BusRoute> = emptyList()
     private var stops: List<BusStop> = emptyList()
     private var busRouteData: List<RouteData> = emptyList()
+
+    /** Schedule data to be displayed */
+    private var activeScheduleData: List<ScheduleItem> = emptyList()
+
+    /** Schedule data to keep track of existing schedule even after they are no longer active */
     private var scheduleData: List<ScheduleItem> = emptyList()
     private var durationBetweenStops: List<Double> = emptyList()
     private var arrBusData: List<BusItem> = emptyList()
@@ -345,10 +349,10 @@ class ScheduleActivity : AppCompatActivity() {
 
         // ✅ ENHANCED: Log activity entry with available data
         LifecycleLogger.logActivityEntry("ScheduleActivity", mapOf(
-            "scheduleCount" to scheduleData.size,
+            "scheduleCount" to activeScheduleData.size,
             "routeCount" to busRouteData.size,
             "aid" to aid,
-            "firstTripInfo" to (scheduleData.firstOrNull()?.let { "${it.startTime} ${it.runName}" } ?: "N/A")
+            "firstTripInfo" to (activeScheduleData.firstOrNull()?.let { "${it.startTime} ${it.runName}" } ?: "N/A")
         ))
 
         // Connect and subscribe to MQTT
@@ -460,7 +464,7 @@ class ScheduleActivity : AppCompatActivity() {
         }
 
         btnNext.setOnClickListener {
-            val totalPages = (scheduleData.size + maxRowsPerPage - 1) / maxRowsPerPage
+            val totalPages = (activeScheduleData.size + maxRowsPerPage - 1) / maxRowsPerPage
             if (currentPage < totalPages - 1) {
                 currentPage++
                 updateScheduleTablePaged()
@@ -481,12 +485,12 @@ class ScheduleActivity : AppCompatActivity() {
         // Set up the "Start Route" button
         binding.startRouteButton.setOnClickListener {
             try {
-                if (scheduleData.isEmpty()) {
+                if (activeScheduleData.isEmpty()) {
                     Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
                 val no = nextPanelDebugNo()
-                val first = scheduleData.first()
+                val first = activeScheduleData.first()
 
                 // Log now (works for Trip or Break)
                 logPanelDebugPreStart(no, first)
@@ -504,12 +508,12 @@ class ScheduleActivity : AppCompatActivity() {
 
 // Set up the "Test Start Route" button
         binding.testStartRouteButton.setOnClickListener {
-            if (scheduleData.isEmpty()) {
+            if (activeScheduleData.isEmpty()) {
                 Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             val no = nextPanelDebugNo()
-            val first = scheduleData.first()
+            val first = activeScheduleData.first()
 
             logPanelDebugPreStart(no, first)
 
@@ -527,7 +531,7 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     private fun launchBreakActivity(firstScheduleItem: ScheduleItem, no: Int) {
         // ✅ FIX: Check for empty scheduleData and active trips before removing
-        if (scheduleData.isEmpty()) {
+        if (activeScheduleData.isEmpty()) {
             Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
             return
         }
@@ -536,7 +540,7 @@ class ScheduleActivity : AppCompatActivity() {
         val hasActiveTrip = TripLog.hasActive(this)
         if (!hasActiveTrip) {
             // remove first item, persist, refresh (your existing code) ...
-            scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+            activeScheduleData = activeScheduleData.toMutableList().apply { removeAt(0) }
             isScheduleCacheUpdated = false
             saveScheduleDataToCache()
             updateScheduleTablePaged()
@@ -554,7 +558,7 @@ class ScheduleActivity : AppCompatActivity() {
             putExtra("ACCESS_TOKEN", token)
             putExtra("BREAK_LABEL", breakLabel)
             putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
-            putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+            putExtra("FULL_SCHEDULE_DATA", ArrayList(activeScheduleData))
             putExtra("EXTRA_PANEL_DEBUG_NO", no)   // <-- same counter
         }
         publishActiveSegment(breakLabel)
@@ -598,7 +602,7 @@ class ScheduleActivity : AppCompatActivity() {
 
             putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
             putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
-            putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleData))
+            putExtra("FULL_SCHEDULE_DATA", ArrayList(activeScheduleData))
 
             putExtra("SELECTED_ROUTE_INDEX", selectedIdx ?: -1)
             selectedIdx?.let { idx ->
@@ -615,7 +619,7 @@ class ScheduleActivity : AppCompatActivity() {
         }
 
         // pop the first schedule like other flows
-        scheduleData = scheduleData.toMutableList().apply { removeAt(0) }
+        activeScheduleData = activeScheduleData.toMutableList().apply { removeAt(0) }
         isScheduleCacheUpdated = false
         saveScheduleDataToCache()
         updateScheduleTablePaged()
@@ -632,26 +636,26 @@ class ScheduleActivity : AppCompatActivity() {
     @SuppressLint("LongLogTag")
     private fun launchMapActivity(no: Int) {
         // ✅ FIX: Check for empty scheduleData FIRST before creating intent
-        if (scheduleData.isEmpty()) {
+        if (activeScheduleData.isEmpty()) {
             Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
             return
         }
 
         // Store the first schedule item for the Map
-        val firstScheduleItem = scheduleData.first()
+        val firstScheduleItem = activeScheduleData.first()
         val selectedIdx = routeIndexFromRouteNo(firstScheduleItem.runNo)
         Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
-        Log.d("ScheduleActivity startRouteButton before", scheduleData.toString())
+        Log.d("ScheduleActivity startRouteButton before", activeScheduleData.toString())
 
         // ✅ FIX: Check if there's an active trip - don't remove from cache if trip is unfinished
         val hasActiveTrip = TripLog.hasActive(this)
         val scheduleDataToPass = if (hasActiveTrip) {
             Log.w("ScheduleActivity", "⚠️ Active trip detected, keeping first schedule in cache")
             // Don't remove from scheduleData, pass full schedule
-            scheduleData
+            activeScheduleData
         } else {
             // Remove first schedule & persist
-            scheduleData.toMutableList().apply { removeAt(0) }
+            activeScheduleData.toMutableList().apply { removeAt(0) }
         }
 
         // We will still pass the full list (for future trips), AND pass the selected one explicitly.
@@ -674,7 +678,7 @@ class ScheduleActivity : AppCompatActivity() {
             putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
             putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
 
-            // NEW: tell MapActivity which one to use for THIS trip
+            // tell MapActivity which one to use for THIS trip
             putExtra("SELECTED_ROUTE_INDEX", selectedIdx ?: -1)
             selectedIdx?.let { idx ->
                 putExtra("SELECTED_ROUTE_DATA", busRouteData[idx])  // RouteData must be Serializable/Parcelable (you already pass list)
@@ -685,7 +689,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         if (!hasActiveTrip) {
             // Update scheduleData and persist only if no active trip
-            scheduleData = scheduleDataToPass
+            activeScheduleData = scheduleDataToPass
             isScheduleCacheUpdated = false
             saveScheduleDataToCache()
             updateScheduleTablePaged()
@@ -700,8 +704,11 @@ class ScheduleActivity : AppCompatActivity() {
     private fun routeIndexFromRouteNo(runNo: String): Int? {
         // Accepts "1" or "Route 1" etc.
         val cleaned = runNo.trim().lowercase(Locale.ROOT)
-        val digits  = cleaned.removePrefix("route").trim()
-        val idx     = digits.toIntOrNull()?.minus(1) ?: return null
+        val digits  = cleaned.removePrefix("route").trim().toIntOrNull() ?: return null
+        val runOffset = scheduleData.first().runNo.toIntOrNull() ?: return null
+        // Offset is the number of breaks in scheduleData plus 1 (because index starts from 0)
+        val offset = scheduleData.subList(0, digits - runOffset).count { it.runName.lowercase() == "break" } + 1
+        val idx     = digits.minus(offset)
         return if (idx in busRouteData.indices) idx else null
     }
 
@@ -969,8 +976,8 @@ class ScheduleActivity : AppCompatActivity() {
     private fun startPeriodicScheduleCheck() {
         scheduleCheckRunnable = object : Runnable {
             override fun run() {
-                if (scheduleData.isNotEmpty()) {
-                    val firstSchedule = scheduleData.first()
+                if (activeScheduleData.isNotEmpty()) {
+                    val firstSchedule = activeScheduleData.first()
                     val startTimeStr = firstSchedule.startTime
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
                     val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
@@ -1016,10 +1023,10 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     private fun updateScheduleTablePaged() {
         val start = currentPage * maxRowsPerPage
-        val end   = minOf(scheduleData.size, start + maxRowsPerPage)
-        scheduleAdapter.update(if (scheduleData.isEmpty()) emptyList() else scheduleData.subList(start, end))
+        val end   = minOf(activeScheduleData.size, start + maxRowsPerPage)
+        scheduleAdapter.update(if (activeScheduleData.isEmpty()) emptyList() else activeScheduleData.subList(start, end))
 
-        val totalPages = if (scheduleData.isEmpty()) 0 else (scheduleData.size + maxRowsPerPage - 1) / maxRowsPerPage
+        val totalPages = if (activeScheduleData.isEmpty()) 0 else (activeScheduleData.size + maxRowsPerPage - 1) / maxRowsPerPage
         if (totalPages == 0) {
             paginationLayout.visibility = View.GONE
         } else {
@@ -1068,7 +1075,7 @@ class ScheduleActivity : AppCompatActivity() {
     private fun updateTimeline() {
 
         runOnUiThread {
-            if (scheduleData.isEmpty()) {
+            if (activeScheduleData.isEmpty()) {
                 Log.e("ScheduleActivity updateTimeline", "No scheduleData to draw!")
                 updateEmptyState()
                 return@runOnUiThread
@@ -1077,7 +1084,7 @@ class ScheduleActivity : AppCompatActivity() {
             timeline1.visibility = View.VISIBLE
             timeline2.visibility = View.VISIBLE
             timeline3.visibility = View.VISIBLE
-            if (scheduleData.isEmpty()) {
+            if (activeScheduleData.isEmpty()) {
                 Log.e("ScheduleActivity updateTimeline", "No scheduleData to draw!")
                 return@runOnUiThread
             }
@@ -1113,9 +1120,9 @@ class ScheduleActivity : AppCompatActivity() {
             )
 
             // 3) slice the corresponding ScheduleItem lists
-            val items1 = scheduleData.take(maxPerLine)
-            val items2 = scheduleData.drop(maxPerLine).take(maxPerLine)
-            val items3 = scheduleData.drop(2 * maxPerLine).take(maxPerLine)
+            val items1 = activeScheduleData.take(maxPerLine)
+            val items2 = activeScheduleData.drop(maxPerLine).take(maxPerLine)
+            val items3 = activeScheduleData.drop(2 * maxPerLine).take(maxPerLine)
 
             // 4) extract busStops per line
             val busStops1 = items1.flatMap { it.busStops }
@@ -1159,7 +1166,7 @@ class ScheduleActivity : AppCompatActivity() {
      */
     private fun extractBusStops(): List<BusScheduleInfo> {
         val busStopsList = mutableListOf<BusScheduleInfo>()
-        for (item in scheduleData) {
+        for (item in activeScheduleData) {
             busStopsList.addAll(item.busStops)
         }
         return busStopsList
@@ -1173,7 +1180,7 @@ class ScheduleActivity : AppCompatActivity() {
         val workIntervals = mutableListOf<Pair<String, String>>()
         val runNames = mutableListOf<String>()
 
-        for (item in scheduleData) { // ✅ Limit to first 3 entries directly
+        for (item in activeScheduleData) { // ✅ Limit to first 3 entries directly
             val startTime = item.startTime
             val endTime = item.endTime
             val runName = item.runName
@@ -1282,10 +1289,11 @@ class ScheduleActivity : AppCompatActivity() {
                     val cachedSchedule =
                         Gson().fromJson(jsonContent, Array<ScheduleItem>::class.java).toList()
                     scheduleData = cachedSchedule.map { it.copy(runName = saferunName(it)) }
+                    activeScheduleData = scheduleData.toList() // Shallow copy to sever connection
 
                     Log.d(
                         "ScheduleActivity loadScheduleDataFromCache",
-                        "✅ Loaded cached schedule data: $scheduleData"
+                        "✅ Loaded cached schedule data: $activeScheduleData"
                     )
 
                     // Use the loaded schedule data
@@ -1443,9 +1451,10 @@ class ScheduleActivity : AppCompatActivity() {
 
                     // Retrieve `scheduleData` from ThingsBoard
                     scheduleData = (data.shared?.scheduleData1 ?: emptyList()).map { it.copy(runName = saferunName(it)) }
-                    Log.d("MainActivity subscribeSharedData", "scheduleData: $scheduleData")
+                    activeScheduleData = scheduleData.toList() // Shallow copy to sever connection
+                    Log.d("MainActivity subscribeSharedData", "scheduleData: $activeScheduleData")
 
-                    if (config != null && scheduleData.isNotEmpty()) {
+                    if (config != null && activeScheduleData.isNotEmpty()) {
                         // Save the updated schedule data and bus data immediately
                         saveBusDataToCache()
                         saveScheduleDataToCache()
@@ -1549,7 +1558,7 @@ class ScheduleActivity : AppCompatActivity() {
                 if (!cacheFile.exists()) {
                     cacheFile.createNewFile()
                 }
-                cacheFile.writeText(Gson().toJson(scheduleData))
+                cacheFile.writeText(Gson().toJson(activeScheduleData))
 
                 // 3) Mark flag so we never repeat
                 isScheduleCacheUpdated = true
@@ -1578,7 +1587,7 @@ class ScheduleActivity : AppCompatActivity() {
             val cacheFile = File(getHiddenFolder(), "scheduleDataCache.txt")
 
             try {
-                val jsonString = Gson().toJson(scheduleData) // Convert updated data to JSON
+                val jsonString = Gson().toJson(activeScheduleData) // Convert updated data to JSON
                 cacheFile.writeText(jsonString) // Overwrite cache file
                 Log.d("ScheduleActivity saveScheduleDataToCache", "✅ Schedule data cache updated successfully.")
                 Toast.makeText(this, "Schedule data updated.", Toast.LENGTH_SHORT).show()
@@ -1700,7 +1709,7 @@ class ScheduleActivity : AppCompatActivity() {
 
     @RequiresApi(Build.VERSION_CODES.M)
     private fun updateEmptyState() {
-        val isEmpty = scheduleData.isEmpty()
+        val isEmpty = activeScheduleData.isEmpty()
 
         // Empty-state label
         emptyStateText.visibility = if (isEmpty) View.VISIBLE else View.GONE
@@ -1737,13 +1746,13 @@ class ScheduleActivity : AppCompatActivity() {
         }
     }
 
-    private fun firstScheduleOrNull(): ScheduleItem? = scheduleData.firstOrNull()
+    private fun firstScheduleOrNull(): ScheduleItem? = activeScheduleData.firstOrNull()
 
     private fun buildExtraDump(): Map<String, Any?> = mapOf(
         "aid" to aid,
         "configCount" to (config?.size ?: 0),
         "busRouteDataCount" to (busRouteData.size),
-        "scheduleCount" to (scheduleData.size),
+        "scheduleCount" to (activeScheduleData.size),
         "firstSchedule" to firstScheduleOrNull()?.copy(busStops = firstScheduleOrNull()?.busStops?.take(3) ?: emptyList()),
         // 👇 replace the offending line with this:
         "firstRouteSummary" to busRouteData.firstOrNull()?.let { rd ->
