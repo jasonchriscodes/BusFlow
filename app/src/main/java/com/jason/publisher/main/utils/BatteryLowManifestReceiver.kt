@@ -3,12 +3,8 @@ package com.jason.publisher.main.utils
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.os.Build
 import androidx.annotation.RequiresApi
-import com.jason.publisher.main.sos.BatteryLowWatcher
-import com.jason.publisher.main.utils.FileLogger
-import android.os.BatteryManager
 
 class BatteryLowManifestReceiver : BroadcastReceiver() {
     @RequiresApi(Build.VERSION_CODES.M)
@@ -22,5 +18,4 @@ class BatteryLowManifestReceiver : BroadcastReceiver() {
         BatteryLowWatcher.showConfirmationNotification(context, result, pct, bucket)
     }
 }
-
 

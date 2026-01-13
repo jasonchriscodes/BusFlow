@@ -1,6 +1,7 @@
-package com.jason.publisher.main.sos
+package com.jason.publisher.main.utils
 
 import android.Manifest
+import android.R
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -14,7 +15,6 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.jason.publisher.main.utils.FileLogger
 import kotlin.math.roundToInt
 
 object BatteryLowWatcher {
@@ -63,7 +63,7 @@ object BatteryLowWatcher {
 
             // Optional logging
             try {
-                 FileLogger.i("BatteryLowWatcher", "Battery: $pct%")
+                FileLogger.i("BatteryLowWatcher", "Battery: $pct%")
             } catch (_: Throwable) { /* no-op if logger missing */ }
 
             // Hook: if you want to do something when critically low (e.g., GPS ping),
@@ -161,7 +161,7 @@ object BatteryLowWatcher {
         val text = "Battery $pct% ($bucket)"
 
         val notif = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_warning)
+            .setSmallIcon(R.drawable.stat_sys_warning)
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -210,4 +210,3 @@ object BatteryLowWatcher {
         }
     }
 }
-

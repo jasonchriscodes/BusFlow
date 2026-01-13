@@ -1,4 +1,4 @@
-package com.jason.publisher
+package com.jason.publisher.main.activity
 
 import android.graphics.Color
 import android.os.Bundle

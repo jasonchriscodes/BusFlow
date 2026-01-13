@@ -1,7 +1,6 @@
 package com.jason.publisher.main.model
 
 import android.os.Parcelable
-import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import kotlinx.parcelize.Parcelize
 
@@ -183,61 +182,4 @@ data class RouteData(
         val duration: String,
         @SerializedName("route_coordinates") val routeCoordinates: List<List<Double>>
     ) : Parcelable
-
-    /**
-     * Parses a JSON string into a Triple containing:
-     * - List of BusRoute (route)
-     * - List of BusStop (stops)
-     * - List of durations between stops
-     */
-    companion object {
-        fun fromJson(jsonString: String): Triple<List<BusRoute>, List<BusStop>, List<Double>> {
-            val routeDataList: List<RouteData> = Gson().fromJson(jsonString, Array<RouteData>::class.java).toList()
-
-            // Since your JSON is an array, process only the first element (assuming only one route exists)
-            val routeData = routeDataList.firstOrNull() ?: throw IllegalArgumentException("Invalid JSON format")
-
-            val route = mutableListOf<BusRoute>()
-            val stops = mutableListOf<BusStop>()
-            val durationBetweenStops = mutableListOf<Double>()
-
-            // Add all route coordinates (with duplicate filtering)
-            var previousCoordinate: BusRoute? = null
-            for (nextPoint in routeData.nextPoints) {
-                for (coord in nextPoint.routeCoordinates) {
-                    val newCoordinate = BusRoute(latitude = coord[1], longitude = coord[0])
-                    if (previousCoordinate == null || newCoordinate != previousCoordinate) {
-                        route.add(newCoordinate)
-                    }
-                    previousCoordinate = newCoordinate
-                }
-            }
-
-            // Add bus stops with address
-            stops.add(
-                BusStop(
-                    latitude = routeData.startingPoint.latitude,
-                    longitude = routeData.startingPoint.longitude,
-                    address = routeData.startingPoint.address
-                )
-            )
-            for (nextPoint in routeData.nextPoints) {
-                stops.add(
-                    BusStop(
-                        latitude = nextPoint.latitude,
-                        longitude = nextPoint.longitude,
-                        address = nextPoint.address
-                    )
-                )
-            }
-
-            // Extract duration values
-            for (nextPoint in routeData.nextPoints) {
-                val durationValue = nextPoint.duration.split(" ")[0].toDoubleOrNull() ?: 0.0
-                durationBetweenStops.add(durationValue)
-            }
-
-            return Triple(route, stops, durationBetweenStops)
-        }
-    }
 }

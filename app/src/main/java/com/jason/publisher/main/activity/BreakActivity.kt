@@ -16,7 +16,7 @@ import com.jason.publisher.main.helpers.MqttHelper.Companion.PUB_MSG_TOPIC
 import com.jason.publisher.main.helpers.MqttHelper.Companion.REQUEST_PERIODIC_TIME
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.MqttManager
-import com.jason.publisher.main.ui.BreakUpcomingAdapter
+import com.jason.publisher.main.helpers.BreakUpcomingAdapter
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.TripLog
 import com.jason.publisher.main.utils.hookBatteryToasts

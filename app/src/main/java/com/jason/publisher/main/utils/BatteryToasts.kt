@@ -1,16 +1,13 @@
-// com.jason.publisher.main.utils.BatteryToasts.kt
 package com.jason.publisher.main.utils
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.os.Build
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import com.jason.publisher.main.sos.BatteryLowWatcher
 
 /** Call this once in onCreate() of any Activity to get battery toasts automatically. */
 fun AppCompatActivity.hookBatteryToasts(
@@ -49,4 +46,3 @@ fun AppCompatActivity.hookBatteryToasts(
         }
     })
 }
-
