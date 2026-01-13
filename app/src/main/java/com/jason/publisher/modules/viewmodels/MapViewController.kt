@@ -4,18 +4,11 @@ import android.annotation.SuppressLint
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.Drawable
-import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.util.TypedValue
-import android.view.Gravity
-import android.view.View
-import android.view.ViewGroup
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
@@ -24,9 +17,11 @@ import androidx.core.graphics.createBitmap
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.loggers.LifecycleLogger
+import com.jason.publisher.main.model.BusRoute
 import com.jason.publisher.main.model.BusStop
 import com.jason.publisher.main.ui.DrawableHelper
 import com.jason.publisher.modules.map.activities.MapActivity
+import com.jason.publisher.modules.map.utils.BUS_STOP_RADIUS
 import com.jason.publisher.modules.mqtt.helpers.MqttHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,24 +41,21 @@ import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
 import java.io.File
+import java.util.HashMap
 import kotlin.math.abs
-import kotlin.math.atan2
-import kotlin.math.cos
 import kotlin.math.min
-import kotlin.math.pow
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 class MapViewController(
     private val activity: MapActivity,
     private val binding: ActivityMapBinding,
     private val mqttHelper: MqttHelper,
-    private val detailContainer: LinearLayout
 ) {
     private var routePolyline: Polyline? = null
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    var activeSegment: String? = null
     var activeBusToken: String? = null
+    var currentBusMarker: Marker? = null
+
+    var busMarkerRegistry = HashMap<String, Marker>()
 
     private var activityMonitorHandler: Handler? = null
     private var activityMonitorRunnable: Runnable? = null
@@ -83,15 +75,15 @@ class MapViewController(
                     var removedCount = 0
 
                     // Get valid bus tokens from arrBusData to ensure we only track valid buses
-                    val validBusTokens = activity.arrBusData.map { it.accessToken }.toSet()
+                    val validBusTokens = activity.viewModel.arrBusData.map { it.accessToken }.toSet()
 
                     // 1) remove any buses that are no longer in arrBusData (orphaned markers)
-                    activity.markerBus.keys
-                        .filter { it != activity.token && it !in validBusTokens }
+                    busMarkerRegistry.keys
+                        .filter { it != activity.viewModel.token && it !in validBusTokens }
                         .forEach { t ->
                             val label = activity.otherBusLabels[t] ?: "Unknown"
                             val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
-                            val marker = activity.markerBus[t]
+                            val marker = busMarkerRegistry[t]
 
                             LifecycleLogger.logOtherBusRemoved(
                                 token = t,
@@ -103,55 +95,55 @@ class MapViewController(
                             marker?.let {
                                 binding.map.layerManager.layers.remove(it)
                             }
-                            activity.markerBus.remove(t)
-                            activity.prevCoords.remove(t)
-                            activity.lastSeen.remove(t)
+                            busMarkerRegistry.remove(t)
+                            activity.viewModel.prevOtherBusCoordinates.remove(t)
+                            activity.viewModel.lastSeen.remove(t)
                             activity.otherBusLabels.remove(t)
                             removedCount++
                         }
 
                     // 2a) Remove buses that don't have valid currentTripLabel (haven't started)
                     // This ensures buses that haven't started are removed even if they have markers
-                    activity.markerBus.keys
-                        .filter { it != activity.token && it in validBusTokens }
+                    busMarkerRegistry.keys
+                        .filter { it != activity.viewModel.token && it in validBusTokens }
                         .forEach { t ->
                             val label = activity.otherBusLabels[t]
                             if (label.isNullOrBlank()) {
                                 // Bus doesn't have currentTripLabel - remove marker
-                                val marker = activity.markerBus[t]
+                                val marker = busMarkerRegistry[t]
                                 marker?.let {
                                     binding.map.layerManager.layers.remove(it)
                                 }
-                                activity.markerBus.remove(t)
-                                activity.prevCoords.remove(t)
-                                activity.lastSeen.remove(t)
+                                busMarkerRegistry.remove(t)
+                                activity.viewModel.prevOtherBusCoordinates.remove(t)
+                                activity.viewModel.lastSeen.remove(t)
                                 activity.otherBusLabels.remove(t)
                                 removedCount++
                             } else if (label.contains("Break", ignoreCase = true)) {
                                 // Remove marker for buses on break but keep label for detail panel
                                 // Bus on break should appear in detail panel but not on map
-                                val marker = activity.markerBus[t]
+                                val marker = busMarkerRegistry[t]
                                 marker?.let {
                                     binding.map.layerManager.layers.remove(it)
                                 }
-                                activity.markerBus.remove(t)
+                                busMarkerRegistry.remove(t)
                                 removedCount++
                             }
                         }
 
                     // 2b) remove any buses inactive ≥2 minutes (reduced from 5 minutes for faster cleanup)
                     // Bus that was started but app was closed will have currentTripLabel but no recent location updates
-                    activity.markerBus.keys
-                        .filter { it != activity.token && it in validBusTokens }
+                    busMarkerRegistry.keys
+                        .filter { it != activity.viewModel.token && it in validBusTokens }
                         .forEach { t ->
-                            val last = activity.lastSeen[t] ?: 0L
+                            val last = activity.viewModel.lastSeen[t] ?: 0L
                             // Use 2 minutes to quickly remove buses that closed app
                             // This ensures buses that were started but app was closed are removed quickly
                             if (last != 0L && now - last >= 2 * 60 * 1000L) {
                                 // Log bus removal with destination info
                                 val label = activity.otherBusLabels[t] ?: "Unknown"
                                 val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
-                                val marker = activity.markerBus[t]
+                                val marker = busMarkerRegistry[t]
 
                                 LifecycleLogger.logOtherBusRemoved(
                                     token = t,
@@ -163,9 +155,9 @@ class MapViewController(
                                 marker?.let {
                                     binding.map.layerManager.layers.remove(it)
                                 }
-                                activity.markerBus.remove(t)
-                                activity.prevCoords.remove(t)
-                                activity.lastSeen.remove(t)
+                                busMarkerRegistry.remove(t)
+                                activity.viewModel.prevOtherBusCoordinates.remove(t)
+                                activity.viewModel.lastSeen.remove(t)
                                 activity.otherBusLabels.remove(t)
                                 removedCount++
                             }
@@ -226,9 +218,9 @@ class MapViewController(
      * Draws a polyline on the Mapsforge map using the busRoute data.
      */
     @SuppressLint("LongLogTag")
-    fun drawPolyline() {
-        if (activity.route.isNotEmpty()) {
-            val routePoints = activity.route.map { LatLong(it.latitude!!, it.longitude!!) }
+    fun drawPolyline(route: List<BusRoute>) {
+        if (route.isNotEmpty()) {
+            val routePoints = route.map { LatLong(it.latitude!!, it.longitude!!) }
 
             routePolyline?.let { binding.map.layerManager.layers.remove(it) }
 
@@ -243,6 +235,13 @@ class MapViewController(
                 addPoints(routePoints)
             }
             binding.map.layerManager.layers.add(routePolyline)
+            binding.map.invalidate()
+        }
+    }
+
+    fun clearPolyline() {
+        routePolyline?.let {
+            binding.map.layerManager.layers.remove(it)
             binding.map.invalidate()
         }
     }
@@ -314,11 +313,11 @@ class MapViewController(
                         try {
                             binding.map.model.mapViewPosition.zoomLevel = 15
                             binding.map.model.mapViewPosition.center =
-                                LatLong(activity.latitude, activity.longitude)
-                            drawDetectionZones(activity.stops)
-                            drawPolyline()
-                            addBusStopMarkers(activity.stops)
-                            addBusMarker(activity.latitude, activity.longitude)
+                                LatLong(activity.viewModel.latitude, activity.viewModel.longitude)
+                            drawDetectionZones(activity.viewModel.stops, activity.viewModel.passedStops)
+                            drawPolyline(activity.viewModel.route)
+                            addBusStopMarkers(activity.viewModel.stops)
+                            addBusMarker(activity.viewModel.latitude, activity.viewModel.longitude)
 
                             // Force map to render by invalidating
                             binding.map.invalidate()
@@ -362,12 +361,12 @@ class MapViewController(
     fun addBusMarker(lat: Double, lon: Double) {
         val pos = LatLong(lat, lon)
         val mf = createBusIcon(R.drawable.ic_bus_symbol, sizeDp = 16)
-        activity.busMarker = Marker(LatLong(lat, lon), mf, 0, 0)
+        currentBusMarker = Marker(LatLong(lat, lon), mf, 0, 0)
 
-        activity.busMarker?.let { binding.map.layerManager.layers.remove(it) }
+        currentBusMarker?.let { binding.map.layerManager.layers.remove(it) }
 
-        activity.busMarker = Marker(pos, mf, 0, 0)
-        binding.map.layerManager.layers.add(activity.busMarker)
+        currentBusMarker = Marker(pos, mf, 0, 0)
+        binding.map.layerManager.layers.add(currentBusMarker)
     }
 
     /** Adds bus stops to the map. */
@@ -376,11 +375,11 @@ class MapViewController(
         val total = busStops.size
         // desired symbol square in dp
         val desiredDp = 30
-        val sizePx = dpToPx(desiredDp)
+        val sizePx = activity.dpToPx(desiredDp)
 
         busStops.forEachIndexed { idx, stop ->
             val key = "${stop.latitude},${stop.longitude}"
-            val isRed = activity.redBusStops.contains(key)
+            val isRed = activity.viewModel.redBusStops.contains(key)
 
             // 1) get the Drawable from your helper
             val symDrawable: Drawable =
@@ -426,7 +425,8 @@ class MapViewController(
      */
     fun drawDetectionZones(
         busStops: List<BusStop>,
-        radiusMeters: Double = activity.busStopRadius
+        passedStops: List<BusStop>,
+        radiusMeters: Double = BUS_STOP_RADIUS
     ) {
         // remove all old circles
         val layers = binding.map.layerManager.layers
@@ -435,7 +435,7 @@ class MapViewController(
 
         // draw fresh ones based on passedStops
         busStops.forEach { stop ->
-            val passed = activity.passedStops.any {
+            val passed = passedStops.any {
                 it.latitude == stop.latitude && it.longitude == stop.longitude
             }
             val fill   = if (passed) Color.argb(64, 0,255,0) else Color.argb(64,255,0,0)
@@ -454,33 +454,6 @@ class MapViewController(
             layers.add(circle)
         }
         binding.map.invalidate()
-    }
-
-    /** Calculates distance between two lat/lon points in meters */
-    fun calculateDistance(
-        lat1: Double, lon1: Double,
-        lat2: Double, lon2: Double
-    ): Double {
-        val radiusOfEarth = 6371000.0
-        val phi1 = Math.toRadians(lat1)
-        val phi2 = Math.toRadians(lat2)
-        val deltaPhi = Math.toRadians(lat2 - lat1)
-        val deltaLambda = Math.toRadians(lon2 - lon1)
-        val a = sin(deltaPhi / 2).pow(2) +
-                cos(phi1) * cos(phi2) * sin(deltaLambda / 2).pow(2)
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return radiusOfEarth * c
-    }
-
-    /** Find nearest route‐point index for smoothing, etc. */
-    fun findNearestBusRoutePoint(currentLat: Double, currentLon: Double): Int {
-        var idx = 0
-        var minD = Double.MAX_VALUE
-        activity.route.forEachIndexed { i, pt ->
-            val d = calculateDistance(currentLat, currentLon, pt.latitude!!, pt.longitude!!)
-            if (d < minD) { minD = d; idx = i }
-        }
-        return idx
     }
 
     // Cache last position to avoid unnecessary updates
@@ -521,8 +494,8 @@ class MapViewController(
                 lastMarkerUpdateTime = currentTime
 
                 // 1) publish telemetry & client-attrs (throttled internally to avoid excessive calls)
-                mqttHelper.publishTelemetryData()
-                activity.updateClientAttributes()
+                mqttHelper.publishTelemetryData(activity.viewModel.createTelemetryJson())
+                activity.viewModel.updateClientAttributes()
             }
 
             // 2) build a rotated icon for *this* bus (always update for smooth rotation)
@@ -531,13 +504,13 @@ class MapViewController(
 
             // 3) Always update marker position (even if position hasn't changed much)
             // This ensures marker and map are always rendered correctly
-            if (activity.busMarker != null) {
-                activity.busMarker!!.latLong = newPos
-                activity.busMarker!!.bitmap = rotated
+            if (currentBusMarker != null) {
+                currentBusMarker!!.latLong = newPos
+                currentBusMarker!!.bitmap = rotated
             } else {
                 // 4) Create new marker if it doesn't exist
-                activity.busMarker = Marker(newPos, rotated, 0, 0)
-                binding.map.layerManager.layers.add(activity.busMarker)
+                currentBusMarker = Marker(newPos, rotated, 0, 0)
+                binding.map.layerManager.layers.add(currentBusMarker)
             }
 
             // 5) spin the *map* so that this bus's bearing is "up"
@@ -599,19 +572,6 @@ class MapViewController(
         return AndroidBitmap(bmp)
     }
 
-    /** Calculates the bearing between two geographical points. */
-    fun calculateBearing(
-        lat1: Double, lon1: Double,
-        lat2: Double, lon2: Double
-    ): Float {
-        val phi1 = Math.toRadians(lat1)
-        val phi2 = Math.toRadians(lat2)
-        val deltaLambda = Math.toRadians(lon2 - lon1)
-        val y = sin(deltaLambda) * cos(phi2)
-        val x = cos(phi1) * sin(phi2) - sin(phi1) * cos(phi2) * cos(deltaLambda)
-        return ((Math.toDegrees(atan2(y, x)) + 360) % 360).toFloat()
-    }
-
     /**
      * Retrieves default configuration values for the activity,
      * such as adding other-bus markers.
@@ -619,11 +579,11 @@ class MapViewController(
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     fun getDefaultConfigValue() {
-        activity.arrBusData.forEachIndexed { idx, bus ->
+        activity.viewModel.arrBusData.forEachIndexed { idx, bus ->
             val slot = min(idx + 2, 10)
             Log.d("MapViewController getDefaultConfigValue", "📍 getDefaultConfigValue: bus-aid=${bus.accessToken} → ic_bus_symbol$slot")
-            val lat = activity.latitude
-            val lon = activity.longitude
+            val lat = activity.viewModel.latitude
+            val lon = activity.viewModel.longitude
             val token = bus.accessToken
             val iconRes = activity.resources.getIdentifier(
                 "ic_bus_symbol${min(idx + 2, 10)}",
@@ -632,170 +592,17 @@ class MapViewController(
             )
             val icon  = createBusIcon(iconRes)
 
-            if (activity.markerBus.containsKey(token)) {
+            if (busMarkerRegistry.containsKey(token)) {
                 // just move the existing one
-                activity.markerBus[token]?.latLong = LatLong(lat, lon)
+                busMarkerRegistry[token]?.latLong = LatLong(lat, lon)
             } else {
                 // first time
                 val marker = Marker(LatLong(lat, lon), icon, 0, 0)
                 binding.map.layerManager.layers.add(marker)
-                activity.markerBus[token] = marker
-                refreshDetailPanelIcons()
+                busMarkerRegistry[token] = marker
+                activity.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
             }
         }
-    }
-
-    /**
-     * utility to convert dp → px
-     */
-    private fun dpToPx(dp: Int): Int = TypedValue
-        .applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP,
-            dp.toFloat(),
-            activity.resources.displayMetrics
-        ).toInt()
-
-    /** Call this any time you re-draw or move markers on the map */
-    @RequiresApi(Build.VERSION_CODES.M)
-    @SuppressLint("LongLogTag")
-    fun refreshDetailPanelIcons() {
-        activity.runOnUiThread {
-            detailContainer.removeAllViews()
-
-            val zoom = binding.map.model.mapViewPosition.zoomLevel.toDouble()
-            val selfToken = activity.token
-
-            // Other buses that are currently drawn, on screen, exist in arrBusData, AND have valid label
-            // This ensures we only show buses that are actually in the system and have started a trip
-            val validBusTokens = activity.arrBusData.map { it.accessToken }.toSet()
-
-            // Detail panel should show all active buses based on otherBusLabels
-            // Only show buses that have a valid label (have started a trip)
-            val allActiveOthers = if (isReallyOnline()) {
-                activity.otherBusLabels
-                    .filter { (t, label) ->
-                        t != selfToken && t in validBusTokens && label.isNotBlank()
-                    }
-                    .keys
-                    .toList()
-            } else {
-                // In offline mode, return empty list - no other buses can be tracked
-                emptyList()
-            }
-
-            // If zoomed way in or there are no other active buses → show only self
-            val displayOrderRaw = if (zoom > 25.0) {
-                listOf(selfToken)
-            } else {
-                val prioritized = activeBusToken?.takeIf { it in allActiveOthers } ?: allActiveOthers.firstOrNull()
-                if (prioritized != null) {
-                    listOf(selfToken, prioritized) + allActiveOthers.filter { it != prioritized }
-                } else {
-                    listOf(selfToken)
-                }
-            }
-
-            // Remove duplicate tokens from displayOrder to prevent duplicate panels
-            val displayOrderDistinct = displayOrderRaw.distinct()
-            if (displayOrderDistinct.size != displayOrderRaw.size) {
-                Log.w("MapViewController refreshDetailPanelIcons", "⚠️ WARNING: Found duplicate tokens in displayOrder! Raw: $displayOrderRaw, Distinct: $displayOrderDistinct")
-            }
-
-            displayOrderDistinct.forEachIndexed { idx, token ->
-                // If we're in deep zoom or there are no others, skip any non-self rows
-                if (idx >= 1 && (zoom > 25.0 || allActiveOthers.isEmpty())) {
-                    return@forEachIndexed
-                }
-
-                val iconName = if (idx == 0) "ic_bus_symbol"
-                else "ic_bus_symbol${(idx + 1).coerceAtMost(10)}"
-                val iconRes  = activity.resources.getIdentifier(iconName, "drawable", activity.packageName)
-
-                // Labels:
-                // - self: current trip label if available
-                // - others: stored label only; if missing/blank, skip (no "---")
-                val label: String = if (token == selfToken) {
-                    val selfLbl = activeSegment ?: selfToken
-                    // Show self bus even if on Break - it's still an active trip
-                    selfLbl
-                } else {
-                    val lbl = activity.otherBusLabels[token]
-                    if (lbl.isNullOrBlank()) {
-                        return@forEachIndexed
-                    }
-                    // Show other buses even if on Break - they're still active and should be tracked
-                    lbl
-                }
-
-                val row = LinearLayout(activity).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    val pad = dpToPx(8)
-                    setPadding(pad, pad/2, pad, pad/2)
-                }
-
-                val iv = ImageView(activity).apply {
-                    setImageResource(iconRes)
-                    layoutParams = LinearLayout.LayoutParams(dpToPx(16), dpToPx(16))
-                }
-                val tv = TextView(activity).apply {
-                    text = label
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                    setPadding(dpToPx(8), 0, 0, 0)
-                    setTextColor(Color.BLACK)
-                    // store the token on the view for logging use (not shown to user)
-                    tag = token
-                }
-
-                row.addView(iv)
-                row.addView(tv)
-                detailContainer.addView(row)
-
-                if (idx < displayOrderDistinct.lastIndex) {
-                    detailContainer.addView(View(activity).apply {
-                        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(1)).apply {
-                            topMargin = dpToPx(4); bottomMargin = dpToPx(4)
-                        }
-                        setBackgroundColor(Color.LTGRAY)
-                    })
-                }
-                try {
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        try {
-                            activity.logPanelDetailTextOnly()
-                        } catch (e: Exception) {
-                            Log.w("MapViewController", "Failed to call logPanelDetailTextOnly(): ${e.message}")
-                        }
-                    }, 120L)
-                } catch (e: Exception) {
-                    Log.w("MapViewController", "postDelayed logPanelDetailTextOnly failed: ${e.message}")
-                }
-            }
-
-            if (allActiveOthers.isEmpty() && !isReallyOnline()) {
-                val hint = TextView(activity).apply {
-                    text = "Other bus tracking is not available in offline mode"
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-                    setTextColor(Color.GRAY)
-                    setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(8))
-                    gravity = Gravity.CENTER
-                }
-                detailContainer.addView(hint)
-            }
-        }
-    }
-
-    /**
-     * Returns true if the system’s current network is both capable of, and validated for, Internet.
-     */
-    @RequiresApi(Build.VERSION_CODES.M)
-    private fun isReallyOnline(): Boolean {
-        val cm = activity.connectivityManager
-        val net = cm.activeNetwork ?: return false
-        return cm.getNetworkCapabilities(net)?.run {
-            hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                    && hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-        } ?: false
     }
 
 }
