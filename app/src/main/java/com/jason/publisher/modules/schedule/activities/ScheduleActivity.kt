@@ -10,7 +10,6 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -24,12 +23,12 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DividerItemDecoration
@@ -51,6 +50,8 @@ import com.jason.publisher.main.loggers.LifecycleLogger
 import com.jason.publisher.main.loggers.TripLog
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.map.activities.MapActivity
+import com.jason.publisher.modules.map.utils.formatPanelLabel
+import com.jason.publisher.modules.map.utils.safeRunName
 import com.jason.publisher.modules.mqtt.helpers.MqttConfigHelper
 import com.jason.publisher.modules.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.mqtt.services.MqttManager
@@ -76,6 +77,9 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.core.graphics.toColorInt
+import androidx.core.content.edit
+import androidx.core.net.toUri
 
 class ScheduleActivity : AppCompatActivity() {
 
@@ -110,7 +114,7 @@ class ScheduleActivity : AppCompatActivity() {
     private val loadingBarHandler = Handler(Looper.getMainLooper())
     private var isTabulatedView: Boolean = false
     private lateinit var changeModeButton: Button
-    private lateinit var darkModeSwitch: Switch
+    private lateinit var darkModeSwitch: SwitchCompat
     private var isDarkMode = false
     private lateinit var paginationLayout: LinearLayout
     private var currentPage = 0
@@ -138,55 +142,6 @@ class ScheduleActivity : AppCompatActivity() {
         private const val PANEL_DEBUG_PREF = "panel_debug_pref"
         private const val PANEL_DEBUG_NO_KEY = "panel_debug_no"
     }
-
-//    private val dummyScheduleData = listOf(
-//        ScheduleItem(
-//            "Route 1",
-//            "08:00",
-//            "08:35",
-//            listOf(
-//                BusScheduleInfo("Stop 2", "08:05", -36.854209, 174.767755, "25-29 Symonds Street"),
-//                BusScheduleInfo("Stop S/E", "08:35", -36.854685, 174.764528, "39 Airedale Street")
-//            )
-//        ),
-//        ScheduleItem(
-//            "Route 2",
-//            "09:30",
-//            "10:00",
-//            listOf(
-//                BusScheduleInfo("Stop 3", "09:45", -36.855281, 174.767117, "52 Symonds Street"),
-//                BusScheduleInfo("Stop S/E", "10:00", -36.854685, 174.764528, "39 Airedale Street")
-//            )
-//        ),
-//        ScheduleItem(
-//            "Route 3",
-//            "10:20",
-//            "11:10",
-//            listOf(
-//                BusScheduleInfo("Stop 1", "10:25", -36.853677, 174.766063, "27 St Paul Street"),
-//                BusScheduleInfo("Stop 4", "10:35", -36.856047, 174.765309, "89 Airedale Street")
-//            )
-//        ),
-//        ScheduleItem(
-//            "Route 4",
-//            "12:30",
-//            "12:10",
-//            listOf(
-//                BusScheduleInfo("Stop 2", "11:45", -36.854209, 174.767755, "25-29 Symonds Street"),
-//                BusScheduleInfo("Stop 3", "12:00", -36.855281, 174.767117, "52 Symonds Street"),
-//                BusScheduleInfo("Stop 4", "12:10", -36.856047, 174.765309, "89 Airedale Street")
-//            )
-//        ),
-//        ScheduleItem(
-//            "Route 5",
-//            "12:30",
-//            "13:00",
-//            listOf(
-//                BusScheduleInfo("Stop 1", "12:40", -36.853677, 174.766063, "27 St Paul Street"),
-//                BusScheduleInfo("Stop 4", "12:50", -36.856047, 174.765309, "89 Airedale Street")
-//            )
-//        )
-//    )
 
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
@@ -232,8 +187,8 @@ class ScheduleActivity : AppCompatActivity() {
         val divider = DividerItemDecoration(this, DividerItemDecoration.VERTICAL)
         val oneDp = (resources.displayMetrics.density).toInt()
 
-// subclass ColorDrawable so we can override intrinsicHeight
-        val drawable = object : ColorDrawable(Color.parseColor("#DDDDDD")) {
+        // subclass ColorDrawable so we can override intrinsicHeight
+        val drawable = object : ColorDrawable("#DDDDDD".toColorInt()) {
             override fun getIntrinsicHeight(): Int = oneDp
         }
         divider.setDrawable(drawable)
@@ -258,8 +213,9 @@ class ScheduleActivity : AppCompatActivity() {
         darkModeSwitch.setOnCheckedChangeListener { _, isChecked ->
             isDarkMode = isChecked
             applyThemeMode(isDarkMode)
-            getSharedPreferences("prefs", MODE_PRIVATE).edit().putBoolean("dark_mode", isDarkMode)
-                .apply()
+            getSharedPreferences("prefs", MODE_PRIVATE).edit {
+                putBoolean("dark_mode", isDarkMode)
+            }
         }
 
         // 0) init your MQTT managers *before* you ever call enterOnlineMode()/fetchConfig()
@@ -271,7 +227,7 @@ class ScheduleActivity : AppCompatActivity() {
         // 1. get connectivity service
         connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
 
-// 2. define the callback
+        // 2. define the callback
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 if (fetchRoster) {
@@ -292,7 +248,7 @@ class ScheduleActivity : AppCompatActivity() {
             }
         }
 
-// 3. register it
+        // 3. register it
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             connectivityManager.registerDefaultNetworkCallback(networkCallback)
         } else {
@@ -305,7 +261,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         // read the user’s choice from the Splash
         val fetchRoster = intent.getBooleanExtra("EXTRA_FETCH_ROSTER", false)
-// if they tapped “Fetch Roster” *and* we have internet, do a one-time fetch
+        // if they tapped “Fetch Roster” *and* we have internet, do a one-time fetch
         if (fetchRoster && NetworkStatusHelper.isNetworkAvailable(this)) {
             enterOnlineMode()
         } else {
@@ -337,7 +293,7 @@ class ScheduleActivity : AppCompatActivity() {
         Configuration.getInstance()
             .load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
 
-        // ✅ ENHANCED: Log activity entry with available data
+        // Log activity entry with available data
         LifecycleLogger.logActivityEntry("ScheduleActivity", mapOf(
             "scheduleCount" to activeScheduleData.size,
             "routeCount" to busRouteData.size,
@@ -421,11 +377,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         FileLogger.d("ScheduleActivity", "STATE_SNAPSHOT | ${Gson().toJson(buildExtraDump())}")
 
-
-
         changeModeButton.setOnClickListener {
-//            Log.d("ChangeModeButton", "Clicked")
-//            Toast.makeText(this, "Clicked!", Toast.LENGTH_SHORT).show()
             if (!isTabulatedView) {
                 scheduleRecycler.visibility = View.VISIBLE
                 paginationLayout.visibility = View.VISIBLE
@@ -459,7 +411,7 @@ class ScheduleActivity : AppCompatActivity() {
             }
         }
 
-        // ➊ Immediately ask for location permission on startup
+        // Immediately ask for location permission on startup
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -484,8 +436,8 @@ class ScheduleActivity : AppCompatActivity() {
                 logPanelDebugPreStart(no, first)
 
                 when {
-                    isBreak(first)      -> launchBreakActivity(first, no)
-                    isReposition(first) -> launchRepActivity(first, no)
+                    first.isBreak()      -> launchBreakActivity(first, no)
+                    first.isReposition() -> launchRepActivity(first, no)
                     else                -> launchMapActivity(no)
                 }
             } catch (e: Exception) {
@@ -494,7 +446,7 @@ class ScheduleActivity : AppCompatActivity() {
             }
         }
 
-// Set up the "Test Start Route" button
+        // Set up the "Test Start Route" button
         binding.testStartRouteButton.setOnClickListener {
             if (activeScheduleData.isEmpty()) {
                 Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
@@ -505,7 +457,7 @@ class ScheduleActivity : AppCompatActivity() {
 
             logPanelDebugPreStart(no, first)
 
-            if (isBreak(first)) {
+            if (first.isBreak()) {
                 launchBreakActivity(first,no)
             } else {
                 launchMapActivity(no)
@@ -518,13 +470,13 @@ class ScheduleActivity : AppCompatActivity() {
      */
     @RequiresApi(Build.VERSION_CODES.M)
     private fun launchBreakActivity(firstScheduleItem: ScheduleItem, no: Int) {
-        // ✅ FIX: Check for empty scheduleData and active trips before removing
+        // Check for empty scheduleData and active trips before removing
         if (activeScheduleData.isEmpty()) {
             Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // ✅ FIX: Check if there's an active trip - don't remove from cache if trip is unfinished
+        // Check if there's an active trip - don't remove from cache if trip is unfinished
         val hasActiveTrip = TripLog.hasActive(this)
         if (!hasActiveTrip) {
             // remove first item, persist, refresh (your existing code) ...
@@ -553,7 +505,7 @@ class ScheduleActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    // ➌ Handle the user’s response to your initial permission request
+    // Handle the user’s response to your initial permission request
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -649,11 +601,7 @@ class ScheduleActivity : AppCompatActivity() {
         // We will still pass the full list (for future trips), AND pass the selected one explicitly.
         val intent = Intent(this, MapActivity::class.java).apply {
             // timeline labels (unchanged)
-            val labels = scheduleDataToPass.map { item ->
-                val from = item.busStops.firstOrNull()?.abbreviation ?: "?"
-                val to   = item.busStops.lastOrNull()?.abbreviation  ?: "?"
-                "${item.startTime} ${saferunName(item)} $from → $to"
-            }
+            val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
             putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 
             // essentials
@@ -711,16 +659,16 @@ class ScheduleActivity : AppCompatActivity() {
             rootLayout.background = ContextCompat.getDrawable(this, R.drawable.gradient_background)
         }
 
-        // ✅ Update text of darkModeSwitch
-        val darkModeSwitch = findViewById<Switch>(R.id.darkModeSwitch)
+        // Update text of darkModeSwitch
+        val darkModeSwitch = findViewById<SwitchCompat>(R.id.darkModeSwitch)
         darkModeSwitch.text = if (isDark) "Dark Mode" else "Light Mode"
 
-        // ✅ Apply dark mode color to currentDateTimeTextView
+        // Apply dark mode color to currentDateTimeTextView
         val currentDateTimeTextView = findViewById<TextView>(R.id.currentDateTimeTextView)
         val backgroundColorRes = if (isDark) R.color.grey else R.color.purple_500
         currentDateTimeTextView.setBackgroundColor(ContextCompat.getColor(this, backgroundColorRes))
 
-// Apply same background color as tint to changeModeButton
+        // Apply same background color as tint to changeModeButton
         changeModeButton.backgroundTintList = ContextCompat.getColorStateList(this, backgroundColorRes)
 
         // ✅ Change background colors of Start/Test buttons
@@ -731,14 +679,14 @@ class ScheduleActivity : AppCompatActivity() {
         startBtn.backgroundTintList = ContextCompat.getColorStateList(this, buttonBackgroundTint)
         testBtn.backgroundTintList = ContextCompat.getColorStateList(this, buttonBackgroundTint)
 
-        // ✅ Apply dark mode to custom timeline views
+        // Apply dark mode to custom timeline views
         timeline1.setDarkMode(isDark)
         timeline2.setDarkMode(isDark)
         timeline3.setDarkMode(isDark)
 
         scheduleAdapter.setThemeMode(isDark)
 
-        // ✅ Update networkStatusIndicator if currently online
+        // Update networkStatusIndicator if currently online
         val networkIndicator = findViewById<View>(R.id.networkStatusIndicator)
         val isConnected = NetworkStatusHelper.isNetworkAvailable(this)
 
@@ -1028,7 +976,7 @@ class ScheduleActivity : AppCompatActivity() {
             }
 
             // 1) extract raw data
-            val (workIntervals, runNames) = extractWorkIntervalsAndrunNames()
+            val (workIntervals, runNames) = extractWorkIntervalsAndRunNames()
             Log.d("ScheduleActivity updateTimeline", "🔄 workIntervals=$workIntervals")
             Log.d("ScheduleActivity updateTimeline", "🔄 runNames    =$runNames")
 
@@ -1103,11 +1051,11 @@ class ScheduleActivity : AppCompatActivity() {
      * Extracts work intervals and duty names from the schedule data dynamically.
      */
     @SuppressLint("LongLogTag")
-    private fun extractWorkIntervalsAndrunNames(): Pair<List<Pair<String, String>>, List<String>> {
+    private fun extractWorkIntervalsAndRunNames(): Pair<List<Pair<String, String>>, List<String>> {
         val workIntervals = mutableListOf<Pair<String, String>>()
         val runNames = mutableListOf<String>()
 
-        for (item in activeScheduleData) { // ✅ Limit to first 3 entries directly
+        for (item in activeScheduleData) { // Limit to first 3 entries directly
             val startTime = item.startTime
             val endTime = item.endTime
             val runName = item.runName
@@ -1118,8 +1066,8 @@ class ScheduleActivity : AppCompatActivity() {
             }
         }
 
-        Log.d("ScheduleActivity extractWorkIntervalsAndrunNames", "✅ Extracted Work Intervals: $workIntervals")
-        Log.d("ScheduleActivity extractWorkIntervalsAndrunNames", "✅ Extracted Duty Names: $runNames")
+        Log.d("ScheduleActivity extractWorkIntervalsAndRunNames", "✅ Extracted Work Intervals: $workIntervals")
+        Log.d("ScheduleActivity extractWorkIntervalsAndRunNames", "✅ Extracted Duty Names: $runNames")
         return Pair(workIntervals, runNames)
     }
 
@@ -1207,7 +1155,7 @@ class ScheduleActivity : AppCompatActivity() {
                     val jsonContent = cacheFile.readText()
                     val cachedSchedule =
                         Gson().fromJson(jsonContent, Array<ScheduleItem>::class.java).toList()
-                    scheduleData = cachedSchedule.map { it.copy(runName = saferunName(it)) }
+                    scheduleData = cachedSchedule.map { it.copy(runName = safeRunName(it)) }
                     activeScheduleData = scheduleData.toList() // Shallow copy to sever connection
 
                     Log.d(
@@ -1272,9 +1220,9 @@ class ScheduleActivity : AppCompatActivity() {
 
                 // Add route coordinates
                 var last: Pair<Double,Double>? = null
-                for (coord in nextPoint.routeCoordinates) {
-                    val lat = coord[1]
-                    val lon = coord[0]
+                for (coordinate in nextPoint.routeCoordinates) {
+                    val lat = coordinate[1]
+                    val lon = coordinate[0]
                     if (last == lat to lon) continue      // skip duplicate
                     newRoute.add(BusRoute(latitude = lat, longitude = lon))
                     last = lat to lon
@@ -1319,9 +1267,6 @@ class ScheduleActivity : AppCompatActivity() {
             if (isConnected) {
                 Log.d("MainActivity connectAndSubscribe", "✅ Connected to MQTT broker successfully.")
                 subscribeSharedData()
-//                Log.d("MainActivity connectAndSubscribe config", config.toString())
-//                Log.d("MainActivity connectAndSubscribe busRoute", route.toString())
-//                Log.d("MainActivity connectAndSubscribe busStop", stops.toString())
             } else {
                 Log.e("MainActivity connectAndSubscribe", "❌ Failed to connect to MQTT broker. Running in offline mode.")
                 runOnUiThread {
@@ -1352,7 +1297,6 @@ class ScheduleActivity : AppCompatActivity() {
                     Log.d("MainActivity subscribeSharedData", "Config: $config")
 
                     if (config.isNullOrEmpty()) {
-//                        clearBusData()
                         return@runOnUiThread
                     }
 
@@ -1360,7 +1304,6 @@ class ScheduleActivity : AppCompatActivity() {
                     val matchingAid = config!!.any { it.aid == aid }
                     if (!matchingAid) {
                         Toast.makeText(this, "AID does not match.", Toast.LENGTH_SHORT).show()
-//                        clearBusData()
                         return@runOnUiThread
                     }
 
@@ -1369,7 +1312,7 @@ class ScheduleActivity : AppCompatActivity() {
                     Log.d("MainActivity subscribeSharedData", "busRouteData: $busRouteData")
 
                     // Retrieve `scheduleData` from ThingsBoard
-                    scheduleData = (data.shared?.scheduleData1 ?: emptyList()).map { it.copy(runName = saferunName(it)) }
+                    scheduleData = (data.shared?.scheduleData1 ?: emptyList()).map { it.copy(runName = safeRunName(it)) }
                     activeScheduleData = scheduleData.toList() // Shallow copy to sever connection
                     Log.d("MainActivity subscribeSharedData", "scheduleData: $activeScheduleData")
 
@@ -1412,7 +1355,6 @@ class ScheduleActivity : AppCompatActivity() {
 //                        }
                     } else {
                         Log.d("MainActivity subscribeSharedData", "No route data available.")
-//                        clearBusData()
                     }
                 } catch (e: Exception) {
                     Log.e("MainActivity subscribeSharedData", "Error processing shared data: ${e.message}", e)
@@ -1525,7 +1467,7 @@ class ScheduleActivity : AppCompatActivity() {
             if (!Environment.isExternalStorageManager()) {
                 try {
                     val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                    intent.data = Uri.parse("package:$packageName")
+                    intent.data = "package:$packageName".toUri()
                     startActivityForResult(intent, REQUEST_MANAGE_EXTERNAL_STORAGE)
                 } catch (e: Exception) {
                     Log.e("TimeTableActivity requestAllFilesAccessPermission", "Error requesting storage permission: ${e.message}")
@@ -1550,20 +1492,6 @@ class ScheduleActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Returns true if this schedule item represents a break (case-insensitive).
-     */
-    private fun isBreak(item: ScheduleItem): Boolean {
-        // Accept "Break" or "break"
-        return item.runName.equals("break", ignoreCase = true)
-    }
-
-    /** Returns true if the schedule item represents a Reposition (REP). */
-    private fun isReposition(item: ScheduleItem): Boolean {
-        return item.runName.equals("REP", true)
-                || item.runName.contains("reposition", true)
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         NetworkStatusHelper.unregisterReceiver(this)
@@ -1572,6 +1500,7 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /** Fetches the Android ID (AID) of the device. */
+    @SuppressLint("HardwareIds")
     private fun getAndroidId(): String {
         return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
     }
@@ -1579,17 +1508,8 @@ class ScheduleActivity : AppCompatActivity() {
     private fun nextPanelDebugNo(): Int {
         val sp = getSharedPreferences(PANEL_DEBUG_PREF, MODE_PRIVATE)
         val next = sp.getInt(PANEL_DEBUG_NO_KEY, 0) + 1
-        sp.edit().putInt(PANEL_DEBUG_NO_KEY, next).apply()
+        sp.edit { putInt(PANEL_DEBUG_NO_KEY, next) }
         return next
-    }
-
-    // Keep it simple: build the same label your panel shows
-    private fun formatPanelLabel(item: ScheduleItem): String {
-        val from = item.busStops.firstOrNull()?.abbreviation
-            ?: item.busStops.firstOrNull()?.name ?: "?"
-        val to = item.busStops.lastOrNull()?.abbreviation
-            ?: item.busStops.lastOrNull()?.name ?: "?"
-        return "${item.startTime} ${item.runName} $from → $to"
     }
 
     private fun logPanelDebugPreStart(no: Int, first: ScheduleItem) {
@@ -1604,25 +1524,10 @@ class ScheduleActivity : AppCompatActivity() {
         Log.d("PanelDebug", dump)
     }
 
-    private fun isTokenLike(s: String?): Boolean {
-        if (s.isNullOrBlank()) return false
-        val t = s.trim()
-        return t.length in 20..40 && t.all { it.isLetterOrDigit() }
-    }
-
-    private fun saferunName(item: ScheduleItem): String {
-        if (!isTokenLike(item.runName)) return item.runName
-        val from = item.busStops.firstOrNull()?.abbreviation ?: item.busStops.firstOrNull()?.name ?: "?"
-        val to   = item.busStops.lastOrNull()?.abbreviation  ?: item.busStops.lastOrNull()?.name  ?: "?"
-        return "${item.runNo} $from → $to"
-    }
-
     private fun publishActiveSegment(label: String) {
-        val topic = "v1/devices/me/attributes"
-        // CHANGE activeSegment → currentTripLabel
         val payload = "{\"currentTripLabel\":\"${label.replace("\"", "\\\"")}\"}"
         if (::mqttManager.isInitialized) {
-            mqttManager.publish(topic, payload)
+            mqttManager.publish(MqttHelper.ATTR_TOPIC, payload)
         }
     }
 

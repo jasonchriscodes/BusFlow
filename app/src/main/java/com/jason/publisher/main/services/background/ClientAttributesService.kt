@@ -11,11 +11,11 @@ import android.provider.Settings
 import android.util.Log
 import androidx.annotation.RequiresApi
 import com.jason.publisher.modules.mqtt.helpers.MqttConfigHelper
-import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.ATTR_TOPIC
-import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.CLIENT_ID
-import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.PUB_MSG_TOPIC
-import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.REQUEST_PERIODIC_TIME
-import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.SERVER_URI
+import com.jason.publisher.modules.map.helpers.MqttHelper.Companion.ATTR_TOPIC
+import com.jason.publisher.modules.map.helpers.MqttHelper.Companion.CLIENT_ID
+import com.jason.publisher.modules.map.helpers.MqttHelper.Companion.PUB_MSG_TOPIC
+import com.jason.publisher.modules.map.helpers.MqttHelper.Companion.REQUEST_PERIODIC_TIME
+import com.jason.publisher.modules.map.helpers.MqttHelper.Companion.SERVER_URI
 import com.jason.publisher.modules.mqtt.services.MqttManager
 import org.json.JSONObject
 

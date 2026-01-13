@@ -75,11 +75,6 @@ class RepActivity : AppCompatActivity() {
     private lateinit var mqttManager: MqttManager
     private val mqttHandler = Handler(Looper.getMainLooper())
     private lateinit var repLabel: String
-
-    companion object {
-        private const val ATTR_TOPIC = "v1/devices/me/attributes"
-    }
-
     @SuppressLint("SimpleDateFormat")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -193,7 +188,7 @@ class RepActivity : AppCompatActivity() {
         """.trimIndent()
 
         try {
-            mqttManager.publish(ATTR_TOPIC, payload)
+            mqttManager.publish(MqttHelper.ATTR_TOPIC, payload)
         } catch (e: Exception) {
             FileLogger.e("RepActivity", "Publish failed: ${e.message}")
         }

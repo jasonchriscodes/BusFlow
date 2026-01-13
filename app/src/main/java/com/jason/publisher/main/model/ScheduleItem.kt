@@ -10,7 +10,21 @@ data class ScheduleItem(
     val endTime: String,
     val runName: String,
     val busStops: List<BusScheduleInfo>
-) : Parcelable
+) : Parcelable {
+    /**
+     * Returns true if this schedule item represents a break (case-insensitive).
+     */
+    fun isBreak(): Boolean {
+        // Accept "Break" or "break"
+        return runName.equals("break", ignoreCase = true)
+    }
+
+    /** Returns true if the schedule item represents a Reposition (REP). */
+    fun isReposition(): Boolean {
+        return runName.equals("REP", true)
+                || runName.contains("reposition", true)
+    }
+}
 
 data class BusScheduleInfo(
     val name: String,

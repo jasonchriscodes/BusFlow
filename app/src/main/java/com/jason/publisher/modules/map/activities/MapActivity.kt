@@ -53,7 +53,7 @@ import com.jason.publisher.modules.map.viewmodels.MapViewModel
 import com.jason.publisher.modules.map.viewmodels.ScheduleStatusManager
 import com.jason.publisher.modules.map.viewmodels.TimeManager
 import com.jason.publisher.modules.mqtt.helpers.MqttConfigHelper
-import com.jason.publisher.modules.mqtt.helpers.MqttHelper
+import com.jason.publisher.modules.map.helpers.MqttHelper
 import com.jason.publisher.modules.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
 import com.jason.publisher.modules.schedule.activities.ScheduleActivity

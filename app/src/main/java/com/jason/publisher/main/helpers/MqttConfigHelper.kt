@@ -3,6 +3,7 @@ package com.jason.publisher.modules.mqtt.helpers
 import android.annotation.SuppressLint
 import android.util.Log
 import com.jason.publisher.main.model.BusItem
+import com.jason.publisher.modules.map.helpers.MqttHelper
 import com.jason.publisher.modules.mqtt.services.MqttManager
 
 class MqttConfigHelper {

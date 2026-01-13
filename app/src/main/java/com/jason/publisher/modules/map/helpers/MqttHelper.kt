@@ -1,4 +1,4 @@
-package com.jason.publisher.modules.mqtt.helpers
+package com.jason.publisher.modules.map.helpers
 
 import android.annotation.SuppressLint
 import android.os.Build

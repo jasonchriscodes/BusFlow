@@ -8,7 +8,7 @@ private fun isTokenLike(s: String?): Boolean {
     return t.length in 20..40 && t.all { it.isLetterOrDigit() }
 }
 
-private fun safeRunName(item: ScheduleItem): String {
+fun safeRunName(item: ScheduleItem): String {
     if (!isTokenLike(item.runName)) return item.runName
     val from = item.busStops.firstOrNull()?.abbreviation ?: item.busStops.firstOrNull()?.name ?: "?"
     val to   = item.busStops.lastOrNull()?.abbreviation  ?: item.busStops.lastOrNull()?.name  ?: "?"
