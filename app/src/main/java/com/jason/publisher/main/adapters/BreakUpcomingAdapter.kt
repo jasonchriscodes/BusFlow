@@ -1,4 +1,4 @@
-package com.jason.publisher.main.helpers
+package com.jason.publisher.main.adapters
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
@@ -18,8 +18,8 @@ class BreakUpcomingAdapter(
     ) {
         val txtStartEnd: TextView = itemView.findViewById(R.id.txtStartEnd)
         val txtDuration: TextView = itemView.findViewById(R.id.txtDuration)
-        val txtDuty: TextView     = itemView.findViewById(R.id.txtDuty)
-        val txtType: TextView     = itemView.findViewById(R.id.txtType)
+        val txtDuty: TextView = itemView.findViewById(R.id.txtDuty)
+        val txtType: TextView = itemView.findViewById(R.id.txtType)
         val txtFromToAbbr: TextView = itemView.findViewById(R.id.txtFromToAbbr)
         val txtFromToFull: TextView = itemView.findViewById(R.id.txtFromToFull)
     }

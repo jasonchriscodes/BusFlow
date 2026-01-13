@@ -1,11 +1,11 @@
-package com.jason.publisher.main.utils
+package com.jason.publisher.main.loggers
 
 import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.*
 
 /**
- * ✅ OPTIMIZED: Structured lifecycle logging system
+ * Structured lifecycle logging system
  * Tracks app lifecycle events with minimal, meaningful logs
  */
 object LifecycleLogger {

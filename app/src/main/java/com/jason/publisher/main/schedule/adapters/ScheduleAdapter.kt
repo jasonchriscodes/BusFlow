@@ -1,4 +1,4 @@
-package com.jason.publisher.main.utils
+package com.jason.publisher.modules.schedule.adapters
 
 import android.view.LayoutInflater
 import android.view.View

@@ -1,7 +1,11 @@
-package com.jason.publisher.main.activity
+package com.jason.publisher.modules.`break`.activities
 
 import android.annotation.SuppressLint
-import android.os.*
+import android.os.Build
+import android.os.Bundle
+import android.os.CountDownTimer
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.widget.Button
@@ -11,20 +15,18 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.jason.publisher.R
-import com.jason.publisher.main.helpers.MqttHelper.Companion.ATTR_TOPIC
-import com.jason.publisher.main.helpers.MqttHelper.Companion.PUB_MSG_TOPIC
-import com.jason.publisher.main.helpers.MqttHelper.Companion.REQUEST_PERIODIC_TIME
 import com.jason.publisher.main.model.ScheduleItem
-import com.jason.publisher.main.services.MqttManager
-import com.jason.publisher.main.helpers.BreakUpcomingAdapter
-import com.jason.publisher.main.helpers.MqttHelper
-import com.jason.publisher.main.utils.FileLogger
-import com.jason.publisher.main.utils.TripLog
-import com.jason.publisher.main.utils.hookBatteryToasts
+import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.TripLog
+import com.jason.publisher.modules.battery.ui.hookBatteryToasts
+import com.jason.publisher.main.adapters.BreakUpcomingAdapter
+import com.jason.publisher.modules.mqtt.helpers.MqttHelper
+import com.jason.publisher.modules.mqtt.services.MqttManager
 import org.json.JSONObject
 import java.text.SimpleDateFormat
-import java.util.*
-import kotlin.jvm.java
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 class BreakActivity : AppCompatActivity() {
 
@@ -144,9 +146,9 @@ class BreakActivity : AppCompatActivity() {
 
         // ===== MQTT =====
         mqttManager = MqttManager(
-            serverUri = MqttHelper.SERVER_URI,
-            clientId  = MqttHelper.CLIENT_ID,
-            username  = token
+            serverUri = MqttHelper.Companion.SERVER_URI,
+            clientId = MqttHelper.Companion.CLIENT_ID,
+            username = token
         )
 
         mqttManager.connect { ok ->
@@ -201,7 +203,7 @@ class BreakActivity : AppCompatActivity() {
         """.trimIndent()
 
         try {
-            mqttManager.publish(ATTR_TOPIC, payload)
+            mqttManager.publish(MqttHelper.Companion.ATTR_TOPIC, payload)
         } catch (e: Exception) {
             FileLogger.e("BreakActivity", "Publish failed: ${e.message}")
         }
@@ -217,7 +219,7 @@ class BreakActivity : AppCompatActivity() {
             try {
                 val payload = "{\"currentTripLabel\":\"\", \"activityState\":\"\"}"
                 if (::mqttManager.isInitialized) {
-                    mqttManager.publish(ATTR_TOPIC, payload)
+                    mqttManager.publish(MqttHelper.Companion.ATTR_TOPIC, payload)
                 }
 
                 // Ask server to re-publish shared data and force a quick attribute refresh
@@ -254,11 +256,13 @@ class BreakActivity : AppCompatActivity() {
         val jsonObject = JSONObject().apply {
             put("sharedKeys", "message,busRoute,busStop,config")
         }
-        mqttManager.publish(PUB_MSG_TOPIC, jsonObject.toString())
+        mqttManager.publish(MqttHelper.Companion.PUB_MSG_TOPIC, jsonObject.toString())
         Handler(Looper.getMainLooper()).post(object : Runnable {
             override fun run() {
-                mqttManager.publish(PUB_MSG_TOPIC, jsonObject.toString())
-                Handler(Looper.getMainLooper()).postDelayed(this, REQUEST_PERIODIC_TIME)
+                mqttManager.publish(MqttHelper.Companion.PUB_MSG_TOPIC, jsonObject.toString())
+                Handler(Looper.getMainLooper()).postDelayed(this,
+                    MqttHelper.Companion.REQUEST_PERIODIC_TIME
+                )
             }
         })
     }

@@ -1,4 +1,4 @@
-package com.jason.publisher.main.helpers
+package com.jason.publisher.modules.mqtt.helpers
 
 import android.annotation.SuppressLint
 import android.os.Build
@@ -8,12 +8,12 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivityMapBinding
-import com.jason.publisher.main.activity.MapActivity
+import com.jason.publisher.modules.map.activities.MapActivity
 import com.jason.publisher.main.model.Bus
-import com.jason.publisher.main.utils.LifecycleLogger
+import com.jason.publisher.main.loggers.LifecycleLogger
 import com.jason.publisher.main.services.ClientAttributesResponse
 import com.jason.publisher.main.services.ApiService
-import com.jason.publisher.main.services.MqttManager
+import com.jason.publisher.modules.mqtt.services.MqttManager
 import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.Callback

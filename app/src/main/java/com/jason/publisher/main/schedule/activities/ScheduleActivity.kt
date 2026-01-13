@@ -1,6 +1,5 @@
-package com.jason.publisher.main.activity
+package com.jason.publisher.modules.schedule.activities
 
-import com.jason.publisher.main.utils.ScheduleAdapter
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -39,25 +38,26 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.gson.Gson
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityScheduleBinding
-import com.jason.publisher.main.helpers.MqttConfigHelper
-import com.jason.publisher.main.helpers.MqttHelper.Companion.CLIENT_ID
-import com.jason.publisher.main.helpers.MqttHelper.Companion.PUB_MSG_TOPIC
-import com.jason.publisher.main.helpers.MqttHelper.Companion.SERVER_URI
-import com.jason.publisher.main.helpers.MqttHelper.Companion.SUB_MSG_TOPIC
-import com.jason.publisher.main.ui.StyledMultiColorTimeline
+import com.jason.publisher.modules.`break`.activities.BreakActivity
+import com.jason.publisher.modules.rep.RepActivity
 import com.jason.publisher.main.model.Bus
-import com.jason.publisher.main.model.BusDataCache
 import com.jason.publisher.main.model.BusItem
 import com.jason.publisher.main.model.BusRoute
 import com.jason.publisher.main.model.BusStop
 import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
-import com.jason.publisher.main.services.MqttManager
-import com.jason.publisher.main.utils.FileLogger
-import com.jason.publisher.main.utils.NetworkStatusHelper
-import com.jason.publisher.main.utils.TripLog
-import com.jason.publisher.main.utils.LifecycleLogger
-import com.jason.publisher.main.utils.hookBatteryToasts
+import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.LifecycleLogger
+import com.jason.publisher.main.loggers.TripLog
+import com.jason.publisher.modules.battery.ui.hookBatteryToasts
+import com.jason.publisher.modules.map.activities.MapActivity
+import com.jason.publisher.modules.mqtt.helpers.MqttConfigHelper
+import com.jason.publisher.modules.mqtt.helpers.MqttHelper
+import com.jason.publisher.modules.mqtt.services.MqttManager
+import com.jason.publisher.modules.network.utils.NetworkStatusHelper
+import com.jason.publisher.modules.schedule.adapters.ScheduleAdapter
+import com.jason.publisher.modules.schedule.models.BusDataCache
+import com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -264,8 +264,8 @@ class ScheduleActivity : AppCompatActivity() {
 
         // 0) init your MQTT managers *before* you ever call enterOnlineMode()/fetchConfig()
         mqttManager = MqttManager(
-            serverUri = SERVER_URI,
-            clientId = CLIENT_ID
+            serverUri = MqttHelper.Companion.SERVER_URI,
+            clientId = MqttHelper.Companion.CLIENT_ID
         )
 
         // 1. get connectivity service
@@ -831,8 +831,8 @@ class ScheduleActivity : AppCompatActivity() {
                 config = configList
                 token = mqttConfigHelper.getAccessToken(aid, config.orEmpty())
                 mqttManager = MqttManager(
-                    serverUri = SERVER_URI,
-                    clientId = CLIENT_ID,
+                    serverUri = MqttHelper.Companion.SERVER_URI,
+                    clientId = MqttHelper.Companion.CLIENT_ID,
                     username = token
                 )
                 requestAdminMessage()
@@ -1145,10 +1145,10 @@ class ScheduleActivity : AppCompatActivity() {
         jsonObject.put("sharedKeys","message,busRoute,busStop,config,busRouteData,scheduleData")
         val jsonStringSharedKeys = jsonObject.toString()
         val handler = Handler(Looper.getMainLooper())
-        mqttManager.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
+        mqttManager.publish(MqttHelper.Companion.PUB_MSG_TOPIC, jsonStringSharedKeys)
         handler.post(object : Runnable {
             override fun run() {
-                mqttManager.publish(PUB_MSG_TOPIC, jsonStringSharedKeys)
+                mqttManager.publish(MqttHelper.Companion.PUB_MSG_TOPIC, jsonStringSharedKeys)
                 handler.postDelayed(this, REQUEST_PERIODIC_TIME)
             }
         })
@@ -1338,7 +1338,7 @@ class ScheduleActivity : AppCompatActivity() {
     @SuppressLint("LongLogTag")
     private fun subscribeSharedData() {
         Log.d("ScheduleActivity", mqttManager.getUsername())
-        mqttManager.subscribe(SUB_MSG_TOPIC) { message ->
+        mqttManager.subscribe(MqttHelper.Companion.SUB_MSG_TOPIC) { message ->
             runOnUiThread {
                 try {
                     // Parse incoming message

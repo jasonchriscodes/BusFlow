@@ -1,7 +1,6 @@
-package com.jason.publisher.main.utils
+package com.jason.publisher.modules.map.services
 
 import android.content.Context
-import android.content.Context.MODE_PRIVATE
 import androidx.core.content.edit
 
 object LastLocationStore {
@@ -10,7 +9,7 @@ object LastLocationStore {
     private const val KEY_LON = "lon"
 
     fun save(context: Context, lat: Double, lon: Double) {
-        context.getSharedPreferences(PREF, MODE_PRIVATE)
+        context.getSharedPreferences(PREF, Context.MODE_PRIVATE)
             .edit {
                 putString(KEY_LAT, lat.toString())
                 putString(KEY_LON, lon.toString())

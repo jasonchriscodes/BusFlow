@@ -1,19 +1,36 @@
-package com.jason.publisher.main.activity
+package com.jason.publisher.modules.rep
 
 import android.annotation.SuppressLint
+import android.graphics.Canvas
 import android.location.Location
-import android.os.*
-import android.widget.*
+import android.os.Build
+import android.os.Bundle
+import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.content.res.AppCompatResources
-import com.google.android.gms.location.*
+import androidx.core.graphics.createBitmap
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
-import com.jason.publisher.main.helpers.MqttHelper
 import com.jason.publisher.main.model.ScheduleItem
-import com.jason.publisher.main.services.MqttManager
-import com.jason.publisher.main.utils.*
+import com.jason.publisher.main.ui.DrawableHelper
+import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.TripLog
+import com.jason.publisher.modules.battery.ui.hookBatteryToasts
+import com.jason.publisher.modules.mqtt.helpers.MqttHelper
+import com.jason.publisher.modules.mqtt.services.MqttManager
+import org.mapsforge.core.graphics.Bitmap
 import org.mapsforge.core.model.LatLong
+import org.mapsforge.map.android.graphics.AndroidBitmap
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.android.view.MapView
@@ -23,8 +40,8 @@ import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.InternalRenderTheme
 import java.io.File
 import java.text.SimpleDateFormat
-import java.util.*
-import androidx.core.graphics.createBitmap
+import java.util.Date
+import java.util.Locale
 
 class RepActivity : AppCompatActivity() {
 
@@ -43,7 +60,7 @@ class RepActivity : AppCompatActivity() {
     private lateinit var mapView: MapView
     private var busMarker: Marker? = null
     private var stopMarker: Marker? = null
-    private var busIcon: org.mapsforge.core.graphics.Bitmap? = null
+    private var busIcon: Bitmap? = null
 
     // ---- Location ----
     private lateinit var fused: FusedLocationProviderClient
@@ -130,9 +147,9 @@ class RepActivity : AppCompatActivity() {
         val token = intent.getStringExtra("ACCESS_TOKEN")
         if (!token.isNullOrBlank()) {
             mqttManager = MqttManager(
-                serverUri = MqttHelper.SERVER_URI,
-                clientId  = "${MqttHelper.CLIENT_ID}-rep",
-                username  = token
+                serverUri = MqttHelper.Companion.SERVER_URI,
+                clientId = "${MqttHelper.Companion.CLIENT_ID}-rep",
+                username = token
             )
 
             mqttManager.connect { ok ->
@@ -243,14 +260,14 @@ class RepActivity : AppCompatActivity() {
     }
 
     private fun addStopMarker(pos: LatLong) {
-        val drawable = Helper.createBusStopSymbol(this, 0, 1, false)
+        val drawable = DrawableHelper.createBusStopSymbol(this, 0, 1, false)
         val sizePx = (resources.displayMetrics.density * 30f).toInt()
         val bmp = createBitmap(sizePx, sizePx)
-        val canvas = android.graphics.Canvas(bmp)
+        val canvas = Canvas(bmp)
         drawable.setBounds(0, 0, sizePx, sizePx)
         drawable.draw(canvas)
 
-        val mfBmp = org.mapsforge.map.android.graphics.AndroidBitmap(bmp)
+        val mfBmp = AndroidBitmap(bmp)
         stopMarker = Marker(pos, mfBmp, 0, -mfBmp.height / 2)
         mapView.layerManager.layers.add(stopMarker)
     }
@@ -261,10 +278,10 @@ class RepActivity : AppCompatActivity() {
                 ?: return
             val sizePx = (resources.displayMetrics.density * 32f).toInt()
             val bmp = createBitmap(sizePx, sizePx)
-            val canvas = android.graphics.Canvas(bmp)
+            val canvas = Canvas(bmp)
             drawable.setBounds(0, 0, sizePx, sizePx)
             drawable.draw(canvas)
-            busIcon = org.mapsforge.map.android.graphics.AndroidBitmap(bmp)
+            busIcon = AndroidBitmap(bmp)
         }
 
         if (busMarker == null) {

@@ -6,9 +6,9 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/gradient_background"
-    tools:context=".main.activity.ScheduleActivity">
+    tools:context=".modules.schedule.activities.ScheduleActivity">
 
-<org.mapsforge.map.android.view.MapView
+    <org.mapsforge.map.android.view.MapView
         android:id="@+id/preloadMapView"
         android:layout_width="0dp"
         android:layout_height="0dp"
@@ -141,7 +141,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
-        <LinearLayout
+    <LinearLayout
         android:id="@+id/paginationLayout"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -210,7 +210,7 @@
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
-            <com.jason.publisher.main.ui.StyledMultiColorTimeline
+            <com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
                 android:id="@+id/timelinePart1"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
@@ -220,7 +220,7 @@
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
-            <com.jason.publisher.main.ui.StyledMultiColorTimeline
+            <com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
                 android:id="@+id/timelinePart2"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
@@ -230,7 +230,7 @@
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
-            <com.jason.publisher.main.ui.StyledMultiColorTimeline
+            <com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
                 android:id="@+id/timelinePart3"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />

@@ -1,4 +1,4 @@
-package com.jason.publisher.main.`interface`
+package com.jason.publisher.modules.map.`interface`
 
 import android.location.Location
 

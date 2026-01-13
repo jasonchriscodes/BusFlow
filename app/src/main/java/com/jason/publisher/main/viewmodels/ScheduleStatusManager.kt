@@ -1,4 +1,4 @@
-package com.jason.publisher.main.helpers
+package com.jason.publisher.modules.map.viewmodels
 
 import android.annotation.SuppressLint
 import android.util.Log
@@ -6,10 +6,12 @@ import android.widget.ImageView
 import androidx.core.content.ContextCompat
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
-import com.jason.publisher.main.activity.MapActivity
-import com.jason.publisher.main.utils.LifecycleLogger
+import com.jason.publisher.main.loggers.LifecycleLogger
+import com.jason.publisher.modules.map.activities.MapActivity
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Locale
+import kotlin.math.abs
 
 class ScheduleStatusManager(
     private val activity: MapActivity,
@@ -213,7 +215,7 @@ class ScheduleStatusManager(
 
             // convert to minutes only (drop seconds)
             val deltaMin = deltaSec / 60               // signed minutes
-            val absMin   = kotlin.math.abs(deltaMin)   // absolute value
+            val absMin   = abs(deltaMin)   // absolute value
 
             fun minutesLabel(m: Int) = if (m == 1) "1 min" else "$m min"
             val timeDiff = minutesLabel(absMin)
@@ -400,9 +402,10 @@ class ScheduleStatusManager(
             activity.runOnUiThread {
                 try {
                     binding.scheduleStatusValueTextView.text = overrideStatusText
-                    binding.scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(activity,
-                        R.color.blind_red
-                    ))
+                    binding.scheduleStatusValueTextView.setTextColor(
+                        ContextCompat.getColor(activity,
+                            R.color.blind_red
+                        ))
                     val iconView = activity.findViewById<ImageView>(R.id.scheduleAheadIcon)
                     if (iconView != null) {
                         iconView.setImageResource(R.drawable.ic_schedule_late)

@@ -1,4 +1,4 @@
-package com.jason.publisher.main.helpers
+package com.jason.publisher.modules.map.viewmodels
 
 import android.annotation.SuppressLint
 import android.os.Handler
@@ -10,7 +10,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import com.jason.publisher.main.model.ScheduleItem
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 class TimeManager(private val savedStateHandle: SavedStateHandle): ViewModel() {
     companion object {

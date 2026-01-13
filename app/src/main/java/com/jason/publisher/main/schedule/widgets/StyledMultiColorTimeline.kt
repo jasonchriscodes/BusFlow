@@ -1,4 +1,4 @@
-package com.jason.publisher.main.ui
+package com.jason.publisher.modules.schedule.widgets
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -8,14 +8,17 @@ import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.Log
 import android.view.Gravity
-import android.widget.*
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.jason.publisher.R
 import com.jason.publisher.main.model.BusScheduleInfo
 import com.jason.publisher.main.model.ScheduleItem
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 /**
  * A custom LinearLayout that visually renders work intervals (duties) and breaks

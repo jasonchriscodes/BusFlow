@@ -1,4 +1,4 @@
-package com.jason.publisher.main.utils
+package com.jason.publisher.modules.battery.ui
 
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.jason.publisher.modules.battery.services.BatteryLowWatcher
 
 /** Call this once in onCreate() of any Activity to get battery toasts automatically. */
 fun AppCompatActivity.hookBatteryToasts(

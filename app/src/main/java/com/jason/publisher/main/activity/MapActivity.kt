@@ -1,4 +1,4 @@
-package com.jason.publisher.main.activity
+package com.jason.publisher.modules.map.activities
 
 import android.annotation.SuppressLint
 import android.os.Bundle
@@ -20,8 +20,10 @@ import android.text.InputType
 import android.text.method.PasswordTransformationMethod
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.autofill.AutofillManager
+import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
@@ -32,39 +34,44 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.ViewCompat
 import com.jason.publisher.main.model.BusItem
 import com.jason.publisher.main.model.BusStop
-import com.jason.publisher.main.model.BusStopWithTimingPoint
+import com.jason.publisher.modules.map.models.BusStopWithTimingPoint
 import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
-import com.jason.publisher.main.services.LocationManager
-import com.jason.publisher.main.utils.NetworkStatusHelper
+import com.jason.publisher.modules.map.services.LocationManager
+import com.jason.publisher.modules.network.utils.NetworkStatusHelper
 import org.json.JSONArray
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import com.google.android.gms.location.*
 import com.google.gson.Gson
-import com.jason.publisher.main.`interface`.LocationListener
+import com.jason.publisher.modules.map.`interface`.LocationListener
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
-import com.jason.publisher.main.helpers.MapViewController
-import com.jason.publisher.main.helpers.MqttConfigHelper
-import com.jason.publisher.main.helpers.MqttHelper
-import com.jason.publisher.main.helpers.ScheduleStatusManager
-import com.jason.publisher.main.helpers.TimeManager
+import com.jason.publisher.modules.schedule.activities.ScheduleActivity
+import com.jason.publisher.modules.mqtt.helpers.MqttConfigHelper
+import com.jason.publisher.modules.mqtt.helpers.MqttHelper
+import com.jason.publisher.modules.map.viewmodels.ScheduleStatusManager
+import com.jason.publisher.modules.map.viewmodels.TimeManager
 import com.jason.publisher.main.model.AttributesData
 import com.jason.publisher.main.services.ApiServiceBuilder
-import com.jason.publisher.main.services.MqttManager
-import com.jason.publisher.main.utils.FileLogger
-import com.jason.publisher.main.utils.LastLocationStore
-import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
-import com.jason.publisher.main.utils.TripLog
-import com.jason.publisher.main.utils.LifecycleLogger
-import com.jason.publisher.main.utils.hookBatteryToasts
+import com.jason.publisher.modules.mqtt.services.MqttManager
+import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.modules.map.services.LastLocationStore
+import com.jason.publisher.modules.map.utils.TimeBasedMovingAverageFilterDouble
+import com.jason.publisher.main.loggers.TripLog
+import com.jason.publisher.main.loggers.LifecycleLogger
+import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.main.services.ApiService
+import com.jason.publisher.modules.map.viewmodels.MapViewController
+import org.mapsforge.map.layer.overlay.Marker
+import org.mapsforge.map.layer.overlay.Polyline
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import org.mapsforge.map.model.common.Observer
 import java.util.Locale
 import java.util.Locale.getDefault
+import kotlin.math.abs
+import kotlin.math.min
 
 class MapActivity : AppCompatActivity() {
 
@@ -101,9 +108,9 @@ class MapActivity : AppCompatActivity() {
 
     private var tripEndDialog: AlertDialog? = null
 
-    private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
-    var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
-    var markerBus = HashMap<String, org.mapsforge.map.layer.overlay.Marker>()
+    private var routePolyline: Polyline? = null
+    var busMarker: Marker? = null
+    var markerBus = HashMap<String, Marker>()
 
     private lateinit var simulationHandler: Handler
     private lateinit var simulationRunnable: Runnable
@@ -619,7 +626,7 @@ class MapActivity : AppCompatActivity() {
 
             // (optional) keep the keyboard from learning this content
             numberPadInput.imeOptions = numberPadInput.imeOptions or
-                    android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+                    EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
 
             dlgBuilder.setView(numberPadView)
                 .setTitle("Enter Passcode")
@@ -720,7 +727,7 @@ class MapActivity : AppCompatActivity() {
                                         else -> this@MapActivity.arrBusData.find { it.accessToken == token }?.aid ?: token.takeLast(6)
                                     }
                                     lines.add("$label  [aid=$aid]")
-                                } else if (v is android.view.ViewGroup) {
+                                } else if (v is ViewGroup) {
                                     for (k in 0 until v.childCount) findTextViews(v.getChildAt(k))
                                 }
                             }
@@ -795,7 +802,7 @@ class MapActivity : AppCompatActivity() {
                 val text = (0 until row.childCount)
                     .firstNotNullOfOrNull { j -> (row.getChildAt(j) as? TextView)?.text?.toString() }
                 if (!text.isNullOrBlank()) {
-                    val iconName = "ic_bus_symbol${kotlin.math.min(i + 1, 10)}"
+                    val iconName = "ic_bus_symbol${min(i + 1, 10)}"
                     sb.appendLine("otherDetailPanel: \"$iconName\" $text")
                 }
             }
@@ -1022,24 +1029,24 @@ class MapActivity : AppCompatActivity() {
     fun findAddressByCoordinates(latitude: Double, longitude: Double): String? {
         // Check starting point first
         busRouteData.forEach { routeData ->
-            if (kotlin.math.abs(routeData.startingPoint.latitude - latitude) < 0.0001 &&
-                kotlin.math.abs(routeData.startingPoint.longitude - longitude) < 0.0001
+            if (abs(routeData.startingPoint.latitude - latitude) < 0.0001 &&
+                abs(routeData.startingPoint.longitude - longitude) < 0.0001
             ) {
                 return routeData.startingPoint.address
             }
 
             // Iterate through next points
             routeData.nextPoints.forEach { nextPoint ->
-                if (kotlin.math.abs(nextPoint.latitude - latitude) < 0.0001 &&
-                    kotlin.math.abs(nextPoint.longitude - longitude) < 0.0001
+                if (abs(nextPoint.latitude - latitude) < 0.0001 &&
+                    abs(nextPoint.longitude - longitude) < 0.0001
                 ) {
                     return nextPoint.address
                 }
 
                 // Iterate through routeCoordinates inside each nextPoint
                 nextPoint.routeCoordinates.forEach { coordinates ->
-                    if (kotlin.math.abs(coordinates[1] - latitude) < 0.0001 &&
-                        kotlin.math.abs(coordinates[0] - longitude) < 0.0001
+                    if (abs(coordinates[1] - latitude) < 0.0001 &&
+                        abs(coordinates[0] - longitude) < 0.0001
                     ) {
                         return nextPoint.address
                     }

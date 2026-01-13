@@ -1,4 +1,4 @@
-package com.jason.publisher.main.services
+package com.jason.publisher.main.services.background
 
 import android.annotation.SuppressLint
 import android.app.Service
@@ -10,12 +10,13 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import androidx.annotation.RequiresApi
-import com.jason.publisher.main.helpers.MqttConfigHelper
-import com.jason.publisher.main.helpers.MqttHelper.Companion.ATTR_TOPIC
-import com.jason.publisher.main.helpers.MqttHelper.Companion.CLIENT_ID
-import com.jason.publisher.main.helpers.MqttHelper.Companion.PUB_MSG_TOPIC
-import com.jason.publisher.main.helpers.MqttHelper.Companion.REQUEST_PERIODIC_TIME
-import com.jason.publisher.main.helpers.MqttHelper.Companion.SERVER_URI
+import com.jason.publisher.modules.mqtt.helpers.MqttConfigHelper
+import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.ATTR_TOPIC
+import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.CLIENT_ID
+import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.PUB_MSG_TOPIC
+import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.REQUEST_PERIODIC_TIME
+import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.SERVER_URI
+import com.jason.publisher.modules.mqtt.services.MqttManager
 import org.json.JSONObject
 
 class ClientAttributesService : Service() {
@@ -38,11 +39,11 @@ class ClientAttributesService : Service() {
             token = mqttConfigHelper.getAccessToken(aid, configList)
             mqttManager = if (token.isNotEmpty()) MqttManager(
                 serverUri = SERVER_URI,
-                clientId  = CLIENT_ID,
-                username  = token,
+                clientId = CLIENT_ID,
+                username = token,
             ) else MqttManager(
                 serverUri = SERVER_URI,
-                clientId  = CLIENT_ID,
+                clientId = CLIENT_ID,
             )
             Log.d("ClientAttributesService", "access token: $token")
             clearActiveSegmentAndRefresh()

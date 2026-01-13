@@ -1,6 +1,7 @@
-package com.jason.publisher.main.model
+package com.jason.publisher.modules.map.models
 
 import android.os.Parcelable
+import com.jason.publisher.main.model.RouteData
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
@@ -8,7 +9,7 @@ data class BusStopWithTimingPoint(
     val latitude: Double,
     val longitude: Double,
     val address: String?,
-    // Duration in minutes (for example, the value from each nextPoint – e.g. 0.8, 0.7, …)
+    /** Duration in minutes (for example, the value from each nextPoint – e.g. 0.8, 0.7, …) */
     val duration: Double
 ) : Parcelable {
     companion object {

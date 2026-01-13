@@ -1,9 +1,12 @@
-package com.jason.publisher.main.services
+package com.jason.publisher.modules.mqtt.services
 
 import android.util.Log
 import com.jason.publisher.main.model.BusItem
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import org.eclipse.paho.client.mqttv3.MqttClient
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.MqttException
@@ -49,14 +52,14 @@ class MqttManager(
             .url(url)
             .build()
 
-        client.newCall(request).enqueue(object : okhttp3.Callback {
-            override fun onFailure(call: okhttp3.Call, e: IOException) {
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
                 e.printStackTrace()
                 Log.e("MqttManager", "Failed to fetch shared attributes", e)
                 callback(emptyList()) // Return an empty list in case of failure
             }
 
-            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+            override fun onResponse(call: Call, response: Response) {
                 if (response.isSuccessful) {
                     val responseData = response.body?.string()
                     Log.d("MqttManager", "Response data: $responseData") // Log the entire response for debugging

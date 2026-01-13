@@ -10,9 +10,9 @@ import android.os.Handler
 import android.os.Looper
 import android.view.WindowManager
 import androidx.core.app.ActivityCompat
-import com.jason.publisher.main.services.ScreenRecordService
-import com.jason.publisher.main.utils.BatteryLowWatcher
-import com.jason.publisher.main.utils.FileLogger
+import com.jason.publisher.main.services.background.ScreenRecordService
+import com.jason.publisher.modules.battery.services.BatteryLowWatcher
+import com.jason.publisher.main.loggers.FileLogger
 import android.Manifest
 import android.util.Log
 import androidx.core.content.edit

@@ -1,5 +1,6 @@
-package com.jason.publisher.main.services
+package com.jason.publisher.main.services.background
 
+import android.Manifest
 import android.app.*
 import android.content.*
 import android.media.MediaRecorder
@@ -22,6 +23,7 @@ import androidx.core.app.NotificationCompat
 import com.jason.publisher.R
 import java.util.Locale
 import android.os.Handler
+import android.provider.Settings
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationManagerCompat
 import java.io.File
@@ -115,7 +117,7 @@ class ScreenRecordService : Service() {
 
         val wantAudio = inIntent.getBooleanExtra("withAudio", true)
         val hasAudioPerm =
-            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
         val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         projection = mpm.getMediaProjection(code, data) ?: return START_NOT_STICKY
@@ -421,8 +423,8 @@ class ScreenRecordService : Service() {
         val appEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled()
         if (!appEnabled) {
             // Open app notification settings
-            val i = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+            val i = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             startActivity(i)
@@ -436,9 +438,9 @@ class ScreenRecordService : Service() {
             createNotifChannel()
         } else if (ch.importance == NotificationManager.IMPORTANCE_NONE) {
             // Open channel settings
-            val i = Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
-                putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
-                putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, CH_ID)
+            val i = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                putExtra(Settings.EXTRA_CHANNEL_ID, CH_ID)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             startActivity(i)

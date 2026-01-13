@@ -1,4 +1,4 @@
-package com.jason.publisher.main.utils
+package com.jason.publisher.modules.battery.services
 
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.annotation.RequiresApi
+import com.jason.publisher.main.loggers.FileLogger
 
 class BatteryLowManifestReceiver : BroadcastReceiver() {
     @SuppressLint("UnsafeProtectedBroadcastReceiver")

@@ -1,4 +1,4 @@
-package com.jason.publisher.main.utils
+package com.jason.publisher.modules.map.utils
 
 import android.annotation.SuppressLint
 

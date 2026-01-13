@@ -1,4 +1,4 @@
-package com.jason.publisher.main.services
+package com.jason.publisher.modules.map.services
 
 import android.Manifest
 import android.content.Context
@@ -6,7 +6,7 @@ import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
-import com.jason.publisher.main.`interface`.LocationListener
+import com.jason.publisher.modules.map.`interface`.LocationListener
 
 /**
  * Class responsible for managing location updates.

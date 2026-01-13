@@ -1,16 +1,14 @@
-package com.jason.publisher.main.helpers
+package com.jason.publisher.modules.mqtt.helpers
 
 import android.annotation.SuppressLint
 import android.util.Log
-import com.jason.publisher.main.helpers.MqttHelper.Companion.CLIENT_ID
-import com.jason.publisher.main.helpers.MqttHelper.Companion.SERVER_URI
 import com.jason.publisher.main.model.BusItem
-import com.jason.publisher.main.services.MqttManager
+import com.jason.publisher.modules.mqtt.services.MqttManager
 
 class MqttConfigHelper {
     private val mqttManagerConfig = MqttManager(
-        serverUri = SERVER_URI,
-        clientId = CLIENT_ID,
+        serverUri = MqttHelper.Companion.SERVER_URI,
+        clientId = MqttHelper.Companion.CLIENT_ID,
         username = CONFIG_TOKEN
     )
 

@@ -1,5 +1,6 @@
-package com.jason.publisher.main.activity
+package com.jason.publisher.modules.splashscreen
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -12,14 +13,15 @@ import android.widget.Button
 import android.widget.LinearLayout
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.edit
 import com.jason.publisher.R
-import com.jason.publisher.main.services.ScreenRecordService
-import com.jason.publisher.main.utils.FileLogger
-import com.jason.publisher.main.utils.hookBatteryToasts
+import com.jason.publisher.main.services.background.ClientAttributesService
+import com.jason.publisher.main.services.background.ScreenRecordService
+import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.modules.battery.ui.hookBatteryToasts
+import com.jason.publisher.modules.schedule.activities.ScheduleActivity
 import pl.droidsonroids.gif.GifDrawable
 import pl.droidsonroids.gif.GifImageView
-import androidx.core.content.edit
-import com.jason.publisher.main.services.ClientAttributesService
 
 @SuppressLint("CustomSplashScreen")
 class SplashActivity : AppCompatActivity() {
@@ -30,12 +32,12 @@ class SplashActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         if (Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED) {
             registerForActivityResult(
                 ActivityResultContracts.RequestPermission()
             ) { /* granted -> ignore; denied -> you can show a tip */ }
-                .launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                .launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
         // Initialize BEFORE any FileLogger.d/i/w/e
@@ -128,7 +130,7 @@ class SplashActivity : AppCompatActivity() {
     ) { res ->
         if (res.resultCode == RESULT_OK && res.data != null) {
             // Pass the audio decision to the service
-            ScreenRecordService.start(
+            ScreenRecordService.Companion.start(
                 this,
                 res.resultCode,
                 res.data!!,

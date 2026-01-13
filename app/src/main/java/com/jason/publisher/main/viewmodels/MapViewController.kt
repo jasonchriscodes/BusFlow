@@ -1,4 +1,4 @@
-package com.jason.publisher.main.helpers
+package com.jason.publisher.modules.map.viewmodels
 
 import android.annotation.SuppressLint
 import android.graphics.Canvas
@@ -12,7 +12,7 @@ import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -20,14 +20,25 @@ import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.createBitmap
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
-import com.jason.publisher.main.activity.MapActivity
+import com.jason.publisher.main.loggers.LifecycleLogger
 import com.jason.publisher.main.model.BusStop
-import org.mapsforge.core.graphics.Bitmap as MfBitmap
+import com.jason.publisher.main.ui.DrawableHelper
+import com.jason.publisher.modules.map.activities.MapActivity
+import com.jason.publisher.modules.mqtt.helpers.MqttHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.mapsforge.core.graphics.Bitmap
+import org.mapsforge.core.graphics.Style
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidBitmap
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
+import org.mapsforge.map.android.rendertheme.AssetsRenderTheme
 import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.layer.overlay.Circle
 import org.mapsforge.map.layer.overlay.Marker
@@ -35,22 +46,13 @@ import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
 import java.io.File
-import java.lang.Math.*
-import kotlin.math.sqrt
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.mapsforge.core.graphics.Style
 import kotlin.math.abs
-import kotlin.math.pow
-import androidx.core.graphics.createBitmap
-import org.mapsforge.map.android.rendertheme.AssetsRenderTheme
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 class MapViewController(
     private val activity: MapActivity,
@@ -69,8 +71,6 @@ class MapViewController(
     /** Monitor other buses every second, logging their count and active/inactive status. */
     @SuppressLint("LongLogTag")
     fun startActivityMonitor() {
-        // ✅ OPTIMIZED: Removed verbose startup log
-
         // Stop existing monitor first
         stopActivityMonitor()
 
@@ -82,7 +82,7 @@ class MapViewController(
                     val now = System.currentTimeMillis()
                     var removedCount = 0
 
-                    // ✅ FIX: Get valid bus tokens from arrBusData to ensure we only track valid buses
+                    // Get valid bus tokens from arrBusData to ensure we only track valid buses
                     val validBusTokens = activity.arrBusData.map { it.accessToken }.toSet()
 
                     // 1) remove any buses that are no longer in arrBusData (orphaned markers)
@@ -93,7 +93,7 @@ class MapViewController(
                             val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
                             val marker = activity.markerBus[t]
 
-                            com.jason.publisher.main.utils.LifecycleLogger.logOtherBusRemoved(
+                            LifecycleLogger.logOtherBusRemoved(
                                 token = t,
                                 label = label,
                                 destination = destination,
@@ -110,7 +110,7 @@ class MapViewController(
                             removedCount++
                         }
 
-                    // 2a) ✅ FIX: Remove buses that don't have valid currentTripLabel (haven't started)
+                    // 2a) Remove buses that don't have valid currentTripLabel (haven't started)
                     // This ensures buses that haven't started are removed even if they have markers
                     activity.markerBus.keys
                         .filter { it != activity.token && it in validBusTokens }
@@ -128,33 +128,32 @@ class MapViewController(
                                 activity.otherBusLabels.remove(t)
                                 removedCount++
                             } else if (label.contains("Break", ignoreCase = true)) {
-                                // ✅ FIX: Remove marker for buses on break but keep label for detail panel
+                                // Remove marker for buses on break but keep label for detail panel
                                 // Bus on break should appear in detail panel but not on map
                                 val marker = activity.markerBus[t]
                                 marker?.let {
                                     binding.map.layerManager.layers.remove(it)
                                 }
                                 activity.markerBus.remove(t)
-                                // ✅ FIX: Keep otherBusLabels, prevCoords, and lastSeen for detail panel
                                 removedCount++
                             }
                         }
 
-                    // 2b) ✅ FIX: remove any buses inactive ≥2 minutes (reduced from 5 minutes for faster cleanup)
+                    // 2b) remove any buses inactive ≥2 minutes (reduced from 5 minutes for faster cleanup)
                     // Bus that was started but app was closed will have currentTripLabel but no recent location updates
                     activity.markerBus.keys
                         .filter { it != activity.token && it in validBusTokens }
                         .forEach { t ->
                             val last = activity.lastSeen[t] ?: 0L
-                            // ✅ FIX: Use 2 minutes to quickly remove buses that closed app
+                            // Use 2 minutes to quickly remove buses that closed app
                             // This ensures buses that were started but app was closed are removed quickly
                             if (last != 0L && now - last >= 2 * 60 * 1000L) {
-                                // ✅ ENHANCED: Log bus removal with destination info
+                                // Log bus removal with destination info
                                 val label = activity.otherBusLabels[t] ?: "Unknown"
                                 val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
                                 val marker = activity.markerBus[t]
 
-                                com.jason.publisher.main.utils.LifecycleLogger.logOtherBusRemoved(
+                                LifecycleLogger.logOtherBusRemoved(
                                     token = t,
                                     label = label,
                                     destination = destination,
@@ -172,7 +171,7 @@ class MapViewController(
                             }
                         }
 
-                    // ✅ OPTIMIZED: Only log when buses are removed or count changes significantly
+                    // Only log when buses are removed or count changes significantly
                     if (removedCount > 0) {
                         Log.d("MapViewController", "Removed $removedCount inactive bus marker(s)")
                     }
@@ -201,7 +200,7 @@ class MapViewController(
     /**
      * Creates a Mapsforge‐compatible bitmap from a VectorDrawable resource.
      */
-    fun createBusIcon(@DrawableRes id: Int, sizeDp: Int = 16): MfBitmap {
+    fun createBusIcon(@DrawableRes id: Int, sizeDp: Int = 16): Bitmap {
         // 1) load the drawable
         val drawable = ResourcesCompat.getDrawable(activity.resources, id, null)!!
 
@@ -276,7 +275,11 @@ class MapViewController(
             } catch (e: Exception) {
                 Log.e("MapViewController", "Error loading map file: ${e.message}", e)
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(activity, "Error loading map file: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        activity,
+                        "Error loading map file: ${e.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
                 return@launch
             }
@@ -295,9 +298,10 @@ class MapViewController(
 
             withContext(Dispatchers.Main) {
                 try {
-                    // ✅ FIX: Ensure map layer is added correctly and map is rendered
+                    // Ensure map layer is added correctly and map is rendered
                     // Remove any existing TileRendererLayer first to avoid duplicates
-                    val existingLayers = binding.map.layerManager.layers.filterIsInstance<TileRendererLayer>()
+                    val existingLayers =
+                        binding.map.layerManager.layers.filterIsInstance<TileRendererLayer>()
                     existingLayers.forEach { binding.map.layerManager.layers.remove(it) }
 
                     // Store reference to map layer
@@ -316,10 +320,10 @@ class MapViewController(
                             addBusStopMarkers(activity.stops)
                             addBusMarker(activity.latitude, activity.longitude)
 
-                            // ✅ CRITICAL: Force map to render by invalidating
+                            // Force map to render by invalidating
                             binding.map.invalidate()
 
-                            // ✅ FIX: Additional invalidate after a short delay to ensure map renders
+                            // Additional invalidate after a short delay to ensure map renders
                             binding.map.postDelayed({
                                 binding.map.invalidate()
                                 Log.d("MapViewController", "✅ Map layer added and invalidated")
@@ -380,7 +384,7 @@ class MapViewController(
 
             // 1) get the Drawable from your helper
             val symDrawable: Drawable =
-                com.jason.publisher.main.utils.Helper.createBusStopSymbol(
+                DrawableHelper.createBusStopSymbol(
                     activity, idx, total, isRed
                 )
 
@@ -402,7 +406,7 @@ class MapViewController(
             symDrawable.draw(canvas)
 
             // 5) wrap for Mapsforge
-            val mfBmp: MfBitmap = AndroidBitmap(bmp)
+            val mfBmp: Bitmap = AndroidBitmap(bmp)
 
             // 6) add the marker
             val marker = Marker(
@@ -424,12 +428,12 @@ class MapViewController(
         busStops: List<BusStop>,
         radiusMeters: Double = activity.busStopRadius
     ) {
-        // ① remove all old circles
+        // remove all old circles
         val layers = binding.map.layerManager.layers
         layers.filterIsInstance<Circle>()
             .forEach { layers.remove(it) }
 
-        // ② draw fresh ones based on passedStops
+        // draw fresh ones based on passedStops
         busStops.forEach { stop ->
             val passed = activity.passedStops.any {
                 it.latitude == stop.latitude && it.longitude == stop.longitude
@@ -458,12 +462,12 @@ class MapViewController(
         lat2: Double, lon2: Double
     ): Double {
         val radiusOfEarth = 6371000.0
-        val phi1 = toRadians(lat1)
-        val phi2 = toRadians(lat2)
-        val deltaPhi = toRadians(lat2 - lat1)
-        val deltaLambda = toRadians(lon2 - lon1)
+        val phi1 = Math.toRadians(lat1)
+        val phi2 = Math.toRadians(lat2)
+        val deltaPhi = Math.toRadians(lat2 - lat1)
+        val deltaLambda = Math.toRadians(lon2 - lon1)
         val a = sin(deltaPhi / 2).pow(2) +
-                cos(phi1)*cos(phi2)*sin(deltaLambda/2).pow(2)
+                cos(phi1) * cos(phi2) * sin(deltaLambda / 2).pow(2)
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return radiusOfEarth * c
     }
@@ -501,7 +505,7 @@ class MapViewController(
         try {
             val currentTime = System.currentTimeMillis()
 
-            // ✅ OPTIMIZED: Only skip heavy operations if position hasn't changed
+            // Only skip heavy operations if position hasn't changed
             // But always update marker position and invalidate map to prevent white screen
             val positionChanged = (lat != lastMarkerLat || lon != lastMarkerLon ||
                     abs(bearing - lastMarkerBearing) > 1.0f)
@@ -525,7 +529,7 @@ class MapViewController(
             val newPos  = LatLong(lat, lon)
             val rotated = rotateDrawable(R.drawable.ic_bus_symbol, bearing)
 
-            // 3) ✅ CRITICAL: Always update marker position (even if position hasn't changed much)
+            // 3) Always update marker position (even if position hasn't changed much)
             // This ensures marker and map are always rendered correctly
             if (activity.busMarker != null) {
                 activity.busMarker!!.latLong = newPos
@@ -544,7 +548,7 @@ class MapViewController(
             binding.map.scaleY = 1.9f
             binding.map.setCenter(newPos)
 
-            // ✅ FIX: Ensure map layer exists before invalidating
+            // Ensure map layer exists before invalidating
             // If map layer is missing, try to reload it
             val hasMapLayer = binding.map.layerManager.layers.any { it is TileRendererLayer }
             if (!hasMapLayer && mapTileLayer != null) {
@@ -558,7 +562,7 @@ class MapViewController(
                 }
             }
 
-            // 7) ✅ CRITICAL: Always invalidate map to prevent white screen
+            // 7) Always invalidate map to prevent white screen
             // This ensures map is always rendered, even if position hasn't changed
             binding.map.invalidate()
 
@@ -567,7 +571,7 @@ class MapViewController(
             }
         } catch (e: Exception) {
             Log.e("MapViewController", "Error updating bus marker: ${e.message}", e)
-            // ✅ FIX: Ensure map is invalidated even on error to prevent white screen
+            // Ensure map is invalidated even on error to prevent white screen
             try {
                 binding.map.invalidate()
             } catch (e2: Exception) {
@@ -577,7 +581,7 @@ class MapViewController(
     }
 
     /** Rotates any vector‐drawable @id by `angle`° around its center. */
-    fun rotateDrawable(@DrawableRes id: Int, angle: Float, sizeDp: Int = 16): MfBitmap {
+    fun rotateDrawable(@DrawableRes id: Int, angle: Float, sizeDp: Int = 16): Bitmap {
         val d = ResourcesCompat.getDrawable(activity.resources, id, null)!!
         val sizePx = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
@@ -600,12 +604,12 @@ class MapViewController(
         lat1: Double, lon1: Double,
         lat2: Double, lon2: Double
     ): Float {
-        val phi1 = toRadians(lat1)
-        val phi2 = toRadians(lat2)
-        val deltaLambda = toRadians(lon2 - lon1)
-        val y = sin(deltaLambda)*cos(phi2)
-        val x = cos(phi1)*sin(phi2) - sin(phi1)*cos(phi2)*cos(deltaLambda)
-        return ((toDegrees(atan2(y,x)) + 360) % 360).toFloat()
+        val phi1 = Math.toRadians(lat1)
+        val phi2 = Math.toRadians(lat2)
+        val deltaLambda = Math.toRadians(lon2 - lon1)
+        val y = sin(deltaLambda) * cos(phi2)
+        val x = cos(phi1) * sin(phi2) - sin(phi1) * cos(phi2) * cos(deltaLambda)
+        return ((Math.toDegrees(atan2(y, x)) + 360) % 360).toFloat()
     }
 
     /**
@@ -661,7 +665,7 @@ class MapViewController(
             val zoom = binding.map.model.mapViewPosition.zoomLevel.toDouble()
             val selfToken = activity.token
 
-            // ✅ FIX: Other buses that are currently drawn, on screen, exist in arrBusData, AND have valid label
+            // Other buses that are currently drawn, on screen, exist in arrBusData, AND have valid label
             // This ensures we only show buses that are actually in the system and have started a trip
             val validBusTokens = activity.arrBusData.map { it.accessToken }.toSet()
 
@@ -712,14 +716,14 @@ class MapViewController(
                 // - others: stored label only; if missing/blank, skip (no "---")
                 val label: String = if (token == selfToken) {
                     val selfLbl = activeSegment ?: selfToken
-                    // ✅ FIX: Show self bus even if on Break - it's still an active trip
+                    // Show self bus even if on Break - it's still an active trip
                     selfLbl
                 } else {
                     val lbl = activity.otherBusLabels[token]
                     if (lbl.isNullOrBlank()) {
                         return@forEachIndexed
                     }
-                    // ✅ FIX: Show other buses even if on Break - they're still active and should be tracked
+                    // Show other buses even if on Break - they're still active and should be tracked
                     lbl
                 }
 
@@ -749,7 +753,7 @@ class MapViewController(
 
                 if (idx < displayOrderDistinct.lastIndex) {
                     detailContainer.addView(View(activity).apply {
-                        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dpToPx(1)).apply {
+                        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(1)).apply {
                             topMargin = dpToPx(4); bottomMargin = dpToPx(4)
                         }
                         setBackgroundColor(Color.LTGRAY)

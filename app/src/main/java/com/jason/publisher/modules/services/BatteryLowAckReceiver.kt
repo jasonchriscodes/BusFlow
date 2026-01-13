@@ -1,9 +1,10 @@
-package com.jason.publisher.main.utils
+package com.jason.publisher.modules.services
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationManagerCompat
+import com.jason.publisher.main.loggers.FileLogger
 
 class BatteryLowAckReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {

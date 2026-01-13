@@ -5,9 +5,9 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/colorPrimary"
-    tools:context=".main.activity.TestMapActivity">
+    tools:context=".modules.map.activities.TestMapActivity">
 
-<!-- Large Map -->
+    <!-- Large Map -->
     <org.mapsforge.map.android.view.MapView
         android:id="@+id/map"
         android:layout_width="0dp"
@@ -52,31 +52,31 @@
         app:layout_constraintVertical_bias="0.0">
 
         <!-- Current Date and Time -->
-<!--        <LinearLayout-->
-<!--            android:layout_width="match_parent"-->
-<!--            android:layout_height="wrap_content"-->
-<!--            android:layout_marginBottom="8dp"-->
-<!--            android:background="@drawable/white_border"-->
-<!--            android:orientation="horizontal"-->
-<!--            android:padding="12dp">-->
+        <!--        <LinearLayout-->
+        <!--            android:layout_width="match_parent"-->
+        <!--            android:layout_height="wrap_content"-->
+        <!--            android:layout_marginBottom="8dp"-->
+        <!--            android:background="@drawable/white_border"-->
+        <!--            android:orientation="horizontal"-->
+        <!--            android:padding="12dp">-->
 
-<!--            <TextView-->
-<!--                android:id="@+id/currentDateAndTimeTextView"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:text="Date and Time: "-->
-<!--                android:textColor="@color/white"-->
-<!--                android:textSize="16sp"-->
-<!--                android:textStyle="bold" />-->
+        <!--            <TextView-->
+        <!--                android:id="@+id/currentDateAndTimeTextView"-->
+        <!--                android:layout_width="wrap_content"-->
+        <!--                android:layout_height="wrap_content"-->
+        <!--                android:text="Date and Time: "-->
+        <!--                android:textColor="@color/white"-->
+        <!--                android:textSize="16sp"-->
+        <!--                android:textStyle="bold" />-->
 
-<!--            <TextView-->
-<!--                android:id="@+id/currentDateAndTime"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:text="2025-01-23 14:00:00"-->
-<!--                android:textColor="@color/white"-->
-<!--                android:textSize="16sp" />-->
-<!--        </LinearLayout>-->
+        <!--            <TextView-->
+        <!--                android:id="@+id/currentDateAndTime"-->
+        <!--                android:layout_width="wrap_content"-->
+        <!--                android:layout_height="wrap_content"-->
+        <!--                android:text="2025-01-23 14:00:00"-->
+        <!--                android:textColor="@color/white"-->
+        <!--                android:textSize="16sp" />-->
+        <!--        </LinearLayout>-->
 
         <!-- Timing Point and Trip End Time Section -->
         <LinearLayout
@@ -176,22 +176,22 @@
             android:padding="8dp">
 
             <!-- Schedule Status (Ahead, Behind, or On Time) -->
-<!--            <ImageView-->
-<!--                android:id="@+id/scheduleStatusIcon"-->
-<!--                android:layout_width="128dp"-->
-<!--                android:layout_height="128dp"-->
-<!--                android:contentDescription="Schedule Status Icon"-->
-<!--                android:visibility="gone" />-->
+            <!--            <ImageView-->
+            <!--                android:id="@+id/scheduleStatusIcon"-->
+            <!--                android:layout_width="128dp"-->
+            <!--                android:layout_height="128dp"-->
+            <!--                android:contentDescription="Schedule Status Icon"-->
+            <!--                android:visibility="gone" />-->
 
-<!--            <TextView-->
-<!--                android:id="@+id/scheduleStatusText"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:layout_marginTop="4dp"-->
-<!--                android:gravity="center"-->
-<!--                android:text="Unknown"-->
-<!--                android:textColor="@android:color/white"-->
-<!--                android:textSize="16sp" />-->
+            <!--            <TextView-->
+            <!--                android:id="@+id/scheduleStatusText"-->
+            <!--                android:layout_width="wrap_content"-->
+            <!--                android:layout_height="wrap_content"-->
+            <!--                android:layout_marginTop="4dp"-->
+            <!--                android:gravity="center"-->
+            <!--                android:text="Unknown"-->
+            <!--                android:textColor="@android:color/white"-->
+            <!--                android:textSize="16sp" />-->
 
             <!-- Schedule Status (Ahead, Behind, or On Time) -->
             <LinearLayout
@@ -300,32 +300,32 @@
                     android:gravity="end" />
             </LinearLayout>
 
-<!--            &lt;!&ndash; Threshold Range Display &ndash;&gt;-->
-<!--            <LinearLayout-->
-<!--                android:layout_width="match_parent"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:orientation="horizontal"-->
-<!--                android:paddingTop="4dp">-->
+            <!--            &lt;!&ndash; Threshold Range Display &ndash;&gt;-->
+            <!--            <LinearLayout-->
+            <!--                android:layout_width="match_parent"-->
+            <!--                android:layout_height="wrap_content"-->
+            <!--                android:orientation="horizontal"-->
+            <!--                android:paddingTop="4dp">-->
 
-<!--                <TextView-->
-<!--                    android:id="@+id/thresholdRangeLabel"-->
-<!--                    android:layout_width="wrap_content"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:text="Threshold Range:"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/white"-->
-<!--                    android:gravity="start" />-->
+            <!--                <TextView-->
+            <!--                    android:id="@+id/thresholdRangeLabel"-->
+            <!--                    android:layout_width="wrap_content"-->
+            <!--                    android:layout_height="wrap_content"-->
+            <!--                    android:text="Threshold Range:"-->
+            <!--                    android:textSize="16sp"-->
+            <!--                    android:textColor="@android:color/white"-->
+            <!--                    android:gravity="start" />-->
 
-<!--                <TextView-->
-<!--                    android:id="@+id/thresholdRangeValueTextView"-->
-<!--                    android:layout_width="0dp"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:layout_weight="1"-->
-<!--                    android:text="Unknown"-->
-<!--                    android:textSize="16sp"-->
-<!--                    android:textColor="@android:color/white"-->
-<!--                    android:gravity="end" />-->
-<!--            </LinearLayout>-->
+            <!--                <TextView-->
+            <!--                    android:id="@+id/thresholdRangeValueTextView"-->
+            <!--                    android:layout_width="0dp"-->
+            <!--                    android:layout_height="wrap_content"-->
+            <!--                    android:layout_weight="1"-->
+            <!--                    android:text="Unknown"-->
+            <!--                    android:textSize="16sp"-->
+            <!--                    android:textColor="@android:color/white"-->
+            <!--                    android:gravity="end" />-->
+            <!--            </LinearLayout>-->
 
             <!-- Speed Display -->
             <LinearLayout

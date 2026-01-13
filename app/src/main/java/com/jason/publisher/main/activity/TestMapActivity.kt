@@ -1,58 +1,67 @@
-package com.jason.publisher.main.activity
+package com.jason.publisher.modules.map.activities
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.content.res.ColorStateList
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Matrix
+import android.location.Location
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
-import com.jason.publisher.databinding.ActivityTestmapBinding
-import com.jason.publisher.main.model.BusRoute
-import java.text.SimpleDateFormat
-import java.util.*
-import android.content.Intent
-import android.content.res.ColorStateList
-import android.graphics.Bitmap
-import android.graphics.Color
-import android.location.Location
-import android.os.Build
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
-import com.jason.publisher.main.`interface`.LocationListener
+import androidx.core.graphics.createBitmap
 import com.jason.publisher.R
-import com.jason.publisher.main.utils.Helper
+import com.jason.publisher.databinding.ActivityTestmapBinding
+import com.jason.publisher.modules.schedule.activities.ScheduleActivity
+import com.jason.publisher.modules.map.`interface`.LocationListener
 import com.jason.publisher.main.model.BusItem
+import com.jason.publisher.main.model.BusRoute
 import com.jason.publisher.main.model.BusStop
-import com.jason.publisher.main.model.BusStopWithTimingPoint
+import com.jason.publisher.modules.map.models.BusStopWithTimingPoint
 import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
-import com.jason.publisher.main.services.LocationManager
-import com.jason.publisher.main.utils.FileLogger
-import com.jason.publisher.main.utils.NetworkStatusHelper
-import com.jason.publisher.main.utils.TimeBasedMovingAverageFilterDouble
-import com.jason.publisher.main.utils.hookBatteryToasts
+import com.jason.publisher.modules.map.services.LocationManager
+import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.ui.DrawableHelper
+import com.jason.publisher.modules.network.utils.NetworkStatusHelper
+import com.jason.publisher.modules.map.utils.TimeBasedMovingAverageFilterDouble
+import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.mapsforge.core.graphics.Bitmap
+import org.mapsforge.core.graphics.Style
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidBitmap
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
+import org.mapsforge.map.layer.overlay.Marker
+import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.InternalRenderTheme
 import java.io.File
-import java.util.Locale.getDefault
-import androidx.core.graphics.createBitmap
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.HashMap
+import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -87,9 +96,9 @@ class TestMapActivity : AppCompatActivity() {
     private lateinit var timingPointandStopsTextView: TextView
     private lateinit var tripEndTimeTextView: TextView
 
-    private var routePolyline: org.mapsforge.map.layer.overlay.Polyline? = null
-    private var busMarker: org.mapsforge.map.layer.overlay.Marker? = null
-    private var markerBus = HashMap<String, org.mapsforge.map.layer.overlay.Marker>()
+    private var routePolyline: Polyline? = null
+    private var busMarker: Marker? = null
+    private var markerBus = HashMap<String, Marker>()
 
     private lateinit var simulationHandler: Handler
     private lateinit var simulationRunnable: Runnable
@@ -415,7 +424,7 @@ class TestMapActivity : AppCompatActivity() {
             "Trip complete! You have $restHours hour(s) and $restMinutes minute(s) rest before your next trip, which starts at ${nextScheduleStartStr}:00."
         }
 
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("Trip Completed")
             .setMessage(messageText)
             .setPositiveButton("View Next Trip") { dialog, _ ->
@@ -434,7 +443,7 @@ class TestMapActivity : AppCompatActivity() {
             resources.getColor(R.color.white, null)
         )
         // Style the positive button similar to your simulation button
-        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)?.apply {
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
             backgroundTintList = ColorStateList.valueOf(resources.getColor(R.color.purple_400, null))
             setTextColor(resources.getColor(R.color.white, null))
         }
@@ -480,7 +489,7 @@ class TestMapActivity : AppCompatActivity() {
         actualTimeHandler = Handler(Looper.getMainLooper())
         actualTimeRunnable = object : Runnable {
             override fun run() {
-                val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
+                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                 actualTimeTextView.text = timeFormat.format(simulatedStartTime.time)
 
                 // Always advance time by 1 second per tick (simulate real clock)
@@ -561,7 +570,7 @@ class TestMapActivity : AppCompatActivity() {
     private fun checkScheduleStatus() {
         if (scheduleList.isEmpty()) return
 
-        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
         if (latitude == 0.0 && longitude == 0.0) {
             Log.w("checkScheduleStatus", "Skipping status check: Invalid location (0.0, 0.0)")
@@ -734,7 +743,7 @@ class TestMapActivity : AppCompatActivity() {
     private fun overrideLateStatusForNextSchedule() {
         val logTag = "TestMapActivity checkScheduleStatus"
         // Set up time format.
-        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
         // Retrieve the scheduled final stop time from the current schedule's endTime.
         val scheduledTimeForFinalStopStr = scheduleList.first().endTime + ":00"
@@ -812,9 +821,10 @@ class TestMapActivity : AppCompatActivity() {
                 // Set status text.
                 scheduleStatusValueTextView.text = overrideStatusText
                 // Set text color to blind_red.
-                scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(this@TestMapActivity,
-                    R.color.blind_red
-                ))
+                scheduleStatusValueTextView.setTextColor(
+                    ContextCompat.getColor(this@TestMapActivity,
+                        R.color.blind_red
+                    ))
                 // Set the symbol to ic_schedule_late.
                 findViewById<ImageView>(R.id.scheduleAheadIcon).setImageResource(R.drawable.ic_schedule_late)
             }
@@ -1026,7 +1036,7 @@ class TestMapActivity : AppCompatActivity() {
     private fun updateApiTime() {
         // If locked, simply reuse the locked value — only if upcomingStopName matches the first timing point
         if (apiTimeLocked && lockedApiTime != null) {
-            val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
+            val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
             // Parse the locked time into a Calendar object
             val lockedCal = Calendar.getInstance().apply {
@@ -1034,7 +1044,7 @@ class TestMapActivity : AppCompatActivity() {
             }
 
             // Get timing list and last red timing point
-            val timingList = BusStopWithTimingPoint.fromRouteData(busRouteData.first())
+            val timingList = BusStopWithTimingPoint.Companion.fromRouteData(busRouteData.first())
             val lastScheduledAddress = getLastScheduledAddress(timingList, scheduleList)
             val lastTimingPointIndex = timingList.indexOfFirst { it.address == lastScheduledAddress }
             val finalStopIndex = timingList.lastIndex
@@ -1071,7 +1081,7 @@ class TestMapActivity : AppCompatActivity() {
         }
 
         // Build timing list.
-        val timingList = BusStopWithTimingPoint.fromRouteData(busRouteData.first())
+        val timingList = BusStopWithTimingPoint.Companion.fromRouteData(busRouteData.first())
         Log.d("TestMapActivity updateApiTime", "Timing list: $timingList")
 
         val upcomingAddress = upcomingStop
@@ -1100,7 +1110,7 @@ class TestMapActivity : AppCompatActivity() {
         val additionalSeconds = (totalDurationMinutes * 60).toInt()
         startCalendar.add(Calendar.SECOND, additionalSeconds)
 
-        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
         val updatedApiTime = timeFormat.format(startCalendar.time)
 
         val firstAddress = scheduleList.firstOrNull()?.busStops?.firstOrNull()?.address
@@ -1133,9 +1143,9 @@ class TestMapActivity : AppCompatActivity() {
         scheduleList: List<ScheduleItem>
     ): List<Int> {
         if (scheduleList.isEmpty() || timingList.isEmpty()) return emptyList()
-        val scheduledAddresses = scheduleList.first().busStops.map { it.address.lowercase(getDefault()) }
+        val scheduledAddresses = scheduleList.first().busStops.map { it.address.lowercase(Locale.getDefault()) }
         return timingList.withIndex()
-            .filter { it.value.address?.lowercase(getDefault()) in scheduledAddresses }
+            .filter { it.value.address?.lowercase(Locale.getDefault()) in scheduledAddresses }
             .map { it.index }
             .sorted()
     }
@@ -1351,7 +1361,7 @@ class TestMapActivity : AppCompatActivity() {
             currentStopIndex++
 
             // Build timing list and update API time only if the stop exists in it
-            val timingList = BusStopWithTimingPoint.fromRouteData(busRouteData.first())
+            val timingList = BusStopWithTimingPoint.Companion.fromRouteData(busRouteData.first())
             if (timingList.any { it.address?.equals(stopAddress, ignoreCase = true) == true }) {
                 updateApiTime()
             } else {
@@ -1406,7 +1416,7 @@ class TestMapActivity : AppCompatActivity() {
             // Show the button when a stop is missed
             arriveButtonContainer.visibility = View.VISIBLE
 
-            val alertDialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            val alertDialog = AlertDialog.Builder(this)
                 .setTitle("Missed Stop Alert!")
                 .setMessage("You may have missed a bus stop. Please verify your location and route.")
                 .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
@@ -1565,11 +1575,11 @@ class TestMapActivity : AppCompatActivity() {
             val polylinePaint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
                 color = Color.BLUE  // Change color to RED for visibility
                 strokeWidth = 8f  // Increase thickness for better visibility
-                setStyle(org.mapsforge.core.graphics.Style.STROKE)
+                setStyle(Style.STROKE)
             }
 
             // **Create polyline with proper style**
-            routePolyline = org.mapsforge.map.layer.overlay.Polyline(polylinePaint, AndroidGraphicFactory.INSTANCE).apply {
+            routePolyline = Polyline(polylinePaint, AndroidGraphicFactory.INSTANCE).apply {
                 addPoints(routePoints)
             }
 
@@ -1593,7 +1603,7 @@ class TestMapActivity : AppCompatActivity() {
         val rotatedBitmap = rotateDrawable(bearing)
 
         if (busMarker == null) {
-            busMarker = org.mapsforge.map.layer.overlay.Marker(
+            busMarker = Marker(
                 newPosition, rotatedBitmap, 0, 0
             )
             binding.map.layerManager.layers.add(busMarker)
@@ -1623,7 +1633,7 @@ class TestMapActivity : AppCompatActivity() {
      * @param angle The angle in degrees.
      * @return Rotated Bitmap.
      */
-    private fun rotateDrawable(angle: Float): org.mapsforge.core.graphics.Bitmap {
+    private fun rotateDrawable(angle: Float): Bitmap {
         val markerDrawable = ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol, null)
 
         if (markerDrawable == null) {
@@ -1637,15 +1647,15 @@ class TestMapActivity : AppCompatActivity() {
         val androidBitmap =
             createBitmap(markerDrawable.intrinsicWidth, markerDrawable.intrinsicHeight)
 
-        val canvas = android.graphics.Canvas(androidBitmap)
+        val canvas = Canvas(androidBitmap)
         markerDrawable.setBounds(0, 0, canvas.width, canvas.height)
         markerDrawable.draw(canvas) // Draw the drawable onto the canvas
 
         // Apply rotation
-        val matrix = android.graphics.Matrix()
+        val matrix = Matrix()
         matrix.postRotate(angle)
 
-        val rotatedAndroidBitmap = Bitmap.createBitmap(
+        val rotatedAndroidBitmap = android.graphics.Bitmap.createBitmap(
             androidBitmap, 0, 0, androidBitmap.width, androidBitmap.height, matrix, true
         )
 
@@ -1729,7 +1739,7 @@ class TestMapActivity : AppCompatActivity() {
                 ResourcesCompat.getDrawable(resources, R.drawable.ic_bus_symbol2, null)
             )
             // Create a Mapsforge marker
-            val marker = org.mapsforge.map.layer.overlay.Marker(
+            val marker = Marker(
                 busPosition, // LatLong position
                 markerDrawable, // Marker icon
                 0, // Horizontal offset
@@ -1817,7 +1827,7 @@ class TestMapActivity : AppCompatActivity() {
         }
 
         // Create and add a new marker
-        busMarker = org.mapsforge.map.layer.overlay.Marker(
+        busMarker = Marker(
             busPosition, markerBitmap, 0, 0
         )
         binding.map.layerManager.layers.add(busMarker)
@@ -1837,7 +1847,7 @@ class TestMapActivity : AppCompatActivity() {
 
             Log.d("TestMapActivity addBusStopMarkers", "Checking $coordKey, isRed=$isRed")
 
-            val busStopSymbol = Helper.createBusStopSymbol(
+            val busStopSymbol = DrawableHelper.createBusStopSymbol(
                 applicationContext,
                 index,
                 totalStops,
@@ -1845,7 +1855,7 @@ class TestMapActivity : AppCompatActivity() {
             )
             val markerBitmap = AndroidGraphicFactory.convertToBitmap(busStopSymbol)
 
-            val marker = org.mapsforge.map.layer.overlay.Marker(
+            val marker = Marker(
                 LatLong(stop.latitude!!, stop.longitude!!),
                 markerBitmap,
                 0,

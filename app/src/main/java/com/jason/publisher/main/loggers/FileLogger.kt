@@ -1,4 +1,4 @@
-package com.jason.publisher.main.utils
+package com.jason.publisher.main.loggers
 
 import android.content.ContentUris
 import android.content.ContentValues

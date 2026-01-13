@@ -48,21 +48,21 @@
         </provider>
 
         <activity
-            android:name=".main.activity.MapActivity"
+            android:name=".modules.map.activities.MapActivity"
             android:exported="false"
             android:screenOrientation="landscape" />
-        <activity android:name=".main.activity.TestMapActivity"
+        <activity android:name=".modules.map.activities.TestMapActivity"
             android:exported="false"
             android:screenOrientation="landscape"/>
 
         <service android:name="org.eclipse.paho.android.service.MqttService" />
 
         <activity
-            android:name=".main.activity.ScheduleActivity"
+            android:name=".modules.schedule.activities.ScheduleActivity"
             android:exported="true"
             android:screenOrientation="landscape"/>
         <activity
-            android:name=".main.activity.SplashActivity"
+            android:name=".modules.splashscreen.SplashActivity"
             android:exported="true"
             android:screenOrientation="landscape"
             android:theme="@style/Theme.NavTrack.Splash">
@@ -72,12 +72,12 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".main.activity.BreakActivity"
+            android:name=".modules.break.activities.BreakActivity"
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:exported="false" />
         <activity
-            android:name=".main.activity.RepActivity"
+            android:name=".modules.rep.RepActivity"
             android:exported="false"
             android:screenOrientation="landscape"
             android:configChanges="orientation|keyboardHidden|screenSize" />
@@ -86,17 +86,17 @@
         <!--            android:exported="false"-->
         <!--            android:screenOrientation="landscape" />-->
         <service
-            android:name=".main.services.ScreenRecordService"
+            android:name=".main.services.background.ScreenRecordService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection"
             android:stopWithTask="true" />
         <service
-            android:name=".main.services.ClientAttributesService"
+            android:name=".main.services.background.ClientAttributesService"
             android:exported="false"
             android:stopWithTask="false" />
         <!-- ACTION_BATTERY_LOW while your process might be dead -->
         <receiver
-            android:name=".main.utils.BatteryLowManifestReceiver"
+            android:name=".modules.battery.services.BatteryLowManifestReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BATTERY_LOW"/>
@@ -105,7 +105,7 @@
 
         <!-- Dismiss “OK” action from the heads-up -->
         <receiver
-            android:name=".main.utils.BatteryLowAckReceiver"
+            android:name=".modules.services.BatteryLowAckReceiver"
             android:exported="false" />
     </application>
 

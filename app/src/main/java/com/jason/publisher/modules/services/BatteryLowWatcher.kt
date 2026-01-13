@@ -1,4 +1,4 @@
-package com.jason.publisher.main.utils
+package com.jason.publisher.modules.battery.services
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -14,6 +14,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.jason.publisher.main.loggers.FileLogger
 import kotlin.math.roundToInt
 
 object BatteryLowWatcher {
