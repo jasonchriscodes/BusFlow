@@ -159,7 +159,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                         val icon = ImageView(context).apply {
                             setImageResource(R.drawable.cup_break)
                             setColorFilter(if (isDarkMode) Color.GRAY else Color.WHITE)
-                            layoutParams = LinearLayout.LayoutParams(32, 32).apply {
+                            layoutParams = LayoutParams(32, 32).apply {
                                 gravity = Gravity.CENTER_HORIZONTAL
                             }
                         }
@@ -221,8 +221,6 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
 
             if (i < workIntervals.size - 1) {
                 val lastStopOfCurrent = item?.busStops?.lastOrNull()?.abbreviation ?: "?"
-                val nextItem = allScheduleItems.getOrNull(i + 1)
-                val breakAbbr = nextItem?.busStops?.firstOrNull()?.abbreviation ?: "?"
 
                 val restBox = LinearLayout(context).apply {
                     orientation = VERTICAL
@@ -236,7 +234,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                     val busIcon = ImageView(context).apply {
                         setImageResource(R.drawable.bus_timeline)
                         setColorFilter(if (isDarkMode) Color.GRAY else Color.WHITE)
-                        layoutParams = LinearLayout.LayoutParams(32, 32)
+                        layoutParams = LayoutParams(32, 32)
                     }
 
                     val restAbbr = TextView(context).apply {
@@ -265,11 +263,6 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
         this.allScheduleItems = scheduleItems
     }
 
-    private fun convertToMinutes(time: String): Int {
-        val parts = time.split(":").map { it.toInt() }
-        return parts[0] * 60 + parts[1]
-    }
-
     /**
      * Calculates the duration between two times in minutes.
      * Used for scaling weight of timeline segments.
@@ -281,30 +274,12 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
     private fun calculateDurationInMinutes(start: String, end: String): Long {
         val fmt = SimpleDateFormat("HH:mm", Locale.getDefault())
         return try {
-            val s = fmt.parse(start)
-            val e = fmt.parse(end)
+            val s = fmt.parse(start) ?: Date()
+            val e = fmt.parse(end) ?: Date()
             (e.time - s.time) / 60000
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             30L // fallback duration
         }
     }
 
-    /**
-     * Returns a formatted delta time string between two times.
-     *
-     * @param start Start time in "HH:mm".
-     * @param end End time in "HH:mm".
-     * @return A string like "15 min" or "?" if parsing fails.
-     */
-    private fun getDeltaTime(start: String, end: String): String {
-        val fmt = SimpleDateFormat("HH:mm", Locale.getDefault())
-        return try {
-            val s = fmt.parse(start)
-            val e = fmt.parse(end)
-            val diff = (e.time - s.time) / 60000
-            "${diff} min"
-        } catch (e: Exception) {
-            "?"
-        }
-    }
 }

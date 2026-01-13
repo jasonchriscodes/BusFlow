@@ -1,7 +1,6 @@
 package com.jason.publisher.main.utils
 
 import android.Manifest
-import android.R
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -68,9 +67,9 @@ object BatteryLowWatcher {
 
             // Hook: if you want to do something when critically low (e.g., GPS ping),
             // call your own service here when pct <= CRITICAL_PCT.
-            if (pct in 1..CRITICAL_PCT) {
-                // dispatchLowBatteryLocationPing(app, pct) // <- your implementation
-            }
+            // if (pct in 1..CRITICAL_PCT) {
+            // dispatchLowBatteryLocationPing(app, pct) // <- your implementation
+            // }
         }
     }
 
@@ -125,7 +124,7 @@ object BatteryLowWatcher {
 
     /** Replace with your real network/MQTT/ThingsBoard call. Returns success/failure. */
     @SuppressLint("MissingPermission")
-    fun sendLowBatteryPing(context: Context, telemetry: Telemetry): Boolean {
+    fun sendLowBatteryPing(telemetry: Telemetry): Boolean {
         FileLogger.d(
             "BatteryLowWatcher",
             "sendLowBatteryPing(): battery=${telemetry.batteryPct}%"
@@ -161,7 +160,7 @@ object BatteryLowWatcher {
         val text = "Battery $pct% ($bucket)"
 
         val notif = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.stat_sys_warning)
+            .setSmallIcon(android.R.drawable.stat_sys_warning)
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -192,8 +191,8 @@ object BatteryLowWatcher {
         val prop = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         if (prop in 1..100) return prop
 
-        val ifilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-        val status = context.registerReceiver(null, ifilter)
+        val intentFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+        val status = context.registerReceiver(null, intentFilter)
         val level = status?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val scale = status?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
         return if (level >= 0 && scale > 0) ((level / scale.toFloat()) * 100f).toInt() else -1

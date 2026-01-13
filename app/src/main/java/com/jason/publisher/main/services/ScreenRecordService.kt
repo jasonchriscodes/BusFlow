@@ -160,7 +160,12 @@ class ScreenRecordService : Service() {
 
         fun buildRecorder(needAudio: Boolean): Pair<MediaRecorder, Boolean> {
             var audioEnabled = needAudio && hasAudioPerm
-            var r = MediaRecorder()
+            var r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(this)
+            } else {
+                @Suppress("DEPRECATION")
+                MediaRecorder()
+            }
 
             if (audioEnabled) {
                 try {
@@ -170,7 +175,12 @@ class ScreenRecordService : Service() {
                     Log.w("SRService", "Audio source unavailable, recording without audio: ${e.message}")
                     runCatching { r.reset(); r.release() }
                     audioEnabled = false
-                    r = MediaRecorder()
+                    r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        MediaRecorder(this)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        MediaRecorder()
+                    }
                 }
             }
 
@@ -208,7 +218,7 @@ class ScreenRecordService : Service() {
         }
 
         // Build recorder with error handling
-        val (rec, audioEnabled) = try {
+        val (rec, _) = try {
             buildRecorder(wantAudio)
         } catch (e: Exception) {
             Log.e("SRService", "Failed to build recorder: ${e.message}", e)
@@ -408,7 +418,7 @@ class ScreenRecordService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
 
         // App-level toggle
-        val appEnabled = androidx.core.app.NotificationManagerCompat.from(this).areNotificationsEnabled()
+        val appEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled()
         if (!appEnabled) {
             // Open app notification settings
             val i = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {

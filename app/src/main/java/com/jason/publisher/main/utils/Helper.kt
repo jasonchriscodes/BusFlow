@@ -1,7 +1,6 @@
 package com.jason.publisher.main.utils
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -10,6 +9,8 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import androidx.core.content.ContextCompat
 import com.jason.publisher.R
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.drawable.toDrawable
 
 /**
  * Object containing helper functions used throughout the application.
@@ -20,8 +21,8 @@ object Helper {
      * Creates a custom drawable with the bus stop number.
      *
      * @param context The application context.
-     * @param busStopNumber The bus stop number.
-     * @param maxBusStopNumber The maximum bus stop number.
+     * @param busStopIndex The bus stop number.
+     * @param totalStops The maximum bus stop number.
      * @return A drawable with the bus stop symbol and number.
      */
     fun createBusStopSymbol(context: Context, busStopIndex: Int, totalStops: Int, isRed: Boolean): Drawable {
@@ -32,11 +33,7 @@ object Helper {
         }
 
         val drawable = ContextCompat.getDrawable(context, R.drawable.ic_bus_stop) as BitmapDrawable
-        val bitmap = Bitmap.createBitmap(
-            drawable.intrinsicWidth,
-            drawable.intrinsicHeight,
-            Bitmap.Config.ARGB_8888
-        )
+        val bitmap = createBitmap(drawable.intrinsicWidth, drawable.intrinsicHeight)
         val canvas = Canvas(bitmap)
         drawable.setBounds(0, 0, canvas.width, canvas.height)
         drawable.draw(canvas)
@@ -54,6 +51,6 @@ object Helper {
 
         canvas.drawText(adjustedNumber, x, y, paint)
 
-        return BitmapDrawable(context.resources, bitmap)
+        return bitmap.toDrawable(context.resources)
     }
 }

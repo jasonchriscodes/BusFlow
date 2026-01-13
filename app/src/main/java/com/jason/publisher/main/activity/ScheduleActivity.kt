@@ -1,6 +1,6 @@
 package com.jason.publisher.main.activity
 
-import ScheduleAdapter
+import com.jason.publisher.main.utils.ScheduleAdapter
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -49,7 +49,6 @@ import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.model.BusDataCache
 import com.jason.publisher.main.model.BusItem
 import com.jason.publisher.main.model.BusRoute
-import com.jason.publisher.main.model.BusScheduleInfo
 import com.jason.publisher.main.model.BusStop
 import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
@@ -84,11 +83,7 @@ class ScheduleActivity : AppCompatActivity() {
     val mqttConfigHelper = MqttConfigHelper()
     lateinit var mqttManager: MqttManager
     private lateinit var connectionStatusTextView: TextView
-    private val REQUEST_MANAGE_EXTERNAL_STORAGE = 1001
-    private val REQUEST_WRITE_PERMISSION = 1002
 
-    private var latitude = 0.0
-    private var longitude = 0.0
     private var aid = ""
     private var jsonString = ""
     private var token = ""
@@ -110,8 +105,6 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var timeline1: StyledMultiColorTimeline
     private lateinit var timeline2: StyledMultiColorTimeline
     private lateinit var timeline3: StyledMultiColorTimeline
-    private val timelineRange = Pair("08:00", "11:10")
-    private lateinit var networkStatusHelper: NetworkStatusHelper
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
     private val loadingBarHandler = Handler(Looper.getMainLooper())
@@ -135,18 +128,15 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var fetchingIcon: ImageView
     private lateinit var networkStatusIndicator: View
     private var fetchRoster = false
-    private val PANEL_DEBUG_PREF = "panel_debug_pref"
-    private val PANEL_DEBUG_NO_KEY = "panel_debug_no"
     private var lastPreStartDump: String? = null
     private lateinit var emptyStateText: TextView
 
     companion object {
         private const val REQUEST_PERIODIC_TIME = 5000L
-        private const val PUBLISH_POSITION_TIME = 5000L
-        private const val LAST_MSG_KEY = "lastMessageKey"
-        private const val MSG_KEY = "messageKey"
-        private const val SOUND_FILE_NAME = "notif.wav"
         private const val LOCATION_PERMISSION_REQUEST = 1234
+        private const val REQUEST_MANAGE_EXTERNAL_STORAGE = 1001
+        private const val PANEL_DEBUG_PREF = "panel_debug_pref"
+        private const val PANEL_DEBUG_NO_KEY = "panel_debug_no"
     }
 
 //    private val dummyScheduleData = listOf(
@@ -417,12 +407,10 @@ class ScheduleActivity : AppCompatActivity() {
                     withContext(Dispatchers.Main) {
                         preloadMap.layerManager.layers.add(renderer)
                         preloadMap.post {
-                            preloadMap.model.mapViewPosition.setZoomLevel(16)
-                            preloadMap.model.mapViewPosition.setCenter(
-                                LatLong(
-                                    -36.855647,
-                                    174.765249
-                                )
+                            preloadMap.model.mapViewPosition.zoomLevel = 16
+                            preloadMap.model.mapViewPosition.center = LatLong(
+                                -36.855647,
+                                174.765249
                             )
                             preloadMap.invalidate()
                         }
@@ -597,7 +585,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         val intent = Intent(this, RepActivity::class.java).apply {
             putExtra("AID", aid)
-            putExtra("CONFIG", ArrayList(config))
+            putExtra("CONFIG", ArrayList(config ?: emptyList()))
             putExtra("JSON_STRING", jsonString)
 
             putExtra("BUS_ROUTE_DATA", ArrayList(busRouteData))
@@ -661,7 +649,6 @@ class ScheduleActivity : AppCompatActivity() {
         // We will still pass the full list (for future trips), AND pass the selected one explicitly.
         val intent = Intent(this, MapActivity::class.java).apply {
             // timeline labels (unchanged)
-            val (workIntervals, runNames) = extractWorkIntervalsAndrunNames()
             val labels = scheduleDataToPass.map { item ->
                 val from = item.busStops.firstOrNull()?.abbreviation ?: "?"
                 val to   = item.busStops.lastOrNull()?.abbreviation  ?: "?"
@@ -671,7 +658,7 @@ class ScheduleActivity : AppCompatActivity() {
 
             // essentials
             putExtra("AID", aid)
-            putExtra("CONFIG", ArrayList(config))
+            putExtra("CONFIG", ArrayList(config ?: emptyList()))
             putExtra("JSON_STRING", jsonString)
 
             // keep sending the *full* sets as before
@@ -741,8 +728,8 @@ class ScheduleActivity : AppCompatActivity() {
         val testBtn = findViewById<Button>(R.id.testStartRouteButton)
         val buttonBackgroundTint = if (isDark) R.color.grey else R.color.purple_400
 
-        startBtn.setBackgroundTintList(ContextCompat.getColorStateList(this, buttonBackgroundTint))
-        testBtn.setBackgroundTintList(ContextCompat.getColorStateList(this, buttonBackgroundTint))
+        startBtn.backgroundTintList = ContextCompat.getColorStateList(this, buttonBackgroundTint)
+        testBtn.backgroundTintList = ContextCompat.getColorStateList(this, buttonBackgroundTint)
 
         // ✅ Apply dark mode to custom timeline views
         timeline1.setDarkMode(isDark)
@@ -967,55 +954,6 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /**
-     * Function to continuously check whether the first schedule's start time has passed by 1.5 minutes and automatically start the route when the condition is met
-     */
-    private val scheduleCheckHandler = Handler(Looper.getMainLooper())
-    private lateinit var scheduleCheckRunnable: Runnable
-
-    @SuppressLint("SimpleDateFormat", "LongLogTag")
-    private fun startPeriodicScheduleCheck() {
-        scheduleCheckRunnable = object : Runnable {
-            override fun run() {
-                if (activeScheduleData.isNotEmpty()) {
-                    val firstSchedule = activeScheduleData.first()
-                    val startTimeStr = firstSchedule.startTime
-                    val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-                    val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-                    val fullStartTimeStr = "$todayDate $startTimeStr"
-
-                    try {
-                        val startTime = dateFormat.parse(fullStartTimeStr) ?: return
-                        val currentTime = Date()
-                        val diffInMillis = currentTime.time - startTime.time
-                        val diffInMinutes = diffInMillis / (1000 * 60)
-
-                        Log.d("ScheduleActivity startPeriodicScheduleCheck",
-                            "Current Time: ${dateFormat.format(currentTime)}, " +
-                                    "Start Time: ${dateFormat.format(startTime)}, " +
-                                    "Diff in minutes: $diffInMinutes")
-
-                        if (diffInMinutes >= 1.5) {
-                            Log.d("ScheduleActivity startPeriodicScheduleCheck", "🚀 Auto-starting route as the first schedule has passed 1.5 minutes.")
-                            runOnUiThread {
-                                binding.startRouteButton.performClick()
-                            }
-                            // Stop further checking after starting
-                            scheduleCheckHandler.removeCallbacks(scheduleCheckRunnable)
-                            return
-                        }
-                    } catch (e: Exception) {
-                        Log.e("ScheduleActivity startPeriodicScheduleCheck", "Error parsing start time: ${e.message}")
-                    }
-                }
-                // Re-run check every 1 second
-                scheduleCheckHandler.postDelayed(this, 1000)
-            }
-        }
-        // Start periodic checking
-        scheduleCheckHandler.post(scheduleCheckRunnable)
-    }
-
-    /**
      * Updates the schedule table with paginated rows.
      * Shows only maxRowsPerPage items for the currentPage.
      * Also triggers pagination button rendering.
@@ -1162,17 +1100,6 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /**
-     * a helper to grab the busStops list from your scheduleData
-     */
-    private fun extractBusStops(): List<BusScheduleInfo> {
-        val busStopsList = mutableListOf<BusScheduleInfo>()
-        for (item in activeScheduleData) {
-            busStopsList.addAll(item.busStops)
-        }
-        return busStopsList
-    }
-
-    /**
      * Extracts work intervals and duty names from the schedule data dynamically.
      */
     @SuppressLint("LongLogTag")
@@ -1194,14 +1121,6 @@ class ScheduleActivity : AppCompatActivity() {
         Log.d("ScheduleActivity extractWorkIntervalsAndrunNames", "✅ Extracted Work Intervals: $workIntervals")
         Log.d("ScheduleActivity extractWorkIntervalsAndrunNames", "✅ Extracted Duty Names: $runNames")
         return Pair(workIntervals, runNames)
-    }
-
-    /**
-     * Helper function to convert a time string "HH:mm" to minutes since midnight.
-     */
-    private fun convertToMinutes(time: String): Int {
-        val parts = time.split(":").map { it.toInt() }
-        return parts[0] * 60 + parts[1]
     }
 
     /** Starts a periodic task to update the current date and time in the UI. */

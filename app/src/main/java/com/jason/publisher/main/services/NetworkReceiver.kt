@@ -1,3 +1,5 @@
+package com.jason.publisher.main.services
+
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent

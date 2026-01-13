@@ -1,7 +1,6 @@
 package com.jason.publisher.main.utils
 
 import android.annotation.SuppressLint
-import android.util.Log
 
 // Place this near the top of your file (or in a separate file if you prefer)
 data class DoubleEntry(val timestamp: Long, val value: Double)
@@ -11,7 +10,6 @@ class TimeBasedMovingAverageFilterDouble(
     private val minValidValue: Double? = null  // Optional minimum valid value to filter out invalid measurements
 ) {
     private val entries = mutableListOf<DoubleEntry>()
-    private val TAG = "TimeBasedMovingAverageFilter"
 
     /**
      * Adds a new t₁ measurement.

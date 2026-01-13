@@ -13,6 +13,8 @@ import android.view.View
 import androidx.core.content.ContextCompat
 import com.jason.publisher.R
 import com.jason.publisher.main.model.BusScheduleInfo
+import androidx.core.graphics.createBitmap
+import java.util.Locale
 
 class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
 
@@ -20,17 +22,14 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
     private val timelineMargin = 50f // Added margin on both sides of the timeline
     private var dutyNames: List<String> = emptyList() // Add this at class level
 
-    private val timeLabelInterval = 30 // Show a label every 30 minutes
     // Load and resize the bus icon, make it white
     private val busBitmap: Bitmap? = ContextCompat.getDrawable(context,
         R.drawable.ic_bustimeline
     )?.let { drawable ->
-        val originalWidth = drawable.intrinsicWidth
-        val originalHeight = drawable.intrinsicHeight
         val newWidth = 50  // Set desired width
         val newHeight = 50 // Set desired height
 
-        val bitmap = Bitmap.createBitmap(newWidth, newHeight, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(newWidth, newHeight)
         val canvas = Canvas(bitmap)
         drawable.setBounds(0, 0, newWidth, newHeight)
         drawable.draw(canvas)
@@ -39,27 +38,21 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
         val paint = Paint().apply {
             colorFilter = PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
         }
-        val whiteBitmap = Bitmap.createBitmap(newWidth, newHeight, Bitmap.Config.ARGB_8888)
+        val whiteBitmap = createBitmap(newWidth, newHeight)
         val whiteCanvas = Canvas(whiteBitmap)
         whiteCanvas.drawBitmap(bitmap, 0f, 0f, paint)
 
         whiteBitmap
     }
 
-    /** Updates the timeline range and refreshes the view */
-    fun setTimelineRange(start: String, end: String) {
-        timelineRange = Pair(start, end)
-        invalidate() // Redraw the view when timeline range is updated
-    }
-
-    // Paint for work segments (Red)
+    /** Paint for work segments (Red) */
     private val workPaint = Paint().apply {
         color = 0xFFFF0000.toInt() // Red for work
         strokeWidth = 20f
         style = Paint.Style.FILL
     }
 
-    // Paint for rest segments (Green)
+    /** Paint for rest segments (Green) */
     private val restPaint = Paint().apply {
         color = 0xFF00FF00.toInt() // Green for rest
         strokeWidth = 20f
@@ -75,25 +68,8 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
 
     private var timeIntervals: List<Pair<String, String>> = emptyList() // Work intervals
     private var totalDuration = 0 // Total duration of the timeline in minutes
-    private var dutyName: String = "Work" // Default to "Work"
     private var showBusIcon: Boolean = true // Add this flag for control
     private var busStops: List<BusScheduleInfo> = emptyList()
-
-    /** Sets the work intervals and total timeline range */
-    fun setTimeIntervals(
-        workIntervals: List<Pair<String, String>>,
-        totalDayStart: String,
-        totalDayEnd: String,
-        dutyNames: List<String>,
-        showBusIcon: Boolean
-    )
-    {
-        this.timeIntervals = workIntervals
-        this.dutyNames = dutyNames
-        this.totalDuration = getMinutesDifference(totalDayStart, totalDayEnd)
-        this.showBusIcon = showBusIcon // Set the flag to control bus icon drawing
-        invalidate() // Redraw the view when data changes
-    }
 
     /** Draws the timeline on the canvas */
     override fun onDraw(canvas: Canvas) {
@@ -129,7 +105,7 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
         drawTimeLabels(canvas, totalStartMinute, totalEndMinute, totalWidth)
         drawBusStopMarkers(canvas, totalStartMinute, totalEndMinute, totalWidth)
 
-        drawBusIcon(canvas, totalStartMinute, totalEndMinute, totalWidth) // 👈 ADD THIS
+        drawBusIcon(canvas) // 👈 ADD THIS
     }
 
     /**
@@ -161,7 +137,7 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
             val deltaTime = if (deltaMinutes >= 60) {
                 val hours = deltaMinutes / 60
                 val minutes = deltaMinutes % 60
-                String.format("%d:%02d", hours, minutes)
+                String.format(Locale.getDefault(), "%d:%02d", hours, minutes)
             } else {
                 deltaMinutes.toString()
             }
@@ -180,21 +156,12 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
     }
 
     /**
-     * New function to set bus stops on the timeline
-     */
-    fun setBusStops(busStops: List<BusScheduleInfo>) {
-        this.busStops = busStops
-        invalidate() // Redraw the timeline
-    }
-
-    /**
      * Draw bus icon in Bitmap
      */
-    private fun drawBusIcon(canvas: Canvas, totalStart: Int, totalEnd: Int, totalWidth: Float) {
+    private fun drawBusIcon(canvas: Canvas) {
         if (!showBusIcon) return // ✅ Skip drawing if not the first page
 
         busBitmap?.let { bitmap ->
-            val availableWidth = totalWidth - (2 * timelineMargin)
             val busX = timelineMargin - (bitmap.width / 2) // Position at the start of the timeline
             val busY = height / 2f - 60f // Adjust height above timeline
 
@@ -250,7 +217,7 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
     private fun convertMinutesToTime(minutes: Int): String {
         val hours = minutes / 60
         val mins = minutes % 60
-        return String.format("%02d:%02d", hours, mins)
+        return String.format(Locale.getDefault(), "%02d:%02d", hours, mins)
     }
 
     /** Draws a timeline segment with label (Work/Rest) */
@@ -277,8 +244,4 @@ class MultiColorTimelineView(context: Context, attrs: AttributeSet?) : View(cont
         return parts[0] * 60 + parts[1]
     }
 
-    /** Returns the difference in minutes between two time strings */
-    private fun getMinutesDifference(startTime: String, endTime: String): Int {
-        return convertToMinutes(endTime) - convertToMinutes(startTime)
-    }
 }

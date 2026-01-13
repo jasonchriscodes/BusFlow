@@ -129,26 +129,6 @@ class MqttManager(
     }
 
     /**
-     * Reconnects to the MQTT broker and executes the callback on success or failure.
-     *
-     * @param callback The callback to execute after attempting to connect.
-     */
-    fun reconnect() {
-        try {
-            if (mqttClient.isConnected) {
-                Log.d("MqttManager", "MQTT client is already connected, no need to reconnect.")
-            } else {
-                mqttClient.reconnect()
-                Log.d("MqttManager", "MQTT client reconnected successfully.")
-            }
-        } catch (e: MqttException) {
-            Log.e("MqttManager", "Failed to reconnect to MQTT broker: ${e.message}", e)
-        } catch (e: NullPointerException) {
-            Log.e("MqttManager", "MQTT client is not initialized: ${e.message}", e)
-        }
-    }
-
-    /**
      * Checks if the MQTT client is connected.
      *
      * @return True if connected, false otherwise.
@@ -188,13 +168,6 @@ class MqttManager(
             val payload = String(msg.payload)
             callback(payload)
         }
-    }
-
-    /**
-     * Disconnects from the MQTT broker.
-     */
-    fun disconnect() {
-        mqttClient.disconnect()
     }
 
     /**

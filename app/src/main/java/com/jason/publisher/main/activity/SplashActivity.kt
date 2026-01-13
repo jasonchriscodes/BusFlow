@@ -1,10 +1,9 @@
 package com.jason.publisher.main.activity
 
-import android.content.Context
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -21,23 +20,8 @@ import pl.droidsonroids.gif.GifDrawable
 import pl.droidsonroids.gif.GifImageView
 import androidx.core.content.edit
 import com.jason.publisher.main.services.ClientAttributesService
-import androidx.core.net.toUri
 
-// Optimize: Default audio to false to reduce CPU/GPU load during screen recording
-// Audio encoding adds significant overhead, so make it opt-in
-private var wantAudio: Boolean = false
-
-// SharedPreferences keys for screen recording configuration
-private const val PREFS_SCREEN_RECORDING = "screen_recording_prefs"
-private const val KEY_ENABLE_BUILTIN_RECORDING = "enable_builtin_recording"
-private const val KEY_ENABLE_3RD_PARTY_RECORDING = "enable_3rd_party_recording"
-private const val KEY_3RD_PARTY_PACKAGE = "3rd_party_package_name"
-
-// Popular 3rd party screen recording apps (user can configure)
-private const val AZ_SCREEN_RECORDER_PACKAGE = "com.hecorat.screenrecorder.free"
-private const val MOBIZEN_PACKAGE = "com.rsupport.mvagent"
-private const val DU_RECORDER_PACKAGE = "com.duapps.recorder"
-
+@SuppressLint("CustomSplashScreen")
 class SplashActivity : AppCompatActivity() {
     private lateinit var mpm: MediaProjectionManager
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -148,103 +132,8 @@ class SplashActivity : AppCompatActivity() {
                 this,
                 res.resultCode,
                 res.data!!,
-                withAudio = wantAudio
+                withAudio = false // Default to false to reduce CPU/GPU load during screen recording
             )
-        }
-    }
-
-    /**
-     * Launches a 3rd party screen recording app (e.g., AZ Screen Recorder)
-     * This is recommended over built-in recording for better performance
-     *
-     * @param packageName The package name of the screen recording app to launch
-     */
-    private fun launchThirdPartyScreenRecorder(packageName: String) {
-        try {
-            // Try to launch the app by package name
-            val intent = packageManager.getLaunchIntentForPackage(packageName)
-            if (intent != null) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(intent)
-                Log.d("SplashActivity", "✅ Launched 3rd party screen recorder: $packageName")
-                FileLogger.d("SplashActivity", "Launched 3rd party screen recorder: $packageName")
-            } else {
-                // App not installed, try to open Play Store
-                Log.w("SplashActivity", "⚠️ Screen recorder app not found: $packageName")
-                try {
-                    val marketIntent = Intent(Intent.ACTION_VIEW).apply {
-                        data = "market://details?id=$packageName".toUri()
-                        setPackage("com.android.vending")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    startActivity(marketIntent)
-                    Log.d("SplashActivity", "Opened Play Store for screen recorder app")
-                } catch (_: Exception) {
-                    // Play Store not available, try web browser
-                    try {
-                        val webIntent = Intent(Intent.ACTION_VIEW).apply {
-                            data = "https://play.google.com/store/apps/details?id=$packageName".toUri()
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        startActivity(webIntent)
-                        Log.d("SplashActivity", "Opened browser for screen recorder app")
-                    } catch (e2: Exception) {
-                        Log.e("SplashActivity", "Failed to open screen recorder app or store: ${e2.message}")
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("SplashActivity", "Error launching 3rd party screen recorder: ${e.message}", e)
-            FileLogger.e("SplashActivity", "Error launching 3rd party screen recorder: ${e.message}")
-        }
-    }
-
-    companion object {
-        /**
-         * Helper method to enable/disable built-in screen recording
-         * Call this from anywhere in the app to configure recording behavior
-         *
-         * @param context Application context
-         * @param enable true to enable built-in recording, false to disable (recommended)
-         */
-        fun setBuiltinRecordingEnabled(context: Context, enable: Boolean) {
-            context.getSharedPreferences(PREFS_SCREEN_RECORDING, MODE_PRIVATE)
-                .edit {
-                    putBoolean(KEY_ENABLE_BUILTIN_RECORDING, enable)
-                }
-            Log.d("SplashActivity", "Built-in screen recording ${if (enable) "ENABLED" else "DISABLED"}")
-        }
-
-        /**
-         * Helper method to enable/disable 3rd party screen recording
-         *
-         * @param context Application context
-         * @param enable true to auto-launch 3rd party app, false to disable
-         * @param packageName Optional: package name of the screen recorder app (default: AZ Screen Recorder)
-         */
-        fun setThirdPartyRecordingEnabled(context: Context, enable: Boolean, packageName: String = AZ_SCREEN_RECORDER_PACKAGE) {
-            context.getSharedPreferences(PREFS_SCREEN_RECORDING, MODE_PRIVATE)
-                .edit {
-                    putBoolean(KEY_ENABLE_3RD_PARTY_RECORDING, enable)
-                    putString(KEY_3RD_PARTY_PACKAGE, packageName)
-                }
-            Log.d("SplashActivity", "3rd party screen recording ${if (enable) "ENABLED" else "DISABLED"} with package: $packageName")
-        }
-
-        /**
-         * Check if built-in recording is enabled
-         */
-        fun isBuiltinRecordingEnabled(context: Context): Boolean {
-            return context.getSharedPreferences(PREFS_SCREEN_RECORDING, MODE_PRIVATE)
-                .getBoolean(KEY_ENABLE_BUILTIN_RECORDING, false)
-        }
-
-        /**
-         * Check if 3rd party recording is enabled
-         */
-        fun isThirdPartyRecordingEnabled(context: Context): Boolean {
-            return context.getSharedPreferences(PREFS_SCREEN_RECORDING, MODE_PRIVATE)
-                .getBoolean(KEY_ENABLE_3RD_PARTY_RECORDING, false)
         }
     }
 }

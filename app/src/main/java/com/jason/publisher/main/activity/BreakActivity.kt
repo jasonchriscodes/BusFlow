@@ -17,12 +17,14 @@ import com.jason.publisher.main.helpers.MqttHelper.Companion.REQUEST_PERIODIC_TI
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.MqttManager
 import com.jason.publisher.main.helpers.BreakUpcomingAdapter
+import com.jason.publisher.main.helpers.MqttHelper
 import com.jason.publisher.main.utils.FileLogger
 import com.jason.publisher.main.utils.TripLog
 import com.jason.publisher.main.utils.hookBatteryToasts
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.jvm.java
 
 class BreakActivity : AppCompatActivity() {
 
@@ -38,8 +40,6 @@ class BreakActivity : AppCompatActivity() {
     private lateinit var breakLabel: String
 
     companion object {
-        const val SERVER_URI = MapActivity.SERVER_URI
-        const val CLIENT_ID  = MapActivity.CLIENT_ID
         private const val USE_DYNAMIC = false
         private const val FALLBACK_SECONDS = 30L
     }
@@ -68,7 +68,12 @@ class BreakActivity : AppCompatActivity() {
         breakLabel = intent.getStringExtra("BREAK_LABEL") ?: "Break"
 
         val firstList =
-            intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? ArrayList<ScheduleItem>
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableArrayListExtra("FIRST_SCHEDULE_ITEM", ScheduleItem::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableArrayListExtra("FIRST_SCHEDULE_ITEM")
+            }
         val breakItem = firstList?.firstOrNull()
 
         if (breakItem == null) {
@@ -79,7 +84,12 @@ class BreakActivity : AppCompatActivity() {
 
         // ===== Upcoming list =====
         val fullRemaining =
-            intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? ArrayList<ScheduleItem>
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableArrayListExtra("FULL_SCHEDULE_DATA", ScheduleItem::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableArrayListExtra("FULL_SCHEDULE_DATA")
+            }
                 ?: arrayListOf()
 
         if (fullRemaining.isEmpty()) {
@@ -130,12 +140,12 @@ class BreakActivity : AppCompatActivity() {
                 routeDataSize = 0
             )
         )
-        TripLog.mark(this, "driver break")
+        TripLog.mark("driver break")
 
         // ===== MQTT =====
         mqttManager = MqttManager(
-            serverUri = SERVER_URI,
-            clientId  = CLIENT_ID,
+            serverUri = MqttHelper.SERVER_URI,
+            clientId  = MqttHelper.CLIENT_ID,
             username  = token
         )
 

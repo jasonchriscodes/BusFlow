@@ -1,5 +1,6 @@
 package com.jason.publisher.main.utils
 
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -24,6 +25,7 @@ fun AppCompatActivity.hookBatteryToasts(
     }
 
     lifecycle.addObserver(object : DefaultLifecycleObserver {
+        @SuppressLint("UnspecifiedRegisterReceiverFlag")
         override fun onResume(owner: LifecycleOwner) {
             // 1) Listen first so we don't miss the priming broadcast
             registerReceiver(

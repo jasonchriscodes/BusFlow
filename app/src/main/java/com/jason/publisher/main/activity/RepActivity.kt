@@ -3,15 +3,13 @@ package com.jason.publisher.main.activity
 import android.annotation.SuppressLint
 import android.location.Location
 import android.os.*
-import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.content.res.AppCompatResources
-import androidx.core.content.ContextCompat
-import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.gms.location.*
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
+import com.jason.publisher.main.helpers.MqttHelper
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.MqttManager
 import com.jason.publisher.main.utils.*
@@ -26,6 +24,7 @@ import org.mapsforge.map.rendertheme.InternalRenderTheme
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.core.graphics.createBitmap
 
 class RepActivity : AppCompatActivity() {
 
@@ -81,7 +80,12 @@ class RepActivity : AppCompatActivity() {
         stopAddr = intent.getStringExtra("REP_STOP_ADDR") ?: stopName
 
         scheduleList =
-            (intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? ArrayList<ScheduleItem>)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableArrayListExtra("FIRST_SCHEDULE_ITEM", ScheduleItem::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableArrayListExtra("FIRST_SCHEDULE_ITEM")
+            }
                 ?: emptyList()
 
         if (scheduleList.isEmpty()) {
@@ -120,14 +124,14 @@ class RepActivity : AppCompatActivity() {
                 routeDataSize = 0
             )
         )
-        TripLog.mark(this, "user repositioning")
+        TripLog.mark("user repositioning")
 
         // ===== MQTT (INTI FIX) =====
         val token = intent.getStringExtra("ACCESS_TOKEN")
         if (!token.isNullOrBlank()) {
             mqttManager = MqttManager(
-                serverUri = MapActivity.SERVER_URI,
-                clientId  = "${MapActivity.CLIENT_ID}-rep",
+                serverUri = MqttHelper.SERVER_URI,
+                clientId  = "${MqttHelper.CLIENT_ID}-rep",
                 username  = token
             )
 
@@ -234,14 +238,14 @@ class RepActivity : AppCompatActivity() {
         }
 
         mapView.layerManager.layers.add(layer)
-        mapView.model.mapViewPosition.setZoomLevel(17)
+        mapView.model.mapViewPosition.zoomLevel = 17
         mapView.model.mapViewPosition.center = LatLong(stopLat, stopLon)
     }
 
     private fun addStopMarker(pos: LatLong) {
         val drawable = Helper.createBusStopSymbol(this, 0, 1, false)
         val sizePx = (resources.displayMetrics.density * 30f).toInt()
-        val bmp = android.graphics.Bitmap.createBitmap(sizePx, sizePx, android.graphics.Bitmap.Config.ARGB_8888)
+        val bmp = createBitmap(sizePx, sizePx)
         val canvas = android.graphics.Canvas(bmp)
         drawable.setBounds(0, 0, sizePx, sizePx)
         drawable.draw(canvas)
@@ -256,7 +260,7 @@ class RepActivity : AppCompatActivity() {
             val drawable = AppCompatResources.getDrawable(this, R.drawable.ic_bus_symbol)
                 ?: return
             val sizePx = (resources.displayMetrics.density * 32f).toInt()
-            val bmp = android.graphics.Bitmap.createBitmap(sizePx, sizePx, android.graphics.Bitmap.Config.ARGB_8888)
+            val bmp = createBitmap(sizePx, sizePx)
             val canvas = android.graphics.Canvas(bmp)
             drawable.setBounds(0, 0, sizePx, sizePx)
             drawable.draw(canvas)

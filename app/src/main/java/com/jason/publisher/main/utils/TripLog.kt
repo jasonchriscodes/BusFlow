@@ -5,6 +5,7 @@ import android.os.Build
 import com.google.gson.Gson
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.core.content.edit
 
 object TripLog {
     private const val SP = "trip_log_sp"
@@ -32,7 +33,7 @@ object TripLog {
 
     fun start(ctx: Context, active: ActiveTrip, extraDump: Map<String, Any?> = emptyMap()) {
         val json = Gson().toJson(active)
-        sp(ctx).edit().putString(KEY_ACTIVE, json).apply()
+        sp(ctx).edit { putString(KEY_ACTIVE, json) }
 
         // One clear line you can grep for:
         FileLogger.d("TripEvent", "TRIP_STARTED | ${active.type} | ${active.label ?: "-"} | at=${active.startedAt}")
@@ -55,13 +56,13 @@ object TripLog {
         }
     }
 
-    fun mark(ctx: Context, message: String) {
+    fun mark(message: String) {
         FileLogger.d("TripEvent", message)
     }
 
     fun end(ctx: Context, reason: String = "ReturnedToScheduleActivity", extraDump: Map<String, Any?> = emptyMap()) {
         val activeJson = sp(ctx).getString(KEY_ACTIVE, null)
-        sp(ctx).edit().remove(KEY_ACTIVE).apply()
+        sp(ctx).edit { remove(KEY_ACTIVE) }
 
         FileLogger.d("TripEvent", "TRIP_ENDED | reason=$reason | at=${now()}")
 
@@ -75,4 +76,3 @@ object TripLog {
 
     fun hasActive(ctx: Context): Boolean = sp(ctx).getString(KEY_ACTIVE, null) != null
 }
-

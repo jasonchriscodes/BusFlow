@@ -1,4 +1,4 @@
-package com.jason.publisher.services
+package com.jason.publisher.main.services
 
 import com.jason.publisher.main.model.AttributesData
 import retrofit2.Call

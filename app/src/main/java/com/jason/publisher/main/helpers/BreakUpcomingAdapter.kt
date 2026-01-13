@@ -56,8 +56,8 @@ class BreakUpcomingAdapter(
     private fun pickFullName(si: BusScheduleInfo?): String {
         if (si == null) return "?"
         return when {
-            !si.name.isNullOrBlank() -> si.name    // full street in your data
-            !si.abbreviation.isNullOrBlank() -> si.abbreviation
+            si.name.isNotBlank() -> si.name    // full street in your data
+            si.abbreviation.isNotBlank() -> si.abbreviation
             else -> "?"
         }
     }
@@ -68,7 +68,7 @@ class BreakUpcomingAdapter(
         val d = max(0, e - s)
         val h = d / 60
         val m = d % 60
-        return if (h > 0) "${h}h ${m}m" else "${m} min"
+        return if (h > 0) "${h}h ${m}m" else "$m min"
     }
 
     private fun parseMin(hhmm: String?): Int? {

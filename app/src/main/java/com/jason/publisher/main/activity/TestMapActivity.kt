@@ -9,7 +9,6 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.jason.publisher.databinding.ActivityTestmapBinding
 import com.jason.publisher.main.model.BusRoute
-import org.osmdroid.views.MapController
 import java.text.SimpleDateFormat
 import java.util.*
 import android.content.Intent
@@ -25,12 +24,11 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
-import com.jason.publisher.LocationListener
+import com.jason.publisher.main.`interface`.LocationListener
 import com.jason.publisher.R
 import com.jason.publisher.main.utils.Helper
 import com.jason.publisher.main.model.BusItem
 import com.jason.publisher.main.model.BusStop
-import com.jason.publisher.main.model.BusStopInfo
 import com.jason.publisher.main.model.BusStopWithTimingPoint
 import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
@@ -53,30 +51,25 @@ import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.InternalRenderTheme
 import java.io.File
-import java.lang.Math.atan2
-import java.lang.Math.cos
-import java.lang.Math.sin
-import java.lang.Math.sqrt
+import java.util.Locale.getDefault
+import androidx.core.graphics.createBitmap
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 class TestMapActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityTestmapBinding
     private lateinit var locationManager: LocationManager
-    private lateinit var mapController: MapController
-    private lateinit var dateTimeHandler: Handler
-//    private lateinit var dateTimeRunnable: Runnable
 
     private var latitude = 0.0
     private var longitude = 0.0
     private var lastLatitude = 0.0
     private var lastLongitude = 0.0
-    private var bearing = 0.0F
     private var speed = 30.0F
-    private var direction = ""
-    private var busConfig = ""
     private var busname = ""
     private var aid = ""
-    private var busDataCache = ""
     private var jsonString = ""
     private var token = ""
     private var config: List<BusItem>? = emptyList()
@@ -84,21 +77,13 @@ class TestMapActivity : AppCompatActivity() {
     private var stops: List<BusStop> = emptyList()
     private var busRouteData: List<RouteData> = emptyList()
     private var durationBetweenStops: List<Double> = emptyList()
-    private var busStopInfo: List<BusStopInfo> = emptyList()
     private var arrBusData: List<BusItem> = emptyList()
-    private var firstTime = true
     private var upcomingStop: String = "Unknown"
     private var stopAddress: String = "Unknown"
     private var upcomingStopName: String = "Unknown"
 
-    private lateinit var aidTextView: TextView
-    private lateinit var latitudeTextView: TextView
-    private lateinit var longitudeTextView: TextView
-    private lateinit var bearingTextView: TextView
     private lateinit var speedTextView: TextView
     private lateinit var upcomingBusStopTextView: TextView
-    private lateinit var scheduleStatusIcon: ImageView
-    private lateinit var scheduleStatusText: TextView
     private lateinit var timingPointandStopsTextView: TextView
     private lateinit var tripEndTimeTextView: TextView
 
@@ -119,9 +104,8 @@ class TestMapActivity : AppCompatActivity() {
     private lateinit var actualTimeRunnable: Runnable
     private lateinit var actualTimeTextView: TextView
     private lateinit var timingPointValueTextView: TextView
-    private lateinit var ApiTimeValueTextView: TextView
+    private lateinit var apiTimeValueTextView: TextView
     private lateinit var scheduleStatusValueTextView: TextView
-    private lateinit var thresholdRangeValueTextView: TextView
     private var simulatedStartTime: Calendar = Calendar.getInstance()
 
     private var apiTimeLocked = false
@@ -135,19 +119,6 @@ class TestMapActivity : AppCompatActivity() {
     private val t1Filter = TimeBasedMovingAverageFilterDouble(windowMillis = 30000)
     private var lastValidT1: Double = 0.0
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    companion object {
-        const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
-        const val CLIENT_ID = "jasonAndroidClientId"
-        const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
-        private const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
-        private const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
-        private const val REQUEST_PERIODIC_TIME = 5000L
-        private const val PUBLISH_POSITION_TIME = 5000L
-        private const val LAST_MSG_KEY = "lastMessageKey"
-        private const val MSG_KEY = "messageKey"
-        private const val SOUND_FILE_NAME = "notif.wav"
-    }
 
     @SuppressLint("LongLogTag")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -163,53 +134,46 @@ class TestMapActivity : AppCompatActivity() {
 
         // Retrieve data passed from TimeTableActivity
         aid = intent.getStringExtra("AID") ?: "Unknown"
-        config = intent.getSerializableExtra("CONFIG") as? List<BusItem> ?: emptyList()
         jsonString = intent.getStringExtra("JSON_STRING") ?: ""
-        route = intent.getSerializableExtra("ROUTE") as? List<BusRoute> ?: emptyList()
-        stops = intent.getSerializableExtra("STOPS") as? List<BusStop> ?: emptyList()
-        durationBetweenStops = intent.getSerializableExtra("DURATION_BETWEEN_BUS_STOP") as? List<Double> ?: emptyList()
-        busRouteData = intent.getSerializableExtra("BUS_ROUTE_DATA") as? List<RouteData> ?: emptyList()
-        scheduleList = intent.getSerializableExtra("FIRST_SCHEDULE_ITEM") as? List<ScheduleItem> ?: emptyList()
-        scheduleData = intent.getSerializableExtra("FULL_SCHEDULE_DATA") as? List<ScheduleItem> ?: emptyList()
+        durationBetweenStops = intent.getDoubleArrayExtra("DURATION_BETWEEN_BUS_STOP")?.toList() ?: emptyList()
+
+        @Suppress("DEPRECATION")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            config = intent.getParcelableArrayListExtra("CONFIG", BusItem::class.java) ?: emptyList()
+            route = intent.getParcelableArrayListExtra("ROUTE", BusRoute::class.java) ?: emptyList()
+            stops = intent.getParcelableArrayListExtra("STOPS", BusStop::class.java) ?: emptyList()
+            busRouteData = intent.getParcelableArrayListExtra("BUS_ROUTE_DATA", RouteData::class.java) ?: emptyList()
+            scheduleList = intent.getParcelableArrayListExtra("FIRST_SCHEDULE_ITEM", ScheduleItem::class.java) ?: emptyList()
+            scheduleData = intent.getParcelableArrayListExtra("FULL_SCHEDULE_DATA", ScheduleItem::class.java) ?: emptyList()
+        } else {
+            config = intent.getParcelableArrayListExtra("CONFIG") ?: emptyList()
+            route = intent.getParcelableArrayListExtra("ROUTE") ?: emptyList()
+            stops = intent.getParcelableArrayListExtra("STOPS") ?: emptyList()
+            busRouteData = intent.getParcelableArrayListExtra("BUS_ROUTE_DATA") ?: emptyList()
+            scheduleList = intent.getParcelableArrayListExtra("FIRST_SCHEDULE_ITEM") ?: emptyList()
+            scheduleData = intent.getParcelableArrayListExtra("FULL_SCHEDULE_DATA") ?: emptyList()
+        }
 
         Log.d("TestMapActivity onCreate retrieve", "Received aid: $aid")
         Log.d("TestMapActivity onCreate retrieve", "Received config: ${config.toString()}")
         Log.d("TestMapActivity onCreate retrieve", "Received jsonString: $jsonString")
-        Log.d("TestMapActivity onCreate retrieve", "Received route: ${route.toString()}")
-        Log.d("TestMapActivity onCreate retrieve", "Received stops: ${stops.toString()}")
-        Log.d("TestMapActivity onCreate retrieve", "Received durationBetweenStops: ${durationBetweenStops.toString()}")
-        Log.d("TestMapActivity onCreate retrieve", "Received busRouteData: ${busRouteData.toString()}")
-        Log.d("TestMapActivity onCreate retrieve", "Received scheduleList: ${scheduleList.toString()}")
-        Log.d("TestMapActivity onCreate retrieve", "Received scheduleData: ${scheduleData.toString()}")
+        Log.d("TestMapActivity onCreate retrieve", "Received route: $route")
+        Log.d("TestMapActivity onCreate retrieve", "Received stops: $stops")
+        Log.d("TestMapActivity onCreate retrieve", "Received durationBetweenStops: $durationBetweenStops")
+        Log.d("TestMapActivity onCreate retrieve", "Received busRouteData: $busRouteData")
+        Log.d("TestMapActivity onCreate retrieve", "Received scheduleList: $scheduleList")
+        Log.d("TestMapActivity onCreate retrieve", "Received scheduleData: $scheduleData")
 
         extractRedBusStops()
 
         // Initialize UI components
         initializeUIComponents()
 
-//        aidTextView.text = "AID: $aid"
-
         // Set up network status UI
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
 
-        // Initialize the date/time updater
-//        startDateTimeUpdater()
-
-//        fetchConfig { success ->
-//            if (success) {
-//                getAccessToken()
         Log.d("TestMapActivity onCreate Token", token)
-//                mqttManager = MqttManager(serverUri = TimeTableActivity.SERVER_URI, clientId = TimeTableActivity.CLIENT_ID, username = token)
         getDefaultConfigValue()
-//                requestAdminMessage()
-//                connectAndSubscribe()
-//                Log.d("TestMapActivity oncreate fetchConfig config", config.toString())
-//                Log.d("TestMapActivity oncreate fetchConfig busRoute", route.toString())
-//                Log.d("TestMapActivity oncreate fetchConfig busStop", stops.toString())
-//            } else {
-//                Log.e("TestMapActivity onCreate", "Failed to fetch config, running in offline mode.")
-//            }
-//        }
 
         updateBusNameFromConfig()
 
@@ -220,10 +184,6 @@ class TestMapActivity : AppCompatActivity() {
                 longitude = location.longitude
                 Log.d("TestMapActivity onCreate Latitude", latitude.toString())
                 Log.d("TestMapActivity onCreate Longitude", longitude.toString())
-
-                // Update UI components with the current location
-//                latitudeTextView.text = "Latitude: $latitude"
-//                longitudeTextView.text = "Longitude: $longitude"
             }
         })
 
@@ -320,7 +280,7 @@ class TestMapActivity : AppCompatActivity() {
                 ?.map { "${it.latitude},${it.longitude}" }
                 ?.let { redBusStops.addAll(it) }
 
-            val stops = firstSchedule.busStops.mapNotNull { it.address }
+            val stops = firstSchedule.busStops.map { it.address }
             redBusStops.addAll(stops)
             Log.d("TestMapActivity extractRedBusStops stops", "$stops")
         }
@@ -336,9 +296,6 @@ class TestMapActivity : AppCompatActivity() {
 
         if (matchingBus != null) {
             busname = matchingBus.bus
-            runOnUiThread {
-//                binding.busNameTextView.text = "Bus Name: $busname"
-            }
             Log.d("TestMapActivity updateBusNameFromConfig", "✅ Bus name updated: $busname for AID: $aid")
         } else {
             Log.e("TestMapActivity updateBusNameFromConfig", "❌ No matching bus found for AID: $aid")
@@ -381,7 +338,7 @@ class TestMapActivity : AppCompatActivity() {
                     val endLon = end.longitude!!
 
                     val distanceMeters = calculateDistance(startLat, startLon, endLat, endLon)
-                    Log.d("startSimulation distanceMeters", "distanceMeters: ${distanceMeters}")
+                    Log.d("startSimulation distanceMeters", "distanceMeters: $distanceMeters")
                     // If simulationSpeedFactor is 0, bus is stopped; simply re-post without movement.
                     if (simulationSpeedFactor <= 0) {
                         simulationHandler.postDelayed(this, 1000)
@@ -396,13 +353,11 @@ class TestMapActivity : AppCompatActivity() {
                     }
 
                     val travelTimeSeconds = (distanceMeters / baseSpeedMetersPerSecond)
-                    val steps = (travelTimeSeconds * 10).toInt() // Update every 100ms
 
                     // Cancel any previously running simulation steps
                     val handler = Handler(Looper.getMainLooper())
                     handler.removeCallbacksAndMessages(null)
 
-//                    simulateMovement(startLat, startLon, endLat, endLon, steps)
                     simulateMovement(startLat, startLon, endLat, endLon)
 
                     simulationHandler.postDelayed({
@@ -435,7 +390,7 @@ class TestMapActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     private fun showSummaryDialog() {
         // Flatten scheduleData into a List<ScheduleItem>
-        val flatSchedule = (scheduleData as? List<Any> ?: emptyList()).flatMap { element ->
+        (scheduleData as? List<Any> ?: emptyList()).flatMap { element ->
             when (element) {
                 is ScheduleItem -> listOf(element)
                 is List<*> -> element.filterIsInstance<ScheduleItem>()
@@ -480,7 +435,7 @@ class TestMapActivity : AppCompatActivity() {
         )
         // Style the positive button similar to your simulation button
         dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)?.apply {
-            setBackgroundTintList(ColorStateList.valueOf(resources.getColor(R.color.purple_400, null)))
+            backgroundTintList = ColorStateList.valueOf(resources.getColor(R.color.purple_400, null))
             setTextColor(resources.getColor(R.color.white, null))
         }
     }
@@ -525,7 +480,7 @@ class TestMapActivity : AppCompatActivity() {
         actualTimeHandler = Handler(Looper.getMainLooper())
         actualTimeRunnable = object : Runnable {
             override fun run() {
-                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
                 actualTimeTextView.text = timeFormat.format(simulatedStartTime.time)
 
                 // Always advance time by 1 second per tick (simulate real clock)
@@ -606,7 +561,7 @@ class TestMapActivity : AppCompatActivity() {
     private fun checkScheduleStatus() {
         if (scheduleList.isEmpty()) return
 
-        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
 
         if (latitude == 0.0 && longitude == 0.0) {
             Log.w("checkScheduleStatus", "Skipping status check: Invalid location (0.0, 0.0)")
@@ -620,7 +575,7 @@ class TestMapActivity : AppCompatActivity() {
             val baseTimeStr = scheduleList.first().startTime + ":00"
             val baseTime = parseTimeToday(baseTimeStr)
 
-            var apiTimeStr = ApiTimeValueTextView.text.toString()
+            var apiTimeStr = apiTimeValueTextView.text.toString()
             val firstAddress = scheduleList.firstOrNull()?.busStops?.firstOrNull()?.address
 
             if (upcomingStopName == firstAddress && currentStopIndex > 0 && currentStopIndex - 1 < durationBetweenStops.size) {
@@ -637,22 +592,21 @@ class TestMapActivity : AppCompatActivity() {
 
                 val adjustedApiTime = timeFormat.format(adjustedCalendar.time)
                 runOnUiThread {
-                    ApiTimeValueTextView.text = adjustedApiTime
+                    apiTimeValueTextView.text = adjustedApiTime
                 }
                 apiTimeStr = adjustedApiTime
             }
 
             val apiTime = parseTimeToday(apiTimeStr)
             val actualTimeStr = timeFormat.format(simulatedStartTime.time)
-            val actualTime = simulatedStartTime.time
 
-            // ✅ Find next stop that is a red timing point
+            // Find next stop that is a red timing point
             var redStopIndex = stops.indexOfFirst { stop ->
                 redBusStops.contains(stop.address ?: "") &&
                         stops.indexOf(stop) >= currentStopIndex
             }
 
-// 🔁 Fallback: If no red timing point found, use last stop instead
+            // Fallback: If no red timing point found, use last stop instead
             if (redStopIndex == -1) {
                 Log.d("checkScheduleStatus", "⚠️ No red timing point found after index $currentStopIndex, using final stop as fallback.")
                 redStopIndex = stops.lastIndex
@@ -717,8 +671,7 @@ class TestMapActivity : AppCompatActivity() {
                 deltaSec in 1..119 -> "Slightly Ahead (~${deltaSec}s early)"
                 deltaSec in -179..0 -> "On Time (~${-deltaSec}s on time)"
                 deltaSec in -299..-180 -> "Slightly Behind (~${-deltaSec}s late)"
-                deltaSec <= -300 -> "Very Behind (~${-deltaSec}s late)"
-                else -> "Unknown"
+                else -> "Very Behind (~${-deltaSec}s late)"
             }
 
             val symbolRes = when {
@@ -726,8 +679,7 @@ class TestMapActivity : AppCompatActivity() {
                 deltaSec in 1..119 -> R.drawable.ic_schedule_slightly_ahead
                 deltaSec in -179..0 -> R.drawable.ic_schedule_on_time
                 deltaSec in -299..-180 -> R.drawable.ic_schedule_slightly_behind
-                deltaSec <= -300 -> R.drawable.ic_schedule_very_behind
-                else -> R.drawable.ic_schedule_on_time
+                else -> R.drawable.ic_schedule_very_behind
             }
 
             val colorRes = when {
@@ -735,8 +687,7 @@ class TestMapActivity : AppCompatActivity() {
                 deltaSec in 1..119 -> R.color.blind_light_orange     // Slightly Ahead
                 deltaSec in -179..0 -> R.color.blind_cyan       // On Time
                 deltaSec in -299..-180 -> R.color.blind_orange   // Slightly Behind
-                deltaSec <= -300 -> R.color.blind_orange          // Very Behind
-                else -> R.color.blind_cyan
+                else -> R.color.blind_orange          // Very Behind
             }
 
             runOnUiThread {
@@ -783,7 +734,7 @@ class TestMapActivity : AppCompatActivity() {
     private fun overrideLateStatusForNextSchedule() {
         val logTag = "TestMapActivity checkScheduleStatus"
         // Set up time format.
-        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
 
         // Retrieve the scheduled final stop time from the current schedule's endTime.
         val scheduledTimeForFinalStopStr = scheduleList.first().endTime + ":00"
@@ -844,7 +795,7 @@ class TestMapActivity : AppCompatActivity() {
             return
         }
         // Append ":00" for seconds.
-        val nextScheduleStartStr = nextScheduleStartRaw + ":00"
+        val nextScheduleStartStr = "$nextScheduleStartRaw:00"
         val nextScheduleStartTime = parseTimeToday(nextScheduleStartStr)
         Log.d(logTag, "Next schedule start time: $nextScheduleStartStr")
 
@@ -1075,7 +1026,7 @@ class TestMapActivity : AppCompatActivity() {
     private fun updateApiTime() {
         // If locked, simply reuse the locked value — only if upcomingStopName matches the first timing point
         if (apiTimeLocked && lockedApiTime != null) {
-            val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
 
             // Parse the locked time into a Calendar object
             val lockedCal = Calendar.getInstance().apply {
@@ -1097,11 +1048,11 @@ class TestMapActivity : AppCompatActivity() {
 
                 val updatedFinalApiTime = timeFormat.format(lockedCal.time)
                 runOnUiThread {
-                    ApiTimeValueTextView.text = updatedFinalApiTime
+                    apiTimeValueTextView.text = updatedFinalApiTime
                 }
                 Log.d("TestMapActivity updateApiTime", "⏩ Updated API time after last timing point to: $updatedFinalApiTime")
             } else {
-                runOnUiThread { ApiTimeValueTextView.text = lockedApiTime }
+                runOnUiThread { apiTimeValueTextView.text = lockedApiTime }
                 Log.d("TestMapActivity updateApiTime", "API time locked, using last computed value: $lockedApiTime")
             }
             return
@@ -1149,13 +1100,13 @@ class TestMapActivity : AppCompatActivity() {
         val additionalSeconds = (totalDurationMinutes * 60).toInt()
         startCalendar.add(Calendar.SECOND, additionalSeconds)
 
-        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
         val updatedApiTime = timeFormat.format(startCalendar.time)
 
         val firstAddress = scheduleList.firstOrNull()?.busStops?.firstOrNull()?.address
         if (upcomingStopName == firstAddress) {
             runOnUiThread {
-                ApiTimeValueTextView.text = updatedApiTime
+                apiTimeValueTextView.text = updatedApiTime
             }
             Log.d("TestMapActivity updateApiTime", "API Time updated to: $updatedApiTime")
         } else {
@@ -1182,9 +1133,9 @@ class TestMapActivity : AppCompatActivity() {
         scheduleList: List<ScheduleItem>
     ): List<Int> {
         if (scheduleList.isEmpty() || timingList.isEmpty()) return emptyList()
-        val scheduledAddresses = scheduleList.first().busStops.map { it.address?.toLowerCase() }
+        val scheduledAddresses = scheduleList.first().busStops.map { it.address.lowercase(getDefault()) }
         return timingList.withIndex()
-            .filter { it.value.address?.toLowerCase() in scheduledAddresses }
+            .filter { it.value.address?.lowercase(getDefault()) in scheduledAddresses }
             .map { it.index }
             .sorted()
     }
@@ -1331,7 +1282,10 @@ class TestMapActivity : AppCompatActivity() {
     private fun initializeTimingPoint() {
         if (scheduleList.isNotEmpty()) {
             val firstSchedule = scheduleList.first()
-            val firstTimingPoint = firstSchedule.busStops.firstOrNull()?.time + ":00" ?: "Unknown"
+            var firstTimingPoint = "Unknown"
+            firstSchedule.busStops.firstOrNull()?.let {
+                firstTimingPoint = "${it.time}:00"
+            }
 
             timingPointValueTextView.text = firstTimingPoint
             upcomingStop = firstTimingPoint // Set the upcoming stop initially
@@ -1341,6 +1295,9 @@ class TestMapActivity : AppCompatActivity() {
         }
     }
 
+    private val passedStops = mutableListOf<BusStop>() // Track stops that have been passed
+    private var currentStopIndex = 0 // Keep track of the current stop in order
+
     /**
      * Finds and logs the nearest bus stop that has been passed.
      * After passing a stop, it moves to the next stop in the list.
@@ -1348,9 +1305,6 @@ class TestMapActivity : AppCompatActivity() {
      * @param currentLat The current latitude of the bus.
      * @param currentLon The current longitude of the bus.
      */
-    private val passedStops = mutableListOf<BusStop>() // Track stops that have been passed
-    private var currentStopIndex = 0 // Keep track of the current stop in order
-
     @SuppressLint("LongLogTag")
     private fun checkPassedStops(currentLat: Double, currentLon: Double) {
         if (stops.isEmpty()) {
@@ -1389,7 +1343,7 @@ class TestMapActivity : AppCompatActivity() {
             )
 
             runOnUiThread {
-                upcomingBusStopTextView.text = "$stopAddress"
+                upcomingBusStopTextView.text = stopAddress
                 upcomingStop = stopAddress
             }
 
@@ -1416,7 +1370,7 @@ class TestMapActivity : AppCompatActivity() {
                 )
 
                 runOnUiThread {
-                    upcomingBusStopTextView.text = "$upcomingStopName"
+                    upcomingBusStopTextView.text = upcomingStopName
                 }
             } else if (distance > stopPassThreshold && distance <= failSafeThreshold) {
                 Log.w("TestMapActivity checkPassedStops", "⚠️ Warning: No bus stop detected within expected range!")
@@ -1438,7 +1392,7 @@ class TestMapActivity : AppCompatActivity() {
             )
 
             runOnUiThread {
-                upcomingBusStopTextView.text = "$upcomingStopName"
+                upcomingBusStopTextView.text = upcomingStopName
                 upcomingStop = upcomingStopName
             }
         }
@@ -1525,7 +1479,7 @@ class TestMapActivity : AppCompatActivity() {
 
     /** Calculates distance between two lat/lon points in meters */
     private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val R = 6371000 // Radius of Earth in meters
+        val radius = 6371000 // Radius of Earth in meters
         val lat1Rad = Math.toRadians(lat1)
         val lat2Rad = Math.toRadians(lat2)
         val deltaLat = Math.toRadians(lat2 - lat1)
@@ -1536,7 +1490,7 @@ class TestMapActivity : AppCompatActivity() {
                 sin(deltaLon / 2) * sin(deltaLon / 2)
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
 
-        return R * c // Distance in meters
+        return radius * c // Distance in meters
     }
 
     /** Stops the simulation and resets the state. */
@@ -1652,7 +1606,7 @@ class TestMapActivity : AppCompatActivity() {
         }
 
         // Apply map rotation
-        binding.map.setRotation(-bearing) // Negative to align with compass movement
+        binding.map.rotation = -bearing // Negative to align with compass movement
 
         // Scale the map to prevent cropping
         binding.map.scaleX = 1.5f  // Adjust scaling factor
@@ -1675,16 +1629,13 @@ class TestMapActivity : AppCompatActivity() {
         if (markerDrawable == null) {
             Log.e("rotateDrawable", "Drawable is null!")
             // Use an alternative way to create a blank Bitmap
-            val emptyBitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            val emptyBitmap = createBitmap(1, 1)
             return AndroidBitmap(emptyBitmap)
         }
 
         // Convert Drawable to Android Bitmap
-        val androidBitmap = android.graphics.Bitmap.createBitmap(
-            markerDrawable.intrinsicWidth,
-            markerDrawable.intrinsicHeight,
-            android.graphics.Bitmap.Config.ARGB_8888
-        )
+        val androidBitmap =
+            createBitmap(markerDrawable.intrinsicWidth, markerDrawable.intrinsicHeight)
 
         val canvas = android.graphics.Canvas(androidBitmap)
         markerDrawable.setBounds(0, 0, canvas.width, canvas.height)
@@ -1694,7 +1645,7 @@ class TestMapActivity : AppCompatActivity() {
         val matrix = android.graphics.Matrix()
         matrix.postRotate(angle)
 
-        val rotatedAndroidBitmap = android.graphics.Bitmap.createBitmap(
+        val rotatedAndroidBitmap = Bitmap.createBitmap(
             androidBitmap, 0, 0, androidBitmap.width, androidBitmap.height, matrix, true
         )
 
@@ -1750,7 +1701,7 @@ class TestMapActivity : AppCompatActivity() {
         }
         actualTimeTextView = binding.actualTimeValueTextView
         timingPointValueTextView = binding.timingPointValueTextView
-        ApiTimeValueTextView = binding.ApiTimeValueTextView
+        apiTimeValueTextView = binding.ApiTimeValueTextView
         scheduleStatusValueTextView = binding.scheduleStatusValueTextView
 //        thresholdRangeValueTextView = binding.thresholdRangeValueTextView
         speedTextView = binding.speedTextView
@@ -1839,8 +1790,8 @@ class TestMapActivity : AppCompatActivity() {
                     binding.map.layerManager.layers.add(renderLayer)
                 }
                 binding.map.post {
-                    binding.map.model.mapViewPosition.setZoomLevel(16)
-                    binding.map.model.mapViewPosition.setCenter(LatLong(latitude, longitude))
+                    binding.map.model.mapViewPosition.zoomLevel = 16
+                    binding.map.model.mapViewPosition.center = LatLong(latitude, longitude)
                     drawPolyline()
                     addBusStopMarkers(stops)
                     addBusMarker(latitude, longitude)

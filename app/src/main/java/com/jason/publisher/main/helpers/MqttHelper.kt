@@ -11,8 +11,8 @@ import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.activity.MapActivity
 import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.utils.LifecycleLogger
-import com.jason.publisher.services.ClientAttributesResponse
-import com.jason.publisher.services.ApiService
+import com.jason.publisher.main.services.ClientAttributesResponse
+import com.jason.publisher.main.services.ApiService
 import com.jason.publisher.main.services.MqttManager
 import org.json.JSONObject
 import retrofit2.Call
@@ -32,7 +32,6 @@ class MqttHelper(
     // Configured managers passed in or initialized in MapActivity
     private val mqttManager: MqttManager get() = owner.mqttManager
     private val apiService: ApiService get() = owner.apiService
-    private val clientKeys: String get() = owner.clientKeys
 
     companion object {
         const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
@@ -43,6 +42,7 @@ class MqttHelper(
         const val PUB_MSG_TOPIC = "v1/devices/me/attributes/request/1"
         /** Topic path for subscribing to shared data */
         const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
+        const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
         private const val CLIENT_KEYS = "latitude,longitude,bearing,speed,direction,scheduleData,currentTripLabel"
         const val REQUEST_PERIODIC_TIME = 1000L
         private const val MIN_FETCH_INTERVAL_MS = 2_000L
@@ -87,7 +87,7 @@ class MqttHelper(
                 // For each new bus, just request its attributes.
                 // getAttributes() will create & log the marker exactly once.
                 newArr.forEach { bus ->
-                    getAttributes(apiService, bus.accessToken, clientKeys)
+                    getAttributes(apiService, bus.accessToken)
                 }
 
                 // ✅ FIX: remove dropped-out buses and clean up all tracking data
@@ -138,7 +138,7 @@ class MqttHelper(
     private val pollRunnable = object : Runnable {
         override fun run() {
             owner.arrBusData.forEach { bus ->
-                getAttributes(apiService, bus.accessToken, clientKeys)
+                getAttributes(apiService, bus.accessToken)
             }
             pollingHandler?.postDelayed(this, MIN_FETCH_INTERVAL_MS)
         }
@@ -166,7 +166,7 @@ class MqttHelper(
     fun refreshAllAttributes() {
         lastFetchTime.clear()
         owner.arrBusData.forEach { bus ->
-            getAttributes(apiService, bus.accessToken, clientKeys)
+            getAttributes(apiService, bus.accessToken)
         }
     }
 
@@ -176,10 +176,8 @@ class MqttHelper(
     @SuppressLint("LongLogTag")
     fun getAttributes(
         apiService: ApiService,
-        token: String,
-        clientKeys: String
+        token: String
     ) {
-        //Log.d("MqttHelper getAttributes", "→ getAttributes for token=$token")
         val now = System.currentTimeMillis()
 
         // 1) throttle to once every 2 s per bus
@@ -547,7 +545,7 @@ class MqttHelper(
         }
         Handler(Looper.getMainLooper()).post {
             mqttManager.publish(
-                MapActivity.PUB_POS_TOPIC,
+                PUB_POS_TOPIC,
                 json.toString(),
                 1
             )

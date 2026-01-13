@@ -207,7 +207,6 @@ class ScheduleStatusManager(
             }
 
             val predictedArrivalStr = timeFormat.format(predictedArrival.time)
-            val actualTimeStr       = timeFormat.format(activity.timeManager.simulatedStartTime.time)
 
             // --- 5. Compare predicted arrival with Timing Point ---
             val deltaSec = ((timingPointTime.time - predictedArrival.time.time) / 1000).toInt()
@@ -259,9 +258,7 @@ class ScheduleStatusManager(
                             // Fallback: try to access via binding if available
                             try {
                                 val bindingIcon = binding.root.findViewById<ImageView>(R.id.scheduleAheadIcon)
-                                if (bindingIcon != null) {
-                                    bindingIcon.setImageResource(symbolRes)
-                                }
+                                bindingIcon?.setImageResource(symbolRes)
                             } catch (e3: Exception) {
                                 Log.e("ScheduleStatusManager", "Error accessing icon: ${e3.message}", e3)
                             }
@@ -324,7 +321,6 @@ class ScheduleStatusManager(
     @SuppressLint("LongLogTag")
     private fun overrideLateStatusForNextSchedule() {
         val logTag = "TestMapActivity checkScheduleStatus"
-        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
         val scheduledTimeForFinalStopStr = activity.scheduleList.first().endTime + ":00"
         val finalStopScheduledTime = activity.timeManager.parseTimeToday(scheduledTimeForFinalStopStr)

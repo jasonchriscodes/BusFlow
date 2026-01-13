@@ -10,7 +10,7 @@ import kotlinx.parcelize.Parcelize
  * @property stops The bus stop data.
  * @property sharedBus The list of shared bus items.
  * @property bearing The list of bus bearing data.
- * @property bearingCust The list of customer-specific bus bearing data.
+ * @property bearingCustomers The list of customer-specific bus bearing data.
  */
 @Parcelize
 data class BusData(
@@ -18,5 +18,5 @@ data class BusData(
     var stops: BusStop?,
     var sharedBus: List<BusItem>,
     var bearing: List<BusBearing>?,
-    var bearingCust: List<BusBearingCustomer>?
+    var bearingCustomers: List<BusBearingCustomer>?
 ) : Parcelable

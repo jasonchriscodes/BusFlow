@@ -1,10 +1,11 @@
+package com.jason.publisher.main.utils
+
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.jason.publisher.R
-import com.jason.publisher.databinding.ItemScheduleRowBinding
 import com.jason.publisher.main.model.ScheduleItem
 
 class ScheduleAdapter(

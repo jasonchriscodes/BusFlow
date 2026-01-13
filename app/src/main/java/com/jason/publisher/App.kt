@@ -11,24 +11,25 @@ import android.os.Looper
 import android.view.WindowManager
 import androidx.core.app.ActivityCompat
 import com.jason.publisher.main.services.ScreenRecordService
-import com.jason.publisher.main.sos.BatteryLowWatcher
+import com.jason.publisher.main.utils.BatteryLowWatcher
 import com.jason.publisher.main.utils.FileLogger
 import android.Manifest
 import android.util.Log
+import androidx.core.content.edit
 
 class App : Application(), Application.ActivityLifecycleCallbacks {
 
-    private val REQ_NOTIF = 12345
-    private val PREFS = "battery_watcher_prefs"
-    private val KEY_NOTIF_ASKED = "notif_perm_asked_once"
+    companion object {
+        private const val REQ_NOTIF = 12345
+        private const val PREFS = "battery_watcher_prefs"
+        private const val KEY_NOTIF_ASKED = "notif_perm_asked_once"
+        private const val STOP_RECORDING_DELAY_MS = 2000L
+    }
 
     // Tracks visible activities to know when the app is effectively closed
     private var liveActivities = 0
 
-    // Optimize: Increase delay to better handle config changes/rotations
-    // This prevents unnecessary stop/start cycles during screen rotations
     private val killHandler = Handler(Looper.getMainLooper())
-    private val STOP_RECORDING_DELAY_MS = 2000L // Increased from 800ms to 2 seconds
     private val maybeStopRecording = Runnable {
         if (liveActivities == 0) {
             // Only stop built-in recording if it was enabled
@@ -94,13 +95,13 @@ class App : Application(), Application.ActivityLifecycleCallbacks {
                     REQ_NOTIF
                 )
                 activity.getSharedPreferences(PREFS, MODE_PRIVATE)
-                    .edit().putBoolean(KEY_NOTIF_ASKED, true).apply()
+                    .edit { putBoolean(KEY_NOTIF_ASKED, true) }
             }
         }
 
         // 🟢 Also force an immediate battery check on every resume
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            com.jason.publisher.main.sos.BatteryLowWatcher.ensureNow(activity)
+            BatteryLowWatcher.ensureNow(activity)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {

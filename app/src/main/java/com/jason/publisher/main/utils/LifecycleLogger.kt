@@ -16,11 +16,17 @@ object LifecycleLogger {
     private var currentActivity: String? = null
     private var currentRoute: String? = null
     private var lastLocationLogTime = 0L
-    private val LOCATION_LOG_INTERVAL_MS = 5000L // ✅ FIX: Log location every 5 seconds (changed from 10)
+
+    /** Log location every 5 seconds */
+    private const val LOCATION_LOG_INTERVAL_MS = 5000L
     private var lastBusStopPassLogTime = 0L
     private var lastScheduleStatusLogTime = 0L
-    private val BUS_STOP_PASS_LOG_INTERVAL_MS = 5000L // Log bus stop pass details every 5 seconds
-    private val SCHEDULE_STATUS_LOG_INTERVAL_MS = 5000L // Log schedule status details every 5 seconds
+
+    /** Log bus stop pass details every 5 seconds */
+    private const val BUS_STOP_PASS_LOG_INTERVAL_MS = 5000L
+
+    /** Log schedule status details every 5 seconds */
+    private const val SCHEDULE_STATUS_LOG_INTERVAL_MS = 5000L
 
     /**
      * Log activity lifecycle event
@@ -34,38 +40,6 @@ object LifecycleLogger {
         }
         Log.d(TAG, "[$timestamp] $activity.$event$dataStr")
         FileLogger.d(TAG, "[$timestamp] $activity.$event$dataStr")
-    }
-
-    /**
-     * Log when SplashActivity animation starts
-     */
-    fun logSplashAnimationStart() {
-        logActivityEvent("SplashActivity", "ANIMATION_START")
-    }
-
-    /**
-     * Log when ScheduleActivity fetches data
-     */
-    fun logScheduleDataFetch(success: Boolean, scheduleCount: Int, routeCount: Int) {
-        logActivityEvent("ScheduleActivity", "DATA_FETCH", mapOf(
-            "success" to success,
-            "scheduleCount" to scheduleCount,
-            "routeCount" to routeCount
-        ))
-    }
-
-    /**
-     * Log when user starts a route
-     */
-    fun logRouteStart(routeName: String, startTime: String, endTime: String, fromStop: String, toStop: String) {
-        currentRoute = routeName
-        logActivityEvent("ScheduleActivity", "ROUTE_START", mapOf(
-            "route" to routeName,
-            "startTime" to startTime,
-            "endTime" to endTime,
-            "from" to fromStop,
-            "to" to toStop
-        ))
     }
 
     /**
@@ -106,26 +80,6 @@ object LifecycleLogger {
             "currentStop" to currentStop,
             "eta" to (eta ?: "N/A"),
             "scheduleStatus" to scheduleStatus
-        ))
-    }
-
-    /**
-     * Log when BreakActivity is opened
-     */
-    fun logBreakActivityOpen(breakDuration: String) {
-        currentActivity = "BreakActivity"
-        logActivityEvent("BreakActivity", "OPENED", mapOf(
-            "breakDuration" to breakDuration
-        ))
-    }
-
-    /**
-     * Log when returning to ScheduleActivity
-     */
-    fun logReturnToSchedule(currentRoute: String?) {
-        currentActivity = "ScheduleActivity"
-        logActivityEvent("ScheduleActivity", "RETURNED", mapOf(
-            "previousRoute" to (currentRoute ?: "N/A")
         ))
     }
 

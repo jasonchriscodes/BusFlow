@@ -1,7 +1,6 @@
 package com.jason.publisher.main.helpers
 
 import android.annotation.SuppressLint
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.Drawable
@@ -14,7 +13,6 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
-import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -36,7 +34,6 @@ import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
-import org.mapsforge.map.rendertheme.InternalRenderTheme
 import java.io.File
 import java.lang.Math.*
 import kotlin.math.sqrt
@@ -156,8 +153,6 @@ class MapViewController(
                                 val label = activity.otherBusLabels[t] ?: "Unknown"
                                 val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
                                 val marker = activity.markerBus[t]
-                                val lat = marker?.latLong?.latitude
-                                val lon = marker?.latLong?.longitude
 
                                 com.jason.publisher.main.utils.LifecycleLogger.logOtherBusRemoved(
                                     token = t,
@@ -457,64 +452,20 @@ class MapViewController(
         binding.map.invalidate()
     }
 
-    private var animationHandler: Handler? = null
-    private var animationRunnable: Runnable? = null
-
-    /**
-     * Smoothly animate the marker's movement instead of jumping suddenly.
-     */
-    fun animateMarkerThroughPoints(startIndex: Int, endIndex: Int) {
-        // Cancel any existing animation
-        animationHandler?.removeCallbacksAndMessages(null)
-
-        val pts = activity.route.subList(startIndex, minOf(endIndex + 1, activity.route.size))
-        if (pts.isEmpty()) return
-
-        var step = 0
-        val total = pts.size
-        animationHandler = Handler(Looper.getMainLooper())
-        animationRunnable = object : Runnable {
-            override fun run() {
-                try {
-                    if (step < total) {
-                        val p = pts[step]
-                        // Update marker directly without triggering full update cycle
-                        val newPos = LatLong(p.latitude!!, p.longitude!!)
-                        activity.busMarker?.let { marker ->
-                            marker.latLong = newPos
-                            binding.map.setCenter(newPos)
-                            binding.map.invalidate()
-                        }
-                        step++
-                        animationHandler?.postDelayed(this, 100) // Faster animation (100ms instead of 500ms)
-                    } else {
-                        // Animation complete, ensure final position is set
-                        if (pts.isNotEmpty()) {
-                            val finalP = pts[total - 1]
-                            updateBusMarkerPosition(finalP.latitude!!, finalP.longitude!!, activity.bearing)
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("MapViewController", "Error in animation: ${e.message}", e)
-                }
-            }
-        }
-        animationHandler?.post(animationRunnable!!)
-    }
-
     /** Calculates distance between two lat/lon points in meters */
     fun calculateDistance(
         lat1: Double, lon1: Double,
         lat2: Double, lon2: Double
     ): Double {
-        val R = 6371000.0
-        val φ1 = toRadians(lat1)
-        val φ2 = toRadians(lat2)
-        val dφ = toRadians(lat2 - lat1)
-        val dλ = toRadians(lon2 - lon1)
-        val a = sin(dφ / 2).pow(2) + cos(φ1) *cos(φ2)*sin(dλ/2).pow(2)
+        val radiusOfEarth = 6371000.0
+        val phi1 = toRadians(lat1)
+        val phi2 = toRadians(lat2)
+        val deltaPhi = toRadians(lat2 - lat1)
+        val deltaLambda = toRadians(lon2 - lon1)
+        val a = sin(deltaPhi / 2).pow(2) +
+                cos(phi1)*cos(phi2)*sin(deltaLambda/2).pow(2)
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return R * c
+        return radiusOfEarth * c
     }
 
     /** Find nearest route‐point index for smoothing, etc. */
@@ -528,20 +479,24 @@ class MapViewController(
         return idx
     }
 
-    /**
-     * Move (or create) the bus marker at [lat],[lon], rotated to [bearing],
-     * then spin the map so that "up" is always this bus's heading.
-     */
-    // ✅ OPTIMIZATION: Cache last position to avoid unnecessary updates
+    // Cache last position to avoid unnecessary updates
     private var lastMarkerLat = Double.NaN
     private var lastMarkerLon = Double.NaN
     private var lastMarkerBearing = Float.NaN
     private var lastMarkerUpdateTime = 0L
-    private val MARKER_UPDATE_MIN_INTERVAL_MS = 100L // Minimum 100ms between marker updates for smooth movement
 
-    // ✅ FIX: Track map layer to ensure it's never removed
+    companion object {
+        /** Minimum 100ms between marker updates for smooth movement */
+        private const val MARKER_UPDATE_MIN_INTERVAL_MS = 100L
+    }
+
+    // Track map layer to ensure it's never removed
     private var mapTileLayer: TileRendererLayer? = null
 
+    /**
+     * Move (or create) the bus marker at [lat],[lon], rotated to [bearing],
+     * then spin the map so that "up" is always this bus's heading.
+     */
     fun updateBusMarkerPosition(lat: Double, lon: Double, bearing: Float) {
         try {
             val currentTime = System.currentTimeMillis()
@@ -645,11 +600,11 @@ class MapViewController(
         lat1: Double, lon1: Double,
         lat2: Double, lon2: Double
     ): Float {
-        val φ1 = toRadians(lat1)
-        val φ2 = toRadians(lat2)
-        val Δλ = toRadians(lon2 - lon1)
-        val y = sin(Δλ)*cos(φ2)
-        val x = cos(φ1)*sin(φ2) - sin(φ1)*cos(φ2)*cos(Δλ)
+        val phi1 = toRadians(lat1)
+        val phi2 = toRadians(lat2)
+        val deltaLambda = toRadians(lon2 - lon1)
+        val y = sin(deltaLambda)*cos(phi2)
+        val x = cos(phi1)*sin(phi2) - sin(phi1)*cos(phi2)*cos(deltaLambda)
         return ((toDegrees(atan2(y,x)) + 360) % 360).toFloat()
     }
 
@@ -696,30 +651,6 @@ class MapViewController(
             activity.resources.displayMetrics
         ).toInt()
 
-    /** Wraps the vector drawable into an ImageView, adds with 8dp top-margin */
-    private fun addIconToContainer(@DrawableRes id: Int, sizeDp: Int, parent: LinearLayout) {
-        val bmp = drawableToBitmap(id, sizeDp)
-        val iv = ImageView(activity).apply {
-            setImageBitmap(bmp)
-            layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
-                topMargin = dpToPx(8)
-            }
-        }
-        parent.addView(iv)
-    }
-
-    /** Inflate a VectorDrawable @id into an Android Bitmap at sizeDp × sizeDp */
-    private fun drawableToBitmap(@DrawableRes id: Int, sizeDp: Int): Bitmap {
-        val drawable = ResourcesCompat.getDrawable(activity.resources, id, null)!!
-        val sizePx = dpToPx(sizeDp)
-        val bmp = createBitmap(sizePx, sizePx)
-        val canvas = Canvas(bmp)
-        drawable.setBounds(0, 0, sizePx, sizePx)
-        drawable.draw(canvas)
-        return bmp
-    }
-
-
     /** Call this any time you re-draw or move markers on the map */
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
@@ -728,49 +659,26 @@ class MapViewController(
             detailContainer.removeAllViews()
 
             val zoom = binding.map.model.mapViewPosition.zoomLevel.toDouble()
-            val bb   = binding.map.boundingBox
             val selfToken = activity.token
 
             // ✅ FIX: Other buses that are currently drawn, on screen, exist in arrBusData, AND have valid label
             // This ensures we only show buses that are actually in the system and have started a trip
             val validBusTokens = activity.arrBusData.map { it.accessToken }.toSet()
 
-            // ✅ FIX: visibleOthers - buses that are visible on the map (within bounding box)
-            val visibleOthers = activity.markerBus
-                .filter { (t, m) ->
-                    t != selfToken &&
-                            t in validBusTokens &&  // ✅ FIX: Only show buses that exist in arrBusData
-                            bb.contains(m.latLong.latitude, m.latLong.longitude) &&
-                            // ✅ FIX: Only show buses that have a valid label (have started a trip)
-                            !activity.otherBusLabels[t].isNullOrBlank() &&
-                            // ✅ FIX: Filter out Break schedules - don't show buses that are on break
-                            !activity.otherBusLabels[t]!!.contains("Break", ignoreCase = true)
-                }
-                .keys
-                .toList()
-
-            // ✅ FIX: allActiveOthers - ALL buses that have started (for detail panel), not just visible ones
             // Detail panel should show all active buses based on otherBusLabels
             // Only show buses that have a valid label (have started a trip)
-            // ✅ FIX: In offline mode, don't show other buses - they can't be tracked
             val allActiveOthers = if (isReallyOnline()) {
                 activity.otherBusLabels
                     .filter { (t, label) ->
-                        t != selfToken &&
-                                t in validBusTokens &&
-                                // ✅ FIX: Only show buses that have a valid label (have started a trip)
-                                label.isNotBlank()
-                        // ✅ FIX: Don't filter Break schedules - bus on break should still be shown in detail panel
-                        // Break buses are tracked but marker is not shown on map
+                        t != selfToken && t in validBusTokens && label.isNotBlank()
                     }
                     .keys
                     .toList()
             } else {
-                // ✅ FIX: In offline mode, return empty list - no other buses can be tracked
+                // In offline mode, return empty list - no other buses can be tracked
                 emptyList()
             }
 
-            // ✅ FIX: Use allActiveOthers for detail panel (not just visible ones)
             // If zoomed way in or there are no other active buses → show only self
             val displayOrderRaw = if (zoom > 25.0) {
                 listOf(selfToken)
@@ -783,17 +691,13 @@ class MapViewController(
                 }
             }
 
-            // ✅ FIX: Remove duplicate tokens from displayOrder to prevent duplicate panels
+            // Remove duplicate tokens from displayOrder to prevent duplicate panels
             val displayOrderDistinct = displayOrderRaw.distinct()
             if (displayOrderDistinct.size != displayOrderRaw.size) {
                 Log.w("MapViewController refreshDetailPanelIcons", "⚠️ WARNING: Found duplicate tokens in displayOrder! Raw: $displayOrderRaw, Distinct: $displayOrderDistinct")
             }
 
-            // ✅ FIX: Show all active buses in detail panel, even if they have the same label
-            // Detail panel should display all buses that have started, not filter by label
-            val displayOrder = displayOrderDistinct
-
-            displayOrder.forEachIndexed { idx, token ->
+            displayOrderDistinct.forEachIndexed { idx, token ->
                 // If we're in deep zoom or there are no others, skip any non-self rows
                 if (idx >= 1 && (zoom > 25.0 || allActiveOthers.isEmpty())) {
                     return@forEachIndexed
@@ -843,7 +747,7 @@ class MapViewController(
                 row.addView(tv)
                 detailContainer.addView(row)
 
-                if (idx < displayOrder.lastIndex) {
+                if (idx < displayOrderDistinct.lastIndex) {
                     detailContainer.addView(View(activity).apply {
                         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dpToPx(1)).apply {
                             topMargin = dpToPx(4); bottomMargin = dpToPx(4)
@@ -890,24 +794,4 @@ class MapViewController(
         } ?: false
     }
 
-    /** Adds a single stop marker at (lat, lon) using the given drawable resource. */
-    fun addStopMarker(lat: Double, lon: Double, @DrawableRes iconRes: Int) {
-        // 1) get the drawable from resources
-        val drawable = ResourcesCompat.getDrawable(activity.resources, iconRes, null) ?: return
-
-        // 2) render it into an Android Bitmap (size ~24dp)
-        val sizePx = dpToPx(24)
-        val bmp = createBitmap(sizePx, sizePx)
-        val canvas = Canvas(bmp)
-        drawable.setBounds(0, 0, sizePx, sizePx)
-        drawable.draw(canvas)
-
-        // 3) wrap as a Mapsforge bitmap and add the marker to the map
-        val mf = AndroidBitmap(bmp)  // org.mapsforge.core.graphics.Bitmap
-        val marker = Marker(
-            LatLong(lat, lon), mf, 0, -mf.height / 2
-        )
-        binding.map.layerManager.layers.add(marker)
-        binding.map.invalidate()
-    }
 }

@@ -10,7 +10,6 @@ import android.provider.MediaStore
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
-import java.io.FileWriter
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.locks.ReentrantLock
@@ -87,14 +86,6 @@ object FileLogger {
         if (!ready()) {
             Log.w(TAG, "Called before init(); dropping log E/$tag"); return
         }; write("E", tag, msg)
-    }
-
-    /** Use the session-stamped file name so each app run gets its own file */
-    fun currentLogFile(): File {
-        // Only called after ready() checks, but keep a soft guard anyway
-        if (!ready()) throw IllegalStateException("FileLogger.init(context) not called")
-        val name = fileDisplayName ?: "app-log_${nameFmt.format(sessionStart)}.txt"
-        return File(getLogDir(), name)
     }
 
     private fun write(level: String, tag: String, msg: String) {

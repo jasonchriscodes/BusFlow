@@ -28,13 +28,6 @@ class OverlayBusStopMarkerView @JvmOverloads constructor(
         setShadowLayer(5f, 2f, 2f, Color.BLACK)
     }
 
-    fun setData(stops: List<BusScheduleInfo>, start: String, end: String) {
-        busStops = stops
-        startTime = start
-        endTime = end
-        invalidate()
-    }
-
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 

@@ -18,9 +18,6 @@ object OnlineData {
         val jsonString = """
             {"busConfig":[{"aid":"8d34bdc9a5c78c42","bus":"Bus A","accessToken":"3KMpqehqIfz7V4NT6xW7"},{"aid":"2b039058a1a5f8a3","bus":"Bus B","accessToken":"wurH9PWz8Le2Lqcsu7tw"},{"aid":"02372ba208415152","bus":"Bus C","accessToken":"ASxTwuAPMUGGdvlwLPX2"}]}
         """.trimIndent()
-        val jsonString1 = """
-            {}
-        """.trimIndent()
         val configurationBus = mutableListOf<BusItem>()
         val jsonObject = JSONObject(jsonString)
         val jsonArray = jsonObject.getJSONArray("busConfig")
