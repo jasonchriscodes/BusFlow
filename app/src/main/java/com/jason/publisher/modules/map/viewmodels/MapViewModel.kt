@@ -17,6 +17,7 @@ import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.ApiService
 import com.jason.publisher.main.services.ApiServiceBuilder
+import com.jason.publisher.main.utils.parseTimeToday
 import com.jason.publisher.modules.map.`interface`.LocationListener
 import com.jason.publisher.modules.map.models.BusStopWithTimingPoint
 import com.jason.publisher.modules.map.utils.BUS_STOP_RADIUS
@@ -551,6 +552,57 @@ class MapViewModel: ViewModel() {
             if (d < minD) { minD = d; idx = i }
         }
         return idx
+    }
+
+    fun getExpectedDurationForNextSchedule(): Double? {
+        val scheduledTimeForFinalStopStr = scheduleList.first().endTime + ":00"
+        val finalStopScheduledTime = scheduledTimeForFinalStopStr.parseTimeToday()
+
+        val baseTimeStr = scheduleList.first().startTime + ":00"
+        val baseTime = baseTimeStr.parseTimeToday()
+
+        return getExpectedDuration(baseTime, finalStopScheduledTime)
+    }
+
+    fun getExpectedDuration(start: Date, end: Date): Double? {
+        val finalStop = stops.last()
+        val stopLat = finalStop.latitude!!
+        val stopLon = finalStop.longitude!!
+
+        val d1 = calculateDistance(latitude, longitude, stopLat, stopLon)
+
+        val finalStopRouteIndex = route.indexOfLast {
+            calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
+        }.coerceAtLeast(1)
+        val d2 = (0 until finalStopRouteIndex).sumOf { i ->
+            val p1 = route[i]
+            val p2 = route[i + 1]
+            calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
+        }
+        if (d2 == 0.0) {
+            Log.e("getExpectedDuration", "Total route distance is zero; cannot compute predicted arrival.")
+            return null
+        }
+
+        val t2 = ((end.time - start.time) / 1000).toDouble()
+
+        // Use smoothed speed with fallback to schedule average
+        val minSpeedMps = 0.5
+        val maxSpeedMps = 30.0
+        val avgSpeedFromSchedule = if (d2 > 0 && t2 > 0) {
+            (d2 / t2).coerceIn(minSpeedMps, maxSpeedMps)
+        } else {
+            minSpeedMps
+        }
+
+        val rawSpeedMps = smoothedSpeed / 3.6
+        val speedMetersPerSec = when {
+            rawSpeedMps >= minSpeedMps && rawSpeedMps <= maxSpeedMps -> rawSpeedMps
+            rawSpeedMps < minSpeedMps -> avgSpeedFromSchedule
+            else -> avgSpeedFromSchedule.coerceAtMost(maxSpeedMps)
+        }
+
+        return d1 / speedMetersPerSec
     }
 
     fun createTelemetryJson(): JSONObject {

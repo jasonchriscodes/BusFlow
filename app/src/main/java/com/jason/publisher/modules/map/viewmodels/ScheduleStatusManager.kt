@@ -289,7 +289,7 @@ class ScheduleStatusManager(
                 "deltaSec" to deltaSec
             )
 
-            // ✅ ENHANCED: Log detailed schedule status every 5 seconds
+            // Log detailed schedule status every 5 seconds
             LifecycleLogger.logScheduleStatus(
                 d1 = d1,
                 d2 = d2,
@@ -325,61 +325,9 @@ class ScheduleStatusManager(
     private fun overrideLateStatusForNextSchedule() {
         val logTag = "TestMapActivity checkScheduleStatus"
 
-        val scheduledTimeForFinalStopStr = activity.viewModel.scheduleList.first().endTime + ":00"
-        val finalStopScheduledTime = scheduledTimeForFinalStopStr.parseTimeToday()
+        val t1 = activity.viewModel.getExpectedDurationForNextSchedule() ?: return
 
-        val baseTimeStr = activity.viewModel.scheduleList.first().startTime + ":00"
-        val baseTime = baseTimeStr.parseTimeToday()
-
-        val finalStop = activity.viewModel.stops.last()
-        val stopLat = finalStop.latitude!!
-        val stopLon = finalStop.longitude!!
-
-        val d1 = calculateDistance(activity.viewModel.latitude, activity.viewModel.longitude, stopLat, stopLon)
-
-        val finalStopRouteIndex = activity.viewModel.route.indexOfLast {
-            calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
-        }.coerceAtLeast(1)
-        val d2 = (0 until finalStopRouteIndex).sumOf { i ->
-            val p1 = activity.viewModel.route[i]
-            val p2 = activity.viewModel.route[i + 1]
-            calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
-        }
-        if (d2 == 0.0) {
-            Log.e(logTag, "Total route distance is zero; cannot compute predicted arrival.")
-            return
-        }
-
-        val t2 = ((finalStopScheduledTime.time - baseTime.time) / 1000).toDouble()
-
-        // Use smoothed speed with fallback to schedule average
-        val minSpeedMps = 0.5
-        val maxSpeedMps = 30.0
-        val avgSpeedFromSchedule = if (d2 > 0 && t2 > 0) {
-            (d2 / t2).coerceIn(minSpeedMps, maxSpeedMps)
-        } else {
-            minSpeedMps
-        }
-
-        val rawSpeedMps = activity.viewModel.smoothedSpeed / 3.6
-        val speedMetersPerSec = when {
-            rawSpeedMps >= minSpeedMps && rawSpeedMps <= maxSpeedMps -> rawSpeedMps
-            rawSpeedMps < minSpeedMps -> avgSpeedFromSchedule
-            else -> avgSpeedFromSchedule.coerceAtMost(maxSpeedMps)
-        }
-
-        val t1 = d1 / speedMetersPerSec
-
-        val predictedArrival = Calendar.getInstance().apply {
-            time = activity.timeManager.simulatedStartTime.time
-            add(Calendar.SECOND, t1.toInt())
-        }
-
-        val nextScheduleStartRaw = activity.timeManager.getNextScheduleStartTime(activity.viewModel.scheduleData) ?: return
-        val nextScheduleStartStr = "$nextScheduleStartRaw:00"
-        val nextScheduleStartTime = nextScheduleStartStr.parseTimeToday()
-
-        val deltaNextSec = ((nextScheduleStartTime.time - predictedArrival.time.time) / 1000).toInt()
+        val deltaNextSec = activity.timeManager.getDeltaNextSec(t1, activity.viewModel.scheduleData) ?: return
 
         if (deltaNextSec in -86400..300) {
             val overrideValue = if (deltaNextSec < 0) (-deltaNextSec) + 300 else deltaNextSec

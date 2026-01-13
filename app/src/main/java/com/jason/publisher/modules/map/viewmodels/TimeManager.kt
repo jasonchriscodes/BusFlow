@@ -9,6 +9,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import com.jason.publisher.main.model.ScheduleItem
+import com.jason.publisher.main.utils.parseTimeToday
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -223,7 +224,6 @@ class TimeManager(private val savedStateHandle: SavedStateHandle): ViewModel() {
     /**
      * Returns the start time for the next schedule.
      * Assumes that the scheduleData list is sorted chronologically.
-     * ✅ REVERT: Back to original implementation before plan changes
      */
     fun getNextScheduleStartTime(scheduleData: List<ScheduleItem>): String? {
         val flat = (scheduleData as? List<Any> ?: emptyList()).flatMap {
@@ -237,4 +237,16 @@ class TimeManager(private val savedStateHandle: SavedStateHandle): ViewModel() {
         return if (flat.size > 1) flat[1].startTime else null
     }
 
+    fun getDeltaNextSec(t1: Double, scheduleData: List<ScheduleItem>): Int? {
+        val predictedArrival = Calendar.getInstance().apply {
+            time = simulatedStartTime.time
+            add(Calendar.SECOND, t1.toInt())
+        }
+
+        val nextScheduleStartRaw = getNextScheduleStartTime(scheduleData) ?: return null
+        val nextScheduleStartStr = "$nextScheduleStartRaw:00"
+        val nextScheduleStartTime = nextScheduleStartStr.parseTimeToday()
+
+        return ((nextScheduleStartTime.time - predictedArrival.time.time) / 1000).toInt()
+    }
 }
