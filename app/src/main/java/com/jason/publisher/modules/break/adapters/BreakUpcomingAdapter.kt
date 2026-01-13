@@ -1,4 +1,4 @@
-package com.jason.publisher.main.adapters
+package com.jason.publisher.modules.`break`.adapters
 
 import android.view.LayoutInflater
 import android.view.ViewGroup

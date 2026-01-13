@@ -1,4 +1,4 @@
-package com.jason.publisher.modules.map.services
+package com.jason.publisher.modules.battery.services
 
 import android.content.BroadcastReceiver
 import android.content.Context

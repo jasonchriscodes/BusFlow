@@ -24,13 +24,18 @@ import java.io.IOException
  * @param username The username for the MQTT connection (default is "cngz9qqls7dk5zgi3y4j").
  */
 class MqttManager(
-    serverUri: String,
-    clientId: String,
+    serverUri: String = SERVER_URI,
+    clientId: String = CLIENT_ID,
     private var username: String = "BEXBIArF3URHeYBslJE2" // Config Data
 ) {
     private val persistence = MemoryPersistence()
     private val mqttClient = MqttClient(serverUri, clientId, persistence)
     private val connectOptions = MqttConnectOptions()
+
+    companion object {
+        const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
+        const val CLIENT_ID = "jasonAndroidClientId"
+    }
 
     init {
         connectOptions.userName = username

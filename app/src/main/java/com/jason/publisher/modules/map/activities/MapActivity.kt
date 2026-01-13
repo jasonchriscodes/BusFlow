@@ -62,6 +62,7 @@ import com.jason.publisher.modules.map.utils.calculateBearing
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.model.common.Observer
 import java.util.Locale.getDefault
+import kotlin.text.toDouble
 
 class MapActivity : AppCompatActivity() {
 
@@ -1612,7 +1613,7 @@ class MapActivity : AppCompatActivity() {
                         }
 
                         // Refresh local UI and log after the attribute refresh attempt
-                        refreshPanelDetail()
+                        panelController.refreshPanelDetailWithLogging(binding.map.model.mapViewPosition.zoomLevel.toDouble())
                     }, 200L)
                     return
                 }
@@ -1621,21 +1622,11 @@ class MapActivity : AppCompatActivity() {
             }
 
             // If mqttHelper not initialized or above failed, still refresh UI locally
-            refreshPanelDetail()
+            panelController.refreshPanelDetailWithLogging(binding.map.model.mapViewPosition.zoomLevel.toDouble())
 
         } catch (e: Exception) {
             Log.w("MapActivity", "clearActiveSegmentAndRefresh failed: ${e.message}")
         }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.M)
-    private fun refreshPanelDetail() {
-        try {
-            panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
-        } catch (_: Exception) { /* ignore */ }
-        try {
-            runOnUiThread { panelController.logPanelDetailTextOnly() }
-        } catch (_: Exception) { /* ignore */ }
     }
 
     private fun publishActiveSegment(label: String) {

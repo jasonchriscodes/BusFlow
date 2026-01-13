@@ -41,6 +41,16 @@ class DetailPanelController(
 
     var hasDumpedPanelLog = false
 
+    @RequiresApi(Build.VERSION_CODES.M)
+    fun refreshPanelDetailWithLogging(zoom: Double) {
+        try {
+            refreshDetailPanelIcons(zoom)
+        } catch (_: Exception) { /* ignore */ }
+        try {
+            activity.runOnUiThread { logPanelDetailTextOnly() }
+        } catch (_: Exception) { /* ignore */ }
+    }
+
     /** Call this any time you re-draw or move markers on the map */
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")

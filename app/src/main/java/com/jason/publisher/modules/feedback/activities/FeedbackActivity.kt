@@ -1,4 +1,4 @@
-package com.jason.publisher.main.activity
+package com.jason.publisher.modules.feedback.activities
 
 import android.graphics.Color
 import android.os.Bundle
@@ -8,6 +8,9 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.jason.publisher.BuildConfig
+import com.jason.publisher.R
+import com.jason.publisher.modules.feedback.fragments.LoadingDialogFragment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
