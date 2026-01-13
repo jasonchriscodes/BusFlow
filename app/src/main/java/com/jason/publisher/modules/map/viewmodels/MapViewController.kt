@@ -15,7 +15,6 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import com.jason.publisher.R
-import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.loggers.LifecycleLogger
 import com.jason.publisher.main.model.BusRoute
 import com.jason.publisher.main.model.BusStop
@@ -23,6 +22,10 @@ import com.jason.publisher.main.ui.DrawableHelper
 import com.jason.publisher.modules.map.activities.MapActivity
 import com.jason.publisher.modules.map.utils.BUS_STOP_RADIUS
 import com.jason.publisher.modules.mqtt.helpers.MqttHelper
+import java.io.File
+import java.util.HashMap
+import kotlin.math.abs
+import kotlin.math.min
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,19 +38,16 @@ import org.mapsforge.map.android.graphics.AndroidBitmap
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.rendertheme.AssetsRenderTheme
 import org.mapsforge.map.android.util.AndroidUtil
+import org.mapsforge.map.android.view.MapView
 import org.mapsforge.map.layer.overlay.Circle
 import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
-import java.io.File
-import java.util.HashMap
-import kotlin.math.abs
-import kotlin.math.min
 
 class MapViewController(
     private val activity: MapActivity,
-    private val binding: ActivityMapBinding,
+    private val mapView: MapView,
     private val mqttHelper: MqttHelper,
 ) {
     private var routePolyline: Polyline? = null
@@ -93,7 +93,7 @@ class MapViewController(
                             )
 
                             marker?.let {
-                                binding.map.layerManager.layers.remove(it)
+                                mapView.layerManager.layers.remove(it)
                             }
                             busMarkerRegistry.remove(t)
                             activity.viewModel.prevOtherBusCoordinates.remove(t)
@@ -112,7 +112,7 @@ class MapViewController(
                                 // Bus doesn't have currentTripLabel - remove marker
                                 val marker = busMarkerRegistry[t]
                                 marker?.let {
-                                    binding.map.layerManager.layers.remove(it)
+                                    mapView.layerManager.layers.remove(it)
                                 }
                                 busMarkerRegistry.remove(t)
                                 activity.viewModel.prevOtherBusCoordinates.remove(t)
@@ -124,7 +124,7 @@ class MapViewController(
                                 // Bus on break should appear in detail panel but not on map
                                 val marker = busMarkerRegistry[t]
                                 marker?.let {
-                                    binding.map.layerManager.layers.remove(it)
+                                    mapView.layerManager.layers.remove(it)
                                 }
                                 busMarkerRegistry.remove(t)
                                 removedCount++
@@ -153,7 +153,7 @@ class MapViewController(
                                 )
 
                                 marker?.let {
-                                    binding.map.layerManager.layers.remove(it)
+                                    mapView.layerManager.layers.remove(it)
                                 }
                                 busMarkerRegistry.remove(t)
                                 activity.viewModel.prevOtherBusCoordinates.remove(t)
@@ -169,7 +169,7 @@ class MapViewController(
                     }
 
                     // 2) refresh the map
-                    binding.map.invalidate()
+                    mapView.invalidate()
 
                     // 3) schedule next check in 1s only if handler is still valid
                     activityMonitorHandler?.postDelayed(this, 1_000L)
@@ -222,7 +222,7 @@ class MapViewController(
         if (route.isNotEmpty()) {
             val routePoints = route.map { LatLong(it.latitude!!, it.longitude!!) }
 
-            routePolyline?.let { binding.map.layerManager.layers.remove(it) }
+            routePolyline?.let { mapView.layerManager.layers.remove(it) }
 
             AndroidGraphicFactory.createInstance(activity.application)
             val paint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
@@ -234,15 +234,15 @@ class MapViewController(
             routePolyline = Polyline(paint, AndroidGraphicFactory.INSTANCE).apply {
                 addPoints(routePoints)
             }
-            binding.map.layerManager.layers.add(routePolyline)
-            binding.map.invalidate()
+            mapView.layerManager.layers.add(routePolyline)
+            mapView.invalidate()
         }
     }
 
     fun clearPolyline() {
         routePolyline?.let {
-            binding.map.layerManager.layers.remove(it)
-            binding.map.invalidate()
+            mapView.layerManager.layers.remove(it)
+            mapView.invalidate()
         }
     }
 
@@ -250,14 +250,14 @@ class MapViewController(
      * Loads the offline map from assets and configures the map.
      */
     fun openMapFromAssets() {
-        binding.map.mapScaleBar.isVisible = true
-        binding.map.setBuiltInZoomControls(true)
+        mapView.mapScaleBar.isVisible = true
+        mapView.setBuiltInZoomControls(true)
 
         val cache = AndroidUtil.createTileCache(
             activity, "preloadCache",
-            binding.map.model.displayModel.tileSize,
+            mapView.model.displayModel.tileSize,
             1f,
-            binding.map.model.frameBufferModel.overdrawFactor
+            mapView.model.frameBufferModel.overdrawFactor
         )
         // 1) copy it out of assets into cacheDir
         val mapFile = copyAssetToFile("new-zealand.map")
@@ -291,7 +291,7 @@ class MapViewController(
             val layer = TileRendererLayer(
                 cache,
                 store,
-                binding.map.model.mapViewPosition,
+                mapView.model.mapViewPosition,
                 AndroidGraphicFactory.INSTANCE
             ).apply { setXmlRenderTheme(renderTheme) }
 
@@ -300,19 +300,19 @@ class MapViewController(
                     // Ensure map layer is added correctly and map is rendered
                     // Remove any existing TileRendererLayer first to avoid duplicates
                     val existingLayers =
-                        binding.map.layerManager.layers.filterIsInstance<TileRendererLayer>()
-                    existingLayers.forEach { binding.map.layerManager.layers.remove(it) }
+                        mapView.layerManager.layers.filterIsInstance<TileRendererLayer>()
+                    existingLayers.forEach { mapView.layerManager.layers.remove(it) }
 
                     // Store reference to map layer
                     mapTileLayer = layer
 
                     // Add the new layer at index 0 (bottom layer, so map tiles render first)
-                    binding.map.layerManager.layers.add(0, layer)
+                    mapView.layerManager.layers.add(0, layer)
 
-                    binding.map.post {
+                    mapView.post {
                         try {
-                            binding.map.model.mapViewPosition.zoomLevel = 15
-                            binding.map.model.mapViewPosition.center =
+                            mapView.model.mapViewPosition.zoomLevel = 15
+                            mapView.model.mapViewPosition.center =
                                 LatLong(activity.viewModel.latitude, activity.viewModel.longitude)
                             drawDetectionZones(activity.viewModel.stops, activity.viewModel.passedStops)
                             drawPolyline(activity.viewModel.route)
@@ -320,23 +320,23 @@ class MapViewController(
                             addBusMarker(activity.viewModel.latitude, activity.viewModel.longitude)
 
                             // Force map to render by invalidating
-                            binding.map.invalidate()
+                            mapView.invalidate()
 
                             // Additional invalidate after a short delay to ensure map renders
-                            binding.map.postDelayed({
-                                binding.map.invalidate()
+                            mapView.postDelayed({
+                                mapView.invalidate()
                                 Log.d("MapViewController", "✅ Map layer added and invalidated")
                             }, 200)
                         } catch (e: Exception) {
                             Log.e("MapViewController", "Error setting up map: ${e.message}", e)
                             // Ensure map is invalidated even on error
-                            binding.map.invalidate()
+                            mapView.invalidate()
                         }
                     }
                 } catch (e: Exception) {
                     Log.e("MapViewController", "Error adding map layer: ${e.message}", e)
                     // Ensure map is invalidated even on error
-                    binding.map.invalidate()
+                    mapView.invalidate()
                 }
             }
         }
@@ -363,10 +363,10 @@ class MapViewController(
         val mf = createBusIcon(R.drawable.ic_bus_symbol, sizeDp = 16)
         currentBusMarker = Marker(LatLong(lat, lon), mf, 0, 0)
 
-        currentBusMarker?.let { binding.map.layerManager.layers.remove(it) }
+        currentBusMarker?.let { mapView.layerManager.layers.remove(it) }
 
         currentBusMarker = Marker(pos, mf, 0, 0)
-        binding.map.layerManager.layers.add(currentBusMarker)
+        mapView.layerManager.layers.add(currentBusMarker)
     }
 
     /** Adds bus stops to the map. */
@@ -414,10 +414,10 @@ class MapViewController(
                 0,
                 0
             )
-            binding.map.layerManager.layers.add(marker)
+            mapView.layerManager.layers.add(marker)
         }
 
-        binding.map.invalidate()
+        mapView.invalidate()
     }
 
     /**
@@ -429,7 +429,7 @@ class MapViewController(
         radiusMeters: Double = BUS_STOP_RADIUS
     ) {
         // remove all old circles
-        val layers = binding.map.layerManager.layers
+        val layers = mapView.layerManager.layers
         layers.filterIsInstance<Circle>()
             .forEach { layers.remove(it) }
 
@@ -453,7 +453,7 @@ class MapViewController(
             )
             layers.add(circle)
         }
-        binding.map.invalidate()
+        mapView.invalidate()
     }
 
     // Cache last position to avoid unnecessary updates
@@ -510,25 +510,25 @@ class MapViewController(
             } else {
                 // 4) Create new marker if it doesn't exist
                 currentBusMarker = Marker(newPos, rotated, 0, 0)
-                binding.map.layerManager.layers.add(currentBusMarker)
+                mapView.layerManager.layers.add(currentBusMarker)
             }
 
             // 5) spin the *map* so that this bus's bearing is "up"
-            binding.map.rotation = -bearing
+            mapView.rotation = -bearing
 
             // 6) optional: zoom, scale, center (always update to ensure map is visible)
-            binding.map.scaleX = 1.9f
-            binding.map.scaleY = 1.9f
-            binding.map.setCenter(newPos)
+            mapView.scaleX = 1.9f
+            mapView.scaleY = 1.9f
+            mapView.setCenter(newPos)
 
             // Ensure map layer exists before invalidating
             // If map layer is missing, try to reload it
-            val hasMapLayer = binding.map.layerManager.layers.any { it is TileRendererLayer }
+            val hasMapLayer = mapView.layerManager.layers.any { it is TileRendererLayer }
             if (!hasMapLayer && mapTileLayer != null) {
                 Log.w("MapViewController", "⚠️ Map layer missing, re-adding...")
                 try {
-                    if (!binding.map.layerManager.layers.contains(mapTileLayer)) {
-                        binding.map.layerManager.layers.add(0, mapTileLayer)
+                    if (!mapView.layerManager.layers.contains(mapTileLayer)) {
+                        mapView.layerManager.layers.add(0, mapTileLayer)
                     }
                 } catch (e: Exception) {
                     Log.e("MapViewController", "Error re-adding map layer: ${e.message}", e)
@@ -537,7 +537,7 @@ class MapViewController(
 
             // 7) Always invalidate map to prevent white screen
             // This ensures map is always rendered, even if position hasn't changed
-            binding.map.invalidate()
+            mapView.invalidate()
 
             if (shouldDoFullUpdate) {
                 activity.onBusMarkerUpdated()
@@ -546,7 +546,7 @@ class MapViewController(
             Log.e("MapViewController", "Error updating bus marker: ${e.message}", e)
             // Ensure map is invalidated even on error to prevent white screen
             try {
-                binding.map.invalidate()
+                mapView.invalidate()
             } catch (e2: Exception) {
                 Log.e("MapViewController", "Error invalidating map: ${e2.message}", e2)
             }
@@ -598,9 +598,9 @@ class MapViewController(
             } else {
                 // first time
                 val marker = Marker(LatLong(lat, lon), icon, 0, 0)
-                binding.map.layerManager.layers.add(marker)
+                mapView.layerManager.layers.add(marker)
                 busMarkerRegistry[token] = marker
-                activity.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
+                activity.panelController.refreshDetailPanelIcons(mapView.model.mapViewPosition.zoomLevel.toDouble())
             }
         }
     }

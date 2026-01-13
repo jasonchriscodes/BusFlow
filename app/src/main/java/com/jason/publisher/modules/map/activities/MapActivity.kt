@@ -143,16 +143,13 @@ class MapActivity : AppCompatActivity() {
         FileLogger.markAppOpened("MapActivity")
 
         // ── ADD THIS: initialize mqttManager for offline use ──
-        mqttManager = MqttManager(
-            serverUri = MqttHelper.SERVER_URI,
-            clientId  = MqttHelper.CLIENT_ID
-        )
+        mqttManager = MqttManager()
 
         // Initialize Managers before using it
         scheduleStatusManager = ScheduleStatusManager(this, binding)
         mqttHelper = MqttHelper(this, binding)
         panelController = DetailPanelController(this, binding.detailIconsContainer)
-        mapController  = MapViewController(this, binding, mqttHelper)
+        mapController = MapViewController(this, binding.map, mqttHelper)
 
         // Retrieve data passed from TimeTableActivity
         viewModel.aid = intent.getStringExtra("AID") ?: "Unknown"
@@ -293,11 +290,7 @@ class MapActivity : AppCompatActivity() {
                                 viewModel.aid,
                                 viewModel.config.orEmpty()
                             )
-                            mqttManager = MqttManager(
-                                serverUri = MqttHelper.SERVER_URI,
-                                clientId  = MqttHelper.CLIENT_ID,
-                                username  = viewModel.token
-                            )
+                            mqttManager = MqttManager(username = viewModel.token)
                             // tell ThingsBoard to re-send shared data
                             mqttHelper.requestAdminMessage()
                             // (re)subscribe to the shared message topic
@@ -349,11 +342,8 @@ class MapActivity : AppCompatActivity() {
                         viewModel.aid,
                         viewModel.config.orEmpty()
                     )
-                    mqttManager = MqttManager(
-                        serverUri = MqttHelper.SERVER_URI,
-                        clientId  = MqttHelper.CLIENT_ID,
-                        username  = viewModel.token
-                    )
+                    mqttManager = MqttManager(username  = viewModel.token)
+
                     // build your markers etc.
                     mapController.getDefaultConfigValue()
                     panelController.activeSegment = selfLabel
@@ -374,10 +364,7 @@ class MapActivity : AppCompatActivity() {
                 } else {
                     // --- FAILURE HANDLING ---
                     // ensure mqttManager is assigned even on config-fetch failure
-                    mqttManager = MqttManager(
-                        serverUri = MqttHelper.SERVER_URI,
-                        clientId  = MqttHelper.CLIENT_ID
-                    )
+                    mqttManager = MqttManager()
                     Log.e("MapActivity", "Failed to fetch config, entering offline mode.")
                     Toast.makeText(
                         this@MapActivity,
