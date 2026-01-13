@@ -48,12 +48,12 @@ import com.jason.publisher.modules.map.utils.calculateDurationForUpdate
 import com.jason.publisher.modules.map.utils.formatPanelLabel
 import com.jason.publisher.modules.map.utils.getLastScheduledAddress
 import com.jason.publisher.modules.map.viewmodels.DetailPanelController
-import com.jason.publisher.modules.viewmodels.MapViewController
+import com.jason.publisher.modules.map.viewmodels.MapViewController
 import com.jason.publisher.modules.map.viewmodels.MapViewModel
 import com.jason.publisher.modules.map.viewmodels.ScheduleStatusManager
 import com.jason.publisher.modules.map.viewmodels.TimeManager
 import com.jason.publisher.modules.mqtt.helpers.MqttConfigHelper
-import com.jason.publisher.modules.map.helpers.MqttHelper
+import com.jason.publisher.modules.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
 import com.jason.publisher.modules.schedule.activities.ScheduleActivity
@@ -289,7 +289,7 @@ class MapActivity : AppCompatActivity() {
                         if (success) {
                             // rebuild your MQTT client with the new token
                             viewModel.config = configList
-                            viewModel.token = mqttConfigHelper.getAccessToken(
+                            viewModel.token = MqttConfigHelper.getAccessToken(
                                 viewModel.aid,
                                 viewModel.config.orEmpty()
                             )
@@ -345,7 +345,7 @@ class MapActivity : AppCompatActivity() {
             runOnUiThread {
                 if (success) {
                     viewModel.config = configList
-                    viewModel.token = mqttConfigHelper.getAccessToken(
+                    viewModel.token = MqttConfigHelper.getAccessToken(
                         viewModel.aid,
                         viewModel.config.orEmpty()
                     )
