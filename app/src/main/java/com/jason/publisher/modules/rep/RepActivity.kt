@@ -141,12 +141,7 @@ class RepActivity : AppCompatActivity() {
         // ===== MQTT (INTI FIX) =====
         val token = intent.getStringExtra("ACCESS_TOKEN")
         if (!token.isNullOrBlank()) {
-            mqttManager = MqttManager(
-                serverUri = MqttHelper.Companion.SERVER_URI,
-                clientId = "${MqttHelper.Companion.CLIENT_ID}-rep",
-                username = token
-            )
-
+            mqttManager = MqttManager(username = token)
             mqttManager.connect { ok ->
                 if (ok) {
                     publishRepAttributes()

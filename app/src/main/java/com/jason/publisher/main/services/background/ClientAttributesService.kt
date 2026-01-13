@@ -12,10 +12,8 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import com.jason.publisher.modules.mqtt.helpers.MqttConfigHelper
 import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.ATTR_TOPIC
-import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.CLIENT_ID
 import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.PUB_MSG_TOPIC
 import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.REQUEST_PERIODIC_TIME
-import com.jason.publisher.modules.mqtt.helpers.MqttHelper.Companion.SERVER_URI
 import com.jason.publisher.modules.mqtt.services.MqttManager
 import org.json.JSONObject
 
@@ -37,14 +35,7 @@ class ClientAttributesService : Service() {
         mqttConfigHelper.fetchConfig { configList ->
             val aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             token = MqttConfigHelper.getAccessToken(aid, configList)
-            mqttManager = if (token.isNotEmpty()) MqttManager(
-                serverUri = SERVER_URI,
-                clientId = CLIENT_ID,
-                username = token,
-            ) else MqttManager(
-                serverUri = SERVER_URI,
-                clientId = CLIENT_ID,
-            )
+            mqttManager = if (token.isNotEmpty()) MqttManager(username = token) else MqttManager()
             Log.d("ClientAttributesService", "access token: $token")
             clearActiveSegmentAndRefresh()
         }

@@ -196,10 +196,7 @@ class ScheduleActivity : AppCompatActivity() {
         }
 
         // 0) init your MQTT managers *before* you ever call enterOnlineMode()/fetchConfig()
-        mqttManager = MqttManager(
-            serverUri = MqttHelper.Companion.SERVER_URI,
-            clientId = MqttHelper.Companion.CLIENT_ID
-        )
+        mqttManager = MqttManager()
 
         // 1. get connectivity service
         connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -738,11 +735,7 @@ class ScheduleActivity : AppCompatActivity() {
             if (success) {
                 viewModel.config = configList
                 viewModel.loadAccessToken()
-                mqttManager = MqttManager(
-                    serverUri = MqttHelper.Companion.SERVER_URI,
-                    clientId = MqttHelper.Companion.CLIENT_ID,
-                    username = viewModel.token
-                )
+                mqttManager = MqttManager(username = viewModel.token)
                 requestAdminMessage()
                 connectAndSubscribe()
             } else {

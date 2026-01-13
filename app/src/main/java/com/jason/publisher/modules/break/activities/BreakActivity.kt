@@ -19,7 +19,7 @@ import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.TripLog
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
-import com.jason.publisher.main.adapters.BreakUpcomingAdapter
+import com.jason.publisher.modules.`break`.adapters.BreakUpcomingAdapter
 import com.jason.publisher.modules.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.mqtt.services.MqttManager
 import org.json.JSONObject
@@ -145,11 +145,7 @@ class BreakActivity : AppCompatActivity() {
         TripLog.mark("driver break")
 
         // ===== MQTT =====
-        mqttManager = MqttManager(
-            serverUri = MqttHelper.Companion.SERVER_URI,
-            clientId = MqttHelper.Companion.CLIENT_ID,
-            username = token
-        )
+        mqttManager = MqttManager(username = token)
 
         mqttManager.connect { ok ->
             if (ok) {
