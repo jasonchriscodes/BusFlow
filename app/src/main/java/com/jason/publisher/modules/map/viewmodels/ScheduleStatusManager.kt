@@ -111,12 +111,11 @@ class ScheduleStatusManager(
             val scheduledTimeStr = binding.timingPointValueTextView.text.toString()
             val timingPointTime = scheduledTimeStr.parseTimeToday()
 
-            if (activity.viewModel.forceAheadStatus) {
-                activity.viewModel.baseTimeStr = activity.viewModel.customTime
+            val baseTime = if (activity.viewModel.forceAheadStatus) {
+                "22:15:00" // dummy actual-time string
             } else {
-                activity.viewModel.baseTimeStr = activity.viewModel.scheduleList.first().startTime + ":00"
-            }
-            val baseTime = activity.viewModel.baseTimeStr.parseTimeToday()
+                activity.viewModel.scheduleList.first().startTime + ":00"
+            }.parseTimeToday()
 
             var apiTimeStr = binding.ApiTimeValueTextView.text.toString()
             val firstAddress = activity.viewModel.scheduleList.firstOrNull()?.busStops?.firstOrNull()?.address

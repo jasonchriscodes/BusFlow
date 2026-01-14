@@ -98,8 +98,8 @@ class MqttHelper(
                 toRemove.forEach { token ->
                     binding.map.layerManager.layers.remove(owner.mapController.busMarkerRegistry[token])
                     owner.mapController.busMarkerRegistry.remove(token)
-                    owner.viewModel.prevOtherBusCoordinates.remove(token)
-                    owner.viewModel.lastSeen.remove(token)
+                    owner.mapController.prevOtherBusCoordinates.remove(token)
+                    owner.mapController.lastSeenOtherBuses.remove(token)
                     owner.otherBusLabels.remove(token)
                     Log.d("MqttHelper subscribeSharedData", "Removed bus $token - no longer in arrBusData")
                 }
@@ -245,8 +245,8 @@ class MqttHelper(
                         owner.mapController.busMarkerRegistry[token]?.let { marker ->
                             binding.map.layerManager.layers.remove(marker)
                             owner.mapController.busMarkerRegistry.remove(token)
-                            owner.viewModel.prevOtherBusCoordinates.remove(token)
-                            owner.viewModel.lastSeen.remove(token)
+                            owner.mapController.prevOtherBusCoordinates.remove(token)
+                            owner.mapController.lastSeenOtherBuses.remove(token)
                             owner.otherBusLabels.remove(token)
                             binding.map.invalidate()
                         }
@@ -268,8 +268,8 @@ class MqttHelper(
                             owner.mapController.busMarkerRegistry.remove(token)
                             binding.map.invalidate()
                         }
-                        owner.viewModel.prevOtherBusCoordinates.remove(token)
-                        owner.viewModel.lastSeen.remove(token)
+                        owner.mapController.prevOtherBusCoordinates.remove(token)
+                        owner.mapController.lastSeenOtherBuses.remove(token)
                         owner.otherBusLabels.remove(token)
                         owner.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
                     }
@@ -295,15 +295,15 @@ class MqttHelper(
 
                 // Check if bus is still active (has sent location update recently)
                 // Bus that was started but app was closed will have currentTripLabel but no recent updates
-                val lastSeenTime = owner.viewModel.lastSeen[token] ?: 0L
+                val lastSeenTime = owner.mapController.lastSeenOtherBuses[token] ?: 0L
                 if (lastSeenTime > 0L && (now - lastSeenTime) > MAX_INACTIVE_TIME_MS) {
                     // Bus hasn't sent update in 2 minutes - consider it inactive and remove
                     owner.runOnUiThread {
                         owner.mapController.busMarkerRegistry[token]?.let { marker ->
                             binding.map.layerManager.layers.remove(marker)
                             owner.mapController.busMarkerRegistry.remove(token)
-                            owner.viewModel.prevOtherBusCoordinates.remove(token)
-                            owner.viewModel.lastSeen.remove(token)
+                            owner.mapController.prevOtherBusCoordinates.remove(token)
+                            owner.mapController.lastSeenOtherBuses.remove(token)
                             owner.otherBusLabels.remove(token)
                             binding.map.invalidate()
                         }
@@ -315,14 +315,14 @@ class MqttHelper(
 
                 // ✅ FIX: If bus already exists in markerBus but coordinates haven't changed,
                 // it might be a stale bus (app was closed). Don't update lastSeen if coordinates are stale.
-                val existingPrev = owner.viewModel.prevOtherBusCoordinates[token]
+                val existingPrev = owner.mapController.prevOtherBusCoordinates[token]
                 if (existingPrev != null && existingPrev.first == lat && existingPrev.second == lon) {
                     // Coordinates haven't changed - this might be stale data from ThingsBoard
                     // Only update lastSeen if it's a recent first-time fetch (within last 30 seconds)
                     if (lastSeenTime == 0L) {
                         // First time seeing this bus with stale coordinates - set lastSeen but don't create marker yet
                         // Wait for next update to see if coordinates change
-                        owner.viewModel.lastSeen[token] = now
+                        owner.mapController.lastSeenOtherBuses[token] = now
                         Log.d("MqttHelper getAttributes", "First fetch for $token with stale coordinates - waiting for movement")
                         return
                     } else if ((now - lastSeenTime) > 30_000L) {
@@ -331,8 +331,8 @@ class MqttHelper(
                             owner.mapController.busMarkerRegistry[token]?.let { marker ->
                                 binding.map.layerManager.layers.remove(marker)
                                 owner.mapController.busMarkerRegistry.remove(token)
-                                owner.viewModel.prevOtherBusCoordinates.remove(token)
-                                owner.viewModel.lastSeen.remove(token)
+                                owner.mapController.prevOtherBusCoordinates.remove(token)
+                                owner.mapController.lastSeenOtherBuses.remove(token)
                                 owner.otherBusLabels.remove(token)
                                 binding.map.invalidate()
                             }
@@ -342,7 +342,7 @@ class MqttHelper(
                         return
                     }
                     // Coordinates are same but recent - just update lastSeen and return (no marker update needed)
-                    owner.viewModel.lastSeen[token] = now
+                    owner.mapController.lastSeenOtherBuses[token] = now
                     if (labelUpdated) {
                         owner.runOnUiThread { owner.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble()) }
                     }
@@ -351,13 +351,13 @@ class MqttHelper(
 
                 // First time we see this token → record and draw immediately
                 // Only create marker if bus has started (has currentTripLabel) and is not on Break
-                val prev = owner.viewModel.prevOtherBusCoordinates[token]
+                val prev = owner.mapController.prevOtherBusCoordinates[token]
                 if (prev == null) {
                     // Don't create marker if bus hasn't started yet
                     if (resolvedLabel.isBlank()) {
                         // Bus hasn't started - just record coordinates but don't create marker
-                        owner.viewModel.prevOtherBusCoordinates[token] = lat to lon
-                        owner.viewModel.lastSeen[token] = now
+                        owner.mapController.prevOtherBusCoordinates[token] = lat to lon
+                        owner.mapController.lastSeenOtherBuses[token] = now
                         // Refresh detail panel even if bus hasn't started (to remove it if it was there)
                         if (labelUpdated) {
                             owner.runOnUiThread { owner.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble()) }
@@ -368,15 +368,15 @@ class MqttHelper(
                     // Don't create marker if bus is on Break, but keep label for detail panel
                     if (resolvedLabel.contains("Break", ignoreCase = true)) {
                         // Bus is on break - record coordinates and label but don't create marker
-                        owner.viewModel.prevOtherBusCoordinates[token] = lat to lon
-                        owner.viewModel.lastSeen[token] = now
+                        owner.mapController.prevOtherBusCoordinates[token] = lat to lon
+                        owner.mapController.lastSeenOtherBuses[token] = now
                         // Refresh detail panel so bus on break appears
                         owner.runOnUiThread { owner.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble()) }
                         return
                     }
 
-                    owner.viewModel.prevOtherBusCoordinates[token] = lat to lon
-                    owner.viewModel.lastSeen[token] = now
+                    owner.mapController.prevOtherBusCoordinates[token] = lat to lon
+                    owner.mapController.lastSeenOtherBuses[token] = now
 
                     // Log bus detection with destination info
                     val label = resolvedLabel
@@ -410,7 +410,7 @@ class MqttHelper(
 
                 // No movement → still update lastSeen and refresh panel if label changed
                 if (prev.first == lat && prev.second == lon) {
-                    owner.viewModel.lastSeen[token] = now // Update lastSeen even if no movement
+                    owner.mapController.lastSeenOtherBuses[token] = now // Update lastSeen even if no movement
                     // ✅ FIX: If label changed to "Break", remove marker but keep label for detail panel
                     if (labelUpdated && resolvedLabel.contains("Break", ignoreCase = true)) {
                         owner.runOnUiThread {
@@ -435,7 +435,7 @@ class MqttHelper(
                 val distance = calculateDistance(prev.first, prev.second, lat, lon)
                 if (distance < MIN_MOVEMENT_DISTANCE && !labelUpdated) {
                     // Small movement, just update lastSeen
-                    owner.viewModel.lastSeen[token] = now
+                    owner.mapController.lastSeenOtherBuses[token] = now
                     return
                 }
 
@@ -453,8 +453,8 @@ class MqttHelper(
                     return
                 }
 
-                owner.viewModel.prevOtherBusCoordinates[token] = lat to lon
-                owner.viewModel.lastSeen[token] = now
+                owner.mapController.prevOtherBusCoordinates[token] = lat to lon
+                owner.mapController.lastSeenOtherBuses[token] = now
 
                 owner.runOnUiThread {
                     try {

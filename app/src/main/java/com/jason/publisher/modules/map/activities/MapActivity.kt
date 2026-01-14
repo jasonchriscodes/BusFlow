@@ -158,7 +158,6 @@ class MapActivity : AppCompatActivity() {
         viewModel.jsonString = intent.getStringExtra("JSON_STRING") ?: ""
         viewModel.durationBetweenStops = intent.getDoubleArrayExtra("DURATION_BETWEEN_BUS_STOP")?.toList() ?: emptyList()
         val timelineLabels = intent.getStringArrayListExtra("TIMELINE_LABELS") ?: emptyList<String>()
-        viewModel.panelDebugNo = intent.getIntExtra("EXTRA_PANEL_DEBUG_NO", 0)
 
         @Suppress("DEPRECATION")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -429,8 +428,6 @@ class MapActivity : AppCompatActivity() {
             // Manually set dummy values to simulate schedule status in advance
             timingPointValueTextView.text = "22:21:00"     // scheduledTimeStr
             apiTimeValueTextView.text = "22:21:00"         // apiTimeStr
-            viewModel.customTime = "22:15:00"                    // actualTimeStr
-            // result
 
             timeManager.stopCurrentTime()
             timeManager.startCurrentTimeUpdater {

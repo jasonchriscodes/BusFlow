@@ -55,8 +55,9 @@ class MapViewModel: ViewModel() {
     var longitude = 0.0
     var bearing = 0.0F
     var speed = 0.0F
-    var direction = ""
+    private var direction = ""
     private var busName = ""
+
     var aid = ""
     var jsonString = ""
     var token = ""
@@ -82,15 +83,8 @@ class MapViewModel: ViewModel() {
     val nextTimingPoint by lazy { MutableLiveData("Unknown") }
 
     val forceAheadStatus = false
-    var baseTimeStr  = "00:00:00"
-    var customTime  = "00:00:00"
     var lastTimingPointStopAddress: String? = null
     var smoothedSpeed: Float = 0f
-
-    // for other buses
-    val lastSeen       = mutableMapOf<String, Long>()
-    /** remember last lat/lon per token */
-    val prevOtherBusCoordinates     = mutableMapOf<String, Pair<Double, Double>>()
 
     // for self
     private var prevOwnCoordinate: Pair<Double,Double>? = null
@@ -113,7 +107,6 @@ class MapViewModel: ViewModel() {
     var lastValidLongitude = 0.0
     var hasPassedFirstStop = false
     val jumpThreshold = 3 // Prevents sudden jumps
-    var panelDebugNo: Int = 0
 
     // Cache TextView values to prevent unnecessary updates
     val lastSpeedText by lazy { MutableLiveData<String>() }
@@ -214,7 +207,7 @@ class MapViewModel: ViewModel() {
     }
 
     /** Log every stop with its index */
-    fun logAllStopsWithIndex(tag: String = "MapActivity") {
+    private fun logAllStopsWithIndex(tag: String = "MapActivity") {
         if (stops.isEmpty()) {
             FileLogger.d(tag, "🗺️ Stops: (none)")
             return
@@ -224,7 +217,7 @@ class MapViewModel: ViewModel() {
     }
 
     // Log only red timing-point stops with their indices
-    fun logRedStopsWithIndex(tag: String = "MapActivity") {
+    private fun logRedStopsWithIndex(tag: String = "MapActivity") {
         if (stops.isEmpty()) {
             FileLogger.d(tag, "🔴 Red timing points: (no stops loaded)")
             return

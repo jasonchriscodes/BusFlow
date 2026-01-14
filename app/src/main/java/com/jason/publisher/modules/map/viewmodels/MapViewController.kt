@@ -51,12 +51,17 @@ class MapViewController(
     private val mqttHelper: MqttHelper,
 ) {
     private var routePolyline: Polyline? = null
-    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     var activeBusToken: String? = null
     var currentBusMarker: Marker? = null
 
     var busMarkerRegistry = HashMap<String, Marker>()
 
+    /** remember last time other buses are seen */
+    val lastSeenOtherBuses       = mutableMapOf<String, Long>()
+    /** remember last lat/lon per token */
+    val prevOtherBusCoordinates     = mutableMapOf<String, Pair<Double, Double>>()
+
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var activityMonitorHandler: Handler? = null
     private var activityMonitorRunnable: Runnable? = null
 
@@ -96,8 +101,8 @@ class MapViewController(
                                 mapView.layerManager.layers.remove(it)
                             }
                             busMarkerRegistry.remove(t)
-                            activity.viewModel.prevOtherBusCoordinates.remove(t)
-                            activity.viewModel.lastSeen.remove(t)
+                            prevOtherBusCoordinates.remove(t)
+                            lastSeenOtherBuses.remove(t)
                             activity.otherBusLabels.remove(t)
                             removedCount++
                         }
@@ -115,8 +120,8 @@ class MapViewController(
                                     mapView.layerManager.layers.remove(it)
                                 }
                                 busMarkerRegistry.remove(t)
-                                activity.viewModel.prevOtherBusCoordinates.remove(t)
-                                activity.viewModel.lastSeen.remove(t)
+                                prevOtherBusCoordinates.remove(t)
+                                lastSeenOtherBuses.remove(t)
                                 activity.otherBusLabels.remove(t)
                                 removedCount++
                             } else if (label.contains("Break", ignoreCase = true)) {
@@ -136,7 +141,7 @@ class MapViewController(
                     busMarkerRegistry.keys
                         .filter { it != activity.viewModel.token && it in validBusTokens }
                         .forEach { t ->
-                            val last = activity.viewModel.lastSeen[t] ?: 0L
+                            val last = lastSeenOtherBuses[t] ?: 0L
                             // Use 2 minutes to quickly remove buses that closed app
                             // This ensures buses that were started but app was closed are removed quickly
                             if (last != 0L && now - last >= 2 * 60 * 1000L) {
@@ -156,8 +161,8 @@ class MapViewController(
                                     mapView.layerManager.layers.remove(it)
                                 }
                                 busMarkerRegistry.remove(t)
-                                activity.viewModel.prevOtherBusCoordinates.remove(t)
-                                activity.viewModel.lastSeen.remove(t)
+                                prevOtherBusCoordinates.remove(t)
+                                lastSeenOtherBuses.remove(t)
                                 activity.otherBusLabels.remove(t)
                                 removedCount++
                             }
