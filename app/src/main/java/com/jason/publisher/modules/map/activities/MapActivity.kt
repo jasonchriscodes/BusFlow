@@ -603,8 +603,6 @@ class MapActivity : AppCompatActivity() {
         val nearestIndex = viewModel.findNearestBusRoutePoint(viewModel.latitude, viewModel.longitude)
         Log.d("MapActivity confirmArrival", "✅ Nearest Route Point Found at Index: $nearestIndex")
 
-        var nearestStop: BusStop? = null
-
         // 2) mark every stop up to that point as passed
         var snappedStop: BusStop? = null
         for (stop in viewModel.stops) {
@@ -615,23 +613,6 @@ class MapActivity : AppCompatActivity() {
                 if (!viewModel.passedStops.contains(stop)) viewModel.passedStops.add(stop)
                 snappedStop = stop
             } else break
-        }
-
-        if (nearestStop != null) {
-            viewModel.latitude = nearestStop.latitude ?: viewModel.latitude
-            viewModel.longitude = nearestStop.longitude ?: viewModel.longitude
-            nearestStop.address = viewModel.findAddressByCoordinates(viewModel.latitude, viewModel.longitude)
-            viewModel.hasPassedFirstStop = true
-
-            if (nearestStop.address != null) {
-                viewModel.stopAddress = nearestStop.address.toString()
-                upcomingBusStopTextView.text = viewModel.stopAddress
-                Log.d("MapActivity confirmArrival", "✅ Updated Address: ${viewModel.stopAddress}")
-            } else {
-                Log.w("MapActivity confirmArrival", "⚠️ Address Not Found for Nearest Stop")
-            }
-        } else {
-            Log.w("MapActivity confirmArrival", "⚠️ No Nearest Stop Found")
         }
 
         // 3) clear & redraw all detection zones _once_
@@ -666,11 +647,6 @@ class MapActivity : AppCompatActivity() {
             set(Calendar.SECOND, 0)
         }
 
-        if (totalDurationUntilArrive == null) {
-            Log.d("MapActivity updateApiTime", "Upcoming bus stop not scheduled. Skipping API update.")
-            // If we already computed a final value before, do not override.
-            return
-        }
         Log.d("MapActivity updateApiTime", "Total duration in minutes: $totalDurationUntilArrive")
 
         // Add the duration (in seconds) to the start time.
@@ -693,10 +669,10 @@ class MapActivity : AppCompatActivity() {
 
         Log.d("MapActivity confirmArrival", "✅ Arrival confirmed at: ${viewModel.stopAddress}")
 
-        startLocationUpdate()   // ✅ Continue marker updates
+        startLocationUpdate()   // Continue marker updates
         Log.d("MapActivity confirmArrival", "✅ Tracking resumed after arrival confirmation.")
 
-        Toast.makeText(this@MapActivity, "✅ Tracking resumed after arrival confirmation.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "✅ Tracking resumed after arrival confirmation.", Toast.LENGTH_SHORT).show()
     }
 
     /**
