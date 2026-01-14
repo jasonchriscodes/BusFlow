@@ -31,8 +31,9 @@ fun getScheduledIndices(
         .sorted()
 }
 
-fun getNextTripFormattedLabel(nextTripStartTime: String?, currentTime: Calendar): String {
+fun getNextTripFormattedLabel(nextTripStartTime: String?): String {
     return if (nextTripStartTime != null) {
+        val currentTime = Calendar.getInstance().apply { timeInMillis = System.currentTimeMillis() }
         val timeParts = nextTripStartTime.split(":").map { it.toInt() }
         val nextTripCalendar = Calendar.getInstance().apply {
             set(Calendar.YEAR, currentTime.get(Calendar.YEAR))

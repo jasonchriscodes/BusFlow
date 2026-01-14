@@ -16,3 +16,11 @@ fun String.parseTimeToday(): Date {
         set(Calendar.MILLISECOND, 0)
     }.time
 }
+
+/**
+ * Convert a time string (e.g. "08:11") to minutes since midnight.
+ */
+fun String.convertTimeToMinutes(): Int {
+    val parts = this.split(":").map { it.toInt() }
+    return parts[0] * 60 + parts[1]
+}

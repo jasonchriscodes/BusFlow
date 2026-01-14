@@ -386,16 +386,16 @@ class MapViewModel: ViewModel() {
         }
     }
 
-    fun updateCurrentTimeText(currentTime: Date) {
+    fun updateCurrentTimeText() {
         val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
-        val currentTimeText = timeFormat.format(currentTime)
+        val currentTimeText = timeFormat.format(System.currentTimeMillis())
         if (currentTimeText != lastCurrentTimeText.value) {
             lastCurrentTimeText.postValue(currentTimeText)
         }
     }
 
-    fun updateNextTripText(nextTripStartTime: String?, currentTime: Calendar) {
-        val nextTripText = getNextTripFormattedLabel(nextTripStartTime, currentTime)
+    fun updateNextTripText(nextTripStartTime: String?) {
+        val nextTripText = getNextTripFormattedLabel(nextTripStartTime)
         if (nextTripText != lastNextTripText.value) {
             lastNextTripText.postValue(nextTripText)
         }

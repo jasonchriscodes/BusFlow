@@ -7,6 +7,7 @@ import androidx.core.content.ContextCompat
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.loggers.LifecycleLogger
+import com.jason.publisher.main.utils.getDeltaNextSec
 import com.jason.publisher.main.utils.parseTimeToday
 import com.jason.publisher.modules.map.activities.MapActivity
 import com.jason.publisher.modules.map.utils.calculateDistance
@@ -205,7 +206,7 @@ class ScheduleStatusManager(
             val t1 = d1 / effectiveSpeed  // d1 is the distance to the red stop in meters
 
             val predictedArrival = Calendar.getInstance().apply {
-                time = activity.timeManager.simulatedStartTime.time
+                timeInMillis = System.currentTimeMillis()
                 add(Calendar.SECOND, t1.toInt())
             }
 
@@ -327,7 +328,7 @@ class ScheduleStatusManager(
 
         val t1 = activity.viewModel.getExpectedDurationForNextSchedule() ?: return
 
-        val deltaNextSec = activity.timeManager.getDeltaNextSec(t1, activity.viewModel.scheduleData) ?: return
+        val deltaNextSec = activity.viewModel.scheduleData.getDeltaNextSec(t1) ?: return
 
         if (deltaNextSec in -86400..300) {
             val overrideValue = if (deltaNextSec < 0) (-deltaNextSec) + 300 else deltaNextSec

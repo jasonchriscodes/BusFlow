@@ -58,11 +58,12 @@ import com.jason.publisher.modules.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
 import com.jason.publisher.modules.schedule.activities.ScheduleActivity
 import com.jason.publisher.R
+import com.jason.publisher.main.utils.convertTimeToMinutes
+import com.jason.publisher.main.utils.getNextScheduleStartTime
 import com.jason.publisher.modules.map.utils.calculateBearing
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.model.common.Observer
 import java.util.Locale.getDefault
-import kotlin.text.toDouble
 
 class MapActivity : AppCompatActivity() {
 
@@ -245,8 +246,7 @@ class MapActivity : AppCompatActivity() {
         }
 
         // Start the current time counter
-        // Use startStartTime() which updates simulatedStartTime for calculations
-        timeManager.startStartTime(viewModel.scheduleList)
+        timeManager.startCurrentTimeUpdater { /* no-op */ }
 
         // Start the next trip countdown updater
         timeManager.startNextTripCountdownUpdater(viewModel.scheduleData) { updatedNextTrip ->
@@ -433,11 +433,10 @@ class MapActivity : AppCompatActivity() {
             // result
 
             timeManager.stopCurrentTime()
-            timeManager.startCustomTime(viewModel.customTime) { updatedCustomTime ->
+            timeManager.startCurrentTimeUpdater {
                 // Update schedule status based on the new simulated time
                 scheduleStatusManager.checkScheduleStatus()
             }
-//            startActualTimeUpdater()
 
             // Trigger visual change to test schedule status UI
             scheduleStatusManager.checkScheduleStatus()
@@ -745,9 +744,12 @@ class MapActivity : AppCompatActivity() {
             "You have completed last run of the day."
         } else {
             val nextTrip = flatSchedule[1]
-            val nextStartMinutes = timeManager.convertTimeToMinutes(nextTrip.startTime)
-            val currentMinutes = timeManager.simulatedStartTime.get(Calendar.HOUR_OF_DAY) * 60 +
-                    timeManager.simulatedStartTime.get(Calendar.MINUTE)
+            val nextStartMinutes = nextTrip.startTime.convertTimeToMinutes()
+            val currentTime = Calendar.getInstance().apply {
+                timeInMillis = System.currentTimeMillis()
+            }
+            val currentMinutes = currentTime.get(Calendar.HOUR_OF_DAY) * 60 +
+                    currentTime.get(Calendar.MINUTE)
             val restTotalMinutes = if (nextStartMinutes > currentMinutes) nextStartMinutes - currentMinutes else 0
             val restHours = restTotalMinutes / 60
             val restMinutes = restTotalMinutes % 60
@@ -1107,17 +1109,6 @@ class MapActivity : AppCompatActivity() {
         // Reset simulation variables.
         viewModel.simulationSpeedFactor = 1
 
-        // Reset the simulated clock to the schedule's start time (if available)
-        if (viewModel.scheduleList.isNotEmpty()) {
-            val startTimeStr = viewModel.scheduleList.first().startTime  // e.g. "08:00"
-            val timeParts = startTimeStr.split(":")
-            if (timeParts.size == 2) {
-                timeManager.simulatedStartTime.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
-                timeManager.simulatedStartTime.set(Calendar.MINUTE, timeParts[1].toInt())
-                timeManager.simulatedStartTime.set(Calendar.SECOND, 0)
-            }
-        }
-
         // Reset any other state you maintain.
         viewModel.upcomingStop = if (viewModel.scheduleList.isNotEmpty() && viewModel.scheduleList.first().busStops.isNotEmpty())
             viewModel.scheduleList.first().busStops.first().time + ":00" else "Unknown"
@@ -1349,15 +1340,14 @@ class MapActivity : AppCompatActivity() {
 
             // Explicitly update currentTimeTextView from TimeManager (only if changed)
             if (::currentTimeTextView.isInitialized) {
-                viewModel.updateCurrentTimeText(timeManager.simulatedStartTime.time)
+                viewModel.updateCurrentTimeText()
             }
 
             // Explicitly update nextTripCountdownTextView (only if changed)
             if (::nextTripCountdownTextView.isInitialized) {
                 try {
-                    val currentTime = timeManager.simulatedStartTime.clone() as Calendar
-                    val nextTripStartTime = timeManager.getNextScheduleStartTime(viewModel.scheduleData)
-                    viewModel.updateNextTripText(nextTripStartTime, currentTime)
+                    val nextTripStartTime = viewModel.scheduleData.getNextScheduleStartTime()
+                    viewModel.updateNextTripText(nextTripStartTime)
                 } catch (e: Exception) {
                     Log.e("MapActivity", "Error updating nextTripCountdownTextView: ${e.message}", e)
                 }
