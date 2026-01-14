@@ -65,6 +65,20 @@ class MapViewController(
     private var activityMonitorHandler: Handler? = null
     private var activityMonitorRunnable: Runnable? = null
 
+    // Cache last position to avoid unnecessary updates
+    private var lastMarkerLat = Double.NaN
+    private var lastMarkerLon = Double.NaN
+    private var lastMarkerBearing = Float.NaN
+    private var lastMarkerUpdateTime = 0L
+
+    // Track map layer to ensure it's never removed
+    private var mapTileLayer: TileRendererLayer? = null
+
+    companion object {
+        /** Minimum 100ms between marker updates for smooth movement */
+        private const val MARKER_UPDATE_MIN_INTERVAL_MS = 100L
+    }
+
     /** Monitor other buses every second, logging their count and active/inactive status. */
     @SuppressLint("LongLogTag")
     fun startActivityMonitor() {
@@ -88,7 +102,6 @@ class MapViewController(
                         .forEach { t ->
                             val label = activity.otherBusLabels[t] ?: "Unknown"
                             val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
-                            val marker = busMarkerRegistry[t]
 
                             LifecycleLogger.logOtherBusRemoved(
                                 token = t,
@@ -97,13 +110,7 @@ class MapViewController(
                                 reason = "not_in_arrBusData"
                             )
 
-                            marker?.let {
-                                mapView.layerManager.layers.remove(it)
-                            }
-                            busMarkerRegistry.remove(t)
-                            prevOtherBusCoordinates.remove(t)
-                            lastSeenOtherBuses.remove(t)
-                            activity.otherBusLabels.remove(t)
+                            removeBusMarker(t)
                             removedCount++
                         }
 
@@ -115,14 +122,7 @@ class MapViewController(
                             val label = activity.otherBusLabels[t]
                             if (label.isNullOrBlank()) {
                                 // Bus doesn't have currentTripLabel - remove marker
-                                val marker = busMarkerRegistry[t]
-                                marker?.let {
-                                    mapView.layerManager.layers.remove(it)
-                                }
-                                busMarkerRegistry.remove(t)
-                                prevOtherBusCoordinates.remove(t)
-                                lastSeenOtherBuses.remove(t)
-                                activity.otherBusLabels.remove(t)
+                                removeBusMarker(t)
                                 removedCount++
                             } else if (label.contains("Break", ignoreCase = true)) {
                                 // Remove marker for buses on break but keep label for detail panel
@@ -148,7 +148,6 @@ class MapViewController(
                                 // Log bus removal with destination info
                                 val label = activity.otherBusLabels[t] ?: "Unknown"
                                 val destination = label.split("→").getOrNull(1)?.trim() ?: "Unknown"
-                                val marker = busMarkerRegistry[t]
 
                                 LifecycleLogger.logOtherBusRemoved(
                                     token = t,
@@ -157,13 +156,7 @@ class MapViewController(
                                     reason = "inactive_2min"
                                 )
 
-                                marker?.let {
-                                    mapView.layerManager.layers.remove(it)
-                                }
-                                busMarkerRegistry.remove(t)
-                                prevOtherBusCoordinates.remove(t)
-                                lastSeenOtherBuses.remove(t)
-                                activity.otherBusLabels.remove(t)
+                                removeBusMarker(t)
                                 removedCount++
                             }
                         }
@@ -197,7 +190,7 @@ class MapViewController(
     /**
      * Creates a Mapsforge‐compatible bitmap from a VectorDrawable resource.
      */
-    fun createBusIcon(@DrawableRes id: Int, sizeDp: Int = 16): Bitmap {
+    private fun createBusIcon(@DrawableRes id: Int, sizeDp: Int = 16): Bitmap {
         // 1) load the drawable
         val drawable = ResourcesCompat.getDrawable(activity.resources, id, null)!!
 
@@ -287,7 +280,6 @@ class MapViewController(
                 }
                 return@launch
             }
-//            val renderTheme = InternalRenderTheme.OSMARENDER
             val renderTheme = AssetsRenderTheme(
                 activity.assets,
                 "",
@@ -363,7 +355,7 @@ class MapViewController(
     }
 
     /** Place the bus marker at a given latitude and longitude */
-    fun addBusMarker(lat: Double, lon: Double) {
+    private fun addBusMarker(lat: Double, lon: Double) {
         val pos = LatLong(lat, lon)
         val mf = createBusIcon(R.drawable.ic_bus_symbol, sizeDp = 16)
         currentBusMarker = Marker(LatLong(lat, lon), mf, 0, 0)
@@ -375,8 +367,7 @@ class MapViewController(
     }
 
     /** Adds bus stops to the map. */
-    @SuppressLint("LongLogTag")
-    fun addBusStopMarkers(busStops: List<BusStop>) {
+    private fun addBusStopMarkers(busStops: List<BusStop>) {
         val total = busStops.size
         // desired symbol square in dp
         val desiredDp = 30
@@ -461,20 +452,6 @@ class MapViewController(
         mapView.invalidate()
     }
 
-    // Cache last position to avoid unnecessary updates
-    private var lastMarkerLat = Double.NaN
-    private var lastMarkerLon = Double.NaN
-    private var lastMarkerBearing = Float.NaN
-    private var lastMarkerUpdateTime = 0L
-
-    companion object {
-        /** Minimum 100ms between marker updates for smooth movement */
-        private const val MARKER_UPDATE_MIN_INTERVAL_MS = 100L
-    }
-
-    // Track map layer to ensure it's never removed
-    private var mapTileLayer: TileRendererLayer? = null
-
     /**
      * Move (or create) the bus marker at [lat],[lon], rotated to [bearing],
      * then spin the map so that "up" is always this bus's heading.
@@ -556,6 +533,22 @@ class MapViewController(
                 Log.e("MapViewController", "Error invalidating map: ${e2.message}", e2)
             }
         }
+    }
+
+    /**
+     *  Remove the bus marker from the map view, map states, and panel detail.
+     *  @param invalidateImmediately Whether to invalidate the map immediately after removing the marker.
+     *  Defaults to false for efficiency.
+     *  */
+    fun removeBusMarker(token: String, invalidateImmediately: Boolean = false) {
+        busMarkerRegistry[token]?.let {
+            mapView.layerManager.layers.remove(it)
+            if (invalidateImmediately) mapView.invalidate()
+        }
+        busMarkerRegistry.remove(token)
+        prevOtherBusCoordinates.remove(token)
+        lastSeenOtherBuses.remove(token)
+        activity.otherBusLabels.remove(token)
     }
 
     /** Rotates any vector‐drawable @id by `angle`° around its center. */

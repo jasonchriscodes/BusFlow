@@ -89,18 +89,14 @@ class MqttHelper(
                     getAttributes(apiService, bus.accessToken)
                 }
 
-                // ✅ FIX: remove dropped-out buses and clean up all tracking data
+                // Remove dropped-out buses and clean up all tracking data
                 // Also remove buses that are no longer in arrBusData (orphaned from ThingsBoard)
                 val newArrTokens = newArr.map { it.accessToken }.toSet()
                 val toRemove = owner.mapController.busMarkerRegistry.keys.filter {
                     it != owner.viewModel.token && it !in newArrTokens
                 }
                 toRemove.forEach { token ->
-                    binding.map.layerManager.layers.remove(owner.mapController.busMarkerRegistry[token])
-                    owner.mapController.busMarkerRegistry.remove(token)
-                    owner.mapController.prevOtherBusCoordinates.remove(token)
-                    owner.mapController.lastSeenOtherBuses.remove(token)
-                    owner.otherBusLabels.remove(token)
+                    owner.mapController.removeBusMarker(token)
                     Log.d("MqttHelper subscribeSharedData", "Removed bus $token - no longer in arrBusData")
                 }
 
@@ -180,11 +176,11 @@ class MqttHelper(
             ) {
                 val client = response.body()?.client ?: return
 
-                // ---------- NEW: resolve a stable label for "other bus" ----------
+                // resolve a stable label for "other bus"
                 var labelUpdated = false
                 var resolvedLabel: String? = null
 
-                // ✅ FIX: Only use currentTripLabel - bus must have started a trip to be shown
+                // Only use currentTripLabel - bus must have started a trip to be shown
                 // Don't use fallback to scheduleData because bus that hasn't started shouldn't be displayed
                 val labelFromPeer = client.currentTripLabel
                 if (!labelFromPeer.isNullOrBlank()) {
@@ -198,7 +194,7 @@ class MqttHelper(
                     if (owner.otherBusLabels[token] != lbl) {
                         owner.otherBusLabels[token] = lbl
                         labelUpdated = true
-                        // ✅ FIX: If this is the first time we set a label for this bus, refresh detail panel
+                        // If this is the first time we set a label for this bus, refresh detail panel
                         // This ensures detail panel shows the bus even if marker hasn't been created yet
                         if (wasEmpty) {
                             owner.runOnUiThread { owner.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble()) }
@@ -206,24 +202,11 @@ class MqttHelper(
                     }
                     try {
                         owner.panelDebounceRunnable?.let {
-                            owner.panelDebounceHandler.removeCallbacks(
-                                it
-                            )
+                            owner.panelDebounceHandler.removeCallbacks(it)
                         }
                         owner.panelDebounceRunnable = Runnable {
                             try {
-                                owner.runOnUiThread {
-                                    try {
-                                        owner.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
-                                    } catch (e: Exception) {
-                                        Log.w("MqttHelper", "refreshDetailPanelIcons failed: ${e.message}")
-                                    }
-                                    try {
-                                        owner.panelController.logPanelDetailTextOnly()
-                                    } catch (e: Exception) {
-                                        Log.w("MqttHelper", "logPanelDetailTextOnly failed: ${e.message}")
-                                    }
-                                }
+                                owner.panelController.refreshPanelDetailWithLogging(binding.map.model.mapViewPosition.zoomLevel.toDouble())
                             } catch (e: Exception) {
                                 Log.w("MqttHelper", "panel debounce runnable failed: ${e.message}")
                             }
@@ -238,18 +221,11 @@ class MqttHelper(
                 val lat = client.latitude
                 val lon = client.longitude
 
-                // ✅ FIX: If no usable coords, don't create/update marker and clean up if exists
+                // If no usable coords, don't create/update marker and clean up if exists
                 if (lat == 0.0 && lon == 0.0) {
                     // Remove marker if it exists (invalid coordinates)
                     owner.runOnUiThread {
-                        owner.mapController.busMarkerRegistry[token]?.let { marker ->
-                            binding.map.layerManager.layers.remove(marker)
-                            owner.mapController.busMarkerRegistry.remove(token)
-                            owner.mapController.prevOtherBusCoordinates.remove(token)
-                            owner.mapController.lastSeenOtherBuses.remove(token)
-                            owner.otherBusLabels.remove(token)
-                            binding.map.invalidate()
-                        }
+                        owner.mapController.removeBusMarker(token, invalidateImmediately = true)
                         if (labelUpdated) {
                             owner.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
                         }
@@ -263,20 +239,13 @@ class MqttHelper(
                 if (resolvedLabel.isNullOrBlank()) {
                     // Bus hasn't started yet - remove marker if exists
                     owner.runOnUiThread {
-                        owner.mapController.busMarkerRegistry[token]?.let { marker ->
-                            binding.map.layerManager.layers.remove(marker)
-                            owner.mapController.busMarkerRegistry.remove(token)
-                            binding.map.invalidate()
-                        }
-                        owner.mapController.prevOtherBusCoordinates.remove(token)
-                        owner.mapController.lastSeenOtherBuses.remove(token)
-                        owner.otherBusLabels.remove(token)
+                        owner.mapController.removeBusMarker(token, invalidateImmediately = true)
                         owner.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
                     }
                     return
                 }
 
-                // ✅ FIX: Bus on break - remove marker from map but keep label in otherBusLabels for detail panel
+                // If bus on break, remove marker from map but keep label in otherBusLabels for detail panel
                 // This allows bus on break to be tracked in detail panel but not shown on map
                 if (resolvedLabel.contains("Break", ignoreCase = true)) {
                     // Bus is on break - remove marker from map but keep label for detail panel
@@ -299,14 +268,7 @@ class MqttHelper(
                 if (lastSeenTime > 0L && (now - lastSeenTime) > MAX_INACTIVE_TIME_MS) {
                     // Bus hasn't sent update in 2 minutes - consider it inactive and remove
                     owner.runOnUiThread {
-                        owner.mapController.busMarkerRegistry[token]?.let { marker ->
-                            binding.map.layerManager.layers.remove(marker)
-                            owner.mapController.busMarkerRegistry.remove(token)
-                            owner.mapController.prevOtherBusCoordinates.remove(token)
-                            owner.mapController.lastSeenOtherBuses.remove(token)
-                            owner.otherBusLabels.remove(token)
-                            binding.map.invalidate()
-                        }
+                        owner.mapController.removeBusMarker(token, invalidateImmediately = true)
                         owner.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
                     }
                     Log.d("MqttHelper getAttributes", "Removing $token - bus inactive (no update in ${(now - lastSeenTime) / 1000}s)")
@@ -328,14 +290,7 @@ class MqttHelper(
                     } else if ((now - lastSeenTime) > 30_000L) {
                         // Coordinates haven't changed in 30 seconds - likely stale, remove
                         owner.runOnUiThread {
-                            owner.mapController.busMarkerRegistry[token]?.let { marker ->
-                                binding.map.layerManager.layers.remove(marker)
-                                owner.mapController.busMarkerRegistry.remove(token)
-                                owner.mapController.prevOtherBusCoordinates.remove(token)
-                                owner.mapController.lastSeenOtherBuses.remove(token)
-                                owner.otherBusLabels.remove(token)
-                                binding.map.invalidate()
-                            }
+                            owner.mapController.removeBusMarker(token, invalidateImmediately = true)
                             owner.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
                         }
                         Log.d("MqttHelper getAttributes", "Removing $token - stale coordinates (no movement in 30s)")
