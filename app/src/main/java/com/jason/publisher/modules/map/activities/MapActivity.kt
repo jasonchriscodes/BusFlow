@@ -235,7 +235,7 @@ class MapActivity : AppCompatActivity() {
         }
         viewModel.lastCurrentTimeText.observe(this) {
             if (::currentTimeTextView.isInitialized) {
-                timeManager.updateCurrentTime(it)
+                timeManager.currentTime.postValue(it)
             }
         }
         viewModel.lastTripEndTimeText.observe(this) {
@@ -246,15 +246,11 @@ class MapActivity : AppCompatActivity() {
 
         // Start the current time counter
         timeManager.startCurrentTimeUpdater { /* no-op */ }
+        timeManager.currentTime.observe(this) { currentTimeTextView.text = it }
 
         // Start the next trip countdown updater
-        timeManager.startNextTripCountdownUpdater(viewModel.scheduleData) { updatedNextTrip ->
-            nextTripCountdownTextView.text = updatedNextTrip
-        }
-
-        timeManager.currentTime.observe(this) {
-            currentTimeTextView.text = it
-        }
+        timeManager.startNextTripCountdownUpdater(viewModel.scheduleData)
+        timeManager.nextTripCountdown.observe(this) { nextTripCountdownTextView.text = it }
 
         updateApiTime() // Ensure API time is updated at the start
 
@@ -429,7 +425,6 @@ class MapActivity : AppCompatActivity() {
             timingPointValueTextView.text = "22:21:00"     // scheduledTimeStr
             apiTimeValueTextView.text = "22:21:00"         // apiTimeStr
 
-            timeManager.stopCurrentTime()
             timeManager.startCurrentTimeUpdater {
                 // Update schedule status based on the new simulated time
                 scheduleStatusManager.checkScheduleStatus()

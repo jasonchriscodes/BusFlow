@@ -4,10 +4,9 @@ import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import androidx.lifecycle.AbstractSavedStateViewModelFactory
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.utils.getNextScheduleStartTime
 import java.text.SimpleDateFormat
@@ -16,15 +15,10 @@ import java.util.Locale
 
 class TimeManager(): ViewModel() {
     companion object {
-        fun provideFactory(): AbstractSavedStateViewModelFactory = object :
-            AbstractSavedStateViewModelFactory() {
+        fun provideFactory(): ViewModelProvider.Factory = object: ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel?> create(
-                key: String,
-                modelClass: Class<T?>,
-                handle: SavedStateHandle
-            ): T & Any {
-                return (TimeManager() as T)!!
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return (TimeManager() as T)
             }
         }
     }
@@ -36,9 +30,7 @@ class TimeManager(): ViewModel() {
         MutableLiveData<String>(systemTimeStr)
     }
 
-    fun updateCurrentTime(newValue: String) {
-        currentTime.postValue(newValue)
-    }
+    val nextTripCountdown: MutableLiveData<String> by lazy { MutableLiveData<String>() }
 
     private var currentTimeHandler: Handler? = null
     private var currentTimeRunnable: Runnable? = null
@@ -58,7 +50,7 @@ class TimeManager(): ViewModel() {
             override fun run() {
                 try {
                     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                    updateCurrentTime(timeFormat.format(System.currentTimeMillis()))
+                    currentTime.postValue(timeFormat.format(System.currentTimeMillis()))
                     onUpdateCallback()
 
                     // Schedule next update only if handler is still valid
@@ -75,10 +67,7 @@ class TimeManager(): ViewModel() {
     /**
      * function to calculate and display the remaining time until the next scheduled run
      */
-    fun startNextTripCountdownUpdater(
-        scheduleData: List<ScheduleItem>,
-        updateTextViewCallback: (String) -> Unit,
-    ) {
+    fun startNextTripCountdownUpdater(scheduleData: List<ScheduleItem>) {
         // Stop any existing countdown timer first
         stopNextTripCountdown()
 
@@ -114,7 +103,8 @@ class TimeManager(): ViewModel() {
                     } else {
                         newNextTripText = "No more scheduled trips for today"
                     }
-                    updateTextViewCallback(newNextTripText)
+                    nextTripCountdown.postValue(newNextTripText)
+
                     // Schedule next update only if handler is still valid
                     nextTripHandler?.postDelayed(this, 1000)
                 } catch (e: Exception) {
@@ -128,7 +118,7 @@ class TimeManager(): ViewModel() {
     /**
      * Stop the next trip countdown updater
      */
-    fun stopNextTripCountdown() {
+    private fun stopNextTripCountdown() {
         nextTripHandler?.removeCallbacksAndMessages(null)
         nextTripRunnable = null
     }
@@ -136,7 +126,7 @@ class TimeManager(): ViewModel() {
     /**
      * Function to remove current time call back
      */
-    fun stopCurrentTime() {
+    private fun stopCurrentTime() {
         currentTimeHandler?.removeCallbacksAndMessages(null)
         currentTimeRunnable = null
     }
@@ -147,5 +137,10 @@ class TimeManager(): ViewModel() {
     fun cleanup() {
         stopCurrentTime()
         stopNextTripCountdown()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        cleanup()
     }
 }
