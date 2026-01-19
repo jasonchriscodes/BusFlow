@@ -496,9 +496,11 @@ class ScheduleActivity : AppCompatActivity() {
         }
 
         val selectedIdx = viewModel.routeIndexFromRouteNo(firstScheduleItem.runNo)
+        viewModel.loadAccessToken()
 
         val intent = Intent(this, RepActivity::class.java).apply {
             putExtra("AID", viewModel.aid)
+            putExtra("ACCESS_TOKEN", viewModel.token)
             putExtra("CONFIG", ArrayList(viewModel.config ?: emptyList()))
             putExtra("JSON_STRING", viewModel.jsonString)
 
