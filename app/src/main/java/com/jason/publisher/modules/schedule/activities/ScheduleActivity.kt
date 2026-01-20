@@ -58,6 +58,7 @@ import com.jason.publisher.modules.network.utils.NetworkStatusHelper
 import com.jason.publisher.modules.schedule.adapters.ScheduleAdapter
 import com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
 import com.jason.publisher.modules.schedule.viewmodels.ScheduleViewModel
+import com.jason.publisher.modules.signing.activities.SigningActivity
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -402,9 +403,11 @@ class ScheduleActivity : AppCompatActivity() {
 
                 when {
                     first.isBreak()      -> launchBreakActivity(first, no)
+                    first.isSigning()    -> launchSigningActivity(first, no)
                     first.isReposition() -> launchRepActivity(first, no)
-                    else                -> launchMapActivity(no)
+                    else                 -> launchMapActivity(no)
                 }
+
             } catch (e: Exception) {
                 FileLogger.e("ScheduleActivity", "Error in startRouteButton: ${e.message}")
                 Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -422,12 +425,50 @@ class ScheduleActivity : AppCompatActivity() {
 
             viewModel.logPanelDebugPreStart(no, first)
 
-            if (first.isBreak()) {
-                launchBreakActivity(first, no)
-            } else {
-                launchMapActivity(no)
+            when {
+                first.isBreak()   -> launchBreakActivity(first, no)
+                first.isSigning() -> launchSigningActivity(first, no)
+                else              -> launchMapActivity(no)
             }
         }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun launchSigningActivity(firstScheduleItem: ScheduleItem, no: Int) {
+        if (viewModel.activeScheduleData.isEmpty()) {
+            Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val hasActiveTrip = TripLog.hasActive(this)
+        if (!hasActiveTrip) {
+            updateActiveScheduleDataOnLaunch(
+                viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
+            )
+        } else {
+            Log.w("ScheduleActivity", "⚠️ Active trip detected, keeping first schedule in cache")
+        }
+
+        val label = formatPanelLabel(firstScheduleItem) // keep your label style
+        val action = firstScheduleItem.signingAction()
+
+        viewModel.loadAccessToken()
+
+        val intent = Intent(this, SigningActivity::class.java).apply {
+            putExtra("AID", viewModel.aid)
+            putExtra("ACCESS_TOKEN", viewModel.token)
+
+            putExtra("SIGNING_LABEL", label)
+            putExtra("SIGNING_ACTION", action)
+            putExtra("SIGNING_RUN_NAME", firstScheduleItem.runName) // optional, helps debug
+
+            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+            putExtra("FULL_SCHEDULE_DATA", ArrayList(viewModel.activeScheduleData))
+            putExtra("EXTRA_PANEL_DEBUG_NO", no)
+        }
+
+        publishActiveSegment(label)
+        startActivity(intent)
     }
 
     /**
@@ -1304,6 +1345,15 @@ class ScheduleActivity : AppCompatActivity() {
             setRouteActionButtonsVisibility(View.VISIBLE)
             hideTestButton()
         }
+    }
+
+    private fun ScheduleItem.isSigning(): Boolean {
+        return (runName ?: "").contains("sign", ignoreCase = true)
+    }
+
+    private fun ScheduleItem.signingAction(): String {
+        val rn = (runName ?: "").lowercase(Locale.getDefault())
+        return if (rn.contains("off") || rn.contains("out")) "OFF" else "IN" // "on"/"in" => IN
     }
 
     override fun onResume() {
