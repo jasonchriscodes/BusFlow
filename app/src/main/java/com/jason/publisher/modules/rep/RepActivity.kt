@@ -214,6 +214,7 @@ class RepActivity : AppCompatActivity() {
         ).build()
 
         callback =object : LocationCallback() {
+            @SuppressLint("SuspiciousIndentation")
             override fun onLocationResult(result: LocationResult) {
                 val loc: Location = result.lastLocation ?:return
                 speedKmh =if (loc.hasSpeed()) loc.speed *3.6f else 0f

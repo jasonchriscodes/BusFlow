@@ -153,7 +153,7 @@ class SigningActivity : AppCompatActivity() {
         }
 
         // ===== UI text =====
-        infoText.text = if (signingAction == "OFF") "Please sign off" else "Please sign in"
+        infoText.text = if (signingAction == "OFF") "Please sign off" else "Please sign on"
         endAtText.text = "Before ${signItem.endTime}"
 
         // ===== Timer =====
@@ -260,7 +260,7 @@ class SigningActivity : AppCompatActivity() {
         infoText.text = if (signingAction == "OFF") {
             "You're late to sign off. Please sign off now."
         } else {
-            "You're late to sign in. Please sign in now."
+            "You're late to sign on. Please sign in now."
         }
 
         doneBtn.visibility = View.VISIBLE

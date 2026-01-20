@@ -101,11 +101,21 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
 
         for (i in workIntervals.indices) {
             val item = allScheduleItems.getOrNull(i)
-            val dutyName = dutyNames.getOrNull(i) ?: "Duty"
-            val isRep = dutyName.equals("REP", ignoreCase = true)
-            val isBreak = dutyName.equals("Break", ignoreCase = true)
+            val dutyName = dutyNames.getOrNull(i) ?:"Duty"
+            val runName = item?.runName ?: dutyName
+
+            val isRep = dutyName.equals("REP", ignoreCase =true)
+            val isBreak = dutyName.equals("Break", ignoreCase =true)
+
+// ✅ Signing detection (Sign On / Sign Off)
+            val isSigning = runName.contains("sign", ignoreCase =true)
+            val isSignOff = isSigning && (
+                    runName.contains("off", ignoreCase =true) ||
+                            runName.contains("out", ignoreCase =true)
+                    )
+
             val startTime = workIntervals[i].first
-            val firstStopAbbr = item?.busStops?.firstOrNull()?.abbreviation ?: "?"
+            val firstStopAbbr = item?.busStops?.firstOrNull()?.abbreviation ?:"?"
 
             Log.d(
                 "StyledMultiColorTimeline renderTimeline",
@@ -121,11 +131,13 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                 orientation = VERTICAL
                 gravity = Gravity.CENTER
                 setPadding(12, 8, 12, 8)
-                background = ContextCompat.getDrawable(context,
+                background = ContextCompat.getDrawable(
+                    context,
                     when {
-                        isRep   -> if (isDarkMode) R.drawable.dark_rep_vertical_style   else R.drawable.rep_vertical_style
-                        isBreak -> if (isDarkMode) R.drawable.dark_break_horizontal_style else R.drawable.break_horizontal_style
-                        else    -> if (isDarkMode) R.drawable.dark_route_rounded_style   else R.drawable.route_rounded_style
+                        isSigning -> if (isDarkMode) R.drawable.dark_break_horizontal_style else R.drawable.break_horizontal_style
+                        isRep     -> if (isDarkMode) R.drawable.dark_rep_vertical_style else R.drawable.rep_vertical_style
+                        isBreak   -> if (isDarkMode) R.drawable.dark_break_horizontal_style else R.drawable.break_horizontal_style
+                        else      -> if (isDarkMode) R.drawable.dark_route_rounded_style else R.drawable.route_rounded_style
                     }
                 )
 
@@ -136,11 +148,38 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                     gravity = Gravity.CENTER
                     setTextColor(Color.WHITE)
                 }
-                if (isRep || isBreak) {
+                if (isRep || isBreak || isSigning) {
                     addView(timeLabel)
                 }
 
                 when {
+                    isSigning -> {
+                        val icon = ImageView(context).apply {
+                            setImageResource(if (isSignOff) R.drawable.ic_sign_off else R.drawable.ic_sign_on)
+                            setColorFilter(if (isDarkMode) Color.GRAY else Color.WHITE)
+                            layoutParams = LayoutParams(32, 32).apply {
+                                gravity = Gravity.CENTER_HORIZONTAL
+                            }
+                        }
+
+                        val signLabel = TextView(context).apply {
+                            text = if (isSignOff) "Sign off" else "Sign on"
+                            textSize = 14f
+                            gravity = Gravity.CENTER
+                            setTextColor(Color.WHITE)
+                        }
+
+                        val stopLabel = TextView(context).apply {
+                            text = firstStopAbbr
+                            textSize = 14f
+                            gravity = Gravity.CENTER
+                            setTextColor(Color.WHITE)
+                        }
+
+                        addView(icon)
+                        addView(signLabel)
+                        addView(stopLabel)
+                    }
                     isRep -> {
                         val repLabel = TextView(context).apply {
                             text = "REP"
@@ -212,10 +251,12 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
             }
 
             val fixedBoxWidth = (64 * context.resources.displayMetrics.density).toInt()
+            val isFixed = isRep || isBreak || isSigning
+
             box.layoutParams = LayoutParams(
-                if (isRep || isBreak) fixedBoxWidth else 0,
+                if (isFixed) fixedBoxWidth else 0,
                 LayoutParams.WRAP_CONTENT,
-                if (isRep || isBreak) 0f else segmentDurations[i].toFloat() / totalDuration
+                if (isFixed) 0f else segmentDurations[i].toFloat() / totalDuration
             ).apply {
                 marginStart = if (i > 0) 8 else 0
             }
