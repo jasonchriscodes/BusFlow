@@ -10,7 +10,7 @@ import com.jason.publisher.main.loggers.LifecycleLogger
 import com.jason.publisher.main.utils.getDeltaNextSec
 import com.jason.publisher.main.utils.parseTimeToday
 import com.jason.publisher.modules.map.activities.MapActivity
-import com.jason.publisher.modules.map.activities.RepActivity
+import com.jason.publisher.modules.rep.activities.RepActivity
 import com.jason.publisher.modules.map.utils.calculateDistance
 import java.text.SimpleDateFormat
 import java.util.Calendar

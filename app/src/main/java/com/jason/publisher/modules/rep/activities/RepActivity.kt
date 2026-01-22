@@ -1,4 +1,4 @@
-package com.jason.publisher.modules.map.activities
+package com.jason.publisher.modules.rep.activities
 
 import android.annotation.SuppressLint
 import android.os.Bundle

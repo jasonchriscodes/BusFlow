@@ -20,7 +20,7 @@ import com.jason.publisher.main.model.BusRoute
 import com.jason.publisher.main.model.BusStop
 import com.jason.publisher.main.ui.DrawableHelper
 import com.jason.publisher.modules.map.activities.MapActivity
-import com.jason.publisher.modules.map.activities.RepActivity
+import com.jason.publisher.modules.rep.activities.RepActivity
 import com.jason.publisher.modules.map.utils.BUS_STOP_RADIUS
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.rep.mqtt.helpers.RepMqttHelper

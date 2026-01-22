@@ -60,6 +60,10 @@ class BreakActivity : AppCompatActivity() {
         endAtText = findViewById(R.id.breakEndAtText)
         doneBtn   = findViewById(R.id.breakDoneBtn)
 
+        doneBtn.visibility = View.VISIBLE
+        doneBtn.isEnabled = true
+        doneBtn.text = "Back to Schedule" // or: "End break early"
+
         val token = intent.getStringExtra("ACCESS_TOKEN")
         if (token.isNullOrBlank()) {
             FileLogger.e("BreakActivity", "ACCESS_TOKEN missing")
@@ -273,7 +277,6 @@ class BreakActivity : AppCompatActivity() {
     private fun showFinished() {
         timerText.text = "00:00"
         infoText.text = "Your break is over"
-        doneBtn.visibility = View.VISIBLE
     }
 
     @RequiresApi(Build.VERSION_CODES.M)

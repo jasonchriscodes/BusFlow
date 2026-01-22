@@ -62,6 +62,11 @@ class SigningActivity : AppCompatActivity() {
         endAtText = findViewById(R.id.signingEndAtText)
         doneBtn   = findViewById(R.id.signingDoneBtn)
 
+        doneBtn.visibility = View.VISIBLE
+        doneBtn.isEnabled = true
+        doneBtn.text = "Back to Schedule" // or: "I've signed — Back to Schedule"
+
+
         val token = intent.getStringExtra("ACCESS_TOKEN")
         if (token.isNullOrBlank()) {
             FileLogger.e("SigningActivity", "ACCESS_TOKEN missing")
@@ -262,8 +267,6 @@ class SigningActivity : AppCompatActivity() {
         } else {
             "You're late to sign on. Please sign in now."
         }
-
-        doneBtn.visibility = View.VISIBLE
     }
 
     @RequiresApi(Build.VERSION_CODES.M)

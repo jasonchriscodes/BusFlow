@@ -18,7 +18,7 @@ import android.widget.TextView
 import androidx.annotation.RequiresApi
 import com.jason.publisher.main.loggers.TripLog
 import com.jason.publisher.modules.map.activities.MapActivity
-import com.jason.publisher.modules.map.activities.RepActivity
+import com.jason.publisher.modules.rep.activities.RepActivity
 import com.jason.publisher.modules.map.utils.formatPanelLabel
 import java.text.SimpleDateFormat
 import java.util.Date

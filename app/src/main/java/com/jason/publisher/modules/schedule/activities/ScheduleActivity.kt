@@ -48,7 +48,7 @@ import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.TripLog
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.map.activities.MapActivity
-import com.jason.publisher.modules.map.activities.RepActivity
+import com.jason.publisher.modules.rep.activities.RepActivity
 import com.jason.publisher.modules.map.utils.formatPanelLabel
 import com.jason.publisher.modules.map.utils.safeRunName
 import com.jason.publisher.modules.map.mqtt.helpers.MqttConfigHelper

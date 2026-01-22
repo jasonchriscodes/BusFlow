@@ -13,7 +13,7 @@ import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.loggers.LifecycleLogger
 import com.jason.publisher.main.services.ClientAttributesResponse
 import com.jason.publisher.main.services.ApiService
-import com.jason.publisher.modules.map.activities.RepActivity
+import com.jason.publisher.modules.rep.activities.RepActivity
 import com.jason.publisher.modules.map.utils.calculateDistance
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import org.json.JSONObject
