@@ -47,13 +47,10 @@ import com.jason.publisher.modules.map.utils.calculateDistance
 import com.jason.publisher.modules.map.utils.calculateDurationForUpdate
 import com.jason.publisher.modules.map.utils.formatPanelLabel
 import com.jason.publisher.modules.map.utils.getLastScheduledAddress
-import com.jason.publisher.modules.map.viewmodels.DetailPanelController
-import com.jason.publisher.modules.map.viewmodels.MapViewController
 import com.jason.publisher.modules.map.viewmodels.MapViewModel
-import com.jason.publisher.modules.map.viewmodels.ScheduleStatusManager
 import com.jason.publisher.modules.map.viewmodels.TimeManager
 import com.jason.publisher.modules.map.mqtt.helpers.MqttConfigHelper
-import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
+import com.jason.publisher.modules.rep.mqtt.helpers.RepMqttHelper
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
 import com.jason.publisher.modules.schedule.activities.ScheduleActivity
@@ -61,11 +58,14 @@ import com.jason.publisher.R
 import com.jason.publisher.main.utils.convertTimeToMinutes
 import com.jason.publisher.main.utils.getNextScheduleStartTime
 import com.jason.publisher.modules.map.utils.calculateBearing
+import com.jason.publisher.modules.rep.viewmodels.RepDetailPanelController
+import com.jason.publisher.modules.rep.viewmodels.RepMapViewController
+import com.jason.publisher.modules.rep.viewmodels.RepScheduleStatusManager
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.model.common.Observer
 import java.util.Locale.getDefault
 
-class MapActivity : AppCompatActivity() {
+class RepActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMapBinding
 
@@ -92,15 +92,15 @@ class MapActivity : AppCompatActivity() {
 
     private lateinit var locationManager: LocationManager
 
-    private lateinit var mqttHelper: MqttHelper
+    private lateinit var mqttHelper: RepMqttHelper
     val mqttConfigHelper = MqttConfigHelper()
     lateinit var mqttManager: MqttManager
     val timeManager: TimeManager by viewModels {
         TimeManager.provideFactory()
     }
-    lateinit var mapController: MapViewController
-    lateinit var panelController: DetailPanelController
-    private lateinit var scheduleStatusManager: ScheduleStatusManager
+    lateinit var mapController: RepMapViewController
+    lateinit var panelController: RepDetailPanelController
+    private lateinit var scheduleStatusManager: RepScheduleStatusManager
     val connectivityManager by lazy(LazyThreadSafetyMode.NONE) {
         getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
     }
@@ -148,10 +148,10 @@ class MapActivity : AppCompatActivity() {
         mqttManager = MqttManager()
 
         // Initialize Managers before using it
-        scheduleStatusManager = ScheduleStatusManager(this, binding)
-        mqttHelper = MqttHelper(this, binding)
-        panelController = DetailPanelController(this, binding.detailIconsContainer)
-        mapController = MapViewController(this, binding.map, mqttHelper)
+        scheduleStatusManager = RepScheduleStatusManager(this, binding)
+        mqttHelper = RepMqttHelper(this, binding)
+        panelController = RepDetailPanelController(this, binding.detailIconsContainer)
+        mapController = RepMapViewController(this, binding.map, mqttHelper)
 
         // Retrieve data passed from TimeTableActivity
         viewModel.aid = intent.getStringExtra("AID") ?: "Unknown"
@@ -271,7 +271,7 @@ class MapActivity : AppCompatActivity() {
                 runOnUiThread {
                     // reuse the same helper to flip your dot + text
                     NetworkStatusHelper.setupNetworkStatus(
-                        this@MapActivity,
+                        this@RepActivity,
                         connectionStatusTextView,
                         networkStatusIndicator
                     )
@@ -315,7 +315,7 @@ class MapActivity : AppCompatActivity() {
                 // went offline → stop polling
                 runOnUiThread {
                     NetworkStatusHelper.setupNetworkStatus(
-                        this@MapActivity,
+                        this@RepActivity,
                         connectionStatusTextView,
                         networkStatusIndicator
                     )
@@ -363,7 +363,7 @@ class MapActivity : AppCompatActivity() {
                     mqttManager = MqttManager()
                     Log.e("MapActivity", "Failed to fetch config, entering offline mode.")
                     Toast.makeText(
-                        this@MapActivity,
+                        this@RepActivity,
                         "Unable to connect. Falling back to offline map…",
                         Toast.LENGTH_LONG
                     ).show()
@@ -952,7 +952,7 @@ class MapActivity : AppCompatActivity() {
             // update UI to "end of route" and fire the summary dialog:
             upcomingBusStopTextView.text = "End of Route"
             if (!viewModel.hasShownFinalStopMessage) {
-                Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@RepActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
                 viewModel.hasShownFinalStopMessage = true
             }
             showSummaryDialog()
@@ -990,7 +990,7 @@ class MapActivity : AppCompatActivity() {
                     upcomingBusStopTextView.text = "End of Route"
                     // Only show final stop message once
                     if (!viewModel.hasShownFinalStopMessage) {
-                        Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@RepActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
                         viewModel.hasShownFinalStopMessage = true
                     }
                     showSummaryDialog()
@@ -1040,7 +1040,7 @@ class MapActivity : AppCompatActivity() {
                     upcomingBusStopTextView.text = "End of Route"
                     // Only show final stop message once
                     if (!viewModel.hasShownFinalStopMessage) {
-                        Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@RepActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
                         viewModel.hasShownFinalStopMessage = true
                     }
 
@@ -1118,7 +1118,7 @@ class MapActivity : AppCompatActivity() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 // Failsafe to prevent location update when this activity is closed
-                if (this@MapActivity.isDestroyed) {
+                if (this@RepActivity.isDestroyed) {
                     return
                 }
 
@@ -1241,7 +1241,7 @@ class MapActivity : AppCompatActivity() {
                             if (currentTime - lastLocationUpdateTime >= locationUpdateThrottleMs) {
                                 lastLocationUpdateTime = currentTime
                                 updateUIElementsThrottled()
-                                LastLocationStore.save(this@MapActivity, viewModel.latitude, viewModel.longitude)
+                                LastLocationStore.save(this@RepActivity, viewModel.latitude, viewModel.longitude)
                             }
                         } catch (e: Exception) {
                             Log.e("MapActivity", "Error in location update: ${e.message}", e)
@@ -1590,7 +1590,7 @@ class MapActivity : AppCompatActivity() {
     private fun publishActiveSegment(label: String) {
         val payload = "{\"currentTripLabel\":\"${label.replace("\"", "\\\"")}\"}"
         if (::mqttManager.isInitialized) {
-            mqttManager.publish(MqttHelper.ATTR_TOPIC, payload)
+            mqttManager.publish(RepMqttHelper.ATTR_TOPIC, payload)
         }
 
         // Ask server to re-publish shared data and force a quick attribute refresh

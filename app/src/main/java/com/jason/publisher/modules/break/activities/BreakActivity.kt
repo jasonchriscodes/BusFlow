@@ -20,8 +20,8 @@ import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.TripLog
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.`break`.adapters.BreakUpcomingAdapter
-import com.jason.publisher.modules.mqtt.helpers.MqttHelper
-import com.jason.publisher.modules.mqtt.services.MqttManager
+import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
+import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Calendar

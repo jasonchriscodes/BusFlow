@@ -1,9 +1,9 @@
-package com.jason.publisher.modules.mqtt.helpers
+package com.jason.publisher.modules.map.mqtt.helpers
 
 import android.annotation.SuppressLint
 import android.util.Log
 import com.jason.publisher.main.model.BusItem
-import com.jason.publisher.modules.mqtt.services.MqttManager
+import com.jason.publisher.modules.map.mqtt.services.MqttManager
 
 class MqttConfigHelper {
     private val mqttManagerConfig = MqttManager(username = CONFIG_TOKEN)

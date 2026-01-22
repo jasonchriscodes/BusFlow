@@ -42,18 +42,18 @@ import com.google.gson.Gson
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityScheduleBinding
 import com.jason.publisher.modules.`break`.activities.BreakActivity
-import com.jason.publisher.modules.rep.RepActivity
 import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.TripLog
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.map.activities.MapActivity
+import com.jason.publisher.modules.map.activities.RepActivity
 import com.jason.publisher.modules.map.utils.formatPanelLabel
 import com.jason.publisher.modules.map.utils.safeRunName
-import com.jason.publisher.modules.mqtt.helpers.MqttConfigHelper
-import com.jason.publisher.modules.mqtt.helpers.MqttHelper
-import com.jason.publisher.modules.mqtt.services.MqttManager
+import com.jason.publisher.modules.map.mqtt.helpers.MqttConfigHelper
+import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
+import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
 import com.jason.publisher.modules.schedule.adapters.ScheduleAdapter
 import com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
@@ -529,44 +529,57 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     private fun launchRepActivity(firstScheduleItem: ScheduleItem, no: Int) {
-        // We expect exactly one stop for REP; use the first if more are present
-        val repStop = firstScheduleItem.busStops.firstOrNull()
-        if (repStop == null) {
-            Toast.makeText(this, "No reposition stop found.", Toast.LENGTH_SHORT).show()
+        // Check for empty scheduleData FIRST before creating intent
+        if (viewModel.activeScheduleData.isEmpty()) {
+            Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
             return
         }
 
+        // Store the first schedule item for the Map
+        val firstScheduleItem = viewModel.activeScheduleData.first()
         val selectedIdx = viewModel.routeIndexFromRouteNo(firstScheduleItem.runNo)
-        viewModel.loadAccessToken()
+        Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
+        Log.d("ScheduleActivity startRouteButton before", viewModel.activeScheduleData.toString())
 
+        // Check if there's an active trip - don't remove from cache if trip is unfinished
+        val hasActiveTrip = TripLog.hasActive(this)
+        val scheduleDataToPass = if (hasActiveTrip) {
+            Log.w("ScheduleActivity", "⚠️ Active trip detected, keeping first schedule in cache")
+            // Don't remove from scheduleData, pass full schedule
+            viewModel.activeScheduleData
+        } else {
+            // Remove first schedule & persist
+            viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
+        }
+
+        // We will still pass the full list (for future trips), AND pass the selected one explicitly.
         val intent = Intent(this, RepActivity::class.java).apply {
+            // timeline labels (unchanged)
+            val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
+            putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
+
+            // essentials
             putExtra("AID", viewModel.aid)
-            putExtra("ACCESS_TOKEN", viewModel.token)
             putExtra("CONFIG", ArrayList(viewModel.config ?: emptyList()))
             putExtra("JSON_STRING", viewModel.jsonString)
 
+            // keep sending the *full* sets as before
             putExtra("BUS_ROUTE_DATA", ArrayList(viewModel.busRouteData))
             putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
-            putExtra("FULL_SCHEDULE_DATA", ArrayList(viewModel.activeScheduleData))
 
+            // tell RepActivity which one to use for THIS trip
             putExtra("SELECTED_ROUTE_INDEX", selectedIdx ?: -1)
             selectedIdx?.let { idx ->
-                putExtra("SELECTED_ROUTE_DATA", viewModel.busRouteData[idx])
+                putExtra("SELECTED_ROUTE_DATA", viewModel.busRouteData[idx])  // RouteData must be Serializable/Parcelable (you already pass list)
             }
-
             putExtra("EXTRA_PANEL_DEBUG_NO", no)
-
-            // REP stop payload
-            putExtra("REP_STOP_LAT", repStop.latitude)
-            putExtra("REP_STOP_LON", repStop.longitude)
-            putExtra("REP_STOP_NAME", repStop.name)
-            putExtra("REP_STOP_ADDR", repStop.address)
+            putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleDataToPass))
         }
 
-        // pop the first schedule like other flows
-        updateActiveScheduleDataOnLaunch(
-            viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
-        )
+        if (!hasActiveTrip) {
+            // Update scheduleData and persist only if no active trip
+            updateActiveScheduleDataOnLaunch(scheduleDataToPass)
+        }
 
         startActivity(intent)
     }

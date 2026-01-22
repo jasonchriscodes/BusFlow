@@ -77,7 +77,7 @@
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:exported="false" />
         <activity
-            android:name=".modules.rep.RepActivity"
+            android:name=".modules.rep.activities.RepActivity"
             android:exported="false"
             android:screenOrientation="landscape"
             android:configChanges="orientation|keyboardHidden|screenSize" />

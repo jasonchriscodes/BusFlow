@@ -1,4 +1,4 @@
-package com.jason.publisher.modules.mqtt.services
+package com.jason.publisher.modules.map.mqtt.services
 
 import android.util.Log
 import com.jason.publisher.main.model.BusItem

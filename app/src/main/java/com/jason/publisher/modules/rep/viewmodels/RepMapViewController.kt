@@ -1,4 +1,4 @@
-package com.jason.publisher.modules.map.viewmodels
+package com.jason.publisher.modules.rep.viewmodels
 
 import android.annotation.SuppressLint
 import android.graphics.Canvas
@@ -20,8 +20,10 @@ import com.jason.publisher.main.model.BusRoute
 import com.jason.publisher.main.model.BusStop
 import com.jason.publisher.main.ui.DrawableHelper
 import com.jason.publisher.modules.map.activities.MapActivity
+import com.jason.publisher.modules.map.activities.RepActivity
 import com.jason.publisher.modules.map.utils.BUS_STOP_RADIUS
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
+import com.jason.publisher.modules.rep.mqtt.helpers.RepMqttHelper
 import java.io.File
 import java.util.HashMap
 import kotlin.math.abs
@@ -45,10 +47,10 @@ import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
 
-class MapViewController(
-    private val activity: MapActivity,
+class RepMapViewController(
+    private val activity: RepActivity,
     private val mapView: MapView,
-    private val mqttHelper: MqttHelper,
+    private val mqttHelper: RepMqttHelper,
 ) {
     private var routePolyline: Polyline? = null
     var activeBusToken: String? = null

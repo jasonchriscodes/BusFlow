@@ -1,4 +1,4 @@
-package com.jason.publisher.modules.mqtt.helpers
+package com.jason.publisher.modules.map.mqtt.helpers
 
 import android.annotation.SuppressLint
 import android.os.Build
@@ -14,7 +14,7 @@ import com.jason.publisher.main.loggers.LifecycleLogger
 import com.jason.publisher.main.services.ClientAttributesResponse
 import com.jason.publisher.main.services.ApiService
 import com.jason.publisher.modules.map.utils.calculateDistance
-import com.jason.publisher.modules.mqtt.services.MqttManager
+import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.Callback
