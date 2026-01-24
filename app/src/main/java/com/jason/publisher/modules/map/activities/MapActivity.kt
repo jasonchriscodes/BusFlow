@@ -266,7 +266,12 @@ class MapActivity : AppCompatActivity() {
         timeManager.currentTime.observe(this) { currentTimeTextView.text = it }
 
         // Start the next trip countdown updater
-        timeManager.startNextTripCountdownUpdater(viewModel.scheduleData)
+        val countdownList = ArrayList<ScheduleItem>().apply {
+            addAll(viewModel.scheduleList)  // current (REP)
+            addAll(viewModel.scheduleData)  // remaining (Run 3, etc)
+        }
+        timeManager.startNextTripCountdownUpdater(countdownList)
+
         timeManager.nextTripCountdown.observe(this) { nextTripCountdownTextView.text = it }
 
         updateApiTime() // Ensure API time is updated at the start
@@ -792,7 +797,14 @@ class MapActivity : AppCompatActivity() {
         val messageText = if (flatSchedule.size < 2) {
             "You have completed last run of the day."
         } else {
-            val nextTrip = flatSchedule[1]
+            val nextTrip: ScheduleItem =
+                flatSchedule.getOrNull(1)
+                    ?: flatSchedule.firstOrNull()
+                    ?: run {
+                        // defensive fallback (shouldn't happen if list isn't empty)
+                        return
+                    }
+
             val nextStartMinutes = nextTrip.startTime.convertTimeToMinutes()
             val currentTime = Calendar.getInstance().apply {
                 timeInMillis = System.currentTimeMillis()
