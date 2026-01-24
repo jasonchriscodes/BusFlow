@@ -18,6 +18,7 @@ import com.jason.publisher.R
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.TripLog
+import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.`break`.adapters.BreakUpcomingAdapter
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
@@ -102,6 +103,31 @@ class BreakActivity : AppCompatActivity() {
             FileLogger.e("BreakActivity", "FULL_SCHEDULE_DATA EMPTY")
         }
 
+        val idx = intent.getIntExtra("SELECTED_ROUTE_INDEX", -1)
+        FileLogger.d("BreakActivity ROUTE","BreakActivity ROUTE | selectedIdx=$idx | (ROUTE IGNORED)")
+
+
+        val busRouteData =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableArrayListExtra("BUS_ROUTE_DATA", RouteData::class.java) ?: arrayListOf()
+            }else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableArrayListExtra("BUS_ROUTE_DATA") ?: arrayListOf()
+            }
+
+        val selectedRoute =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra("SELECTED_ROUTE_DATA", RouteData::class.java)
+            }else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra("SELECTED_ROUTE_DATA")
+            }
+
+        FileLogger.d(
+            "BreakActivity ROUTE",
+            "BreakActivity ROUTE | selectedIdx=$idx | busRouteData.size=${busRouteData.size} | selectedStart=${selectedRoute?.startingPoint}"
+        )
+
         val upNextHeader = findViewById<TextView>(R.id.upNextHeader)
         val upNextRecycler = findViewById<RecyclerView>(R.id.upNextRecycler)
 
@@ -150,6 +176,13 @@ class BreakActivity : AppCompatActivity() {
 
         // ===== MQTT =====
         mqttManager = MqttManager(username = token)
+
+        val no = intent.getIntExtra("EXTRA_PANEL_DEBUG_NO", -1)
+
+        FileLogger.d(
+            "BreakActivity INTENT",
+            "BreakActivity INTENT | no=$no | BREAK_LABEL=$breakLabel | breakItem=$breakItem | remaining.size=${fullRemaining.size}"
+        )
 
         mqttManager.connect { ok ->
             if (ok) {

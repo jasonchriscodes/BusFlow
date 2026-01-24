@@ -398,6 +398,23 @@ class ScheduleActivity : AppCompatActivity() {
                 val no = nextPanelDebugNo()
                 val first = viewModel.activeScheduleData.first()
 
+                val selectedIdx =
+                    if (shouldUseBusRouteData(first)) findRouteIndexForScheduleItem(first) else -1
+
+                FileLogger.d(
+                    "ScheduleActivity START_ROUTE",
+                    "ScheduleActivity START_ROUTE | no=$no | first.runNo=${first.runNo} first.runName=${first.runName} ${first.startTime}->${first.endTime} | selectedIdx=$selectedIdx | scheduleSize=${viewModel.activeScheduleData.size} | busRouteDataSize=${viewModel.busRouteData.size}"
+                )
+
+                FileLogger.d(
+                    "ScheduleActivity START_ROUTE",
+                    "ScheduleActivity START_ROUTE | no=$no | first.busStops.size=${first.busStops.size} | firstStop=${first.busStops.firstOrNull()} | lastStop=${first.busStops.lastOrNull()}"
+                )
+                FileLogger.d(
+                    "ScheduleActivity START_ROUTE",
+                    "ScheduleActivity START_ROUTE | no=$no | selectedRouteData=${viewModel.busRouteData.getOrNull(selectedIdx)}"
+                )
+
                 // Log now (works for Trip or Break)
                 viewModel.logPanelDebugPreStart(no, first)
 
@@ -433,6 +450,77 @@ class ScheduleActivity : AppCompatActivity() {
         }
     }
 
+    private fun shouldUseBusRouteData(item: ScheduleItem): Boolean {
+        // Only REP + normal Trip use busRouteData
+        return !item.isBreak() && !item.isSigning()
+    }
+
+    // ===== RouteData matching (fix for index mismatch when SignOn/Break don't exist in busRouteData) =====
+
+    private fun findRouteIndexForScheduleItem(item: ScheduleItem): Int {
+        val routes = viewModel.busRouteData
+        if (routes.isEmpty()) return -1
+
+        val (lat, lon) = pickMatchPoint(item) ?: return -1
+
+        // 1) exact-ish match first
+        val exactIdx = routes.indexOfFirst { rd ->
+            nearlySame(rd.startingPoint.latitude, lat) && nearlySame(rd.startingPoint.longitude, lon)
+        }
+        if (exactIdx != -1) return exactIdx
+
+        // 2) fallback: nearest startingPoint within a tolerance (meters)
+        var bestIdx = -1
+        var bestMeters = Double.MAX_VALUE
+        routes.forEachIndexed { idx, rd ->
+            val d = distanceMeters(lat, lon, rd.startingPoint.latitude, rd.startingPoint.longitude)
+            if (d < bestMeters) {
+                bestMeters = d
+                bestIdx = idx
+            }
+        }
+        return if (bestMeters <= 120.0) bestIdx else -1 // 120m tolerance for GPS/rounding
+    }
+
+    private fun pickMatchPoint(item: ScheduleItem): Pair<Double, Double>? {
+        if (item.busStops.isEmpty()) return null
+
+        // Prefer Stop S if present, else first stop, else Stop E/last
+        val stopS = item.busStops.firstOrNull { it.name.equals("Stop S", true) }
+        val stopE = item.busStops.lastOrNull { it.name.equals("Stop E", true) }
+
+        val chosen = stopS ?: item.busStops.firstOrNull() ?: stopE ?: item.busStops.lastOrNull()
+        val lat = chosen?.latitude
+        val lon = chosen?.longitude
+        if (lat == null || lon == null) return null
+        return lat to lon
+    }
+
+    private fun nearlySame(a: Double, b: Double): Boolean = kotlin.math.abs(a - b) <= 1e-5
+
+    private fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val r = 6371000.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val sLat1 = Math.toRadians(lat1)
+        val sLat2 = Math.toRadians(lat2)
+        val a = kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
+                kotlin.math.cos(sLat1) * kotlin.math.cos(sLat2) *
+                kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
+        val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+        return r * c
+    }
+
+    /**
+     * Optional: once we assign a RouteData to a started segment, remove it from the pool
+     * so future segments cannot accidentally reuse it.
+     */
+    private fun consumeRouteDataIfPossible(selectedIdx: Int) {
+        if (selectedIdx < 0) return
+        if (selectedIdx >= viewModel.busRouteData.size) return
+        viewModel.busRouteData = viewModel.busRouteData.toMutableList().apply { removeAt(selectedIdx) }
+    }
+
     @RequiresApi(Build.VERSION_CODES.M)
     private fun launchSigningActivity(firstScheduleItem: ScheduleItem, no: Int) {
         if (viewModel.activeScheduleData.isEmpty()) {
@@ -441,17 +529,9 @@ class ScheduleActivity : AppCompatActivity() {
         }
 
         val hasActiveTrip = TripLog.hasActive(this)
-        if (!hasActiveTrip) {
-            updateActiveScheduleDataOnLaunch(
-                viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
-            )
-        } else {
-            Log.w("ScheduleActivity", "⚠️ Active trip detected, keeping first schedule in cache")
-        }
 
-        val label = formatPanelLabel(firstScheduleItem) // keep your label style
+        val label = formatPanelLabel(firstScheduleItem)
         val action = firstScheduleItem.signingAction()
-
         viewModel.loadAccessToken()
 
         val intent = Intent(this, SigningActivity::class.java).apply {
@@ -460,7 +540,10 @@ class ScheduleActivity : AppCompatActivity() {
 
             putExtra("SIGNING_LABEL", label)
             putExtra("SIGNING_ACTION", action)
-            putExtra("SIGNING_RUN_NAME", firstScheduleItem.runName) // optional, helps debug
+            putExtra("SIGNING_RUN_NAME", firstScheduleItem.runName)
+
+            // ❌ DO NOT PASS BUS_ROUTE_DATA for Sign On/Off
+            putExtra("SELECTED_ROUTE_INDEX", -1)
 
             putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
             putExtra("FULL_SCHEDULE_DATA", ArrayList(viewModel.activeScheduleData))
@@ -468,6 +551,21 @@ class ScheduleActivity : AppCompatActivity() {
         }
 
         publishActiveSegment(label)
+
+        FileLogger.d(
+            "ScheduleActivity → SigningActivity",
+            "ScheduleActivity → SigningActivity | no=$no | label=$label action=$action | selectedIdx=-1 (NO ROUTE)"
+        )
+
+        // ✅ Consume only the schedule item (NOT busRouteData)
+        if (!hasActiveTrip) {
+            updateActiveScheduleDataOnLaunch(
+                viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
+            )
+        } else {
+            Log.w("ScheduleActivity", "⚠️ Active trip detected, keeping first schedule in cache")
+        }
+
         startActivity(intent)
     }
 
@@ -476,16 +574,38 @@ class ScheduleActivity : AppCompatActivity() {
      */
     @RequiresApi(Build.VERSION_CODES.M)
     private fun launchBreakActivity(firstScheduleItem: ScheduleItem, no: Int) {
-        // Check for empty scheduleData and active trips before removing
         if (viewModel.activeScheduleData.isEmpty()) {
             Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Check if there's an active trip - don't remove from cache if trip is unfinished
         val hasActiveTrip = TripLog.hasActive(this)
+
+        val breakLabel = formatPanelLabel(firstScheduleItem)
+        viewModel.loadAccessToken()
+
+        val intent = Intent(this, BreakActivity::class.java).apply {
+            putExtra("AID", viewModel.aid)
+            putExtra("ACCESS_TOKEN", viewModel.token)
+            putExtra("BREAK_LABEL", breakLabel)
+
+            // ❌ DO NOT PASS BUS_ROUTE_DATA for Break
+            putExtra("SELECTED_ROUTE_INDEX", -1)
+
+            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+            putExtra("FULL_SCHEDULE_DATA", ArrayList(viewModel.activeScheduleData))
+            putExtra("EXTRA_PANEL_DEBUG_NO", no)
+        }
+
+        publishActiveSegment(breakLabel)
+
+        FileLogger.d(
+            "ScheduleActivity → BreakActivity",
+            "ScheduleActivity → BreakActivity | no=$no | label=$breakLabel | selectedIdx=-1 (NO ROUTE)"
+        )
+
+        // ✅ Consume only the schedule item (NOT busRouteData)
         if (!hasActiveTrip) {
-            // remove first item, persist, refresh (your existing code) ...
             updateActiveScheduleDataOnLaunch(
                 viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
             )
@@ -493,18 +613,6 @@ class ScheduleActivity : AppCompatActivity() {
             Log.w("ScheduleActivity", "⚠️ Active trip detected, keeping first schedule in cache")
         }
 
-        val breakLabel = formatPanelLabel(firstScheduleItem) // e.g. "09:00 Break BCS → BCS"
-        viewModel.loadAccessToken()
-
-        val intent = Intent(this, BreakActivity::class.java).apply {
-            putExtra("AID", viewModel.aid)
-            putExtra("ACCESS_TOKEN", viewModel.token)
-            putExtra("BREAK_LABEL", breakLabel)
-            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
-            putExtra("FULL_SCHEDULE_DATA", ArrayList(viewModel.activeScheduleData))
-            putExtra("EXTRA_PANEL_DEBUG_NO", no)   // <-- same counter
-        }
-        publishActiveSegment(breakLabel)
         startActivity(intent)
     }
 
@@ -529,56 +637,50 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     private fun launchRepActivity(firstScheduleItem: ScheduleItem, no: Int) {
-        // Check for empty scheduleData FIRST before creating intent
         if (viewModel.activeScheduleData.isEmpty()) {
             Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Store the first schedule item for the Map
-        val firstScheduleItem = viewModel.activeScheduleData.first()
-        val selectedIdx = viewModel.routeIndexFromRouteNo(firstScheduleItem.runNo)
-        Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
-        Log.d("ScheduleActivity startRouteButton before", viewModel.activeScheduleData.toString())
+        val selectedIdx = findRouteIndexForScheduleItem(firstScheduleItem)
+        val selectedRouteData = viewModel.busRouteData.getOrNull(selectedIdx)
 
-        // Check if there's an active trip - don't remove from cache if trip is unfinished
         val hasActiveTrip = TripLog.hasActive(this)
         val scheduleDataToPass = if (hasActiveTrip) {
             Log.w("ScheduleActivity", "⚠️ Active trip detected, keeping first schedule in cache")
-            // Don't remove from scheduleData, pass full schedule
             viewModel.activeScheduleData
         } else {
-            // Remove first schedule & persist
             viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
         }
 
-        // We will still pass the full list (for future trips), AND pass the selected one explicitly.
         val intent = Intent(this, RepActivity::class.java).apply {
-            // timeline labels (unchanged)
             val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
             putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 
-            // essentials
             putExtra("AID", viewModel.aid)
             putExtra("CONFIG", ArrayList(viewModel.config ?: emptyList()))
             putExtra("JSON_STRING", viewModel.jsonString)
 
-            // keep sending the *full* sets as before
+            // ✅ REP MUST USE ROUTE DATA
             putExtra("BUS_ROUTE_DATA", ArrayList(viewModel.busRouteData))
-            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+            putExtra("SELECTED_ROUTE_INDEX", selectedIdx)
+            selectedRouteData?.let { putExtra("SELECTED_ROUTE_DATA", it) }
 
-            // tell RepActivity which one to use for THIS trip
-            putExtra("SELECTED_ROUTE_INDEX", selectedIdx ?: -1)
-            selectedIdx?.let { idx ->
-                putExtra("SELECTED_ROUTE_DATA", viewModel.busRouteData[idx])  // RouteData must be Serializable/Parcelable (you already pass list)
-            }
-            putExtra("EXTRA_PANEL_DEBUG_NO", no)
+            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
             putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleDataToPass))
+            putExtra("EXTRA_PANEL_DEBUG_NO", no)
         }
 
+        FileLogger.d(
+            "ScheduleActivity → RepActivity",
+            "ScheduleActivity → RepActivity | no=$no | selectedIdx=$selectedIdx | selectedRoute=${selectedRouteData?.startingPoint}"
+        )
+
         if (!hasActiveTrip) {
-            // Update scheduleData and persist only if no active trip
             updateActiveScheduleDataOnLaunch(scheduleDataToPass)
+
+            // ✅ ONLY REP/TRIP consume route data
+            consumeRouteDataIfPossible(selectedIdx)
         }
 
         startActivity(intent)
@@ -590,56 +692,52 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("LongLogTag")
     private fun launchMapActivity(no: Int) {
-        // Check for empty scheduleData FIRST before creating intent
         if (viewModel.activeScheduleData.isEmpty()) {
             Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Store the first schedule item for the Map
         val firstScheduleItem = viewModel.activeScheduleData.first()
-        val selectedIdx = viewModel.routeIndexFromRouteNo(firstScheduleItem.runNo)
-        Log.d("ScheduleActivity startRouteButton firstScheduleItem", firstScheduleItem.toString())
-        Log.d("ScheduleActivity startRouteButton before", viewModel.activeScheduleData.toString())
 
-        // Check if there's an active trip - don't remove from cache if trip is unfinished
+        val selectedIdx = findRouteIndexForScheduleItem(firstScheduleItem)
+        val selectedRouteData = viewModel.busRouteData.getOrNull(selectedIdx)
+
         val hasActiveTrip = TripLog.hasActive(this)
         val scheduleDataToPass = if (hasActiveTrip) {
             Log.w("ScheduleActivity", "⚠️ Active trip detected, keeping first schedule in cache")
-            // Don't remove from scheduleData, pass full schedule
             viewModel.activeScheduleData
         } else {
-            // Remove first schedule & persist
             viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
         }
 
-        // We will still pass the full list (for future trips), AND pass the selected one explicitly.
         val intent = Intent(this, MapActivity::class.java).apply {
-            // timeline labels (unchanged)
             val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
             putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 
-            // essentials
             putExtra("AID", viewModel.aid)
             putExtra("CONFIG", ArrayList(viewModel.config ?: emptyList()))
             putExtra("JSON_STRING", viewModel.jsonString)
 
-            // keep sending the *full* sets as before
+            // ✅ TRIP MUST USE ROUTE DATA
             putExtra("BUS_ROUTE_DATA", ArrayList(viewModel.busRouteData))
-            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+            putExtra("SELECTED_ROUTE_INDEX", selectedIdx)
+            selectedRouteData?.let { putExtra("SELECTED_ROUTE_DATA", it) }
 
-            // tell MapActivity which one to use for THIS trip
-            putExtra("SELECTED_ROUTE_INDEX", selectedIdx ?: -1)
-            selectedIdx?.let { idx ->
-                putExtra("SELECTED_ROUTE_DATA", viewModel.busRouteData[idx])  // RouteData must be Serializable/Parcelable (you already pass list)
-            }
-            putExtra("EXTRA_PANEL_DEBUG_NO", no)
+            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
             putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleDataToPass))
+            putExtra("EXTRA_PANEL_DEBUG_NO", no)
         }
 
+        FileLogger.d(
+            "ScheduleActivity → MapActivity",
+            "ScheduleActivity → MapActivity | no=$no | selectedIdx=$selectedIdx | selectedRoute=${selectedRouteData?.startingPoint}"
+        )
+
         if (!hasActiveTrip) {
-            // Update scheduleData and persist only if no active trip
             updateActiveScheduleDataOnLaunch(scheduleDataToPass)
+
+            // ✅ ONLY REP/TRIP consume route data
+            consumeRouteDataIfPossible(selectedIdx)
         }
 
         startActivity(intent)
@@ -1103,10 +1201,10 @@ class ScheduleActivity : AppCompatActivity() {
     private fun connectAndSubscribe() {
         mqttManager.connect { isConnected ->
             if (isConnected) {
-                Log.d("MainActivity connectAndSubscribe", "✅ Connected to MQTT broker successfully.")
+                Log.d("ScheduleActivity connectAndSubscribe", "✅ Connected to MQTT broker successfully.")
                 subscribeSharedData()
             } else {
-                Log.e("MainActivity connectAndSubscribe", "❌ Failed to connect to MQTT broker. Running in offline mode.")
+                Log.e("ScheduleActivity connectAndSubscribe", "❌ Failed to connect to MQTT broker. Running in offline mode.")
                 runOnUiThread {
                     Toast.makeText(this@ScheduleActivity, "Running in offline mode. No connection to server.", Toast.LENGTH_SHORT).show()
                 }
@@ -1132,7 +1230,7 @@ class ScheduleActivity : AppCompatActivity() {
                     viewModel.config = data.shared?.config?.busConfig
                     viewModel.arrBusData = viewModel.config.orEmpty()
 
-                    Log.d("MainActivity subscribeSharedData", "Config: ${viewModel.config}")
+                    FileLogger.d("ScheduleActivity subscribeSharedData", "Config: ${viewModel.config}")
 
                     if (viewModel.config.isNullOrEmpty()) {
                         return@runOnUiThread
@@ -1147,12 +1245,18 @@ class ScheduleActivity : AppCompatActivity() {
 
                     // Retrieve `busRouteData` from ThingsBoard
                     viewModel.busRouteData = data.shared?.busRouteData1 ?: emptyList()
-                    Log.d("MainActivity subscribeSharedData", "busRouteData: ${viewModel.busRouteData}")
+                    FileLogger.d(
+                        "ScheduleActivity busRouteData",
+                        "ScheduleActivity subscribeSharedData | busRouteData.size=${viewModel.busRouteData.size} | first=${viewModel.busRouteData.firstOrNull()}"
+                    )
 
                     // Retrieve `scheduleData` from ThingsBoard
                     viewModel.scheduleData = (data.shared?.scheduleData1 ?: emptyList()).map { it.copy(runName = safeRunName(it)) }
                     viewModel.activeScheduleData = viewModel.scheduleData.toList() // Shallow copy to sever connection
-                    Log.d("MainActivity subscribeSharedData", "scheduleData: ${viewModel.activeScheduleData}")
+                    FileLogger.d(
+                        "ScheduleActivity scheduleData",
+                        "ScheduleActivity subscribeSharedData | scheduleData.size=${viewModel.activeScheduleData.size} | first=${viewModel.activeScheduleData.firstOrNull()}"
+                    )
 
                     if (viewModel.config != null && viewModel.activeScheduleData.isNotEmpty()) {
                         // Save the updated schedule data and bus data immediately
@@ -1185,10 +1289,10 @@ class ScheduleActivity : AppCompatActivity() {
 //                            firstTime = false
 //                        }
                     } else {
-                        Log.d("MainActivity subscribeSharedData", "No route data available.")
+                        FileLogger.d("ScheduleActivity subscribeSharedData", "No route data available.")
                     }
                 } catch (e: Exception) {
-                    Log.e("MainActivity subscribeSharedData", "Error processing shared data: ${e.message}", e)
+                    Log.e("ScheduleActivity subscribeSharedData", "Error processing shared data: ${e.message}", e)
                     Toast.makeText(this, "Error processing shared data.", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -1297,9 +1401,9 @@ class ScheduleActivity : AppCompatActivity() {
         if (requestCode == REQUEST_MANAGE_EXTERNAL_STORAGE) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 if (Environment.isExternalStorageManager()) {
-                    Log.d("MainActivity", "All files access granted.")
+                    Log.d("ScheduleActivity", "All files access granted.")
                 } else {
-                    Log.e("MainActivity", "User denied all files access.")
+                    Log.e("ScheduleActivity", "User denied all files access.")
                 }
             }
         }

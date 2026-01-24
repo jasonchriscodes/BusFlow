@@ -176,6 +176,22 @@ class RepActivity : AppCompatActivity() {
             viewModel.scheduleData = intent.getParcelableArrayListExtra("FULL_SCHEDULE_DATA") ?: emptyList()
         }
 
+        val no = intent.getIntExtra("EXTRA_PANEL_DEBUG_NO", -1)
+        val idx = intent.getIntExtra("SELECTED_ROUTE_INDEX", -1)
+
+        FileLogger.d(
+            "RepActivity INTENT",
+            "RepActivity INTENT | no=$no | scheduleList.size=${viewModel.scheduleList.size} | scheduleData.size=${viewModel.scheduleData.size} | busRouteData.size=${viewModel.busRouteData.size}"
+        )
+        FileLogger.d(
+            "RepActivity INTENT",
+            "RepActivity INTENT | no=$no | SELECTED_ROUTE_INDEX=$idx | SELECTED_ROUTE_DATA=${viewModel.selectedRouteData}"
+        )
+        FileLogger.d(
+            "RepActivity INTENT",
+            "RepActivity INTENT | no=$no | FIRST_SCHEDULE_ITEM=${viewModel.scheduleList.firstOrNull()}"
+        )
+
         Log.d("MapActivity onCreate retrieve", "▶ Received timelineLabels = $timelineLabels")
         viewModel.logReceivedStates()
 
@@ -206,6 +222,8 @@ class RepActivity : AppCompatActivity() {
 
         // If we have a selected route, derive the map vectors from it
         viewModel.deriveMapVectors()
+
+        dumpMapVectors("RepActivity", no)
 
         viewModel.extractRedBusStops()
 
@@ -551,6 +569,70 @@ class RepActivity : AppCompatActivity() {
 
         binding.arriveButton.setOnClickListener {
             confirmArrival()
+        }
+    }
+
+    // ===== DEBUG: log everything used to build bus stop symbols + polyline =====
+
+    private fun dumpMapVectors(tag: String, no: Int) {
+        try {
+            val rd = viewModel.selectedRouteData
+            val sp = rd?.startingPoint
+            val np0 = rd?.nextPoints?.firstOrNull()
+
+            FileLogger.d(tag, "MAP_VECTORS | no=$no | aid=${viewModel.aid} | jsonString.len=${viewModel.jsonString.length}")
+
+            // RouteData sources (what should generate vectors)
+            FileLogger.d(tag,
+                "MAP_VECTORS | no=$no | selectedRouteData=" +
+                        "start=(${sp?.latitude},${sp?.longitude}) '${sp?.address}' " +
+                        "| next0=(${np0?.latitude},${np0?.longitude}) '${np0?.address}' " +
+                        "| nextPoints.size=${rd?.nextPoints?.size ?: 0} " +
+                        "| routeCoords0.size=${np0?.routeCoordinates?.size ?: 0}"
+            )
+
+            // Entire RouteData pool summary
+            FileLogger.d(tag,
+                "MAP_VECTORS | no=$no | busRouteData.size=${viewModel.busRouteData.size} " +
+                        "| busRouteData.first.start=${viewModel.busRouteData.firstOrNull()?.startingPoint} " +
+                        "| busRouteData.last.start=${viewModel.busRouteData.lastOrNull()?.startingPoint}"
+            )
+
+            // The actual polyline + stop symbols used for drawing
+            FileLogger.d(tag,
+                "MAP_VECTORS | no=$no | route(polyline).size=${viewModel.route.size} " +
+                        "| route.first=${viewModel.route.firstOrNull()} " +
+                        "| route.last=${viewModel.route.lastOrNull()}"
+            )
+            FileLogger.d(tag,
+                "MAP_VECTORS | no=$no | stops(symbols).size=${viewModel.stops.size} " +
+                        "| stops.first=${viewModel.stops.firstOrNull()} " +
+                        "| stops.last=${viewModel.stops.lastOrNull()}"
+            )
+
+            // Runtime state that affects drawing / detection
+            FileLogger.d(tag,
+                "MAP_STATE | no=$no | currentStopIndex=${viewModel.currentStopIndex} " +
+                        "| passedStops.size=${viewModel.passedStops.size} " +
+                        "| passedStops.last=${viewModel.passedStops.lastOrNull()}"
+            )
+            FileLogger.d(tag,
+                "MAP_STATE | no=$no | hasPassedFirstStop=${viewModel.hasPassedFirstStop} " +
+                        "| nearestRouteIndex=${viewModel.nearestRouteIndex} " +
+                        "| lat=${viewModel.latitude} lon=${viewModel.longitude} bearing=${viewModel.bearing}"
+            )
+
+            // Optional: sanity check nearest route point lookup
+            if (viewModel.route.isNotEmpty() && viewModel.latitude != 0.0 && viewModel.longitude != 0.0) {
+                val nearIdx = viewModel.findNearestBusRoutePoint(viewModel.latitude, viewModel.longitude)
+                val nearPt = viewModel.route.getOrNull(nearIdx)
+                FileLogger.d(tag,
+                    "MAP_STATE | no=$no | findNearestBusRoutePoint() -> idx=$nearIdx point=$nearPt"
+                )
+            }
+
+        } catch (e: Exception) {
+            FileLogger.e(tag, "dumpMapVectors failed: ${e.message}")
         }
     }
 
