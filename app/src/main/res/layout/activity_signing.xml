@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/signingRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="24dp"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:background="@color/colorMain">
+
+    <TextView
+        android:id="@+id/signingInfoText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Please sign in"
+        android:textSize="22sp"
+        android:textColor="@android:color/white"
+        android:layout_marginBottom="8dp"
+        android:textStyle="bold"/>
+
+    <TextView
+        android:id="@+id/signingEndAtText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Before 09:15"
+        android:textSize="18sp"
+        android:textColor="@android:color/white"
+        android:layout_marginBottom="24dp"/>
+
+    <TextView
+        android:id="@+id/signingTimerText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="00:30"
+        android:textSize="56sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/white"
+        android:layout_marginBottom="24dp"/>
+
+    <TextView
+        android:id="@+id/upNextHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Up next (until next Break)"
+        android:textStyle="bold"
+        android:textSize="18sp"
+        android:textColor="@android:color/white"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:visibility="gone" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/upNextRecycler"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:visibility="gone"/>
+
+    <Button
+        android:id="@+id/signingDoneBtn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Back to Schedule"
+        android:textSize="18sp"
+        android:paddingLeft="24dp"
+        android:paddingRight="24dp"
+        android:visibility="gone"
+        android:backgroundTint="@color/purple_400"
+        android:textColor="@android:color/white"/>
+</LinearLayout>
