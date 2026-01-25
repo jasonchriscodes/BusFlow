@@ -26,24 +26,52 @@ env:
   TB_OTA_TITLE: BusFlow-Android
   TB_OTA_TYPE: SOFTWARE
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
 
+jobs:
+  # 1) PR job: build only (no upload)
+  pr_build:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Make gradlew executable (fix permission denied)
+      - name: Make gradlew executable
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f ./gradlew ]; then
-            chmod +x ./gradlew
-          else
-            echo "ERROR: ./gradlew not found in repo root"
-            exit 1
-          fi
+          test -f ./gradlew
+          chmod +x ./gradlew
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build APK (Debug)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew clean assembleDebug --stacktrace
+
+  # 2) Merge-to-main job: build + release + upload to ThingsBoard
+  release_and_ota:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Make gradlew executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ./gradlew
+          chmod +x ./gradlew
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -63,8 +91,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          chmod +x ./gradlew
-
           ./gradlew clean assembleDebug --stacktrace
 
           APK_SOURCE_PATH="$(find . -type f -path "*/app/build/outputs/apk/debug/*.apk" -print -quit 2>/dev/null || true)"
@@ -91,13 +117,7 @@ jobs:
           echo "APK_SHA256=$APK_SHA256" >> "$GITHUB_ENV"
           echo "SHA_FILE=$SHA_FILE" >> "$GITHUB_ENV"
 
-          echo "Using APK: $APK_SOURCE_PATH"
-          echo "Packaged as: $RELEASE_APK_NAME"
-          echo "sha256: $APK_SHA256"
-
-      # --- Release steps only on push to main ---
       - name: Create annotated git tag locally (for Release)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
@@ -107,7 +127,6 @@ jobs:
           git push origin "${TAG}" || true
 
       - name: Create GitHub Release + upload APK assets
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
@@ -123,7 +142,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to ThingsBoard and get JWT
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: tb_login
         shell: bash
         run: |
@@ -131,7 +149,6 @@ jobs:
           TBHOST="${TB_HOST:-https://thingsboard.cloud}"
           TBHOST="${TBHOST%/}"
 
-          echo "Logging into ThingsBoard at ${TBHOST}"
           LOGIN_RESP="$(curl -sS -X POST "${TBHOST}/api/auth/login" \
             -H "Content-Type: application/json" \
             -d "{\"username\":\"${TB_USER}\",\"password\":\"${TB_PASS}\"}")"
@@ -144,10 +161,8 @@ jobs:
           fi
 
           echo "TB_TOKEN=${TB_TOKEN}" >> "${GITHUB_ENV}"
-          echo "Logged into ThingsBoard."
 
       - name: Upload APK into ThingsBoard OTA Updates (create package + upload binary)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
@@ -162,11 +177,6 @@ jobs:
           APK_PATH="${APK_PATH:?APK_PATH missing}"
           APK_SHA256="${APK_SHA256:?APK_SHA256 missing}"
           TB_TOKEN="${TB_TOKEN:?TB_TOKEN missing}"
-
-          if [[ ! -f "${APK_PATH}" ]]; then
-            echo "ERROR: APK file not found: ${APK_PATH}"
-            exit 1
-          fi
 
           # 1) Get deviceProfileId from the target device
           DEVICE_JSON="$(curl -sS -H "X-Authorization: Bearer ${TB_TOKEN}" \
@@ -200,7 +210,6 @@ jobs:
           if [[ "${CREATE_CODE}" == "200" || "${CREATE_CODE}" == "201" ]]; then
             OTA_ID="$(echo "${CREATE_JSON}" | jq -r '.id.id // empty')"
           else
-            echo "Create OTA package returned HTTP ${CREATE_CODE}; trying to find existing package..."
             LIST_JSON="$(curl -sS -H "X-Authorization: Bearer ${TB_TOKEN}" \
               "${TBHOST}/api/otaPackages?pageSize=50&page=0&textSearch=${VERSION}")"
             OTA_ID="$(echo "${LIST_JSON}" | jq -r --arg t "${TITLE}" --arg v "${VERSION}" \
@@ -209,7 +218,6 @@ jobs:
 
           if [[ -z "${OTA_ID}" ]]; then
             echo "ERROR: Could not determine OTA package id."
-            echo "Create response:"
             echo "${CREATE_JSON}"
             exit 1
           fi
@@ -221,7 +229,7 @@ jobs:
             -F "file=@${APK_PATH};type=application/vnd.android.package-archive" \
             >/dev/null
 
-          echo "✅ Uploaded to ThingsBoard OTA Updates: title=${TITLE}, version=${VERSION}, id=${OTA_ID}"
+          echo "✅ Uploaded to ThingsBoard OTA Updates (Packages repository): title=${TITLE}, version=${VERSION}, id=${OTA_ID}"
 
       - name: Cleanup local tag (optional)
         if: always()
