@@ -87,28 +87,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Decode keystore + write keystore.properties
+      - name: Decode keystore + export signing env vars
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p keystore
           echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > keystore/busflow-release.jks
-
-          cat > keystore.properties <<EOF
-          storeFile=keystore/busflow-release.jks
-          storePassword=${{ secrets.SIGNING_STORE_PASSWORD }}
-          keyAlias=${{ secrets.SIGNING_KEY_ALIAS }}
-          keyPassword=${{ secrets.SIGNING_KEY_PASSWORD }}
-          EOF
-          
           test -f keystore/busflow-release.jks
-          test -f keystore.properties
-          
-          echo "SIGNING_STORE_FILE=$PWD/keystore/busflow-release.jks" >> $GITHUB_ENV
+
+          # Export signing vars for Gradle (most reliable)
+          echo "SIGNING_STORE_FILE=$GITHUB_WORKSPACE/keystore/busflow-release.jks" >> $GITHUB_ENV
           echo "SIGNING_STORE_PASSWORD=${{ secrets.SIGNING_STORE_PASSWORD }}" >> $GITHUB_ENV
           echo "SIGNING_KEY_ALIAS=${{ secrets.SIGNING_KEY_ALIAS }}" >> $GITHUB_ENV
           echo "SIGNING_KEY_PASSWORD=${{ secrets.SIGNING_KEY_PASSWORD }}" >> $GITHUB_ENV
-
 
       - name: Build APK (Debug, signed)
         id: build_apk
@@ -140,6 +131,15 @@ jobs:
           echo "APK_PATH=$OUT_APK_NAME" >> "$GITHUB_ENV"
           echo "APK_SHA256=$APK_SHA256" >> "$GITHUB_ENV"
           echo "SHA_FILE=$SHA_FILE" >> "$GITHUB_ENV"
+          
+      - name: Verify APK signer (CI)
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_PATH="$(find . -type f -path "*/app/build/outputs/apk/debug/*.apk" -print -quit)"
+          echo "APK: $APK_PATH"
+          "$ANDROID_SDK_ROOT/build-tools/33.0.1/apksigner" verify --print-certs "$APK_PATH" || \
+          "$ANDROID_HOME/build-tools/33.0.1/apksigner" verify --print-certs "$APK_PATH"
 
       - name: Create annotated git tag locally
         shell: bash
@@ -251,3 +251,6 @@ jobs:
             >/dev/null
           
           echo "✅ Uploaded to ThingsBoard OTA Updates: title=${TITLE}, version=${VERSION}, id=${OTA_ID}"
+          
+
+

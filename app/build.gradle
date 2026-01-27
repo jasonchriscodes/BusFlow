@@ -24,14 +24,13 @@ if (ksPropsFile.exists()) {
     ksProps.load(new FileInputStream(ksPropsFile))
 }
 
-// helper: do we have a real storeFile?
+// helper: resolve storeFile (CI env first, then keystore.properties)
 def resolveStoreFile = {
+    def sf = System.getenv("SIGNING_STORE_FILE")
+    if (sf != null && sf.trim()) return file(sf)
+
     if (ksPropsFile.exists() && ksProps['storeFile']) {
         return file(ksProps['storeFile'].toString())
-    }
-    def sf = System.getenv("SIGNING_STORE_FILE")
-    if (sf != null && sf.trim()) {
-        return file(sf)
     }
     return null
 }
@@ -75,15 +74,10 @@ android {
             if (hasSigning) {
                 storeFile storeFileResolved
 
-                if (ksPropsFile.exists() && ksProps['storeFile']) {
-                    storePassword ksProps['storePassword']
-                    keyAlias ksProps['keyAlias']
-                    keyPassword ksProps['keyPassword']
-                } else {
-                    storePassword System.getenv("SIGNING_STORE_PASSWORD")
-                    keyAlias System.getenv("SIGNING_KEY_ALIAS")
-                    keyPassword System.getenv("SIGNING_KEY_PASSWORD")
-                }
+                def fromProps = (ksPropsFile.exists() && ksProps['storeFile'])
+                storePassword (fromProps ? ksProps['storePassword'] : System.getenv("SIGNING_STORE_PASSWORD"))
+                keyAlias      (fromProps ? ksProps['keyAlias']      : System.getenv("SIGNING_KEY_ALIAS"))
+                keyPassword   (fromProps ? ksProps['keyPassword']   : System.getenv("SIGNING_KEY_PASSWORD"))
             }
         }
     }
