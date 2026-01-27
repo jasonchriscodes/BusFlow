@@ -86,22 +86,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Decode keystore + write keystore.properties
+      - name: Decode keystore + write keystore.properties (PR, non-fork only)
+        if: github.event.pull_request.head.repo.full_name == github.repository
         shell: bash
         run: |
           set -euo pipefail
-
           mkdir -p keystore
-
           echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > keystore/busflow-release.jks
-
-          cat > keystore.properties <<'EOF'
+          cat > keystore.properties <<EOF
           storeFile=keystore/busflow-release.jks
           storePassword=${{ secrets.SIGNING_STORE_PASSWORD }}
           keyAlias=${{ secrets.SIGNING_KEY_ALIAS }}
           keyPassword=${{ secrets.SIGNING_KEY_PASSWORD }}
           EOF
-
           test -f keystore/busflow-release.jks
           test -f keystore.properties
 

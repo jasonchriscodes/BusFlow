@@ -24,6 +24,21 @@ if (ksPropsFile.exists()) {
     ksProps.load(new FileInputStream(ksPropsFile))
 }
 
+// helper: do we have a real storeFile?
+def resolveStoreFile = {
+    if (ksPropsFile.exists() && ksProps['storeFile']) {
+        return file(ksProps['storeFile'].toString())
+    }
+    def sf = System.getenv("SIGNING_STORE_FILE")
+    if (sf != null && sf.trim()) {
+        return file(sf)
+    }
+    return null
+}
+
+def storeFileResolved = resolveStoreFile()
+def hasSigning = (storeFileResolved != null && storeFileResolved.exists())
+
 if (propertiesFile.exists()) {
     def properties = new Properties()
     propertiesFile.withInputStream { stream ->
@@ -57,16 +72,14 @@ android {
 
     signingConfigs {
         release {
-            if (ksPropsFile.exists()) {
-                storeFile file(ksProps['storeFile'])
-                storePassword ksProps['storePassword']
-                keyAlias ksProps['keyAlias']
-                keyPassword ksProps['keyPassword']
-            } else {
-                // Fallback for CI (optional) if you later use env vars
-                def sf = System.getenv("SIGNING_STORE_FILE")
-                if (sf != null && sf.trim()) {
-                    storeFile file(sf)
+            if (hasSigning) {
+                storeFile storeFileResolved
+
+                if (ksPropsFile.exists() && ksProps['storeFile']) {
+                    storePassword ksProps['storePassword']
+                    keyAlias ksProps['keyAlias']
+                    keyPassword ksProps['keyPassword']
+                } else {
                     storePassword System.getenv("SIGNING_STORE_PASSWORD")
                     keyAlias System.getenv("SIGNING_KEY_ALIAS")
                     keyPassword System.getenv("SIGNING_KEY_PASSWORD")
@@ -77,13 +90,20 @@ android {
 
     buildTypes {
         release {
+            // Require signing for release builds
+            if (!hasSigning) {
+                throw new GradleException("Release signing requested but keystore is missing. Ensure keystore.properties or SIGNING_STORE_FILE exists.")
+            }
             signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
 
         debug {
-            signingConfig signingConfigs.release
+            // ✅ Debug will be signed ONLY when keystore is available (local + CI that decodes it)
+            if (hasSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
