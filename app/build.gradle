@@ -89,21 +89,20 @@ android {
     }
 
     buildTypes {
-        release {
-            // Require signing for release builds
-            if (!hasSigning) {
-                throw new GradleException("Release signing requested but keystore is missing. Ensure keystore.properties or SIGNING_STORE_FILE exists.")
-            }
-            signingConfig signingConfigs.release
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-
         debug {
-            // ✅ Debug will be signed ONLY when keystore is available (local + CI that decodes it)
+            // ✅ If keystore exists, sign debug with your release key (same signature forever)
             if (hasSigning) {
                 signingConfig signingConfigs.release
             }
+            // else: default debug signing
+        }
+
+        release {
+            // ✅ Always use debug signing, even if keystore exists
+            signingConfig signingConfigs.debug
+
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 
