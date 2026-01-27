@@ -15,3 +15,7 @@
 local.properties
 *.map
 .idea/deploymentTargetDropDown.xml
+keystore/
+keystore.properties
+*.jks
+*.keystore
