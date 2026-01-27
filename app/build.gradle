@@ -90,17 +90,14 @@ android {
 
     buildTypes {
         debug {
-            // ✅ If keystore exists, sign debug with your release key (same signature forever)
             if (hasSigning) {
                 signingConfig signingConfigs.release
             }
-            // else: default debug signing
         }
-
         release {
-            // ✅ Always use debug signing, even if keystore exists
-            signingConfig signingConfigs.debug
-
+            if (hasSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }

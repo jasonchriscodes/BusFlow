@@ -90,19 +90,21 @@ jobs:
       - name: Decode keystore + write keystore.properties
         shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p keystore
-          echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > keystore/busflow-release.jks
-
-          cat > keystore.properties <<EOF
-          storeFile=keystore/busflow-release.jks
-          storePassword=${{ secrets.SIGNING_STORE_PASSWORD }}
-          keyAlias=${{ secrets.SIGNING_KEY_ALIAS }}
-          keyPassword=${{ secrets.SIGNING_KEY_PASSWORD }}
-          EOF
-          
-          test -f keystore/busflow-release.jks
-          test -f keystore.properties
+            set -euo pipefail
+            mkdir -p keystore
+            echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > keystore/busflow-release.jks
+            
+            cat > keystore.properties <<EOF
+            storeFile=keystore/busflow-release.jks
+            storePassword=${{ secrets.SIGNING_STORE_PASSWORD }}
+            keyAlias=${{ secrets.SIGNING_KEY_ALIAS }}
+            keyPassword=${{ secrets.SIGNING_KEY_PASSWORD }}
+            EOF
+            
+            test -f keystore/busflow-release.jks
+            test -f keystore.properties
+            echo "keystore.properties created:"
+            cat keystore.properties | sed 's/=.*/=***hidden***/'
 
       - name: Build APK (Debug, signed)
         id: build_apk
