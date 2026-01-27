@@ -57,8 +57,8 @@ jobs:
           set -euo pipefail
           ./gradlew clean assembleDebug --stacktrace
 
-  # 2) Merged PR to main: build release + upload to ThingsBoard
-  release_and_ota:
+  # 2) Merged PR to main: build DEBUG (signed with your "release" keystore) + upload to ThingsBoard
+  debug_and_ota:
     if: github.event.action == 'closed' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
@@ -104,44 +104,44 @@ jobs:
           test -f keystore/busflow-release.jks
           test -f keystore.properties
 
-      - name: Build APK (Release)
+      - name: Build APK (Debug, signed)
         id: build_apk
         shell: bash
         run: |
           set -euo pipefail
-          ./gradlew clean assembleRelease --stacktrace
+          ./gradlew clean assembleDebug --stacktrace
           
-          APK_SOURCE_PATH="$(find . -type f -path "*/app/build/outputs/apk/release/*.apk" -print -quit 2>/dev/null || true)"
+          APK_SOURCE_PATH="$(find . -type f -path "*/app/build/outputs/apk/debug/*.apk" -print -quit 2>/dev/null || true)"
           if [[ -z "$APK_SOURCE_PATH" ]]; then
-            echo "ERROR: Release APK not found."
+            echo "ERROR: Debug APK not found."
             find app/build -maxdepth 7 -type f -print || true
             exit 1
           fi
           
           SHORT_SHA="${GITHUB_SHA::7}"
-          TAG="release-${SHORT_SHA}"
+          TAG="debug-${SHORT_SHA}"
           
-          RELEASE_APK_NAME="app_${SHORT_SHA}_release.apk"
-          cp "$APK_SOURCE_PATH" "$RELEASE_APK_NAME"
+          OUT_APK_NAME="app_${SHORT_SHA}_debug.apk"
+          cp "$APK_SOURCE_PATH" "$OUT_APK_NAME"
           
-          APK_SHA256="$(sha256sum "$RELEASE_APK_NAME" | awk '{print $1}')"
-          SHA_FILE="${RELEASE_APK_NAME}.sha256"
-          echo "${APK_SHA256}  ${RELEASE_APK_NAME}" > "${SHA_FILE}"
+          APK_SHA256="$(sha256sum "$OUT_APK_NAME" | awk '{print $1}')"
+          SHA_FILE="${OUT_APK_NAME}.sha256"
+          echo "${APK_SHA256}  ${OUT_APK_NAME}" > "${SHA_FILE}"
           
           echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_ENV"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
-          echo "BUILD_VARIANT=release" >> "$GITHUB_ENV"
-          echo "APK_PATH=$RELEASE_APK_NAME" >> "$GITHUB_ENV"
+          echo "BUILD_VARIANT=debug" >> "$GITHUB_ENV"
+          echo "APK_PATH=$OUT_APK_NAME" >> "$GITHUB_ENV"
           echo "APK_SHA256=$APK_SHA256" >> "$GITHUB_ENV"
           echo "SHA_FILE=$SHA_FILE" >> "$GITHUB_ENV"
 
-      - name: Create annotated git tag locally (for Release)
+      - name: Create annotated git tag locally
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "${TAG}" -m "Automated release ${TAG}" || true
+          git tag -a "${TAG}" -m "Automated build ${TAG}" || true
           git push origin "${TAG}" || true
 
       - name: Create GitHub Release + upload APK assets
@@ -150,7 +150,7 @@ jobs:
           tag_name: ${{ env.TAG }}
           name: ${{ env.TAG }}
           body: |
-            Automated release from merged PR #${{ github.event.pull_request.number }}
+            Automated build from merged PR #${{ github.event.pull_request.number }}
             variant:${{ env.BUILD_VARIANT }}
             sha256:${{ env.APK_SHA256 }}
           files: |
