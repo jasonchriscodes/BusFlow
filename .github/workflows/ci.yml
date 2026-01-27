@@ -86,24 +86,43 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Build APK (Debug)
+      - name: Decode keystore + write keystore.properties
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p keystore
+
+          echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > keystore/busflow-release.jks
+
+          cat > keystore.properties <<'EOF'
+          storeFile=keystore/busflow-release.jks
+          storePassword=${{ secrets.SIGNING_STORE_PASSWORD }}
+          keyAlias=${{ secrets.SIGNING_KEY_ALIAS }}
+          keyPassword=${{ secrets.SIGNING_KEY_PASSWORD }}
+          EOF
+
+          test -f keystore/busflow-release.jks
+          test -f keystore.properties
+
+      - name: Build APK (Release)
         id: build_apk
         shell: bash
         run: |
           set -euo pipefail
-          ./gradlew clean assembleDebug --stacktrace
+          ./gradlew clean assembleRelease --stacktrace
 
-          APK_SOURCE_PATH="$(find . -type f -path "*/app/build/outputs/apk/debug/*.apk" -print -quit 2>/dev/null || true)"
+          APK_SOURCE_PATH="$(find . -type f -path "*/app/build/outputs/apk/release/*.apk" -print -quit 2>/dev/null || true)"
           if [[ -z "$APK_SOURCE_PATH" ]]; then
-            echo "ERROR: Debug APK not found."
-            find app/build -maxdepth 6 -type f -print || true
+            echo "ERROR: Release APK not found."
+            find app/build -maxdepth 7 -type f -print || true
             exit 1
           fi
 
           SHORT_SHA="${GITHUB_SHA::7}"
           TAG="release-${SHORT_SHA}"
 
-          RELEASE_APK_NAME="app_${SHORT_SHA}_debug.apk"
+          RELEASE_APK_NAME="app_${SHORT_SHA}_release.apk"
           cp "$APK_SOURCE_PATH" "$RELEASE_APK_NAME"
 
           APK_SHA256="$(sha256sum "$RELEASE_APK_NAME" | awk '{print $1}')"
@@ -112,7 +131,7 @@ jobs:
 
           echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_ENV"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
-          echo "BUILD_VARIANT=debug" >> "$GITHUB_ENV"
+          echo "BUILD_VARIANT=release" >> "$GITHUB_ENV"
           echo "APK_PATH=$RELEASE_APK_NAME" >> "$GITHUB_ENV"
           echo "APK_SHA256=$APK_SHA256" >> "$GITHUB_ENV"
           echo "SHA_FILE=$SHA_FILE" >> "$GITHUB_ENV"
@@ -178,7 +197,6 @@ jobs:
           APK_SHA256="${APK_SHA256:?APK_SHA256 missing}"
           TB_TOKEN="${TB_TOKEN:?TB_TOKEN missing}"
 
-          # 1) Get deviceProfileId from the target device
           DEVICE_JSON="$(curl -sS -H "X-Authorization: Bearer ${TB_TOKEN}" \
             "${TBHOST}/api/device/${DEVICE_ID}")"
 
@@ -189,7 +207,6 @@ jobs:
             exit 1
           fi
 
-          # 2) Create OTA package info
           OTA_INFO="$(jq -n \
             --arg title "${TITLE}" \
             --arg version "${VERSION}" \
@@ -222,14 +239,13 @@ jobs:
             exit 1
           fi
 
-          # 3) Upload the APK binary to that OTA package
           curl -sS -X POST \
             "${TBHOST}/api/otaPackage/${OTA_ID}?checksumAlgorithm=SHA256&checksum=${APK_SHA256}" \
             -H "X-Authorization: Bearer ${TB_TOKEN}" \
             -F "file=@${APK_PATH};type=application/vnd.android.package-archive" \
             >/dev/null
 
-          echo "✅ Uploaded to ThingsBoard OTA Updates (Packages repository): title=${TITLE}, version=${VERSION}, id=${OTA_ID}"
+          echo "✅ Uploaded to ThingsBoard OTA Updates: title=${TITLE}, version=${VERSION}, id=${OTA_ID}"
 
       - name: Cleanup local tag (optional)
         if: always()
