@@ -35,10 +35,12 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.gson.Gson
+import com.jason.publisher.BuildConfig
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityScheduleBinding
 import com.jason.publisher.modules.`break`.activities.BreakActivity
@@ -56,6 +58,9 @@ import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
 import com.jason.publisher.modules.schedule.adapters.ScheduleAdapter
+import com.jason.publisher.modules.schedule.helpers.OtaCheckResult
+import com.jason.publisher.modules.schedule.helpers.OtaInfo
+import com.jason.publisher.modules.schedule.helpers.OtaUpdateManager
 import com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
 import com.jason.publisher.modules.schedule.viewmodels.ScheduleViewModel
 import com.jason.publisher.modules.signing.activities.SigningActivity
@@ -112,6 +117,7 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var fetchingIcon: ImageView
     private lateinit var networkStatusIndicator: View
     private lateinit var emptyStateText: TextView
+    private var otaCheckedThisLaunch = false
 
     companion object {
         private const val REQUEST_PERIODIC_TIME = 5000L
@@ -271,9 +277,6 @@ class ScheduleActivity : AppCompatActivity() {
         // Log activity entry with available data
         viewModel.logActivityEntry()
 
-        // Connect and subscribe to MQTT
-        connectAndSubscribe()
-
         // Start updating the date/time
         startDateTimeUpdater()
 
@@ -304,11 +307,11 @@ class ScheduleActivity : AppCompatActivity() {
         val mapFile = File(viewModel.getHiddenFolder(), "new-zealand.map")
         if (!mapFile.exists()) {
             Log.e("ScheduleActivity", "Map file not found at: ${mapFile.absolutePath}")
-            Toast.makeText(
-                this,
-                "Offline map unavailable. Other features will still work.",
-                Toast.LENGTH_SHORT
-            ).show()
+//            Toast.makeText(
+//                this,
+//                "Offline map unavailable. Other features will still work.",
+//                Toast.LENGTH_SHORT
+//            ).show()
         } else {
             ioScope.launch {
                 // Open the .map file on IO
@@ -448,6 +451,23 @@ class ScheduleActivity : AppCompatActivity() {
                 else              -> launchMapActivity(no)
             }
         }
+    }
+
+    private fun buildClientId(): String {
+        return "busflow-${viewModel.aid ?: "unknown"}"
+    }
+
+    private fun resolveDeviceTokenFromConfig(): String? {
+        val aid = viewModel.aid
+        val cfg = viewModel.config.orEmpty()
+
+        if (aid.isNullOrBlank() || cfg.isEmpty()) return null
+
+        val match = cfg.firstOrNull { it.aid.equals(aid, ignoreCase = true) }
+        if (match == null) return null
+
+        // Change field name if yours is different
+        return match.accessToken?.trim().takeIf { !it.isNullOrBlank() }
     }
 
     private fun shouldUseBusRouteData(item: ScheduleItem): Boolean {
@@ -889,7 +909,7 @@ class ScheduleActivity : AppCompatActivity() {
             if (success) {
                 viewModel.config = configList
                 viewModel.loadAccessToken()
-                mqttManager = MqttManager(username = viewModel.token)
+                mqttManager = MqttManager(clientId = buildClientId(), username = viewModel.token)
                 requestAdminMessage()
                 connectAndSubscribe()
             } else {
@@ -1197,6 +1217,7 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /** Connects to the MQTT broker and subscribes to the required topics. */
+    @RequiresApi(Build.VERSION_CODES.P)
     @SuppressLint("LongLogTag")
     private fun connectAndSubscribe() {
         mqttManager.connect { isConnected ->
@@ -1216,6 +1237,7 @@ class ScheduleActivity : AppCompatActivity() {
      * Subscribes to shared data from the server.
      * Validates configuration, AID matching, and updates the route, stops, and durationBetweenStops.
      */
+    @RequiresApi(Build.VERSION_CODES.P)
     @SuppressLint("LongLogTag")
     private fun subscribeSharedData() {
         Log.d("ScheduleActivity", mqttManager.getUsername())
@@ -1242,6 +1264,8 @@ class ScheduleActivity : AppCompatActivity() {
                         Toast.makeText(this, "AID does not match.", Toast.LENGTH_SHORT).show()
                         return@runOnUiThread
                     }
+
+                    checkForUpdateOnce()
 
                     // Retrieve `busRouteData` from ThingsBoard
                     viewModel.busRouteData = data.shared?.busRouteData1 ?: emptyList()
@@ -1297,6 +1321,70 @@ class ScheduleActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun checkForUpdateOnce() {
+        if (otaCheckedThisLaunch) return
+        otaCheckedThisLaunch = true
+
+        val token = resolveDeviceTokenFromConfig()?.trim()
+        if (token.isNullOrBlank()) return
+
+        val ota = OtaUpdateManager(
+            context = this,
+            tbHost = "https://thingsboard.cloud",
+            deviceToken = token
+        )
+
+        lifecycleScope.launch {
+            when (val res = ota.checkForUpdateOnly()) {
+                is OtaCheckResult.UpdateAvailable -> {
+                    val serverVersion = res.info.version
+                    val installed = BuildConfig.VERSION_NAME
+
+                    val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
+                    val lastPrompted = prefs.getString("last_prompted_sw_version", null)
+
+                    if (isServerVersionNewer(serverVersion, installed) && serverVersion != lastPrompted) {
+                        AlertDialog.Builder(this@ScheduleActivity)
+                            .setTitle("Update available")
+                            .setMessage("New version $serverVersion is available (installed: $installed). Update now?")
+                            .setPositiveButton("Update") { _, _ ->
+                                lifecycleScope.launch {
+                                    val ok = ota.downloadAndInstall(res.info)
+                                    if (ok) {
+                                        prefs.edit().putString("last_prompted_sw_version", serverVersion).apply()
+                                    }
+                                }
+                            }
+                            .setNegativeButton("Not now") { d, _ ->
+                                prefs.edit().putString("last_prompted_sw_version", serverVersion).apply()
+                                d.dismiss()
+                            }
+                            .show()
+                    }
+                }
+                else -> {
+                    // Do nothing automatically (no “up to date” spam)
+                }
+            }
+        }
+    }
+
+    private fun isServerVersionNewer(server: String, installed: String): Boolean {
+        val s = parseTwoPartVersion(server) ?: return false
+        val i = parseTwoPartVersion(installed) ?: return false
+        return (s.first > i.first) || (s.first == i.first && s.second > i.second)
+    }
+
+    private fun parseTwoPartVersion(v: String): Pair<Int, Int>? {
+        // expects "1.00", "1.01" ...
+        val parts = v.trim().split(".")
+        if (parts.size != 2) return null
+        val a = parts[0].toIntOrNull() ?: return null
+        val b = parts[1].toIntOrNull() ?: return null
+        return a to b
     }
 
     /**

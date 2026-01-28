@@ -24,8 +24,8 @@ import com.jason.publisher.main.services.background.ScreenRecordService
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.schedule.activities.ScheduleActivity
-import com.jason.publisher.modules.splashscreen.helpers.OtaCheckResult
-import com.jason.publisher.modules.splashscreen.helpers.OtaUpdateManager
+import com.jason.publisher.modules.schedule.helpers.OtaCheckResult
+import com.jason.publisher.modules.schedule.helpers.OtaUpdateManager
 import kotlinx.coroutines.launch
 import pl.droidsonroids.gif.GifDrawable
 import pl.droidsonroids.gif.GifImageView
@@ -95,8 +95,6 @@ class SplashActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_splash)
 
-        checkOtaOnSplash()
-
         // Start the ClientAttributesService to handle attributes-updating when the app is closed
         startService(Intent(baseContext, ClientAttributesService::class.java))
 
@@ -131,62 +129,6 @@ class SplashActivity : AppCompatActivity() {
         btnUseCache.setOnClickListener {
             startScheduleActivity(fetch = false)
         }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.P)
-    private fun checkOtaOnSplash() {
-        val tbHost = "https://thingsboard.cloud" // TODO: load from config
-        val deviceToken = "YOUR_DEVICE_TOKEN"    // TODO: load from config
-
-        val ota = OtaUpdateManager(this, tbHost, deviceToken)
-
-        lifecycleScope.launch {
-            when (val res = ota.checkForUpdateOnly()) {
-                is OtaCheckResult.NoUpdate -> {
-                    Toast.makeText(
-                        this@SplashActivity,
-                        "You’re up to date.",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-
-                is OtaCheckResult.UpdateAvailable -> {
-                    showUpdateDialog(
-                        onUpdate = {
-                            lifecycleScope.launch {
-                                val ok = ota.downloadAndInstall(res.info)
-                                if (!ok) {
-                                    Toast.makeText(
-                                        this@SplashActivity,
-                                        "Update download failed. Please try again.",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                }
-                            }
-                        }
-                    )
-                }
-
-                is OtaCheckResult.Failed -> {
-                    // optional: you can hide this if you don't want noise
-                    Toast.makeText(
-                        this@SplashActivity,
-                        "Couldn’t check for updates. Please try again later.",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
-        }
-    }
-
-    private fun showUpdateDialog(onUpdate: () -> Unit) {
-        AlertDialog.Builder(this)
-            .setTitle("Update available")
-            .setMessage("A new version is available. Download and install it now?")
-            .setPositiveButton("Update") { _, _ -> onUpdate() }
-            .setNegativeButton("Not now") { dialog, _ -> dialog.dismiss() }
-            .setCancelable(true)
-            .show()
     }
 
 

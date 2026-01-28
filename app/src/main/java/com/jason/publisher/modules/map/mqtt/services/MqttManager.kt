@@ -117,23 +117,29 @@ class MqttManager(
      *
      * @param callback The callback to execute after attempting to connect.
      */
+    @Volatile private var connecting = false
+
     fun connect(callback: (Boolean) -> Unit) {
-        try {
-            if (!mqttClient.isConnected) {
-                mqttClient.connect(connectOptions)
-                Log.d("MqttManager", "MQTT client connected")
-                callback(true)
-            } else {
-                Log.d("MqttManager", "MQTT client is already connected")
-                callback(true) // Assume success if already connected
-            }
-        } catch (e: MqttException) {
-            Log.e("MqttManager", "Failed to connect to MQTT broker: ${e.message}", e)
-            callback(false)
-        } catch (e: NullPointerException) {
-            Log.e("MqttManager", "MQTT client is not initialized: ${e.message}", e)
-            callback(false)
+        if (mqttClient.isConnected) {
+            callback(true); return
         }
+        if (connecting) {
+            Log.w("MqttManager", "Connect skipped: already connecting")
+            callback(false); return
+        }
+
+        connecting = true
+        val ok = try {
+            mqttClient.connect(connectOptions)
+            true
+        } catch (e: Exception) {
+            Log.e("MqttManager", "MQTT connect failed: ${e.message}", e)
+            false
+        } finally {
+            connecting = false
+        }
+
+        callback(ok)
     }
 
     /**
@@ -172,11 +178,13 @@ class MqttManager(
      * @param callback The callback to handle incoming messages.
      */
     fun subscribe(topic: String, callback: (String) -> Unit) {
-        mqttClient.subscribe(topic) { _, msg ->
-            val payload = String(msg.payload)
-            callback(payload)
+        if (!mqttClient.isConnected) {
+            Log.e("MqttManager", "Subscribe skipped: not connected")
+            return
         }
+        mqttClient.subscribe(topic) { _, msg -> callback(String(msg.payload)) }
     }
+
 
     /**
      * Gets the username used for the MQTT connection.

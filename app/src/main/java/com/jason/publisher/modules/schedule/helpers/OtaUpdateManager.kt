@@ -1,4 +1,4 @@
-package com.jason.publisher.modules.splashscreen.helpers
+package com.jason.publisher.modules.schedule.helpers
 
 import android.content.Context
 import android.content.Intent
@@ -204,6 +204,7 @@ class OtaUpdateManager(
         return true
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun promptInstall(apkFile: File) {
         // Android 8+: need “Install unknown apps” permission for your app
         if (!context.packageManager.canRequestPackageInstalls()) {

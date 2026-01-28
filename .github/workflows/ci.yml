@@ -15,13 +15,11 @@ env:
   MAILERSEND_API_KEY: ${{ secrets.MAILERSEND_API_KEY }}
   GOOGLE_APP_PASS: ${{ secrets.GOOGLE_APP_PASS }}
 
-  # ThingsBoard secrets (Settings → Secrets and variables → Actions)
   TB_HOST: ${{ secrets.TB_HOST }}
   TB_USER: ${{ secrets.TB_USER }}
   TB_PASS: ${{ secrets.TB_PASS }}
   TARGET_DEVICE_ID: ${{ secrets.TARGET_DEVICE_ID }}
 
-  # OTA package naming
   TB_OTA_TITLE: BusFlow-Android
   TB_OTA_TYPE: SOFTWARE
 
@@ -30,49 +28,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # 1) PR job: build only (no upload)
   pr_build:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Make gradlew executable
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f ./gradlew
-          chmod +x ./gradlew
-
+        run: chmod +x ./gradlew
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-
       - name: Build APK (Debug)
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./gradlew clean assembleDebug --stacktrace
+        run: ./gradlew clean assembleDebug --stacktrace
 
-  # 2) Merged PR to main: build DEBUG (signed with your "release" keystore) + upload to ThingsBoard
   debug_and_ota:
     if: github.event.action == 'closed' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout merged commit
+      - name: Checkout merged commit (full history + tags)
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
 
       - name: Make gradlew executable
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f ./gradlew
-          chmod +x ./gradlew
+        run: chmod +x ./gradlew
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -81,11 +63,40 @@ jobs:
           java-version: "17"
 
       - name: Install utilities (jq)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Compute next version (start at 1.00)
+        id: ver
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y jq
+          git fetch --tags --force
+
+          # Find latest tag like v1.00, v1.01 ...
+          LATEST_TAG="$(git tag -l 'v[0-9]*.[0-9][0-9]' --sort=-v:refname | head -n 1 || true)"
+
+          if [[ -z "${LATEST_TAG}" ]]; then
+            MAJOR=1
+            MINOR=0
+          else
+            BASE="${LATEST_TAG#v}"          # 1.07
+            MAJOR="${BASE%%.*}"             # 1
+            MINOR_STR="${BASE##*.}"         # 07
+            MINOR=$((10#${MINOR_STR} + 1))  # 8
+          fi
+
+          VERSION_NAME="${MAJOR}.$(printf '%02d' ${MINOR})"   # 1.08
+          VERSION_CODE=$(( MAJOR * 100 + MINOR ))             # 108
+
+          TAG="v${VERSION_NAME}"
+
+          echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
+          echo "VERSION_CODE=${VERSION_CODE}" >> $GITHUB_ENV
+          echo "TAG=${TAG}" >> $GITHUB_ENV
+
+          echo "Computed VERSION_NAME=${VERSION_NAME} VERSION_CODE=${VERSION_CODE} TAG=${TAG}"
 
       - name: Decode keystore + export signing env vars
         shell: bash
@@ -95,53 +106,41 @@ jobs:
           echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > keystore/busflow-release.jks
           test -f keystore/busflow-release.jks
 
-          # Export signing vars for Gradle (most reliable)
           echo "SIGNING_STORE_FILE=$GITHUB_WORKSPACE/keystore/busflow-release.jks" >> $GITHUB_ENV
           echo "SIGNING_STORE_PASSWORD=${{ secrets.SIGNING_STORE_PASSWORD }}" >> $GITHUB_ENV
           echo "SIGNING_KEY_ALIAS=${{ secrets.SIGNING_KEY_ALIAS }}" >> $GITHUB_ENV
           echo "SIGNING_KEY_PASSWORD=${{ secrets.SIGNING_KEY_PASSWORD }}" >> $GITHUB_ENV
 
-      - name: Build APK (Debug, signed)
+      - name: Build APK (Debug, signed) with CI version
         id: build_apk
+        env:
+          CI_VERSION_NAME: ${{ env.VERSION_NAME }}
+          CI_VERSION_CODE: ${{ env.VERSION_CODE }}
         shell: bash
         run: |
           set -euo pipefail
+
           ./gradlew clean assembleDebug --stacktrace
-          
+
           APK_SOURCE_PATH="$(find . -type f -path "*/app/build/outputs/apk/debug/*.apk" -print -quit 2>/dev/null || true)"
           if [[ -z "$APK_SOURCE_PATH" ]]; then
             echo "ERROR: Debug APK not found."
             find app/build -maxdepth 7 -type f -print || true
             exit 1
           fi
-          
-          SHORT_SHA="${GITHUB_SHA::7}"
-          TAG="debug-${SHORT_SHA}"
-          
-          OUT_APK_NAME="app_${SHORT_SHA}_debug.apk"
+
+          OUT_APK_NAME="BusFlow-Android_${VERSION_NAME}.apk"
           cp "$APK_SOURCE_PATH" "$OUT_APK_NAME"
-          
+
           APK_SHA256="$(sha256sum "$OUT_APK_NAME" | awk '{print $1}')"
           SHA_FILE="${OUT_APK_NAME}.sha256"
           echo "${APK_SHA256}  ${OUT_APK_NAME}" > "${SHA_FILE}"
-          
-          echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_ENV"
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
-          echo "BUILD_VARIANT=debug" >> "$GITHUB_ENV"
-          echo "APK_PATH=$OUT_APK_NAME" >> "$GITHUB_ENV"
-          echo "APK_SHA256=$APK_SHA256" >> "$GITHUB_ENV"
-          echo "SHA_FILE=$SHA_FILE" >> "$GITHUB_ENV"
-          
-      - name: Verify APK signer (CI)
-        shell: bash
-        run: |
-          set -euo pipefail
-          APK_PATH="$(find . -type f -path "*/app/build/outputs/apk/debug/*.apk" -print -quit)"
-          echo "APK: $APK_PATH"
-          "$ANDROID_SDK_ROOT/build-tools/33.0.1/apksigner" verify --print-certs "$APK_PATH" || \
-          "$ANDROID_HOME/build-tools/33.0.1/apksigner" verify --print-certs "$APK_PATH"
 
-      - name: Create annotated git tag locally
+          echo "APK_PATH=${OUT_APK_NAME}" >> "$GITHUB_ENV"
+          echo "APK_SHA256=${APK_SHA256}" >> "$GITHUB_ENV"
+          echo "SHA_FILE=${SHA_FILE}" >> "$GITHUB_ENV"
+
+      - name: Create annotated git tag + push
         shell: bash
         run: |
           set -euo pipefail
@@ -157,7 +156,8 @@ jobs:
           name: ${{ env.TAG }}
           body: |
             Automated build from merged PR #${{ github.event.pull_request.number }}
-            variant:${{ env.BUILD_VARIANT }}
+            versionName:${{ env.VERSION_NAME }}
+            versionCode:${{ env.VERSION_CODE }}
             sha256:${{ env.APK_SHA256 }}
           files: |
             ${{ env.APK_PATH }}
@@ -172,46 +172,45 @@ jobs:
           set -euo pipefail
           TBHOST="${TB_HOST:-https://thingsboard.cloud}"
           TBHOST="${TBHOST%/}"
-          
+
           LOGIN_RESP="$(curl -sS -X POST "${TBHOST}/api/auth/login" \
             -H "Content-Type: application/json" \
             -d "{\"username\":\"${TB_USER}\",\"password\":\"${TB_PASS}\"}")"
-          
+
           TB_TOKEN="$(echo "${LOGIN_RESP}" | jq -r '.token // .accessToken // empty')"
           if [[ -z "${TB_TOKEN}" ]]; then
             echo "ERROR: ThingsBoard login failed. Response:"
             echo "${LOGIN_RESP}"
             exit 1
           fi
-          
+
           echo "TB_TOKEN=${TB_TOKEN}" >> "${GITHUB_ENV}"
 
-      - name: Upload APK into ThingsBoard OTA Updates (create package + upload binary)
+      - name: Upload APK into ThingsBoard OTA Updates
         shell: bash
         run: |
           set -euo pipefail
           TBHOST="${TB_HOST:-https://thingsboard.cloud}"
           TBHOST="${TBHOST%/}"
-          
+
           DEVICE_ID="${TARGET_DEVICE_ID:?TARGET_DEVICE_ID missing}"
           TITLE="${TB_OTA_TITLE:-BusFlow-Android}"
           TYPE="${TB_OTA_TYPE:-SOFTWARE}"
-          VERSION="${TAG}"
-          
+          VERSION="${VERSION_NAME}"
+
           APK_PATH="${APK_PATH:?APK_PATH missing}"
           APK_SHA256="${APK_SHA256:?APK_SHA256 missing}"
           TB_TOKEN="${TB_TOKEN:?TB_TOKEN missing}"
-          
+
           DEVICE_JSON="$(curl -sS -H "X-Authorization: Bearer ${TB_TOKEN}" \
             "${TBHOST}/api/device/${DEVICE_ID}")"
-          
           DEVICE_PROFILE_ID="$(echo "${DEVICE_JSON}" | jq -r '.deviceProfileId.id // empty')"
           if [[ -z "${DEVICE_PROFILE_ID}" ]]; then
             echo "ERROR: Could not read deviceProfileId from device:"
             echo "${DEVICE_JSON}"
             exit 1
           fi
-          
+
           OTA_INFO="$(jq -n \
             --arg title "${TITLE}" \
             --arg version "${VERSION}" \
@@ -219,15 +218,15 @@ jobs:
             --arg dpId "${DEVICE_PROFILE_ID}" \
             '{title:$title, version:$version, type:$type,
               deviceProfileId:{entityType:"DEVICE_PROFILE", id:$dpId}}')"
-          
+
           CREATE_RESP="$(curl -sS -w $'\n%{http_code}' -X POST "${TBHOST}/api/otaPackage" \
             -H "Content-Type: application/json" \
             -H "X-Authorization: Bearer ${TB_TOKEN}" \
             -d "${OTA_INFO}")"
-          
+
           CREATE_JSON="$(echo "${CREATE_RESP}" | head -n -1)"
           CREATE_CODE="$(echo "${CREATE_RESP}" | tail -n 1)"
-          
+
           OTA_ID=""
           if [[ "${CREATE_CODE}" == "200" || "${CREATE_CODE}" == "201" ]]; then
             OTA_ID="$(echo "${CREATE_JSON}" | jq -r '.id.id // empty')"
@@ -237,20 +236,46 @@ jobs:
             OTA_ID="$(echo "${LIST_JSON}" | jq -r --arg t "${TITLE}" --arg v "${VERSION}" \
               '.data[] | select(.title==$t and .version==$v) | .id.id' | head -n 1)"
           fi
-          
+
           if [[ -z "${OTA_ID}" ]]; then
             echo "ERROR: Could not determine OTA package id."
             echo "${CREATE_JSON}"
             exit 1
           fi
-          
+
           curl -sS -X POST \
             "${TBHOST}/api/otaPackage/${OTA_ID}?checksumAlgorithm=SHA256&checksum=${APK_SHA256}" \
             -H "X-Authorization: Bearer ${TB_TOKEN}" \
             -F "file=@${APK_PATH};type=application/vnd.android.package-archive" \
             >/dev/null
-          
-          echo "✅ Uploaded to ThingsBoard OTA Updates: title=${TITLE}, version=${VERSION}, id=${OTA_ID}"
-          
 
+          echo "✅ Uploaded OTA package: title=${TITLE}, version=${VERSION}, id=${OTA_ID}"
 
+      - name: Set device shared attributes so the app can detect the update
+        shell: bash
+        run: |
+          set -euo pipefail
+          TBHOST="${TB_HOST:-https://thingsboard.cloud}"
+          TBHOST="${TBHOST%/}"
+
+          DEVICE_ID="${TARGET_DEVICE_ID:?TARGET_DEVICE_ID missing}"
+          TITLE="${TB_OTA_TITLE:-BusFlow-Android}"
+          VERSION="${VERSION_NAME}"
+          SIZE="$(stat -c%s "${APK_PATH}")"
+
+          # These shared keys are what your app reads:
+          # sw_title, sw_version, sw_checksum, sw_checksum_algorithm, sw_size
+          ATTR_JSON="$(jq -n \
+            --arg t "${TITLE}" \
+            --arg v "${VERSION}" \
+            --arg c "${APK_SHA256}" \
+            --arg s "${SIZE}" \
+            '{sw_title:$t, sw_version:$v, sw_checksum:$c, sw_checksum_algorithm:"SHA256", sw_size: ($s|tonumber)}')"
+
+          curl -sS -X POST "${TBHOST}/api/plugins/telemetry/DEVICE/${DEVICE_ID}/SHARED_SCOPE" \
+            -H "Content-Type: application/json" \
+            -H "X-Authorization: Bearer ${TB_TOKEN}" \
+            -d "${ATTR_JSON}" \
+            >/dev/null
+
+          echo "✅ Updated device shared attrs: sw_title/sw_version/sw_checksum/..."
