@@ -118,6 +118,11 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var networkStatusIndicator: View
     private lateinit var emptyStateText: TextView
     private var otaCheckedThisLaunch = false
+    private var onlineInitStarted = false
+    private var connecting = false
+    private val adminHandler = Handler(Looper.getMainLooper())
+    private var adminRunnable: Runnable? = null
+
 
     companion object {
         private const val REQUEST_PERIODIC_TIME = 5000L
@@ -211,21 +216,25 @@ class ScheduleActivity : AppCompatActivity() {
         // 2. define the callback
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                if (viewModel.fetchRoster) {
-                    // only fetch when the user actually asked for fresh data
-                    runOnUiThread { enterOnlineMode() }
-                } else {
-                    // just update your status indicator
-                    runOnUiThread {
+                runOnUiThread {
+                    if (viewModel.fetchRoster && !onlineInitStarted) {
+                        enterOnlineMode()
+                    } else {
                         connectionStatusTextView.text = "Connected (cache only)"
                         networkStatusIndicator.setBackgroundResource(R.drawable.circle_shape_green)
                     }
                 }
             }
 
+
             override fun onLost(network: Network) {
-                // when internet is gone
-                runOnUiThread { enterOfflineMode() }
+                runOnUiThread {
+                    stopAdminPolling()
+                    try { mqttManager.disconnect() } catch (_: Exception) {}
+                    onlineInitStarted = false
+                    connecting = false
+                    enterOfflineMode()
+                }
             }
         }
 
@@ -242,11 +251,18 @@ class ScheduleActivity : AppCompatActivity() {
 
         // read the user’s choice from the Splash
         val fetchRoster = intent.getBooleanExtra("EXTRA_FETCH_ROSTER", false)
-        // if they tapped “Fetch Roster” *and* we have internet, do a one-time fetch
-        if (fetchRoster && NetworkStatusHelper.isNetworkAvailable(this)) {
-            enterOnlineMode()
-        } else {
+        viewModel.fetchRoster = fetchRoster
+
+        if (!fetchRoster) {
             enterOfflineMode()
+        } else {
+            // Let the network callback trigger online mode when available,
+            // OR trigger once here if already available:
+            if (NetworkStatusHelper.isNetworkAvailable(this) && !onlineInitStarted) {
+                enterOnlineMode()
+            } else {
+                enterOfflineMode() // optional UI state while waiting
+            }
         }
 
         // still register the network-status indicator, but *do not* auto-fetch on reconnect
@@ -895,6 +911,10 @@ class ScheduleActivity : AppCompatActivity() {
      */
     @RequiresApi(Build.VERSION_CODES.M)
     private fun enterOnlineMode() {
+        if (onlineInitStarted || connecting) return
+        onlineInitStarted = true
+        connecting = true
+
         Toast.makeText(this, "Online: fetching from ThingsBoard…", Toast.LENGTH_LONG).show()
         setSchedulePaginationVisibility(View.GONE)
         setRouteActionButtonsVisibility(View.GONE)
@@ -905,15 +925,25 @@ class ScheduleActivity : AppCompatActivity() {
         startFetchingAnimation()
 
         mqttConfigHelper.fetchConfig { configList ->
-            val success = configList.isNotEmpty()
-            if (success) {
+            runOnUiThread {
+                val success = configList.isNotEmpty()
+                if (!success) {
+                    connecting = false
+                    onlineInitStarted = false
+                    enterOfflineMode()
+                    return@runOnUiThread
+                }
+
                 viewModel.config = configList
                 viewModel.loadAccessToken()
+
+                // ✅ If you already had a client running, stop it first
+                try { mqttManager.disconnect() } catch (_: Exception) {}
+                stopAdminPolling()
+
                 mqttManager = MqttManager(clientId = buildClientId(), username = viewModel.token)
-                requestAdminMessage()
+
                 connectAndSubscribe()
-            } else {
-                enterOfflineMode()
             }
         }
     }
@@ -1165,22 +1195,30 @@ class ScheduleActivity : AppCompatActivity() {
         dateTimeHandler.post(dateTimeRunnable)
     }
 
-    /**
-     * Requests admin messages periodically.
-     */
-    private fun requestAdminMessage() {
-        val jsonObject = JSONObject()
-        jsonObject.put("sharedKeys","message,busRoute,busStop,config,busRouteData,scheduleData")
-        val jsonStringSharedKeys = jsonObject.toString()
-        val handler = Handler(Looper.getMainLooper())
-        mqttManager.publish(MqttHelper.Companion.PUB_MSG_TOPIC, jsonStringSharedKeys)
-        handler.post(object : Runnable {
+    private fun startAdminPolling() {
+        stopAdminPolling()
+
+        val json = JSONObject().apply {
+            put("sharedKeys", "message,busRoute,busStop,config,busRouteData,scheduleData")
+        }.toString()
+
+        adminRunnable = object : Runnable {
             override fun run() {
-                mqttManager.publish(MqttHelper.Companion.PUB_MSG_TOPIC, jsonStringSharedKeys)
-                handler.postDelayed(this, REQUEST_PERIODIC_TIME)
+                if (::mqttManager.isInitialized && mqttManager.isConnected()) {
+                    mqttManager.publish(MqttHelper.PUB_MSG_TOPIC, json)
+                }
+                adminHandler.postDelayed(this, REQUEST_PERIODIC_TIME)
             }
-        })
+        }
+
+        adminHandler.post(adminRunnable!!)
     }
+
+    private fun stopAdminPolling() {
+        adminRunnable?.let { adminHandler.removeCallbacks(it) }
+        adminRunnable = null
+    }
+
 
     /**
      * Loads schedule data from the cache file if it exists and extracts schedule-related data.
@@ -1217,17 +1255,19 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /** Connects to the MQTT broker and subscribes to the required topics. */
-    @RequiresApi(Build.VERSION_CODES.P)
-    @SuppressLint("LongLogTag")
     private fun connectAndSubscribe() {
-        mqttManager.connect { isConnected ->
-            if (isConnected) {
-                Log.d("ScheduleActivity connectAndSubscribe", "✅ Connected to MQTT broker successfully.")
-                subscribeSharedData()
-            } else {
-                Log.e("ScheduleActivity connectAndSubscribe", "❌ Failed to connect to MQTT broker. Running in offline mode.")
+        ioScope.launch {
+            mqttManager.connect { isConnected ->
                 runOnUiThread {
-                    Toast.makeText(this@ScheduleActivity, "Running in offline mode. No connection to server.", Toast.LENGTH_SHORT).show()
+                    connecting = false
+                    if (isConnected) {
+                        subscribeSharedData()
+                        startAdminPolling()
+                    } else {
+                        onlineInitStarted = false
+                        Toast.makeText(this@ScheduleActivity, "Offline mode: cannot connect to server.", Toast.LENGTH_SHORT).show()
+                        enterOfflineMode()
+                    }
                 }
             }
         }
@@ -1499,10 +1539,13 @@ class ScheduleActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopAdminPolling()
+        try { mqttManager.disconnect() } catch (_: Exception) {}
         NetworkStatusHelper.unregisterReceiver(this)
         dateTimeHandler.removeCallbacks(dateTimeRunnable)
         connectivityManager.unregisterNetworkCallback(networkCallback)
     }
+
 
     /** Fetches the Android ID (AID) of the device. */
     @SuppressLint("HardwareIds")
@@ -1519,8 +1562,10 @@ class ScheduleActivity : AppCompatActivity() {
 
     private fun publishActiveSegment(label: String) {
         val payload = "{\"currentTripLabel\":\"${label.replace("\"", "\\\"")}\"}"
-        if (::mqttManager.isInitialized) {
+        if (::mqttManager.isInitialized && mqttManager.isConnected()) {
             mqttManager.publish(MqttHelper.ATTR_TOPIC, payload)
+        } else {
+            Log.w("ScheduleActivity", "Skipping publishActiveSegment: MQTT not connected")
         }
     }
 

@@ -159,15 +159,18 @@ class MqttManager(
      * @param qos The Quality of Service level for the message (default is 0).
      */
     fun publish(topic: String, message: String, qos: Int = 0) {
+        if (!mqttClient.isConnected) {
+            Log.d("MqttManager", "Publish skipped: not connected")
+            return
+        }
         try {
-            Log.d("mqtt manager", "publish method call")
-            val mqttMessage = MqttMessage(message.toByteArray())
-            mqttMessage.qos = qos
-            mqttMessage.isRetained = false
+            val mqttMessage = MqttMessage(message.toByteArray()).apply {
+                this.qos = qos
+                isRetained = false
+            }
             mqttClient.publish(topic, mqttMessage)
-        } catch (e: MqttException) {
-            Log.d("MqttManager", "Failed to publish message: ${e.message}")
-            // handle the exception according to your app's requirements
+        } catch (e: Exception) {
+            Log.d("MqttManager", "Failed to publish message: ${e.message}", e)
         }
     }
 
@@ -194,4 +197,24 @@ class MqttManager(
     fun getUsername(): String {
         return username
     }
+    /** True if MQTT is connected */
+    fun isConnected(): Boolean = mqttClient.isConnected
+
+    /** Disconnect safely (won't crash if already disconnected) */
+    fun disconnect() {
+        try {
+            if (mqttClient.isConnected) {
+                mqttClient.disconnect()
+            }
+        } catch (e: Exception) {
+            Log.w("MqttManager", "Disconnect failed: ${e.message}", e)
+        }
+
+        // optional but nice: release resources
+        try {
+            mqttClient.close()
+        } catch (_: Exception) {}
+    }
+
+
 }
