@@ -1,4 +1,4 @@
-package com.jason.publisher.modules.splashscreen
+package com.jason.publisher.modules.splashscreen.activities
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -11,21 +11,29 @@ import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
+import androidx.lifecycle.lifecycleScope
 import com.jason.publisher.R
 import com.jason.publisher.main.services.background.ClientAttributesService
 import com.jason.publisher.main.services.background.ScreenRecordService
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.schedule.activities.ScheduleActivity
+import com.jason.publisher.modules.splashscreen.helpers.OtaCheckResult
+import com.jason.publisher.modules.splashscreen.helpers.OtaUpdateManager
+import kotlinx.coroutines.launch
 import pl.droidsonroids.gif.GifDrawable
 import pl.droidsonroids.gif.GifImageView
 
 @SuppressLint("CustomSplashScreen")
 class SplashActivity : AppCompatActivity() {
     private lateinit var mpm: MediaProjectionManager
+    @RequiresApi(Build.VERSION_CODES.P)
     override fun onCreate(savedInstanceState: Bundle?) {
         // apply transparent splash theme
         setTheme(R.style.Theme_NavTrack_Splash)
@@ -46,6 +54,18 @@ class SplashActivity : AppCompatActivity() {
 
         FileLogger.d("SplashActivity", "onCreate")
         hookBatteryToasts()
+
+        lifecycleScope.launch {
+            val tbHost = "https://thingsboard.cloud" // or from your config
+            val deviceToken = "YOUR_DEVICE_TOKEN"    // from config / stored
+            val started = OtaUpdateManager(this@SplashActivity, tbHost, deviceToken)
+                .checkDownloadAndPromptInstall()
+
+            if (started) {
+                FileLogger.d("SplashActivity", "OTA install flow started")
+                // Optionally return early or show “Updating…” UI
+            }
+        }
 
         if (savedInstanceState == null) { // cold start, not a rotation
             getSharedPreferences("panel_debug_pref", MODE_PRIVATE)
@@ -74,6 +94,8 @@ class SplashActivity : AppCompatActivity() {
         }
 
         setContentView(R.layout.activity_splash)
+
+        checkOtaOnSplash()
 
         // Start the ClientAttributesService to handle attributes-updating when the app is closed
         startService(Intent(baseContext, ClientAttributesService::class.java))
@@ -110,6 +132,63 @@ class SplashActivity : AppCompatActivity() {
             startScheduleActivity(fetch = false)
         }
     }
+
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun checkOtaOnSplash() {
+        val tbHost = "https://thingsboard.cloud" // TODO: load from config
+        val deviceToken = "YOUR_DEVICE_TOKEN"    // TODO: load from config
+
+        val ota = OtaUpdateManager(this, tbHost, deviceToken)
+
+        lifecycleScope.launch {
+            when (val res = ota.checkForUpdateOnly()) {
+                is OtaCheckResult.NoUpdate -> {
+                    Toast.makeText(
+                        this@SplashActivity,
+                        "You’re up to date.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+
+                is OtaCheckResult.UpdateAvailable -> {
+                    showUpdateDialog(
+                        onUpdate = {
+                            lifecycleScope.launch {
+                                val ok = ota.downloadAndInstall(res.info)
+                                if (!ok) {
+                                    Toast.makeText(
+                                        this@SplashActivity,
+                                        "Update download failed. Please try again.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        }
+                    )
+                }
+
+                is OtaCheckResult.Failed -> {
+                    // optional: you can hide this if you don't want noise
+                    Toast.makeText(
+                        this@SplashActivity,
+                        "Couldn’t check for updates. Please try again later.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun showUpdateDialog(onUpdate: () -> Unit) {
+        AlertDialog.Builder(this)
+            .setTitle("Update available")
+            .setMessage("A new version is available. Download and install it now?")
+            .setPositiveButton("Update") { _, _ -> onUpdate() }
+            .setNegativeButton("Not now") { dialog, _ -> dialog.dismiss() }
+            .setCancelable(true)
+            .show()
+    }
+
 
     /**
      * Launch ScheduleActivity with the user’s choice.
