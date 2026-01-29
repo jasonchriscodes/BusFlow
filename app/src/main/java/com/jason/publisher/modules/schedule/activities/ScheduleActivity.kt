@@ -119,16 +119,15 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var fetchingIcon: ImageView
     private lateinit var networkStatusIndicator: View
     private lateinit var emptyStateText: TextView
-    private var otaCheckedThisLaunch = false
     private var onlineInitStarted = false
     private var connecting = false
     private val adminHandler = Handler(Looper.getMainLooper())
     private var adminRunnable: Runnable? = null
     private lateinit var copyAidButton: Button
     private fun otaLog(msg: String) = FileLogger.d("OTA", msg)
-    private var otaFinalizedThisLaunch = false
-    private var otaAttempts = 0
-    private val otaRetryHandler = Handler(Looper.getMainLooper())
+    private var otaCheckInFlight = false
+    private var lastPromptedVersion: String? = null
+
 
     companion object {
         private const val REQUEST_PERIODIC_TIME = 5000L
@@ -146,6 +145,10 @@ class ScheduleActivity : AppCompatActivity() {
         setContentView(binding.root)
         FileLogger.d("ScheduleActivity", "onCreate")
         hookBatteryToasts()
+        // Fetch AID from the device
+        viewModel.aid = getAndroidId()
+        Log.d("TimeTableActivity", "Fetched AID: ${viewModel.aid}")
+        otaLog("onCreate: installedName=${getInstalledVersionName()} installedCode=${getInstalledVersionCode()} aid=${viewModel.aid}")
         binding.versionTextView.text = "Version ${getInstalledVersionName()}"
 
         // initialize them here
@@ -283,12 +286,6 @@ class ScheduleActivity : AppCompatActivity() {
 
         // Check and request permission
         requestAllFilesAccessPermission()
-
-        // Fetch AID from the device
-        viewModel.aid = getAndroidId()
-        Log.d("TimeTableActivity", "Fetched AID: ${viewModel.aid}")
-        viewModel.aid = getAndroidId()
-        otaLog("onCreate: installedName=${getInstalledVersionName()} installedCode=${getInstalledVersionCode()} aid=${viewModel.aid}")
 
         copyAidButton.setOnClickListener {
             val aid = viewModel.aid?.trim().orEmpty()
@@ -975,14 +972,9 @@ class ScheduleActivity : AppCompatActivity() {
                 viewModel.config = configList
                 viewModel.loadAccessToken()
 
-                // ✅ Run OTA check immediately (don’t wait for MQTT shared message)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    FileLogger.d("OTA", "enterOnlineMode: triggering checkForUpdateOnce (aid=${viewModel.aid}, tokenPresent=${!viewModel.token.isNullOrBlank()})")
-                    checkForUpdateOnce()
-                } else {
-                    FileLogger.d("OTA", "enterOnlineMode: skipping OTA check (API < 28)")
+                    maybePromptOtaUpdate()
                 }
-
 
                 // ✅ If you already had a client running, stop it first
                 try { mqttManager.disconnect() } catch (_: Exception) {}
@@ -991,6 +983,90 @@ class ScheduleActivity : AppCompatActivity() {
                 mqttManager = MqttManager(clientId = buildClientId(), username = viewModel.token)
 
                 connectAndSubscribe()
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun maybePromptOtaUpdate() {
+        if (otaCheckInFlight) return
+
+        val deviceToken = resolveDeviceTokenFromConfig()?.trim()
+        if (deviceToken.isNullOrBlank()) {
+            otaLog("maybePromptOtaUpdate: SKIP (deviceToken blank) aid=${viewModel.aid} configCount=${viewModel.config?.size ?: 0}")
+            return
+        }
+
+        otaCheckInFlight = true
+
+        val installedName = getInstalledVersionName()
+        val installedCode = getInstalledVersionCode()
+
+        val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
+        val suppressed = prefs.getString("last_prompted_sw_version", null)
+
+        val ota = OtaUpdateManager(
+            context = this,
+            tbHost = "https://thingsboard.cloud",
+            deviceToken = deviceToken
+        )
+
+        lifecycleScope.launch {
+            try {
+                when (val res = ota.checkForUpdateOnly()) {
+                    is OtaCheckResult.UpdateAvailable -> {
+                        val info = res.info
+                        val serverName = info.version
+                        val serverCode = info.versionCode
+
+                        otaLog("maybePromptOtaUpdate: server version=$serverName code=$serverCode | installed=$installedName code=$installedCode")
+
+                        val isNewer = when {
+                            serverCode != null -> serverCode > installedCode
+                            else -> isSemVerNewer(serverName, installedName)
+                        }
+
+                        if (!isNewer) {
+                            otaLog("maybePromptOtaUpdate: NO PROMPT (not newer)")
+                            return@launch
+                        }
+
+                        // prevent re-prompt spam
+                        if (serverName == suppressed) {
+                            otaLog("maybePromptOtaUpdate: NO PROMPT (suppressed last_prompted_sw_version=$suppressed)")
+                            return@launch
+                        }
+
+                        AlertDialog.Builder(this@ScheduleActivity)
+                            .setTitle("Update available")
+                            .setMessage("New version $serverName is available.\nInstalled: $installedName\n\nUpdate now?")
+                            .setPositiveButton("Update") { _, _ ->
+                                otaLog("OTA UI: Update clicked -> download/install $serverName")
+                                lifecycleScope.launch {
+                                    val ok = ota.downloadAndInstall(info)
+                                    otaLog("OTA install flow finished: ok=$ok")
+                                    if (ok) {
+                                        prefs.edit().putString("last_prompted_sw_version", serverName).apply()
+                                    }
+                                }
+                            }
+                            .setNegativeButton("Not now") { d, _ ->
+                                prefs.edit().putString("last_prompted_sw_version", serverName).apply()
+                                d.dismiss()
+                            }
+                            .show()
+                    }
+
+                    is OtaCheckResult.NoUpdate -> {
+                        otaLog("maybePromptOtaUpdate: NoUpdate (attrs missing or not set yet)")
+                    }
+
+                    is OtaCheckResult.Failed -> {
+                        otaLog("maybePromptOtaUpdate: Failed reason=${res.reason}")
+                    }
+                }
+            } finally {
+                otaCheckInFlight = false
             }
         }
     }
@@ -1352,8 +1428,6 @@ class ScheduleActivity : AppCompatActivity() {
                         return@runOnUiThread
                     }
 
-                    checkForUpdateOnce()
-
                     // Retrieve `busRouteData` from ThingsBoard
                     viewModel.busRouteData = data.shared?.busRouteData1 ?: emptyList()
                     FileLogger.d(
@@ -1410,86 +1484,13 @@ class ScheduleActivity : AppCompatActivity() {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.P)
-    private fun checkForUpdateOnce() {
-        otaLog("checkForUpdateOnce: called (finalized=$otaFinalizedThisLaunch attempts=$otaAttempts)")
-        if (otaFinalizedThisLaunch) return
-
-        otaAttempts++
-        if (otaAttempts > 3) {
-            otaLog("checkForUpdateOnce: giving up after $otaAttempts attempts")
-            otaFinalizedThisLaunch = true
-            return
-        }
-
-        val token = resolveDeviceTokenFromConfig()?.trim()
-        otaLog("checkForUpdateOnce: deviceToken present=${!token.isNullOrBlank()}")
-        if (token.isNullOrBlank()) return
-
-        val installedName = getInstalledVersionName()
-        val installedCode = getInstalledVersionCode()
-        otaLog("checkForUpdateOnce: installedName=$installedName installedCode=$installedCode")
-
-        val ota = OtaUpdateManager(this, "https://thingsboard.cloud", token)
-
-        lifecycleScope.launch {
-            otaLog("checkForUpdateOnce: calling ota.checkForUpdateOnly() attempt=$otaAttempts")
-
-            when (val res = ota.checkForUpdateOnly()) {
-                is OtaCheckResult.UpdateAvailable -> {
-                    val info = res.info
-                    val serverName = info.version
-                    val serverCode = info.versionCode
-
-                    otaLog("OTA server: title=${info.title} version=$serverName versionCode=$serverCode")
-
-                    val shouldPrompt = (serverCode != null && serverCode > installedCode)
-                    otaLog("OTA decision: shouldPrompt=$shouldPrompt")
-
-                    if (!shouldPrompt) {
-                        otaFinalizedThisLaunch = true
-                        return@launch
-                    }
-
-                    AlertDialog.Builder(this@ScheduleActivity)
-                        .setTitle("Update available")
-                        .setMessage("New version $serverName is available (installed: $installedName). Update now?")
-                        .setPositiveButton("Update") { _, _ ->
-                            otaLog("OTA UI: Update clicked -> download/install")
-                            lifecycleScope.launch {
-                                val ok = ota.downloadAndInstall(info)
-                                otaLog("OTA install flow finished: ok=$ok")
-                            }
-                        }
-                        .setNegativeButton("Not now") { d, _ ->
-                            otaLog("OTA UI: Not now clicked")
-                            d.dismiss()
-                        }
-                        .show()
-
-                    otaFinalizedThisLaunch = true
-                }
-
-                is OtaCheckResult.NoUpdate -> {
-                    otaLog("checkForUpdateOnce: NoUpdate (likely attrs missing yet) -> retrying soon")
-                    otaRetryHandler.postDelayed({ checkForUpdateOnce() }, 5000L)
-                }
-
-                is OtaCheckResult.Failed -> {
-                    otaLog("checkForUpdateOnce: Failed reason=${res.reason}")
-                    otaFinalizedThisLaunch = true
-                }
-            }
-        }
-    }
-
     private fun isSemVerNewer(server: String, installed: String): Boolean {
         fun parse(v: String): Triple<Int, Int, Int>? {
             val parts = v.trim().split(".")
-            val major = parts.getOrNull(0)?.toIntOrNull() ?: return null
-            val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
-            val patch = parts.getOrNull(2)?.toIntOrNull() ?: 0
-            return Triple(major, minor, patch)
+            val a = parts.getOrNull(0)?.toIntOrNull() ?: return null
+            val b = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            val c = parts.getOrNull(2)?.toIntOrNull() ?: 0
+            return Triple(a, b, c)
         }
 
         val s = parse(server) ?: return false

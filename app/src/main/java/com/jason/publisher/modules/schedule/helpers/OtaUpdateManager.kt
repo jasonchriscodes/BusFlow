@@ -89,36 +89,33 @@ class OtaUpdateManager(
         val req = Request.Builder().url(url).get().build()
         client.newCall(req).execute().use { resp ->
             otaLog("fetchOtaSharedAttrs: HTTP ${resp.code}")
-            if (!resp.isSuccessful) {
-                otaLog("fetchOtaSharedAttrs: not successful")
-                return null
-            }
+            if (!resp.isSuccessful) return null
 
             val body = resp.body?.string().orEmpty()
-            otaLog("fetchOtaSharedAttrs: bodyLen=${body.length}")
+            otaLog("fetchOtaSharedAttrs: body=$body")
 
             val json = JSONObject(body)
-            val shared = json.optJSONObject("shared")
-            if (shared == null) {
-                otaLog("fetchOtaSharedAttrs: missing 'shared' object")
-                return null
-            }
 
-            val title = shared.optString("sw_title", "")
-            val version = shared.optString("sw_version", "")
-            val versionCode = shared.optLong("sw_version_code", -1L).let { if (it >= 0) it else null }
-            val size = shared.optLong("sw_size", -1L).let { if (it >= 0) it else null }
-            val checksum = shared.optString("sw_checksum", "").ifBlank { null }
-            val alg = shared.optString("sw_checksum_algorithm", "").ifBlank { null }
+            // ✅ Device API returns keys at ROOT, not inside "shared"
+            val title = json.optString("sw_title", "")
+            val version = json.optString("sw_version", "")
+            val versionCode = json.optLong("sw_version_code", -1L).let { if (it >= 0) it else null }
+            val size = json.optLong("sw_size", -1L).let { if (it >= 0) it else null }
+            val checksum = json.optString("sw_checksum", "").ifBlank { null }
+            val alg = json.optString("sw_checksum_algorithm", "").ifBlank { null }
 
             otaLog("fetchOtaSharedAttrs: parsed title=$title version=$version versionCode=$versionCode size=$size alg=$alg checksumPresent=${checksum != null}")
 
-            if (title.isBlank() || version.isBlank()) {
-                otaLog("fetchOtaSharedAttrs: title/version blank -> returning null")
-                return null
-            }
+            if (title.isBlank() || version.isBlank()) return null
 
-            return OtaInfo(title, version, versionCode, size, checksum, alg)
+            return OtaInfo(
+                title = title,
+                version = version,
+                versionCode = versionCode,
+                size = size,
+                checksum = checksum,
+                checksumAlg = alg
+            )
         }
     }
 
