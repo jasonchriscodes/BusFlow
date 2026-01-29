@@ -67,35 +67,35 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Compute next version (start at 1.00)
+      - name: Compute next version (start at 1.0.0)
         id: ver
         shell: bash
         run: |
           set -euo pipefail
           git fetch --tags --force
-
-          # Find latest tag like v1.00, v1.01 ...
-          LATEST_TAG="$(git tag -l 'v[0-9]*.[0-9][0-9]' --sort=-v:refname | head -n 1 || true)"
-
+          
+          # Latest tag like 1.2.3 (no "v")
+          LATEST_TAG="$(git tag -l '[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1 || true)"
+          
           if [[ -z "${LATEST_TAG}" ]]; then
-            MAJOR=1
-            MINOR=0
+            MAJOR=1; MINOR=0; PATCH=0
           else
-            BASE="${LATEST_TAG#v}"          # 1.07
-            MAJOR="${BASE%%.*}"             # 1
-            MINOR_STR="${BASE##*.}"         # 07
-            MINOR=$((10#${MINOR_STR} + 1))  # 8
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST_TAG}"
+            PATCH=$((PATCH + 1))
+            if [[ "${PATCH}" -ge 10 ]]; then
+              PATCH=0
+              MINOR=$((MINOR + 1))
+            fi
           fi
-
-          VERSION_NAME="${MAJOR}.$(printf '%02d' ${MINOR})"   # 1.08
-          VERSION_CODE=$(( MAJOR * 100 + MINOR ))             # 108
-
-          TAG="v${VERSION_NAME}"
-
+          
+          VERSION_NAME="${MAJOR}.${MINOR}.${PATCH}"
+          VERSION_CODE=$(( MAJOR*10000 + MINOR*100 + PATCH ))
+          TAG="${VERSION_NAME}"
+          
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
           echo "VERSION_CODE=${VERSION_CODE}" >> $GITHUB_ENV
           echo "TAG=${TAG}" >> $GITHUB_ENV
-
+          
           echo "Computed VERSION_NAME=${VERSION_NAME} VERSION_CODE=${VERSION_CODE} TAG=${TAG}"
 
       - name: Decode keystore + export signing env vars
@@ -113,14 +113,12 @@ jobs:
 
       - name: Build APK (Debug, signed) with CI version
         id: build_apk
-        env:
-          CI_VERSION_NAME: ${{ env.VERSION_NAME }}
-          CI_VERSION_CODE: ${{ env.VERSION_CODE }}
         shell: bash
         run: |
           set -euo pipefail
-
-          ./gradlew clean assembleDebug --stacktrace
+          ./gradlew clean assembleDebug --stacktrace \
+            -PCI_VERSION_NAME="${VERSION_NAME}" \
+            -PCI_VERSION_CODE="${VERSION_CODE}"
 
           APK_SOURCE_PATH="$(find . -type f -path "*/app/build/outputs/apk/debug/*.apk" -print -quit 2>/dev/null || true)"
           if [[ -z "$APK_SOURCE_PATH" ]]; then
@@ -266,13 +264,19 @@ jobs:
           # These shared keys are what your app reads:
           # sw_title, sw_version, sw_checksum, sw_checksum_algorithm, sw_size
           ATTR_JSON="$(jq -n \
-            --arg t "${TITLE}" \
-            --arg v "${VERSION}" \
-            --arg c "${APK_SHA256}" \
-            --arg s "${SIZE}" \
-            '{sw_title:$t, sw_version:$v, sw_checksum:$c, sw_checksum_algorithm:"SHA256", sw_size: ($s|tonumber)}')"
-
-          curl -sS -X POST "${TBHOST}/api/plugins/telemetry/DEVICE/${DEVICE_ID}/SHARED_SCOPE" \
+          --arg t "${TITLE}" \
+          --arg v "${VERSION_NAME}" \
+          --arg vc "${VERSION_CODE}" \
+          --arg c "${APK_SHA256}" \
+          --arg s "${SIZE}" \
+          '{sw_title:$t,
+            sw_version:$v,
+            sw_version_code: ($vc|tonumber),
+            sw_checksum:$c,
+            sw_checksum_algorithm:"SHA256",
+            sw_size: ($s|tonumber)}')"  
+  
+            curl -sS -X POST "${TBHOST}/api/plugins/telemetry/DEVICE/${DEVICE_ID}/SHARED_SCOPE" \
             -H "Content-Type: application/json" \
             -H "X-Authorization: Bearer ${TB_TOKEN}" \
             -d "${ATTR_JSON}" \

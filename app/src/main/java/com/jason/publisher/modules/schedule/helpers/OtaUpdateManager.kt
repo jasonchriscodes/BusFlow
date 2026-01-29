@@ -21,7 +21,8 @@ import java.util.concurrent.TimeUnit
 
 data class OtaInfo(
     val title: String,
-    val version: String,
+    val version: String,      // e.g. "1.0.2"
+    val versionCode: Long?,   // e.g. 10002
     val size: Long?,
     val checksum: String?,
     val checksumAlg: String?
@@ -79,28 +80,24 @@ class OtaUpdateManager(
     private fun fetchOtaSharedAttrs(): OtaInfo? {
         val url =
             "${hostNoTrailingSlash()}/api/v1/$deviceToken/attributes" +
-                    "?sharedKeys=sw_title,sw_version,sw_checksum,sw_checksum_algorithm,sw_size"
+                    "?sharedKeys=sw_title,sw_version,sw_version_code,sw_checksum,sw_checksum_algorithm,sw_size"
 
         val req = Request.Builder().url(url).get().build()
         client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) {
-                FileLogger.e("OtaUpdate", "Shared attrs HTTP ${resp.code}")
-                return null
-            }
-            val body = resp.body?.string().orEmpty()
-            val json = JSONObject(body)
-
+            if (!resp.isSuccessful) return null
+            val json = JSONObject(resp.body?.string().orEmpty())
             val shared = json.optJSONObject("shared") ?: return null
 
             val title = shared.optString("sw_title", "")
             val version = shared.optString("sw_version", "")
             if (title.isBlank() || version.isBlank()) return null
 
+            val versionCode = shared.optLong("sw_version_code", -1L).let { if (it >= 0) it else null }
             val size = shared.optLong("sw_size", -1L).let { if (it >= 0) it else null }
             val checksum = shared.optString("sw_checksum", "").ifBlank { null }
             val alg = shared.optString("sw_checksum_algorithm", "").ifBlank { null }
 
-            return OtaInfo(title, version, size, checksum, alg)
+            return OtaInfo(title, version, versionCode, size, checksum, alg)
         }
     }
 
