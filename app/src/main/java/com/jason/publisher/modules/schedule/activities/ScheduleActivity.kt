@@ -1424,10 +1424,7 @@ class ScheduleActivity : AppCompatActivity() {
                     val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
                     val lastPrompted = prefs.getString("last_prompted_sw_version", null)
 
-                    val shouldPrompt = when {
-                        serverCode != null -> serverCode > installedCode
-                        else -> isServerSemVerNewer(serverName, installedName) // optional fallback
-                    }
+                    val shouldPrompt = (serverCode != null && serverCode > installedCode)
 
                     if (shouldPrompt && serverName != lastPrompted) {
                         AlertDialog.Builder(this@ScheduleActivity)
