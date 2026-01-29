@@ -249,37 +249,51 @@ jobs:
 
           echo "✅ Uploaded OTA package: title=${TITLE}, version=${VERSION}, id=${OTA_ID}"
 
-      - name: Set device shared attributes so the app can detect the update
+      - name: Set device shared attributes so the app can detect the update (ALL devices)
         shell: bash
         run: |
           set -euo pipefail
           TBHOST="${TB_HOST:-https://thingsboard.cloud}"
           TBHOST="${TBHOST%/}"
 
-          DEVICE_ID="${TARGET_DEVICE_ID:?TARGET_DEVICE_ID missing}"
           TITLE="${TB_OTA_TITLE:-BusFlow-Android}"
           VERSION="${VERSION_NAME}"
           SIZE="$(stat -c%s "${APK_PATH}")"
+          TB_TOKEN="${TB_TOKEN:?TB_TOKEN missing}"
 
-          # These shared keys are what your app reads:
-          # sw_title, sw_version, sw_checksum, sw_checksum_algorithm, sw_size
+          # Prefer TARGET_DEVICE_IDS (comma-separated). Fallback to single TARGET_DEVICE_ID.
+          if [[ -n "${TARGET_DEVICE_IDS:-}" ]]; then
+            IDS_RAW="${TARGET_DEVICE_IDS}"
+          else
+            IDS_RAW="${TARGET_DEVICE_ID:?TARGET_DEVICE_ID missing}"
+          fi
+
+          # Normalize to newline list
+          DEVICE_IDS="$(echo "${IDS_RAW}" | tr ',' '\n' | sed '/^\s*$/d')"
+
           ATTR_JSON="$(jq -n \
-          --arg t "${TITLE}" \
-          --arg v "${VERSION_NAME}" \
-          --arg vc "${VERSION_CODE}" \
-          --arg c "${APK_SHA256}" \
-          --arg s "${SIZE}" \
-          '{sw_title:$t,
-            sw_version:$v,
-            sw_version_code: ($vc|tonumber),
-            sw_checksum:$c,
-            sw_checksum_algorithm:"SHA256",
-            sw_size: ($s|tonumber)}')"  
-  
-            curl -sS -X POST "${TBHOST}/api/plugins/telemetry/DEVICE/${DEVICE_ID}/SHARED_SCOPE" \
-            -H "Content-Type: application/json" \
-            -H "X-Authorization: Bearer ${TB_TOKEN}" \
-            -d "${ATTR_JSON}" \
-            >/dev/null
+            --arg t "${TITLE}" \
+            --arg v "${VERSION_NAME}" \
+            --arg vc "${VERSION_CODE}" \
+            --arg c "${APK_SHA256}" \
+            --arg s "${SIZE}" \
+            '{sw_title:$t,
+              sw_version:$v,
+              sw_version_code: ($vc|tonumber),
+              sw_checksum:$c,
+              sw_checksum_algorithm:"SHA256",
+              sw_size: ($s|tonumber)}')"
 
-          echo "✅ Updated device shared attrs: sw_title/sw_version/sw_checksum/..."
+          echo "Will apply sw_* attrs to devices:"
+          echo "${DEVICE_IDS}"
+
+          while IFS= read -r DEVICE_ID; do
+            echo "Updating shared attrs for device=${DEVICE_ID}"
+            curl -sS -X POST "${TBHOST}/api/plugins/telemetry/DEVICE/${DEVICE_ID}/SHARED_SCOPE" \
+              -H "Content-Type: application/json" \
+              -H "X-Authorization: Bearer ${TB_TOKEN}" \
+              -d "${ATTR_JSON}" >/dev/null
+          done <<< "${DEVICE_IDS}"
+
+          echo "✅ Updated sw_* shared attrs on all target devices"
+

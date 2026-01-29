@@ -129,32 +129,35 @@ class OtaUpdateManager(
      */
     private fun downloadOtaBinary(ota: OtaInfo): File? {
         val url =
-            "${hostNoTrailingSlash()}/api/v1/$deviceToken/firmware" +
+            "${hostNoTrailingSlash()}/api/v1/$deviceToken/software" +
                     "?title=${Uri.encode(ota.title)}&version=${Uri.encode(ota.version)}"
 
         val outDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return null
         val outFile = File(outDir, "tb_${ota.title}_${ota.version}.apk")
 
-        otaLog("downloadOtaBinary: url=$url")
+        otaLog("downloadOtaBinary: GET $url")
         otaLog("downloadOtaBinary: outFile=${outFile.absolutePath}")
 
+        // reuse if already downloaded
         if (outFile.exists() && outFile.length() > 0) {
-            otaLog("downloadOtaBinary: reuse existing file size=${outFile.length()}")
+            otaLog("downloadOtaBinary: reuse existing size=${outFile.length()}")
             return outFile
         }
 
         val req = Request.Builder().url(url).get().build()
         client.newCall(req).execute().use { resp ->
             otaLog("downloadOtaBinary: HTTP ${resp.code}")
-            if (!resp.isSuccessful) return null
+            if (!resp.isSuccessful) {
+                otaLog("downloadOtaBinary: failed HTTP ${resp.code}")
+                return null
+            }
             resp.body?.byteStream()?.use { input ->
                 outFile.outputStream().use { output -> input.copyTo(output) }
             }
         }
 
         otaLog("downloadOtaBinary: downloaded size=${outFile.length()}")
-        if (!outFile.exists() || outFile.length() == 0L) return null
-        return outFile
+        return if (outFile.exists() && outFile.length() > 0) outFile else null
     }
 
     /**
