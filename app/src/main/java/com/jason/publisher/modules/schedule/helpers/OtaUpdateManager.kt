@@ -60,7 +60,7 @@ class OtaUpdateManager(
             val apkFile = downloadOtaBinary(ota) ?: return@withContext false
 
             if (!verifyDownloadedApk(apkFile, ota)) {
-                FileLogger.e("OtaUpdate", "Verification failed; not installing.")
+                FileLogger.e("ota OtaUpdateManager checkDownloadAndPromptInstall", "Verification failed; not installing.")
                 return@withContext false
             }
 
@@ -68,7 +68,7 @@ class OtaUpdateManager(
             promptInstall(apkFile)
             return@withContext true
         }.getOrElse { e ->
-            FileLogger.e("OtaUpdate", "OTA check failed: ${e.message}")
+            FileLogger.e("ota OtaUpdateManager checkDownloadAndPromptInstall", "OTA check failed: ${e.message}")
             false
         }
     }
