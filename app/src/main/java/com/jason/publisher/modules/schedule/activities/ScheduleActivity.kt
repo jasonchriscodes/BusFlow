@@ -2,6 +2,8 @@ package com.jason.publisher.modules.schedule.activities
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -122,6 +124,7 @@ class ScheduleActivity : AppCompatActivity() {
     private var connecting = false
     private val adminHandler = Handler(Looper.getMainLooper())
     private var adminRunnable: Runnable? = null
+    private lateinit var copyAidButton: Button
 
 
     companion object {
@@ -165,6 +168,8 @@ class ScheduleActivity : AppCompatActivity() {
         darkModeSwitch = findViewById(R.id.darkModeSwitch)
         paginationLayout = findViewById(R.id.paginationLayout)
         paginationLayout.visibility = View.GONE
+        copyAidButton = findViewById(R.id.copyAidButton)
+        copyAidButton.visibility = View.VISIBLE
         btnPrevious = findViewById(R.id.btnPrevious)
         btnNext = findViewById(R.id.btnNext)
         fetchingLayout = findViewById(R.id.fetchingLayout)
@@ -279,6 +284,19 @@ class ScheduleActivity : AppCompatActivity() {
         viewModel.aid = getAndroidId()
         Log.d("TimeTableActivity", "Fetched AID: ${viewModel.aid}")
 
+        copyAidButton.setOnClickListener {
+            val aid = viewModel.aid?.trim().orEmpty()
+            if (aid.isBlank()) {
+                Toast.makeText(this, "AID is not available.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("AID", aid))
+
+            Toast.makeText(this, "Your AID $aid has been copied.", Toast.LENGTH_SHORT).show()
+        }
+
         // Set up network status UI
         NetworkStatusHelper.setupNetworkStatus(
             this,
@@ -370,7 +388,9 @@ class ScheduleActivity : AppCompatActivity() {
         )
 
         changeModeButton.setOnClickListener {
-            if (!viewModel.isTabulatedView) {
+            viewModel.isTabulatedView = !viewModel.isTabulatedView
+
+            if (viewModel.isTabulatedView) {
                 setSchedulePaginationVisibility(View.VISIBLE)
                 setTimelineVisibility(View.GONE)
                 changeModeButton.text = "Timeline View"
@@ -379,7 +399,9 @@ class ScheduleActivity : AppCompatActivity() {
                 setTimelineVisibility(View.VISIBLE)
                 changeModeButton.text = "Tabulated View"
             }
-            viewModel.isTabulatedView = !viewModel.isTabulatedView
+
+            // optional but helps keep it consistent after async updates
+            updateEmptyState()
         }
 
         btnPrevious.setOnClickListener {
