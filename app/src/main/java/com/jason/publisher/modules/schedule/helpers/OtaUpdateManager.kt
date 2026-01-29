@@ -42,6 +42,8 @@ class OtaUpdateManager(
     private val client = OkHttpClient.Builder()
         .callTimeout(60, TimeUnit.SECONDS)
         .build()
+    private fun otaLog(msg: String) = FileLogger.d("OtaUpdate", msg)
+
 
     /**
      * Call this on Splash:
@@ -82,20 +84,39 @@ class OtaUpdateManager(
             "${hostNoTrailingSlash()}/api/v1/$deviceToken/attributes" +
                     "?sharedKeys=sw_title,sw_version,sw_version_code,sw_checksum,sw_checksum_algorithm,sw_size"
 
+        otaLog("fetchOtaSharedAttrs: GET $url")
+
         val req = Request.Builder().url(url).get().build()
         client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) return null
-            val json = JSONObject(resp.body?.string().orEmpty())
-            val shared = json.optJSONObject("shared") ?: return null
+            otaLog("fetchOtaSharedAttrs: HTTP ${resp.code}")
+            if (!resp.isSuccessful) {
+                otaLog("fetchOtaSharedAttrs: not successful")
+                return null
+            }
+
+            val body = resp.body?.string().orEmpty()
+            otaLog("fetchOtaSharedAttrs: bodyLen=${body.length}")
+
+            val json = JSONObject(body)
+            val shared = json.optJSONObject("shared")
+            if (shared == null) {
+                otaLog("fetchOtaSharedAttrs: missing 'shared' object")
+                return null
+            }
 
             val title = shared.optString("sw_title", "")
             val version = shared.optString("sw_version", "")
-            if (title.isBlank() || version.isBlank()) return null
-
             val versionCode = shared.optLong("sw_version_code", -1L).let { if (it >= 0) it else null }
             val size = shared.optLong("sw_size", -1L).let { if (it >= 0) it else null }
             val checksum = shared.optString("sw_checksum", "").ifBlank { null }
             val alg = shared.optString("sw_checksum_algorithm", "").ifBlank { null }
+
+            otaLog("fetchOtaSharedAttrs: parsed title=$title version=$version versionCode=$versionCode size=$size alg=$alg checksumPresent=${checksum != null}")
+
+            if (title.isBlank() || version.isBlank()) {
+                otaLog("fetchOtaSharedAttrs: title/version blank -> returning null")
+                return null
+            }
 
             return OtaInfo(title, version, versionCode, size, checksum, alg)
         }
@@ -114,24 +135,24 @@ class OtaUpdateManager(
         val outDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return null
         val outFile = File(outDir, "tb_${ota.title}_${ota.version}.apk")
 
-        // If already downloaded, reuse it
-        if (outFile.exists() && outFile.length() > 0) return outFile
+        otaLog("downloadOtaBinary: url=$url")
+        otaLog("downloadOtaBinary: outFile=${outFile.absolutePath}")
 
-        FileLogger.d("OtaUpdate", "Downloading OTA: $url")
+        if (outFile.exists() && outFile.length() > 0) {
+            otaLog("downloadOtaBinary: reuse existing file size=${outFile.length()}")
+            return outFile
+        }
 
         val req = Request.Builder().url(url).get().build()
         client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) {
-                FileLogger.e("OtaUpdate", "Download HTTP ${resp.code}")
-                return null
-            }
+            otaLog("downloadOtaBinary: HTTP ${resp.code}")
+            if (!resp.isSuccessful) return null
             resp.body?.byteStream()?.use { input ->
-                outFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
+                outFile.outputStream().use { output -> input.copyTo(output) }
             }
         }
 
+        otaLog("downloadOtaBinary: downloaded size=${outFile.length()}")
         if (!outFile.exists() || outFile.length() == 0L) return null
         return outFile
     }
@@ -245,13 +266,15 @@ class OtaUpdateManager(
 
     suspend fun checkForUpdateOnly(): OtaCheckResult = withContext(Dispatchers.IO) {
         runCatching {
-            val ota = fetchOtaSharedAttrs() ?: return@withContext OtaCheckResult.NoUpdate
-
-            // Compare installed versionCode vs "latest apk" versionCode is not possible
-            // until you download the apk. We'll treat "has title+version" as available,
-            // OR you can store last-installed tag/version in SharedPreferences.
+            otaLog("checkForUpdateOnly: start")
+            val ota = fetchOtaSharedAttrs() ?: run {
+                otaLog("checkForUpdateOnly: NoUpdate (attrs missing)")
+                return@withContext OtaCheckResult.NoUpdate
+            }
+            otaLog("checkForUpdateOnly: UpdateAvailable version=${ota.version} versionCode=${ota.versionCode}")
             OtaCheckResult.UpdateAvailable(ota)
         }.getOrElse { e ->
+            otaLog("checkForUpdateOnly: Failed ${e.message}")
             OtaCheckResult.Failed(e.message ?: "Unknown error")
         }
     }
