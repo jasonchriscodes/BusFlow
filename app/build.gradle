@@ -67,6 +67,12 @@ android {
         buildConfigField "String", "OpenRouteService_API_KEY", "\"${openRouteServiceApiKey}\""
         buildConfigField "String", "MAILERSEND_API_KEY", "\"${mailerSenderApiKey}\""
         buildConfigField "String", "GOOGLE_APP_PASS", "\"${googleAppPass}\""
+
+        def ciName = project.findProperty("CI_VERSION_NAME") ?: System.getenv("CI_VERSION_NAME")
+        def ciCode = project.findProperty("CI_VERSION_CODE") ?: System.getenv("CI_VERSION_CODE")
+
+        if (ciName != null) versionName = ciName.toString()
+        if (ciCode != null) versionCode = Integer.parseInt(ciCode.toString())
     }
 
     signingConfigs {

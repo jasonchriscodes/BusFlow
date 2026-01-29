@@ -143,6 +143,8 @@ class ScheduleActivity : AppCompatActivity() {
         setContentView(binding.root)
         FileLogger.d("ScheduleActivity", "onCreate")
         hookBatteryToasts()
+        binding.versionTextView.text = "Version ${getInstalledVersionName()}"
+
 
         // initialize them here
         connectionStatusTextView = binding.connectionStatusTextView
@@ -489,6 +491,16 @@ class ScheduleActivity : AppCompatActivity() {
                 else              -> launchMapActivity(no)
             }
         }
+    }
+
+    private fun getInstalledVersionName(): String {
+        val pi = packageManager.getPackageInfo(packageName, 0)
+        return pi.versionName ?: "?"
+    }
+
+    private fun getInstalledVersionCode(): Long {
+        val pi = packageManager.getPackageInfo(packageName, 0)
+        return if (Build.VERSION.SDK_INT >= 28) pi.longVersionCode else pi.versionCode.toLong()
     }
 
     private fun buildClientId(): String {
@@ -1403,25 +1415,29 @@ class ScheduleActivity : AppCompatActivity() {
             when (val res = ota.checkForUpdateOnly()) {
                 is OtaCheckResult.UpdateAvailable -> {
                     val serverVersion = res.info.version
-                    val installed = BuildConfig.VERSION_NAME
+                    val installedName = getInstalledVersionName()
+                    val installedCode = getInstalledVersionCode()
+
+                    val serverName = res.info.version
+                    val serverCode = res.info.versionCode
 
                     val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
                     val lastPrompted = prefs.getString("last_prompted_sw_version", null)
 
-                    if (isServerVersionNewer(serverVersion, installed) && serverVersion != lastPrompted) {
+                    val shouldPrompt = (serverCode != null && serverCode > installedCode)
+
+                    if (shouldPrompt && serverName != lastPrompted) {
                         AlertDialog.Builder(this@ScheduleActivity)
                             .setTitle("Update available")
-                            .setMessage("New version $serverVersion is available (installed: $installed). Update now?")
+                            .setMessage("New version $serverName is available (installed: $installedName). Update now?")
                             .setPositiveButton("Update") { _, _ ->
                                 lifecycleScope.launch {
                                     val ok = ota.downloadAndInstall(res.info)
-                                    if (ok) {
-                                        prefs.edit().putString("last_prompted_sw_version", serverVersion).apply()
-                                    }
+                                    if (ok) prefs.edit().putString("last_prompted_sw_version", serverName).apply()
                                 }
                             }
                             .setNegativeButton("Not now") { d, _ ->
-                                prefs.edit().putString("last_prompted_sw_version", serverVersion).apply()
+                                prefs.edit().putString("last_prompted_sw_version", serverName).apply()
                                 d.dismiss()
                             }
                             .show()
