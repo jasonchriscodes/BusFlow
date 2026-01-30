@@ -60,6 +60,10 @@ import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
 import com.jason.publisher.modules.schedule.adapters.ScheduleAdapter
+import com.jason.publisher.modules.schedule.helpers.OtaCheckResult
+import com.jason.publisher.modules.schedule.helpers.OtaInfo
+import com.jason.publisher.modules.schedule.helpers.OtaUpdateManager
+import com.jason.publisher.modules.schedule.helpers.TbAdminOtaLatest
 import com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
 import com.jason.publisher.modules.schedule.viewmodels.ScheduleViewModel
 import com.jason.publisher.modules.signing.activities.SigningActivity
@@ -492,79 +496,115 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
-    private fun checkAndPromptOtaUpdate_cmdStyle() {
+    private fun promptIfNewerOtaExists_powerShellStyle() {
         if (otaCheckInFlight) return
         otaCheckInFlight = true
 
         val installedName = getInstalledVersionName()
         val installedCode = getInstalledVersionCode()
 
-        val tbHost = BuildConfig.TB_HOST
-        val tbUser = BuildConfig.TB_USER
-        val tbPass = BuildConfig.TB_PASS
+        val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
+        val suppressed = prefs.getString("last_prompted_sw_version", null)
 
-        if (tbUser.isBlank() || tbPass.isBlank()) {
-            otaLog("OTA: TB_USER/TB_PASS missing, skip")
-            otaCheckInFlight = false
-            return
-        }
-
-        val client = com.jason.publisher.modules.schedule.helpers.TbAdminOtaClient(
-            tbHost = tbHost,
-            tbUser = tbUser,
-            tbPass = tbPass
+        val adminApi = TbAdminOtaLatest(
+            tbHost = BuildConfig.TB_HOST,
+            tbUser = BuildConfig.TB_USER,
+            tbPass = BuildConfig.TB_PASS
         )
 
         lifecycleScope.launch {
             try {
-                val latest = client.fetchLatest(title = "BusFlow-Android", type = "SOFTWARE")
+                // 1) Get latest OTA package EXACTLY like PowerShell: filter title + type, newest createdTime
+                val latest = adminApi.fetchLatestExact(title = "BusFlow-Android", type = "SOFTWARE")
                 if (latest == null) {
-                    otaLog("OTA: no latest package found")
+                    otaLog("OTA(admin): no latest package found")
                     return@launch
                 }
 
                 val serverName = latest.version
-                val serverCode = versionNameToCodeOrNull(serverName) ?: 0L
+                val serverCode = versionNameToCodeOrNull(serverName)
 
-                otaLog("OTA: installed=$installedName($installedCode) server=$serverName($serverCode) id=${latest.id}")
+                otaLog("OTA(admin): server version=$serverName code=$serverCode | installed=$installedName code=$installedCode")
 
-                val isNewer = if (serverCode > 0) serverCode > installedCode else isSemVerNewer(serverName, installedName)
+                // 2) Compare
+                val isNewer = when {
+                    serverCode != null -> serverCode > installedCode
+                    else -> isSemVerNewer(serverName, installedName)
+                }
 
+                // If equal/older: toast "app is up to date"
                 if (!isNewer) {
                     Toast.makeText(this@ScheduleActivity, "The app is up to date.", Toast.LENGTH_SHORT).show()
+                    otaLog("OTA(admin): up to date")
                     return@launch
                 }
 
+                // Optional: avoid repeatedly prompting for same version if user pressed "Not now"
+                if (serverName == suppressed) {
+                    otaLog("OTA(admin): suppressed=$suppressed, not prompting again")
+                    return@launch
+                }
+
+                val info = OtaInfo(
+                    title = latest.title,
+                    version = serverName,
+                    versionCode = serverCode,
+                    size = null,
+                    checksum = null,
+                    checksumAlg = null
+                )
+
                 AlertDialog.Builder(this@ScheduleActivity)
                     .setTitle("Update available")
-                    .setMessage("A new version $serverName is available (installed: $installedName). Update now?")
-                    .setNegativeButton("Not now") { d, _ -> d.dismiss() }
-                    .setPositiveButton("Update") { _, _ ->
+                    .setMessage("A new version ($serverName) is available.\nInstalled: $installedName\n\nDo you want to update now?")
+                    .setCancelable(true)
+                    .setNegativeButton("Not now") { dialog, _ ->
+                        // store suppression so we don't spam prompts for the same version
+                        prefs.edit().putString("last_prompted_sw_version", serverName).apply()
+                        dialog.dismiss()
+                    }
+                    .setPositiveButton("Update") { dialog, _ ->
+                        dialog.dismiss()
+
                         lifecycleScope.launch {
-                            val downloadsDir = getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)
-                            if (downloadsDir == null) {
-                                Toast.makeText(this@ScheduleActivity, "Download folder is not available.", Toast.LENGTH_SHORT).show()
-                                return@launch
+                            try {
+                                Toast.makeText(this@ScheduleActivity, "Downloading update…", Toast.LENGTH_SHORT).show()
+
+                                val outDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                                if (outDir == null) {
+                                    Toast.makeText(this@ScheduleActivity, "Storage not available.", Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+
+                                val outFile = File(outDir, "tb_${latest.title}_${latest.version}.apk")
+
+                                // 3) Download EXACTLY like PowerShell: /api/otaPackage/{id}/download
+                                val apk = adminApi.downloadApkById(latest.id, outFile)
+                                if (apk == null) {
+                                    Toast.makeText(this@ScheduleActivity, "Failed to download the update.", Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+
+                                // 4) Verify + prompt install (system installer UI)
+                                val installer = OtaUpdateManager(this@ScheduleActivity, BuildConfig.TB_HOST, deviceToken = "")
+                                val ok = installer.verifyDownloadedApk(apk, info)
+                                if (!ok) {
+                                    Toast.makeText(this@ScheduleActivity, "Downloaded update failed verification.", Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+
+                                withContext(Dispatchers.Main) {
+                                    // This opens the APK and triggers Android's install/update prompt
+                                    installer.promptInstall(apk)
+                                }
+
+                                // After user chose Update once, also suppress this version
+                                prefs.edit().putString("last_prompted_sw_version", serverName).apply()
+                                otaLog("OTA(admin): install prompt launched for $serverName")
+                            } catch (e: Exception) {
+                                otaLog("OTA(admin): update flow failed: ${e.message}")
+                                Toast.makeText(this@ScheduleActivity, "Update failed: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
-
-                            val outApk = java.io.File(downloadsDir, "tb_${latest.title}_${latest.version}.apk")
-
-                            // Download exactly like CMD: /api/otaPackage/{id}/download
-                            val ok = client.downloadOtaApk(latest.id, outApk)
-
-                            if (!ok) {
-                                Toast.makeText(this@ScheduleActivity, "Failed to download the update.", Toast.LENGTH_SHORT).show()
-                                return@launch
-                            }
-
-                            // Trigger Android installer
-                            if (!com.jason.publisher.modules.schedule.helpers.ApkInstaller.canInstallUnknownApps(this@ScheduleActivity)) {
-                                Toast.makeText(this@ScheduleActivity, "Please allow install from unknown sources.", Toast.LENGTH_LONG).show()
-                                com.jason.publisher.modules.schedule.helpers.ApkInstaller.requestUnknownAppsPermission(this@ScheduleActivity)
-                                return@launch
-                            }
-
-                            com.jason.publisher.modules.schedule.helpers.ApkInstaller.openInstaller(this@ScheduleActivity, outApk)
                         }
                     }
                     .show()
@@ -1080,7 +1120,7 @@ class ScheduleActivity : AppCompatActivity() {
                 viewModel.loadAccessToken()
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    checkAndPromptOtaUpdate_cmdStyle()
+                    promptIfNewerOtaExists_powerShellStyle()
                 }
 
                 // ✅ If you already had a client running, stop it first
