@@ -5,8 +5,10 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.widget.Button
@@ -33,20 +35,13 @@ import pl.droidsonroids.gif.GifImageView
 @SuppressLint("CustomSplashScreen")
 class SplashActivity : AppCompatActivity() {
     private lateinit var mpm: MediaProjectionManager
+    private var onboardingRunning = false
+
     @RequiresApi(Build.VERSION_CODES.P)
     override fun onCreate(savedInstanceState: Bundle?) {
         // apply transparent splash theme
         setTheme(R.style.Theme_NavTrack_Splash)
         super.onCreate(savedInstanceState)
-
-        if (Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED) {
-            registerForActivityResult(
-                ActivityResultContracts.RequestPermission()
-            ) { /* granted -> ignore; denied -> you can show a tip */ }
-                .launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
 
         // Initialize BEFORE any FileLogger.d/i/w/e
         FileLogger.init(applicationContext)
@@ -110,27 +105,157 @@ class SplashActivity : AppCompatActivity() {
         val btnFetch      = findViewById<Button>(R.id.btnFetchRoster)
         val btnUseCache   = findViewById<Button>(R.id.btnUseCache)
 
-        // play GIF only once
+// play GIF only once
         val drawable = gifView.drawable as GifDrawable
         drawable.loopCount = 1
 
-        // when the GIF finishes, show the two choice buttons
         drawable.addAnimationListener {
-            choiceLayout.visibility = View.VISIBLE
-            choiceLayout.bringToFront()
+            startOnboardingOnceThenShowButtons()
         }
 
-        // “Fetch Roster Data” → fresh fetch
-        btnFetch.setOnClickListener {
-            startScheduleActivity(fetch = true)
-        }
-
-        // “Use Cached Data” → offline
-        btnUseCache.setOnClickListener {
-            startScheduleActivity(fetch = false)
-        }
+        btnFetch.setOnClickListener { startScheduleActivity(fetch = true) }
+        btnUseCache.setOnClickListener { startScheduleActivity(fetch = false) }
     }
 
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun continueOnboarding() {
+        // 1) Runtime permissions (ONE dialog for both)
+        val permsToAsk = mutableListOf<String>()
+
+        // Location (runtime)
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            permsToAsk.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+
+        // Notifications (runtime, Android 13+)
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            permsToAsk.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        if (permsToAsk.isNotEmpty()) {
+            runtimePermsLauncher.launch(permsToAsk.toTypedArray())
+            return
+        }
+
+        // 2) Install unknown apps (Settings, Android 8+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val canInstall = packageManager.canRequestPackageInstalls()
+            if (!canInstall) {
+                AlertDialog.Builder(this)
+                    .setTitle("Enable app updates")
+                    .setMessage(
+                        "To install BusFlow updates, please enable “Install unknown apps” for this app.\n\n" +
+                                "You only need to do this once."
+                    )
+                    .setCancelable(false)
+                    .setPositiveButton("Open Settings") { _, _ ->
+                        val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                        unknownAppsLauncher.launch(intent)
+                    }
+                    .setNegativeButton("Not now") { _, _ ->
+                        // allow app to continue; OTA will simply not auto-install
+                        showChoiceButtons()
+                    }
+                    .show()
+                return
+            }
+        }
+
+        // 3) All files access (Settings, Android 11+)
+        // Only keep this if you truly need /Documents or broad storage access.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!android.os.Environment.isExternalStorageManager()) {
+                AlertDialog.Builder(this)
+                    .setTitle("Storage access")
+                    .setMessage(
+                        "To read/write route files in Documents, please allow “All files access”.\n\n" +
+                                "You only need to do this once."
+                    )
+                    .setCancelable(false)
+                    .setPositiveButton("Open Settings") { _, _ ->
+                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                        allFilesLauncher.launch(intent)
+                    }
+                    .setNegativeButton("Not now") { _, _ ->
+                        // app can still run, but features needing Documents may fail
+                        showChoiceButtons()
+                    }
+                    .show()
+                return
+            }
+        }
+
+        // DONE
+        showChoiceButtons()
+    }
+
+    // call this after GIF finishes
+    private fun startOnboardingOnceThenShowButtons() {
+        if (onboardingRunning) return
+        onboardingRunning = true
+        continueOnboarding()
+    }
+
+    private val allFilesLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            FileLogger.d("SplashActivity", "allFilesLauncher: returned")
+            continueOnboarding()
+        }
+
+    private val runtimePermsLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+            // result[Manifest.permission.ACCESS_FINE_LOCATION] == true/false
+            // result[Manifest.permission.POST_NOTIFICATIONS] == true/false
+            FileLogger.d("SplashActivity", "runtimePermsLauncher: $result")
+            continueOnboarding()
+        }
+
+    private val unknownAppsLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            FileLogger.d("SplashActivity", "unknownAppsLauncher: returned")
+            continueOnboarding()
+        }
+
+    private fun showChoiceButtons() {
+        val choiceLayout = findViewById<LinearLayout>(R.id.choiceLayout)
+        choiceLayout.visibility = View.VISIBLE
+        choiceLayout.bringToFront()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun ensureUnknownAppsInstallPermission(): Boolean {
+        val canInstall = packageManager.canRequestPackageInstalls()
+        FileLogger.d("SplashActivity", "ensureUnknownAppsInstallPermission: canInstall=$canInstall")
+        if (canInstall) return true
+
+        AlertDialog.Builder(this)
+            .setTitle("Enable app updates")
+            .setMessage(
+                "To install BusFlow updates, please enable “Install unknown apps” for this app.\n\n" +
+                        "You only need to do this once."
+            )
+            .setCancelable(false)
+            .setPositiveButton("Open Settings") { _, _ ->
+                val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+                unknownAppsLauncher.launch(intent)
+            }
+            .setNegativeButton("Not now") { _, _ ->
+                // Continue anyway, but OTA might need to redirect later
+                showChoiceButtons()
+            }
+            .show()
+
+        return false
+    }
 
     /**
      * Launch ScheduleActivity with the user’s choice.
