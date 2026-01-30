@@ -34,31 +34,42 @@ class TbAdminOtaLatest(
 
     private suspend fun loginJwt(): String? = withContext(Dispatchers.IO) {
         val url = "${hostNoSlash()}/api/auth/login"
-        val body = JSONObject()
+        val bodyJson = JSONObject()
             .put("username", tbUser)
             .put("password", tbPass)
             .toString()
 
+        log("login: POST $url user.len=${tbUser.length} pass.len=${tbPass.length}")
+
         val req = Request.Builder()
             .url(url)
-            .post(body.toRequestBody("application/json".toMediaType()))
+            .post(bodyJson.toRequestBody("application/json".toMediaType()))
             .build()
 
         client.newCall(req).execute().use { resp ->
             log("login: HTTP ${resp.code}")
+
+            // ✅ Read body ONCE
+            val bodyStr = resp.body?.string().orEmpty()
+            log("login: body=$bodyStr")
+
             if (!resp.isSuccessful) return@withContext null
 
-            val json = JSONObject(resp.body?.string().orEmpty())
-            // ThingsBoard may return token or accessToken depending on version
-            return@withContext json.optString("token").ifBlank { json.optString("accessToken") }
+            val json = runCatching { JSONObject(bodyStr) }.getOrNull()
+            if (json == null) {
+                log("login: FAIL cannot parse JSON")
+                return@withContext null
+            }
+
+            val token = json.optString("token")
+                .ifBlank { json.optString("accessToken") }
                 .ifBlank { null }
+
+            log("login: tokenPresent=${token != null}")
+            return@withContext token
         }
     }
 
-    /**
-     * EXACTLY like your PowerShell:
-     * GET /api/otaPackages?pageSize=50&page=0&sortProperty=createdTime&sortOrder=DESC&textSearch=BusFlow-Android
-     */
     suspend fun fetchLatest(titleSearch: String): TbLatestOta? = withContext(Dispatchers.IO) {
         val jwt = loginJwt() ?: run {
             log("fetchLatest: login failed")
@@ -70,6 +81,8 @@ class TbAdminOtaLatest(
                     "?pageSize=50&page=0&sortProperty=createdTime&sortOrder=DESC" +
                     "&textSearch=${java.net.URLEncoder.encode(titleSearch, "UTF-8")}"
 
+        log("fetchLatest: GET $url")
+
         val req = Request.Builder()
             .url(url)
             .get()
@@ -78,9 +91,14 @@ class TbAdminOtaLatest(
 
         client.newCall(req).execute().use { resp ->
             log("fetchLatest: HTTP ${resp.code}")
-            if (!resp.isSuccessful) return@withContext null
 
-            val root = JSONObject(resp.body?.string().orEmpty())
+            val bodyStr = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) {
+                log("fetchLatest: FAIL body=$bodyStr")
+                return@withContext null
+            }
+
+            val root = JSONObject(bodyStr)
             val data: JSONArray = root.optJSONArray("data") ?: JSONArray()
             if (data.length() == 0) {
                 log("fetchLatest: empty data[]")
@@ -98,16 +116,11 @@ class TbAdminOtaLatest(
 
             log("fetchLatest: latest title=$title version=$version type=$type createdTime=$createdTime id=$id")
 
-            if (title.isBlank() || version.isBlank()) return@withContext null
+            if (title.isBlank() || version.isBlank() || id.isBlank()) return@withContext null
             TbLatestOta(title, version, type, createdTime, id)
         }
     }
 
-    /**
-     * PowerShell-equivalent:
-     * GET /api/otaPackages?pageSize=200&page=0
-     * filter title + type, pick newest by createdTime
-     */
     suspend fun fetchLatestExact(title: String, type: String, pageSize: Int = 200): TbLatestOta? =
         withContext(Dispatchers.IO) {
             val jwt = loginJwt() ?: run {
@@ -116,6 +129,8 @@ class TbAdminOtaLatest(
             }
 
             val url = "${hostNoSlash()}/api/otaPackages?pageSize=$pageSize&page=0"
+            log("fetchLatestExact: GET $url (filter title=$title type=$type)")
+
             val req = Request.Builder()
                 .url(url)
                 .get()
@@ -124,11 +139,16 @@ class TbAdminOtaLatest(
 
             client.newCall(req).execute().use { resp ->
                 log("fetchLatestExact: HTTP ${resp.code}")
-                if (!resp.isSuccessful) return@withContext null
 
-                val root = JSONObject(resp.body?.string().orEmpty())
+                val bodyStr = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    log("fetchLatestExact: FAIL body=$bodyStr")
+                    return@withContext null
+                }
+
+                val root = JSONObject(bodyStr)
                 val data: JSONArray = root.optJSONArray("data") ?: JSONArray()
-                if (data.length() == 0) return@withContext null
+                log("fetchLatestExact: data.length=${data.length()}")
 
                 var best: JSONObject? = null
                 var bestCreated = Long.MIN_VALUE
@@ -150,9 +170,7 @@ class TbAdminOtaLatest(
                     return@withContext null
                 }
 
-                val idObj = best.optJSONObject("id")
-                val id = idObj?.optString("id").orEmpty()
-
+                val id = best.optJSONObject("id")?.optString("id").orEmpty()
                 val out = TbLatestOta(
                     title = best.optString("title"),
                     version = best.optString("version"),
@@ -167,23 +185,20 @@ class TbAdminOtaLatest(
             }
         }
 
-    /**
-     * PowerShell-equivalent:
-     * GET /api/otaPackage/{id}/download  (admin JWT)
-     */
     suspend fun downloadApkById(otaId: String, outFile: File): File? = withContext(Dispatchers.IO) {
         val jwt = loginJwt() ?: run {
             log("downloadApkById: login failed")
             return@withContext null
         }
 
-        // reuse if already downloaded
         if (outFile.exists() && outFile.length() > 0) {
             log("downloadApkById: reuse existing ${outFile.absolutePath} size=${outFile.length()}")
             return@withContext outFile
         }
 
         val url = "${hostNoSlash()}/api/otaPackage/$otaId/download"
+        log("downloadApkById: GET $url -> ${outFile.absolutePath}")
+
         val req = Request.Builder()
             .url(url)
             .get()
@@ -191,16 +206,26 @@ class TbAdminOtaLatest(
             .build()
 
         client.newCall(req).execute().use { resp ->
-            log("downloadApkById: HTTP ${resp.code}")
-            if (!resp.isSuccessful) return@withContext null
+            log("downloadApkById: HTTP ${resp.code} contentType=${resp.header("Content-Type")} contentLength=${resp.header("Content-Length")}")
 
-            resp.body?.byteStream()?.use { input ->
-                outFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
+            // ✅ Read bytes ONCE
+            val bytes = resp.body?.bytes()
+
+            if (!resp.isSuccessful) {
+                val err = bytes?.decodeToString().orEmpty()
+                log("downloadApkById: FAIL body=$err")
+                return@withContext null
             }
+
+            if (bytes == null || bytes.isEmpty()) {
+                log("downloadApkById: FAIL body bytes empty")
+                return@withContext null
+            }
+
+            outFile.outputStream().use { it.write(bytes) }
         }
 
+        log("downloadApkById: saved size=${outFile.length()}")
         if (outFile.exists() && outFile.length() > 0) outFile else null
     }
 }
