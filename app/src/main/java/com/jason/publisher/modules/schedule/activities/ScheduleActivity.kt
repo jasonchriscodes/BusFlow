@@ -127,14 +127,11 @@ class ScheduleActivity : AppCompatActivity() {
     private lateinit var copyAidButton: Button
     private fun otaLog(msg: String) = FileLogger.d("OTA", msg)
     private var otaCheckInFlight = false
-    private var lastPromptedVersion: String? = null
     private var otaProgressDialog: AlertDialog? = null
     private var otaProgressText: TextView? = null
 
     companion object {
         private const val REQUEST_PERIODIC_TIME = 5000L
-        private const val LOCATION_PERMISSION_REQUEST = 1234
-        private const val REQUEST_MANAGE_EXTERNAL_STORAGE = 1001
         private const val PANEL_DEBUG_PREF = "panel_debug_pref"
         private const val PANEL_DEBUG_NO_KEY = "panel_debug_no"
         private const val PREF_PENDING_OTA_APK_PATH = "pending_ota_apk_path"
@@ -162,8 +159,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         // initialize RecyclerView adapter
         scheduleAdapter = ScheduleAdapter(emptyList(), viewModel.isDarkMode)
-        scheduleRecycler = binding.scheduleRecycler
-        scheduleRecycler.apply {
+        binding.scheduleRecycler.apply {
             layoutManager = LinearLayoutManager(this@ScheduleActivity)
             adapter = scheduleAdapter
             visibility = View.GONE
@@ -288,9 +284,6 @@ class ScheduleActivity : AppCompatActivity() {
             binding.networkStatusIndicator
         )
 
-        // Check and request permission
-        requestAllFilesAccessPermission()
-
         copyAidButton.setOnClickListener {
             val aid = viewModel.aid?.trim().orEmpty()
             if (aid.isBlank()) {
@@ -304,13 +297,6 @@ class ScheduleActivity : AppCompatActivity() {
             Toast.makeText(this, "Your AID $aid has been copied.", Toast.LENGTH_SHORT).show()
         }
 
-        // Set up network status UI
-        NetworkStatusHelper.setupNetworkStatus(
-            this,
-            binding.connectionStatusTextView,
-            binding.networkStatusIndicator
-        )
-
         // Load configuration
         Configuration.getInstance()
             .load(this, getSharedPreferences(getString(R.string.app_name), MODE_PRIVATE))
@@ -320,12 +306,6 @@ class ScheduleActivity : AppCompatActivity() {
 
         // Start updating the date/time
         startDateTimeUpdater()
-
-        NetworkStatusHelper.setupNetworkStatus(
-            this,
-            findViewById(R.id.connectionStatusTextView),
-            findViewById(R.id.networkStatusIndicator)
-        )
 
         // 1. Initialize Mapsforge
         AndroidGraphicFactory.createInstance(application)
@@ -423,17 +403,6 @@ class ScheduleActivity : AppCompatActivity() {
                 viewModel.currentPage++
                 updateScheduleTablePaged()
             }
-        }
-
-        // Immediately ask for location permission on startup
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                LOCATION_PERMISSION_REQUEST
-            )
         }
 
         // Set up the "Start Route" button
@@ -975,23 +944,6 @@ class ScheduleActivity : AppCompatActivity() {
 
         startActivity(intent)
     }
-
-    // Handle the user’s response to your initial permission request
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == LOCATION_PERMISSION_REQUEST) {
-            if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
-                Toast.makeText(this, "Location permission granted", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "Location permission is required to show the map", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
 
     /** Launches RepActivity to handle a single-stop reposition trip. */
     @RequiresApi(Build.VERSION_CODES.M)
@@ -1770,40 +1722,6 @@ class ScheduleActivity : AppCompatActivity() {
                 Toast.makeText(this, "Schedule data updated.", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 Log.e("ScheduleActivity saveScheduleDataToCache", "❌ Error saving schedule data cache: ${e.message}")
-            }
-        }
-    }
-
-    /**
-     * All Files Access Permission (MANAGE_EXTERNAL_STORAGE).
-     */
-    @SuppressLint("LongLogTag")
-    private fun requestAllFilesAccessPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                try {
-                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                    intent.data = "package:$packageName".toUri()
-                    startActivityForResult(intent, REQUEST_MANAGE_EXTERNAL_STORAGE)
-                } catch (e: Exception) {
-                    Log.e("TimeTableActivity requestAllFilesAccessPermission", "Error requesting storage permission: ${e.message}")
-                }
-            }
-        }
-    }
-
-    /**
-     * onActivityResult to handle permission grant
-     */
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_MANAGE_EXTERNAL_STORAGE) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                if (Environment.isExternalStorageManager()) {
-                    Log.d("ScheduleActivity", "All files access granted.")
-                } else {
-                    Log.e("ScheduleActivity", "User denied all files access.")
-                }
             }
         }
     }

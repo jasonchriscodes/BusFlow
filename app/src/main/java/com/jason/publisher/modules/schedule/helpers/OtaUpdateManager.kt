@@ -307,31 +307,33 @@ class OtaUpdateManager(
     internal fun promptInstall(apkFile: File) {
         otaLog("promptInstall: START file=${apkFile.absolutePath} size=${apkFile.length()}")
 
-        if (!context.packageManager.canRequestPackageInstalls()) {
-            otaLog("promptInstall: missing unknown-apps permission -> opening settings")
-            val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                data = Uri.parse("package:${context.packageName}")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
+        val canInstall = context.packageManager.canRequestPackageInstalls()
+        otaLog("promptInstall: canRequestPackageInstalls=$canInstall")
+
+        if (!canInstall) {
+            otaLog("promptInstall: BLOCKED (unknown apps disabled)")
             return
         }
 
-        val apkUri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            apkFile
-        )
+        try {
+            val authority = "${context.packageName}.fileprovider"
+            otaLog("promptInstall: authority=$authority")
 
-        otaLog("promptInstall: apkUri=$apkUri")
+            val apkUri = FileProvider.getUriForFile(context, authority, apkFile)
+            otaLog("promptInstall: apkUri=$apkUri")
 
-        val installIntent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(apkUri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+                data = apkUri
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            context.startActivity(intent)
+            otaLog("promptInstall: launched installer intent ACTION_INSTALL_PACKAGE")
+        } catch (t: Throwable) {
+            otaLog("promptInstall: EXCEPTION ${t.javaClass.simpleName}: ${t.message}")
+            FileLogger.e("OtaUpdate", "promptInstall exception: ${t.message}")
         }
-        context.startActivity(installIntent)
-        otaLog("promptInstall: launched installer intent")
     }
 
     private fun sha256Hex(file: File): String {
