@@ -42,8 +42,10 @@ class OtaUpdateManager(
     private val client = OkHttpClient.Builder()
         .callTimeout(60, TimeUnit.SECONDS)
         .build()
+
     private fun otaLog(msg: String) = FileLogger.d("OtaUpdate", msg)
 
+    private fun hostNoTrailingSlash(): String = tbHost.trimEnd('/')
 
     /**
      * Call this on Splash:
@@ -53,27 +55,43 @@ class OtaUpdateManager(
     @RequiresApi(Build.VERSION_CODES.P)
     suspend fun checkDownloadAndPromptInstall(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            val ota = fetchOtaSharedAttrs() ?: return@withContext false
+            otaLog("checkDownloadAndPromptInstall: START")
 
-            // Basic "is it new?" rule:
-            // Prefer comparing downloaded APK versionCode vs installed versionCode
-            val apkFile = downloadOtaBinary(ota) ?: return@withContext false
-
-            if (!verifyDownloadedApk(apkFile, ota)) {
-                FileLogger.e("ota OtaUpdateManager checkDownloadAndPromptInstall", "Verification failed; not installing.")
+            val ota = fetchOtaSharedAttrs() ?: run {
+                otaLog("checkDownloadAndPromptInstall: STOP (attrs missing)")
                 return@withContext false
             }
 
-            // Trigger install UI (cannot be fully silent unless device-owner)
-            promptInstall(apkFile)
-            return@withContext true
+            otaLog("checkDownloadAndPromptInstall: attrs title=${ota.title} version=${ota.version} vc=${ota.versionCode} size=${ota.size}")
+
+            val apkFile = downloadOtaBinary(ota) ?: run {
+                otaLog("checkDownloadAndPromptInstall: STOP (download null)")
+                return@withContext false
+            }
+
+            otaLog("checkDownloadAndPromptInstall: downloaded apk=${apkFile.absolutePath} size=${apkFile.length()}")
+
+            val verified = verifyDownloadedApk(apkFile, ota)
+            otaLog("checkDownloadAndPromptInstall: verify result=$verified")
+
+            if (!verified) {
+                FileLogger.e("OtaUpdate", "Verification failed; not installing.")
+                return@withContext false
+            }
+
+            withContext(Dispatchers.Main) {
+                otaLog("checkDownloadAndPromptInstall: promptInstall()")
+                promptInstall(apkFile)
+            }
+
+            otaLog("checkDownloadAndPromptInstall: DONE")
+            true
         }.getOrElse { e ->
-            FileLogger.e("ota OtaUpdateManager checkDownloadAndPromptInstall", "OTA check failed: ${e.message}")
+            FileLogger.e("OtaUpdate", "OTA check failed: ${e.message}")
+            otaLog("checkDownloadAndPromptInstall: EXCEPTION ${e.message}")
             false
         }
     }
-
-    private fun hostNoTrailingSlash(): String = tbHost.trimEnd('/')
 
     /**
      * Reads shared attrs:
@@ -89,14 +107,18 @@ class OtaUpdateManager(
         val req = Request.Builder().url(url).get().build()
         client.newCall(req).execute().use { resp ->
             otaLog("fetchOtaSharedAttrs: HTTP ${resp.code}")
-            if (!resp.isSuccessful) return null
+            if (!resp.isSuccessful) {
+                val err = resp.body?.string().orEmpty()
+                otaLog("fetchOtaSharedAttrs: FAIL body=$err")
+                return null
+            }
 
-            val body = resp.body?.string().orEmpty()
-            otaLog("fetchOtaSharedAttrs: body=$body")
+            // ✅ Read body ONCE
+            val bodyStr = resp.body?.string().orEmpty()
+            otaLog("fetchOtaSharedAttrs: body=$bodyStr")
 
-            val json = JSONObject(body)
+            val json = JSONObject(bodyStr)
 
-            // ✅ Device API returns keys at ROOT, not inside "shared"
             val title = json.optString("sw_title", "")
             val version = json.optString("sw_version", "")
             val versionCode = json.optLong("sw_version_code", -1L).let { if (it >= 0) it else null }
@@ -104,7 +126,7 @@ class OtaUpdateManager(
             val checksum = json.optString("sw_checksum", "").ifBlank { null }
             val alg = json.optString("sw_checksum_algorithm", "").ifBlank { null }
 
-            otaLog("fetchOtaSharedAttrs: parsed title=$title version=$version versionCode=$versionCode size=$size alg=$alg checksumPresent=${checksum != null}")
+            otaLog("fetchOtaSharedAttrs: parsed title=$title version=$version vc=$versionCode size=$size alg=$alg checksumPresent=${checksum != null}")
 
             if (title.isBlank() || version.isBlank()) return null
 
@@ -121,21 +143,23 @@ class OtaUpdateManager(
 
     /**
      * Downloads binary via device API.
-     * ThingsBoard docs show device downloads using:
-     * GET /api/v1/$TOKEN/firmware?title=$TITLE&version=$VERSION
+     * GET /api/v1/$TOKEN/software?title=$TITLE&version=$VERSION
      */
     private fun downloadOtaBinary(ota: OtaInfo): File? {
         val url =
             "${hostNoTrailingSlash()}/api/v1/$deviceToken/software" +
                     "?title=${Uri.encode(ota.title)}&version=${Uri.encode(ota.version)}"
 
-        val outDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return null
+        val outDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: run {
+            otaLog("downloadOtaBinary: FAIL outDir=null")
+            return null
+        }
+
         val outFile = File(outDir, "tb_${ota.title}_${ota.version}.apk")
 
         otaLog("downloadOtaBinary: GET $url")
-        otaLog("downloadOtaBinary: outFile=${outFile.absolutePath}")
+        otaLog("downloadOtaBinary: outFile=${outFile.absolutePath} exists=${outFile.exists()} size=${if (outFile.exists()) outFile.length() else 0L}")
 
-        // reuse if already downloaded
         if (outFile.exists() && outFile.length() > 0) {
             otaLog("downloadOtaBinary: reuse existing size=${outFile.length()}")
             return outFile
@@ -143,17 +167,26 @@ class OtaUpdateManager(
 
         val req = Request.Builder().url(url).get().build()
         client.newCall(req).execute().use { resp ->
-            otaLog("downloadOtaBinary: HTTP ${resp.code}")
+            otaLog("downloadOtaBinary: HTTP ${resp.code} contentType=${resp.header("Content-Type")} contentLength=${resp.header("Content-Length")}")
+
+            // ✅ error body (read once)
             if (!resp.isSuccessful) {
-                otaLog("downloadOtaBinary: failed HTTP ${resp.code}")
+                val err = resp.body?.string().orEmpty()
+                otaLog("downloadOtaBinary: FAIL body=$err")
                 return null
             }
-            resp.body?.byteStream()?.use { input ->
-                outFile.outputStream().use { output -> input.copyTo(output) }
+
+            // ✅ Read bytes ONCE, then write to file
+            val bytes = resp.body?.bytes()
+            if (bytes == null || bytes.isEmpty()) {
+                otaLog("downloadOtaBinary: FAIL body bytes empty")
+                return null
             }
+
+            outFile.outputStream().use { it.write(bytes) }
         }
 
-        otaLog("downloadOtaBinary: downloaded size=${outFile.length()}")
+        otaLog("downloadOtaBinary: saved size=${outFile.length()}")
         return if (outFile.exists() && outFile.length() > 0) outFile else null
     }
 
@@ -162,21 +195,26 @@ class OtaUpdateManager(
      * 1) checksum (if provided)
      * 2) packageName matches your app
      * 3) signature matches installed app signature
-     * 4) versionCode is higher than installed (recommended)
+     * 4) versionCode higher OR versionName semver newer
      */
     @RequiresApi(Build.VERSION_CODES.P)
     internal fun verifyDownloadedApk(apkFile: File, ota: OtaInfo): Boolean {
+        otaLog("verify: START file=${apkFile.absolutePath} size=${apkFile.length()}")
+
         // 1) checksum
         val alg = (ota.checksumAlg ?: "SHA256").uppercase()
         if (ota.checksum != null) {
             val digest = when (alg) {
                 "SHA256", "SHA-256" -> sha256Hex(apkFile)
-                else -> sha256Hex(apkFile) // fallback
+                else -> sha256Hex(apkFile)
             }
+            otaLog("verify: checksum local=$digest server=${ota.checksum} alg=$alg")
             if (!digest.equals(ota.checksum, ignoreCase = true)) {
                 FileLogger.e("OtaUpdate", "Checksum mismatch. local=$digest server=${ota.checksum}")
                 return false
             }
+        } else {
+            otaLog("verify: checksum skipped (server checksum missing)")
         }
 
         val pm = context.packageManager
@@ -185,47 +223,66 @@ class OtaUpdateManager(
         val archiveInfo = pm.getPackageArchiveInfo(
             apkFile.absolutePath,
             PackageManager.GET_SIGNING_CERTIFICATES
-        ) ?: return false
-
-        if (archiveInfo.packageName != context.packageName) {
-            FileLogger.e("OtaUpdate", "PackageName mismatch: ${archiveInfo.packageName}")
+        ) ?: run {
+            otaLog("verify: FAIL getPackageArchiveInfo=null")
             return false
         }
 
-        // 3) Signature match check (strongest protection against wrong-signed OTA)
+        otaLog("verify: archive package=${archiveInfo.packageName} vc=${archiveInfo.longVersionCode} vn=${archiveInfo.versionName}")
+
+        if (archiveInfo.packageName != context.packageName) {
+            FileLogger.e("OtaUpdate", "PackageName mismatch: ${archiveInfo.packageName}")
+            otaLog("verify: FAIL package mismatch expected=${context.packageName}")
+            return false
+        }
+
+        // 3) Signature match check
         val installedInfo = pm.getPackageInfo(
             context.packageName,
             PackageManager.GET_SIGNING_CERTIFICATES
         )
 
+        otaLog("verify: installed vc=${installedInfo.longVersionCode} vn=${installedInfo.versionName}")
+
         val installedSigners = installedInfo.signingInfo.apkContentsSigners
         val archiveSigners = archiveInfo.signingInfo?.apkContentsSigners
 
-        if (installedSigners.isNullOrEmpty() || archiveSigners.isNullOrEmpty()) return false
+        if (installedSigners.isNullOrEmpty() || archiveSigners.isNullOrEmpty()) {
+            otaLog("verify: FAIL signers empty installed=${installedSigners?.size} archive=${archiveSigners?.size}")
+            return false
+        }
 
         val installedHash = sha256(installedSigners[0].toByteArray())
         val archiveHash = sha256(archiveSigners[0].toByteArray())
 
         if (!installedHash.contentEquals(archiveHash)) {
             FileLogger.e("OtaUpdate", "Signature mismatch (installed vs downloaded).")
+            otaLog("verify: FAIL signature mismatch")
             return false
         }
 
-        // 4) versionCode comparison (recommended)
+        // 4) version comparison
         val installedVc = installedInfo.longVersionCode
         val downloadedVc = archiveInfo.longVersionCode
 
-        // Prefer versionCode, but fall back to versionName semver if codes are not increasing
         if (downloadedVc <= installedVc) {
             val downloadedName = archiveInfo.versionName.orEmpty()
             val installedName = installedInfo.versionName.orEmpty()
 
-            if (!isSemVerNewer(downloadedName, installedName)) {
-                FileLogger.e("OtaUpdate", "Not newer. downloadedVc=$downloadedVc installedVc=$installedVc | downloadedName=$downloadedName installedName=$installedName")
+            otaLog("verify: versionCode not increasing downloadedVc=$downloadedVc installedVc=$installedVc -> fallback semver")
+            val semverOk = isSemVerNewer(downloadedName, installedName)
+            otaLog("verify: semver compare downloadedName=$downloadedName installedName=$installedName result=$semverOk")
+
+            if (!semverOk) {
+                FileLogger.e(
+                    "OtaUpdate",
+                    "Not newer. downloadedVc=$downloadedVc installedVc=$installedVc | downloadedName=$downloadedName installedName=$installedName"
+                )
                 return false
             }
         }
 
+        otaLog("verify: OK")
         return true
     }
 
@@ -248,8 +305,10 @@ class OtaUpdateManager(
 
     @RequiresApi(Build.VERSION_CODES.O)
     internal fun promptInstall(apkFile: File) {
-        // Android 8+: need “Install unknown apps” permission for your app
+        otaLog("promptInstall: START file=${apkFile.absolutePath} size=${apkFile.length()}")
+
         if (!context.packageManager.canRequestPackageInstalls()) {
+            otaLog("promptInstall: missing unknown-apps permission -> opening settings")
             val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                 data = Uri.parse("package:${context.packageName}")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -264,12 +323,15 @@ class OtaUpdateManager(
             apkFile
         )
 
+        otaLog("promptInstall: apkUri=$apkUri")
+
         val installIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(apkUri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(installIntent)
+        otaLog("promptInstall: launched installer intent")
     }
 
     private fun sha256Hex(file: File): String {
@@ -306,11 +368,15 @@ class OtaUpdateManager(
     @RequiresApi(Build.VERSION_CODES.P)
     suspend fun downloadAndInstall(ota: OtaInfo): Boolean = withContext(Dispatchers.IO) {
         runCatching {
+            otaLog("downloadAndInstall: START title=${ota.title} version=${ota.version}")
             val apk = downloadOtaBinary(ota) ?: return@withContext false
             if (!verifyDownloadedApk(apk, ota)) return@withContext false
             withContext(Dispatchers.Main) { promptInstall(apk) }
+            otaLog("downloadAndInstall: DONE")
             true
-        }.getOrElse { false }
+        }.getOrElse {
+            otaLog("downloadAndInstall: EXCEPTION ${it.message}")
+            false
+        }
     }
-
 }
