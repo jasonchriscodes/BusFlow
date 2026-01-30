@@ -128,7 +128,8 @@ class ScheduleActivity : AppCompatActivity() {
     private fun otaLog(msg: String) = FileLogger.d("OTA", msg)
     private var otaCheckInFlight = false
     private var lastPromptedVersion: String? = null
-
+    private var otaProgressDialog: AlertDialog? = null
+    private var otaProgressText: TextView? = null
 
     companion object {
         private const val REQUEST_PERIODIC_TIME = 5000L
@@ -136,6 +137,8 @@ class ScheduleActivity : AppCompatActivity() {
         private const val REQUEST_MANAGE_EXTERNAL_STORAGE = 1001
         private const val PANEL_DEBUG_PREF = "panel_debug_pref"
         private const val PANEL_DEBUG_NO_KEY = "panel_debug_no"
+        private const val PREF_PENDING_OTA_APK_PATH = "pending_ota_apk_path"
+        private const val PREF_PENDING_OTA_VERSION  = "pending_ota_version"
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -495,6 +498,99 @@ class ScheduleActivity : AppCompatActivity() {
         }
     }
 
+    private fun showOtaProgress(message: String) {
+        runOnUiThread {
+            if (otaProgressDialog?.isShowing == true) {
+                otaProgressText?.text = message
+                return@runOnUiThread
+            }
+
+            val wrap = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(48, 40, 48, 40)
+            }
+
+            val spinner = ProgressBar(this).apply {
+                isIndeterminate = true
+            }
+
+            val tv = TextView(this).apply {
+                text = message
+                textSize = 18f
+                setPadding(32, 0, 0, 0)
+            }
+
+            wrap.addView(spinner)
+            wrap.addView(tv)
+
+            otaProgressText = tv
+            otaProgressDialog = AlertDialog.Builder(this)
+                .setTitle("App update")
+                .setView(wrap)
+                .setCancelable(false)
+                .setNegativeButton("Close") { d, _ -> d.dismiss() }
+                .create()
+
+            otaProgressDialog?.show()
+        }
+    }
+
+    private fun updateOtaProgress(message: String) {
+        runOnUiThread {
+            otaProgressText?.text = message
+        }
+    }
+
+    private fun hideOtaProgress() {
+        runOnUiThread {
+            otaProgressDialog?.dismiss()
+            otaProgressDialog = null
+            otaProgressText = null
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun resumePendingOtaInstallIfAny() {
+        val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
+        val path = prefs.getString(PREF_PENDING_OTA_APK_PATH, null) ?: return
+        val version = prefs.getString(PREF_PENDING_OTA_VERSION, "?") ?: "?"
+
+        val apk = File(path)
+        val canInstall = packageManager.canRequestPackageInstalls()
+
+        otaLog("OTA(admin): resumePending | version=$version path=$path exists=${apk.exists()} size=${if (apk.exists()) apk.length() else 0L} canInstall=$canInstall")
+
+        if (!apk.exists() || apk.length() <= 0L) {
+            otaLog("OTA(admin): resumePending FAIL - apk missing/empty, clearing pending")
+            prefs.edit()
+                .remove(PREF_PENDING_OTA_APK_PATH)
+                .remove(PREF_PENDING_OTA_VERSION)
+                .apply()
+            hideOtaProgress()
+            return
+        }
+
+        if (!canInstall) {
+            showOtaProgress("Update $version downloaded.\nEnable “Install unknown apps” then return.")
+            return
+        }
+
+        showOtaProgress("Launching installer for $version…")
+
+        // This will now open the installer (since permission granted)
+        val installer = OtaUpdateManager(this, BuildConfig.TB_HOST, deviceToken = "")
+        installer.promptInstall(apk)
+
+        // clear pending
+        prefs.edit()
+            .remove(PREF_PENDING_OTA_APK_PATH)
+            .remove(PREF_PENDING_OTA_VERSION)
+            .apply()
+
+        otaLog("OTA(admin): resumePending OK - installer launched, pending cleared")
+        hideOtaProgress()
+    }
+
     @RequiresApi(Build.VERSION_CODES.P)
     private fun promptIfNewerOtaExists_powerShellStyle() {
         if (otaCheckInFlight) {
@@ -581,59 +677,72 @@ class ScheduleActivity : AppCompatActivity() {
 
                         lifecycleScope.launch {
                             try {
-                                Toast.makeText(this@ScheduleActivity, "Downloading update…", Toast.LENGTH_SHORT).show()
+                                showOtaProgress("Downloading update $serverName…")
 
                                 val outDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
                                 otaLog("OTA(admin): step4 outDir=${outDir?.absolutePath}")
-
                                 if (outDir == null) {
-                                    otaLog("OTA(admin): step4 FAIL outDir=null (storage not available)")
-                                    Toast.makeText(this@ScheduleActivity, "Storage not available.", Toast.LENGTH_SHORT).show()
+                                    updateOtaProgress("Storage not available.")
+                                    otaLog("OTA(admin): step4 FAIL outDir=null")
                                     return@launch
                                 }
 
                                 val outFile = File(outDir, "tb_${latest.title}_${latest.version}.apk")
-                                otaLog("OTA(admin): step4 outFile=${outFile.absolutePath} exists=${outFile.exists()} size=${if (outFile.exists()) outFile.length() else 0L}")
+                                otaLog("OTA(admin): step4 outFile=${outFile.absolutePath}")
 
                                 otaLog("OTA(admin): step5 downloadApkById(id=${latest.id})")
                                 val apk = adminApi.downloadApkById(latest.id, outFile)
-
                                 if (apk == null) {
+                                    updateOtaProgress("Download failed.")
                                     otaLog("OTA(admin): step5 FAIL downloadApkById returned null")
-                                    Toast.makeText(this@ScheduleActivity, "Failed to download the update.", Toast.LENGTH_SHORT).show()
                                     return@launch
                                 }
 
+                                updateOtaProgress("Downloaded (${apk.length() / 1024 / 1024} MB). Verifying…")
                                 otaLog("OTA(admin): step5 OK downloaded path=${apk.absolutePath} size=${apk.length()}")
 
-                                // 6) Verify + prompt install
-                                val installer = OtaUpdateManager(
-                                    context = this@ScheduleActivity,
-                                    tbHost = BuildConfig.TB_HOST,
-                                    deviceToken = "" // unused for admin download flow
-                                )
-
-                                otaLog("OTA(admin): step6 verifyDownloadedApk() start")
+                                val installer = OtaUpdateManager(this@ScheduleActivity, BuildConfig.TB_HOST, deviceToken = "")
                                 val ok = installer.verifyDownloadedApk(apk, info)
-                                otaLog("OTA(admin): step6 verifyDownloadedApk() result=$ok")
-
+                                otaLog("OTA(admin): step6 verify result=$ok")
                                 if (!ok) {
-                                    Toast.makeText(this@ScheduleActivity, "Downloaded update failed verification.", Toast.LENGTH_SHORT).show()
+                                    updateOtaProgress("Verification failed.")
                                     return@launch
                                 }
 
+                                // Save as pending BEFORE prompting install (so if it opens settings, we can resume)
+                                val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
+                                prefs.edit()
+                                    .putString(PREF_PENDING_OTA_APK_PATH, apk.absolutePath)
+                                    .putString(PREF_PENDING_OTA_VERSION, serverName)
+                                    .apply()
+                                otaLog("OTA(admin): pending saved path=${apk.absolutePath} version=$serverName")
+
+                                // Prompt install (will open Settings if permission missing)
+                                updateOtaProgress("Starting install…")
                                 withContext(Dispatchers.Main) {
-                                    otaLog("OTA(admin): step7 promptInstall() start (opening installer intent)")
                                     installer.promptInstall(apk)
-                                    otaLog("OTA(admin): step7 promptInstall() launched")
                                 }
 
-                                prefs.edit().putString("last_prompted_sw_version", serverName).apply()
-                                otaLog("OTA(admin): DONE install prompt launched for $serverName")
+                                // If permission was missing, promptInstall opened settings.
+                                // Keep dialog visible with instruction.
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+                                    updateOtaProgress("Update downloaded.\nEnable “Install unknown apps” then return.")
+                                    otaLog("OTA(admin): install blocked by unknown-apps permission (settings opened)")
+                                    return@launch
+                                }
+
+                                // If permission already granted, installer is launching now; clear pending immediately
+                                prefs.edit()
+                                    .remove(PREF_PENDING_OTA_APK_PATH)
+                                    .remove(PREF_PENDING_OTA_VERSION)
+                                    .apply()
+
+                                otaLog("OTA(admin): install intent launched, pending cleared")
+                                hideOtaProgress()
 
                             } catch (e: Exception) {
                                 otaLog("OTA(admin): EXCEPTION during update flow: ${e.message}")
-                                Toast.makeText(this@ScheduleActivity, "Update failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                updateOtaProgress("Update failed: ${e.message}")
                             }
                         }
                     }
@@ -1770,7 +1879,11 @@ class ScheduleActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // If any trip/break/reposition had been started, landing here means it ended.
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            resumePendingOtaInstallIfAny()
+        }
+
         if (TripLog.hasActive(this)) {
             TripLog.end(this, reason = "ScheduleActivityResumed", extraDump = viewModel.buildExtraDump())
         }
