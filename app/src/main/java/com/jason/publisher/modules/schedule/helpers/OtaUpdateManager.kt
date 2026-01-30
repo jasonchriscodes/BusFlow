@@ -165,7 +165,7 @@ class OtaUpdateManager(
      * 4) versionCode is higher than installed (recommended)
      */
     @RequiresApi(Build.VERSION_CODES.P)
-    private fun verifyDownloadedApk(apkFile: File, ota: OtaInfo): Boolean {
+    internal fun verifyDownloadedApk(apkFile: File, ota: OtaInfo): Boolean {
         // 1) checksum
         val alg = (ota.checksumAlg ?: "SHA256").uppercase()
         if (ota.checksum != null) {
@@ -214,16 +214,40 @@ class OtaUpdateManager(
         // 4) versionCode comparison (recommended)
         val installedVc = installedInfo.longVersionCode
         val downloadedVc = archiveInfo.longVersionCode
+
+        // Prefer versionCode, but fall back to versionName semver if codes are not increasing
         if (downloadedVc <= installedVc) {
-            FileLogger.e("OtaUpdate", "Not newer. downloaded=$downloadedVc installed=$installedVc")
-            return false
+            val downloadedName = archiveInfo.versionName.orEmpty()
+            val installedName = installedInfo.versionName.orEmpty()
+
+            if (!isSemVerNewer(downloadedName, installedName)) {
+                FileLogger.e("OtaUpdate", "Not newer. downloadedVc=$downloadedVc installedVc=$installedVc | downloadedName=$downloadedName installedName=$installedName")
+                return false
+            }
         }
 
         return true
     }
 
+    private fun isSemVerNewer(server: String, installed: String): Boolean {
+        fun parse(v: String): Triple<Int, Int, Int>? {
+            val p = v.trim().split(".")
+            val a = p.getOrNull(0)?.toIntOrNull() ?: return null
+            val b = p.getOrNull(1)?.toIntOrNull() ?: 0
+            val c = p.getOrNull(2)?.toIntOrNull() ?: 0
+            return Triple(a, b, c)
+        }
+        val s = parse(server) ?: return false
+        val i = parse(installed) ?: return false
+        return when {
+            s.first != i.first -> s.first > i.first
+            s.second != i.second -> s.second > i.second
+            else -> s.third > i.third
+        }
+    }
+
     @RequiresApi(Build.VERSION_CODES.O)
-    private fun promptInstall(apkFile: File) {
+    internal fun promptInstall(apkFile: File) {
         // Android 8+: need “Install unknown apps” permission for your app
         if (!context.packageManager.canRequestPackageInstalls()) {
             val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {

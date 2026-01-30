@@ -498,14 +498,6 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.P)
     private fun promptIfNewerOtaExists_powerShellStyle() {
         if (otaCheckInFlight) return
-
-        // Needed for installing (download endpoint uses device token)
-        val deviceToken = resolveDeviceTokenFromConfig()?.trim()
-        if (deviceToken.isNullOrBlank()) {
-            otaLog("OTA: skip (deviceToken blank)")
-            return
-        }
-
         otaCheckInFlight = true
 
         val installedName = getInstalledVersionName()
@@ -514,8 +506,6 @@ class ScheduleActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
         val suppressed = prefs.getString("last_prompted_sw_version", null)
 
-        // ⚠️ DO NOT hardcode credentials in code.
-        // Put these into BuildConfig fields or a secured config.
         val adminApi = TbAdminOtaLatest(
             tbHost = BuildConfig.TB_HOST,
             tbUser = BuildConfig.TB_USER,
@@ -524,33 +514,36 @@ class ScheduleActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val latest = adminApi.fetchLatest("BusFlow-Android")
+                // 1) Get latest OTA package EXACTLY like PowerShell: filter title + type, newest createdTime
+                val latest = adminApi.fetchLatestExact(title = "BusFlow-Android", type = "SOFTWARE")
                 if (latest == null) {
-                    otaLog("OTA: admin fetchLatest returned null")
+                    otaLog("OTA(admin): no latest package found")
                     return@launch
                 }
 
                 val serverName = latest.version
                 val serverCode = versionNameToCodeOrNull(serverName)
 
-                otaLog("OTA: server version=$serverName code=$serverCode | installed=$installedName code=$installedCode")
+                otaLog("OTA(admin): server version=$serverName code=$serverCode | installed=$installedName code=$installedCode")
 
+                // 2) Compare
                 val isNewer = when {
                     serverCode != null -> serverCode > installedCode
                     else -> isSemVerNewer(serverName, installedName)
                 }
 
+                // If equal/older: toast "app is up to date"
                 if (!isNewer) {
-                    otaLog("OTA: no prompt (server not newer)")
+                    Toast.makeText(this@ScheduleActivity, "The app is up to date.", Toast.LENGTH_SHORT).show()
+                    otaLog("OTA(admin): up to date")
                     return@launch
                 }
 
+                // Optional: avoid repeatedly prompting for same version if user pressed "Not now"
                 if (serverName == suppressed) {
-                    otaLog("OTA: no prompt (suppressed=$suppressed)")
+                    otaLog("OTA(admin): suppressed=$suppressed, not prompting again")
                     return@launch
                 }
-
-                val ota = OtaUpdateManager(this@ScheduleActivity, "https://thingsboard.cloud", deviceToken)
 
                 val info = OtaInfo(
                     title = latest.title,
@@ -563,20 +556,59 @@ class ScheduleActivity : AppCompatActivity() {
 
                 AlertDialog.Builder(this@ScheduleActivity)
                     .setTitle("Update available")
-                    .setMessage("New version $serverName is available (installed: $installedName). Update now?")
-                    .setPositiveButton("Update") { _, _ ->
+                    .setMessage("A new version ($serverName) is available.\nInstalled: $installedName\n\nDo you want to update now?")
+                    .setCancelable(true)
+                    .setNegativeButton("Not now") { dialog, _ ->
+                        // store suppression so we don't spam prompts for the same version
+                        prefs.edit().putString("last_prompted_sw_version", serverName).apply()
+                        dialog.dismiss()
+                    }
+                    .setPositiveButton("Update") { dialog, _ ->
+                        dialog.dismiss()
+
                         lifecycleScope.launch {
-                            val ok = ota.downloadAndInstall(info)
-                            otaLog("OTA: downloadAndInstall ok=$ok")
-                            // store suppression after we prompted once
-                            prefs.edit().putString("last_prompted_sw_version", serverName).apply()
+                            try {
+                                Toast.makeText(this@ScheduleActivity, "Downloading update…", Toast.LENGTH_SHORT).show()
+
+                                val outDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                                if (outDir == null) {
+                                    Toast.makeText(this@ScheduleActivity, "Storage not available.", Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+
+                                val outFile = File(outDir, "tb_${latest.title}_${latest.version}.apk")
+
+                                // 3) Download EXACTLY like PowerShell: /api/otaPackage/{id}/download
+                                val apk = adminApi.downloadApkById(latest.id, outFile)
+                                if (apk == null) {
+                                    Toast.makeText(this@ScheduleActivity, "Failed to download the update.", Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+
+                                // 4) Verify + prompt install (system installer UI)
+                                val installer = OtaUpdateManager(this@ScheduleActivity, BuildConfig.TB_HOST, deviceToken = "")
+                                val ok = installer.verifyDownloadedApk(apk, info)
+                                if (!ok) {
+                                    Toast.makeText(this@ScheduleActivity, "Downloaded update failed verification.", Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+
+                                withContext(Dispatchers.Main) {
+                                    // This opens the APK and triggers Android's install/update prompt
+                                    installer.promptInstall(apk)
+                                }
+
+                                // After user chose Update once, also suppress this version
+                                prefs.edit().putString("last_prompted_sw_version", serverName).apply()
+                                otaLog("OTA(admin): install prompt launched for $serverName")
+                            } catch (e: Exception) {
+                                otaLog("OTA(admin): update flow failed: ${e.message}")
+                                Toast.makeText(this@ScheduleActivity, "Update failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
-                    .setNegativeButton("Not now") { d, _ ->
-                        prefs.edit().putString("last_prompted_sw_version", serverName).apply()
-                        d.dismiss()
-                    }
                     .show()
+
             } finally {
                 otaCheckInFlight = false
             }
