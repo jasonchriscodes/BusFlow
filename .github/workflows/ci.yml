@@ -118,7 +118,10 @@ jobs:
           set -euo pipefail
           ./gradlew clean assembleDebug --stacktrace \
             -PCI_VERSION_NAME="${VERSION_NAME}" \
-            -PCI_VERSION_CODE="${VERSION_CODE}"
+            -PCI_VERSION_CODE="${VERSION_CODE}" \
+            -PTB_HOST="${TB_HOST}" \
+            -PTB_USER="${TB_USER}" \
+            -PTB_PASS="${TB_PASS}"
 
           APK_SOURCE_PATH="$(find . -type f -path "*/app/build/outputs/apk/debug/*.apk" -print -quit 2>/dev/null || true)"
           if [[ -z "$APK_SOURCE_PATH" ]]; then
@@ -137,6 +140,12 @@ jobs:
           echo "APK_PATH=${OUT_APK_NAME}" >> "$GITHUB_ENV"
           echo "APK_SHA256=${APK_SHA256}" >> "$GITHUB_ENV"
           echo "SHA_FILE=${SHA_FILE}" >> "$GITHUB_ENV"
+
+      - name: Check TB secrets exist
+        run: |
+          echo "TB_HOST set? $([[ -n "${TB_HOST}" ]] && echo yes || echo no)"
+          echo "TB_USER set? $([[ -n "${TB_USER}" ]] && echo yes || echo no)"
+          echo "TB_PASS set? $([[ -n "${TB_PASS}" ]] && echo yes || echo no)"
 
       - name: Create annotated git tag + push
         shell: bash
