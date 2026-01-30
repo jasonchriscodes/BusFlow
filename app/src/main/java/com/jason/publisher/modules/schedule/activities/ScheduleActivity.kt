@@ -60,10 +60,6 @@ import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
 import com.jason.publisher.modules.schedule.adapters.ScheduleAdapter
-import com.jason.publisher.modules.schedule.helpers.OtaCheckResult
-import com.jason.publisher.modules.schedule.helpers.OtaInfo
-import com.jason.publisher.modules.schedule.helpers.OtaUpdateManager
-import com.jason.publisher.modules.schedule.helpers.TbAdminOtaLatest
 import com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
 import com.jason.publisher.modules.schedule.viewmodels.ScheduleViewModel
 import com.jason.publisher.modules.signing.activities.SigningActivity
@@ -496,87 +492,83 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
-    private fun promptIfNewerOtaExists_powerShellStyle() {
+    private fun checkAndPromptOtaUpdate_cmdStyle() {
         if (otaCheckInFlight) return
-
-        // Needed for installing (download endpoint uses device token)
-        val deviceToken = resolveDeviceTokenFromConfig()?.trim()
-        if (deviceToken.isNullOrBlank()) {
-            otaLog("OTA: skip (deviceToken blank)")
-            return
-        }
-
         otaCheckInFlight = true
 
         val installedName = getInstalledVersionName()
         val installedCode = getInstalledVersionCode()
 
-        val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
-        val suppressed = prefs.getString("last_prompted_sw_version", null)
+        val tbHost = BuildConfig.TB_HOST
+        val tbUser = BuildConfig.TB_USER
+        val tbPass = BuildConfig.TB_PASS
 
-        // ⚠️ DO NOT hardcode credentials in code.
-        // Put these into BuildConfig fields or a secured config.
-        val adminApi = TbAdminOtaLatest(
-            tbHost = BuildConfig.TB_HOST,
-            tbUser = BuildConfig.TB_USER,
-            tbPass = BuildConfig.TB_PASS
+        if (tbUser.isBlank() || tbPass.isBlank()) {
+            otaLog("OTA: TB_USER/TB_PASS missing, skip")
+            otaCheckInFlight = false
+            return
+        }
+
+        val client = com.jason.publisher.modules.schedule.helpers.TbAdminOtaClient(
+            tbHost = tbHost,
+            tbUser = tbUser,
+            tbPass = tbPass
         )
 
         lifecycleScope.launch {
             try {
-                val latest = adminApi.fetchLatest("BusFlow-Android")
+                val latest = client.fetchLatest(title = "BusFlow-Android", type = "SOFTWARE")
                 if (latest == null) {
-                    otaLog("OTA: admin fetchLatest returned null")
+                    otaLog("OTA: no latest package found")
                     return@launch
                 }
 
                 val serverName = latest.version
-                val serverCode = versionNameToCodeOrNull(serverName)
+                val serverCode = versionNameToCodeOrNull(serverName) ?: 0L
 
-                otaLog("OTA: server version=$serverName code=$serverCode | installed=$installedName code=$installedCode")
+                otaLog("OTA: installed=$installedName($installedCode) server=$serverName($serverCode) id=${latest.id}")
 
-                val isNewer = when {
-                    serverCode != null -> serverCode > installedCode
-                    else -> isSemVerNewer(serverName, installedName)
-                }
+                val isNewer = if (serverCode > 0) serverCode > installedCode else isSemVerNewer(serverName, installedName)
 
                 if (!isNewer) {
-                    otaLog("OTA: no prompt (server not newer)")
+                    Toast.makeText(this@ScheduleActivity, "The app is up to date.", Toast.LENGTH_SHORT).show()
                     return@launch
                 }
-
-                if (serverName == suppressed) {
-                    otaLog("OTA: no prompt (suppressed=$suppressed)")
-                    return@launch
-                }
-
-                val ota = OtaUpdateManager(this@ScheduleActivity, "https://thingsboard.cloud", deviceToken)
-
-                val info = OtaInfo(
-                    title = latest.title,
-                    version = serverName,
-                    versionCode = serverCode,
-                    size = null,
-                    checksum = null,
-                    checksumAlg = null
-                )
 
                 AlertDialog.Builder(this@ScheduleActivity)
                     .setTitle("Update available")
-                    .setMessage("New version $serverName is available (installed: $installedName). Update now?")
+                    .setMessage("A new version $serverName is available (installed: $installedName). Update now?")
+                    .setNegativeButton("Not now") { d, _ -> d.dismiss() }
                     .setPositiveButton("Update") { _, _ ->
                         lifecycleScope.launch {
-                            val ok = ota.downloadAndInstall(info)
-                            otaLog("OTA: downloadAndInstall ok=$ok")
-                            // store suppression after we prompted once
-                            prefs.edit().putString("last_prompted_sw_version", serverName).apply()
+                            val downloadsDir = getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)
+                            if (downloadsDir == null) {
+                                Toast.makeText(this@ScheduleActivity, "Download folder is not available.", Toast.LENGTH_SHORT).show()
+                                return@launch
+                            }
+
+                            val outApk = java.io.File(downloadsDir, "tb_${latest.title}_${latest.version}.apk")
+
+                            // Download exactly like CMD: /api/otaPackage/{id}/download
+                            val ok = client.downloadOtaApk(latest.id, outApk)
+
+                            if (!ok) {
+                                Toast.makeText(this@ScheduleActivity, "Failed to download the update.", Toast.LENGTH_SHORT).show()
+                                return@launch
+                            }
+
+                            // Trigger Android installer
+                            if (!com.jason.publisher.modules.schedule.helpers.ApkInstaller.canInstallUnknownApps(this@ScheduleActivity)) {
+                                Toast.makeText(this@ScheduleActivity, "Please allow install from unknown sources.", Toast.LENGTH_LONG).show()
+                                com.jason.publisher.modules.schedule.helpers.ApkInstaller.requestUnknownAppsPermission(this@ScheduleActivity)
+                                return@launch
+                            }
+
+                            com.jason.publisher.modules.schedule.helpers.ApkInstaller.openInstaller(this@ScheduleActivity, outApk)
                         }
                     }
-                    .setNegativeButton("Not now") { d, _ ->
-                        prefs.edit().putString("last_prompted_sw_version", serverName).apply()
-                        d.dismiss()
-                    }
                     .show()
+
             } finally {
                 otaCheckInFlight = false
             }
@@ -1088,7 +1080,7 @@ class ScheduleActivity : AppCompatActivity() {
                 viewModel.loadAccessToken()
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    promptIfNewerOtaExists_powerShellStyle()
+                    checkAndPromptOtaUpdate_cmdStyle()
                 }
 
                 // ✅ If you already had a client running, stop it first

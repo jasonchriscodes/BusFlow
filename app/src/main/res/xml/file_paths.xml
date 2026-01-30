@@ -1,7 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- We will save the APK into getExternalFilesDir(DIRECTORY_DOWNLOADS) -->
-    <external-files-path
-        name="downloads"
-        path="Download/" />
+    <external-files-path name="external_files" path="." />
 </paths>
