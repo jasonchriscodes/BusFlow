@@ -63,6 +63,7 @@ import com.jason.publisher.modules.schedule.adapters.ScheduleAdapter
 import com.jason.publisher.modules.schedule.helpers.OtaCheckResult
 import com.jason.publisher.modules.schedule.helpers.OtaInfo
 import com.jason.publisher.modules.schedule.helpers.OtaUpdateManager
+import com.jason.publisher.modules.schedule.helpers.TbAdminOtaLatest
 import com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
 import com.jason.publisher.modules.schedule.viewmodels.ScheduleViewModel
 import com.jason.publisher.modules.signing.activities.SigningActivity
@@ -491,6 +492,120 @@ class ScheduleActivity : AppCompatActivity() {
                 first.isSigning() -> launchSigningActivity(first, no)
                 else              -> launchMapActivity(no)
             }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun promptIfNewerOtaExists_powerShellStyle() {
+        if (otaCheckInFlight) return
+
+        // Needed for installing (download endpoint uses device token)
+        val deviceToken = resolveDeviceTokenFromConfig()?.trim()
+        if (deviceToken.isNullOrBlank()) {
+            otaLog("OTA: skip (deviceToken blank)")
+            return
+        }
+
+        otaCheckInFlight = true
+
+        val installedName = getInstalledVersionName()
+        val installedCode = getInstalledVersionCode()
+
+        val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
+        val suppressed = prefs.getString("last_prompted_sw_version", null)
+
+        // ⚠️ DO NOT hardcode credentials in code.
+        // Put these into BuildConfig fields or a secured config.
+        val adminApi = TbAdminOtaLatest(
+            tbHost = BuildConfig.TB_HOST,
+            tbUser = BuildConfig.TB_USER,
+            tbPass = BuildConfig.TB_PASS
+        )
+
+        lifecycleScope.launch {
+            try {
+                val latest = adminApi.fetchLatest("BusFlow-Android")
+                if (latest == null) {
+                    otaLog("OTA: admin fetchLatest returned null")
+                    return@launch
+                }
+
+                val serverName = latest.version
+                val serverCode = versionNameToCodeOrNull(serverName)
+
+                otaLog("OTA: server version=$serverName code=$serverCode | installed=$installedName code=$installedCode")
+
+                val isNewer = when {
+                    serverCode != null -> serverCode > installedCode
+                    else -> isSemVerNewer(serverName, installedName)
+                }
+
+                if (!isNewer) {
+                    otaLog("OTA: no prompt (server not newer)")
+                    return@launch
+                }
+
+                if (serverName == suppressed) {
+                    otaLog("OTA: no prompt (suppressed=$suppressed)")
+                    return@launch
+                }
+
+                val ota = OtaUpdateManager(this@ScheduleActivity, "https://thingsboard.cloud", deviceToken)
+
+                val info = OtaInfo(
+                    title = latest.title,
+                    version = serverName,
+                    versionCode = serverCode,
+                    size = null,
+                    checksum = null,
+                    checksumAlg = null
+                )
+
+                AlertDialog.Builder(this@ScheduleActivity)
+                    .setTitle("Update available")
+                    .setMessage("New version $serverName is available (installed: $installedName). Update now?")
+                    .setPositiveButton("Update") { _, _ ->
+                        lifecycleScope.launch {
+                            val ok = ota.downloadAndInstall(info)
+                            otaLog("OTA: downloadAndInstall ok=$ok")
+                            // store suppression after we prompted once
+                            prefs.edit().putString("last_prompted_sw_version", serverName).apply()
+                        }
+                    }
+                    .setNegativeButton("Not now") { d, _ ->
+                        prefs.edit().putString("last_prompted_sw_version", serverName).apply()
+                        d.dismiss()
+                    }
+                    .show()
+            } finally {
+                otaCheckInFlight = false
+            }
+        }
+    }
+
+    private fun versionNameToCodeOrNull(v: String): Long? {
+        val parts = v.trim().split(".")
+        if (parts.size < 2) return null
+        val major = parts.getOrNull(0)?.toIntOrNull() ?: return null
+        val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val patch = parts.getOrNull(2)?.toIntOrNull() ?: 0
+        return (major * 10000 + minor * 100 + patch).toLong()
+    }
+
+    private fun isSemVerNewer(server: String, installed: String): Boolean {
+        fun parse(v: String): Triple<Int, Int, Int>? {
+            val p = v.trim().split(".")
+            val a = p.getOrNull(0)?.toIntOrNull() ?: return null
+            val b = p.getOrNull(1)?.toIntOrNull() ?: 0
+            val c = p.getOrNull(2)?.toIntOrNull() ?: 0
+            return Triple(a, b, c)
+        }
+        val s = parse(server) ?: return false
+        val i = parse(installed) ?: return false
+        return when {
+            s.first != i.first -> s.first > i.first
+            s.second != i.second -> s.second > i.second
+            else -> s.third > i.third
         }
     }
 
@@ -973,7 +1088,7 @@ class ScheduleActivity : AppCompatActivity() {
                 viewModel.loadAccessToken()
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    maybePromptOtaUpdate()
+                    promptIfNewerOtaExists_powerShellStyle()
                 }
 
                 // ✅ If you already had a client running, stop it first
@@ -983,90 +1098,6 @@ class ScheduleActivity : AppCompatActivity() {
                 mqttManager = MqttManager(clientId = buildClientId(), username = viewModel.token)
 
                 connectAndSubscribe()
-            }
-        }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.P)
-    private fun maybePromptOtaUpdate() {
-        if (otaCheckInFlight) return
-
-        val deviceToken = resolveDeviceTokenFromConfig()?.trim()
-        if (deviceToken.isNullOrBlank()) {
-            otaLog("maybePromptOtaUpdate: SKIP (deviceToken blank) aid=${viewModel.aid} configCount=${viewModel.config?.size ?: 0}")
-            return
-        }
-
-        otaCheckInFlight = true
-
-        val installedName = getInstalledVersionName()
-        val installedCode = getInstalledVersionCode()
-
-        val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
-        val suppressed = prefs.getString("last_prompted_sw_version", null)
-
-        val ota = OtaUpdateManager(
-            context = this,
-            tbHost = "https://thingsboard.cloud",
-            deviceToken = deviceToken
-        )
-
-        lifecycleScope.launch {
-            try {
-                when (val res = ota.checkForUpdateOnly()) {
-                    is OtaCheckResult.UpdateAvailable -> {
-                        val info = res.info
-                        val serverName = info.version
-                        val serverCode = info.versionCode
-
-                        otaLog("maybePromptOtaUpdate: server version=$serverName code=$serverCode | installed=$installedName code=$installedCode")
-
-                        val isNewer = when {
-                            serverCode != null -> serverCode > installedCode
-                            else -> isSemVerNewer(serverName, installedName)
-                        }
-
-                        if (!isNewer) {
-                            otaLog("maybePromptOtaUpdate: NO PROMPT (not newer)")
-                            return@launch
-                        }
-
-                        // prevent re-prompt spam
-                        if (serverName == suppressed) {
-                            otaLog("maybePromptOtaUpdate: NO PROMPT (suppressed last_prompted_sw_version=$suppressed)")
-                            return@launch
-                        }
-
-                        AlertDialog.Builder(this@ScheduleActivity)
-                            .setTitle("Update available")
-                            .setMessage("New version $serverName is available.\nInstalled: $installedName\n\nUpdate now?")
-                            .setPositiveButton("Update") { _, _ ->
-                                otaLog("OTA UI: Update clicked -> download/install $serverName")
-                                lifecycleScope.launch {
-                                    val ok = ota.downloadAndInstall(info)
-                                    otaLog("OTA install flow finished: ok=$ok")
-                                    if (ok) {
-                                        prefs.edit().putString("last_prompted_sw_version", serverName).apply()
-                                    }
-                                }
-                            }
-                            .setNegativeButton("Not now") { d, _ ->
-                                prefs.edit().putString("last_prompted_sw_version", serverName).apply()
-                                d.dismiss()
-                            }
-                            .show()
-                    }
-
-                    is OtaCheckResult.NoUpdate -> {
-                        otaLog("maybePromptOtaUpdate: NoUpdate (attrs missing or not set yet)")
-                    }
-
-                    is OtaCheckResult.Failed -> {
-                        otaLog("maybePromptOtaUpdate: Failed reason=${res.reason}")
-                    }
-                }
-            } finally {
-                otaCheckInFlight = false
             }
         }
     }
@@ -1481,25 +1512,6 @@ class ScheduleActivity : AppCompatActivity() {
                     Toast.makeText(this, "Error processing shared data.", Toast.LENGTH_SHORT).show()
                 }
             }
-        }
-    }
-
-    private fun isSemVerNewer(server: String, installed: String): Boolean {
-        fun parse(v: String): Triple<Int, Int, Int>? {
-            val parts = v.trim().split(".")
-            val a = parts.getOrNull(0)?.toIntOrNull() ?: return null
-            val b = parts.getOrNull(1)?.toIntOrNull() ?: 0
-            val c = parts.getOrNull(2)?.toIntOrNull() ?: 0
-            return Triple(a, b, c)
-        }
-
-        val s = parse(server) ?: return false
-        val i = parse(installed) ?: return false
-
-        return when {
-            s.first != i.first -> s.first > i.first
-            s.second != i.second -> s.second > i.second
-            else -> s.third > i.third
         }
     }
 

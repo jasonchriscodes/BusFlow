@@ -73,6 +73,14 @@ android {
 
         if (ciName != null) versionName = ciName.toString()
         if (ciCode != null) versionCode = Integer.parseInt(ciCode.toString())
+
+        def TB_HOST = (project.findProperty("TB_HOST") ?: System.getenv("TB_HOST") ?: "https://thingsboard.cloud").toString()
+        def TB_USER = (project.findProperty("TB_USER") ?: System.getenv("TB_USER") ?: "").toString()
+        def TB_PASS = (project.findProperty("TB_PASS") ?: System.getenv("TB_PASS") ?: "").toString()
+
+        buildConfigField "String", "TB_HOST", "\"${TB_HOST}\""
+        buildConfigField "String", "TB_USER", "\"${TB_USER}\""
+        buildConfigField "String", "TB_PASS", "\"${TB_PASS}\""
     }
 
     signingConfigs {
