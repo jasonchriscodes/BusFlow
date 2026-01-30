@@ -50,7 +50,8 @@ class TbAdminOtaLatest(
 
             val json = JSONObject(resp.body?.string().orEmpty())
             // ThingsBoard may return token or accessToken depending on version
-            return@withContext json.optString("token").ifBlank { json.optString("accessToken") }.ifBlank { null }
+            return@withContext json.optString("token").ifBlank { json.optString("accessToken") }
+                .ifBlank { null }
         }
     }
 
