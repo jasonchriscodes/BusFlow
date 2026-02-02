@@ -77,6 +77,7 @@ Printed duty sheets can be hard to read on the go, and memorizing multiple timin
 
 ### Live Map & Schedule Status  
 ![Map view with bus marker, upcoming stop label, and timing-point status icons](docs/screenshot-map.png)  
+![Map view with bus marker, upcoming stop label, and timing-point status icons](docs/screenshot-map2.png)
 
 ---
 
