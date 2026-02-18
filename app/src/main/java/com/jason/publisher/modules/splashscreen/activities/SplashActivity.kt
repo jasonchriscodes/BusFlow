@@ -100,10 +100,9 @@ class SplashActivity : AppCompatActivity() {
                         or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                 )
 
-        val gifView       = findViewById<GifImageView>(R.id.openerGif)
-        val choiceLayout  = findViewById<LinearLayout>(R.id.choiceLayout)
-        val btnFetch      = findViewById<Button>(R.id.btnFetchRoster)
-        val btnUseCache   = findViewById<Button>(R.id.btnUseCache)
+        val gifView     = findViewById<GifImageView>(R.id.openerGif)
+        val btnFetch    = findViewById<Button>(R.id.btnFetchRoster)
+        val btnUseCache = findViewById<Button>(R.id.btnUseCache)
 
 // play GIF only once
         val drawable = gifView.drawable as GifDrawable
@@ -115,6 +114,17 @@ class SplashActivity : AppCompatActivity() {
 
         btnFetch.setOnClickListener { startScheduleActivity(fetch = true) }
         btnUseCache.setOnClickListener { startScheduleActivity(fetch = false) }
+    }
+
+    private fun showChoiceButtons() {
+        val btnFetch = findViewById<Button>(R.id.btnFetchRoster)
+        val btnUseCache = findViewById<Button>(R.id.btnUseCache)
+
+        btnFetch.visibility = View.VISIBLE
+        btnUseCache.visibility = View.VISIBLE
+
+        btnFetch.bringToFront()
+        btnUseCache.bringToFront()
     }
 
 
@@ -203,6 +213,7 @@ class SplashActivity : AppCompatActivity() {
         continueOnboarding()
     }
 
+    @RequiresApi(Build.VERSION_CODES.M)
     private val allFilesLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             FileLogger.d("SplashActivity", "allFilesLauncher: returned")
@@ -222,12 +233,6 @@ class SplashActivity : AppCompatActivity() {
             FileLogger.d("SplashActivity", "unknownAppsLauncher: returned")
             continueOnboarding()
         }
-
-    private fun showChoiceButtons() {
-        val choiceLayout = findViewById<LinearLayout>(R.id.choiceLayout)
-        choiceLayout.visibility = View.VISIBLE
-        choiceLayout.bringToFront()
-    }
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun ensureUnknownAppsInstallPermission(): Boolean {

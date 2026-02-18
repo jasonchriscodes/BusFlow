@@ -86,7 +86,7 @@
             android:layout_marginBottom="16dp"
             android:background="@drawable/white_border"
             android:orientation="horizontal"
-            android:padding="8dp">
+            android:padding="@dimen/pad_sm">
 
             <TextView
                 android:id="@+id/timingPointandStopsTitleTextView"
@@ -115,7 +115,7 @@
             android:layout_marginBottom="16dp"
             android:background="@drawable/white_border"
             android:orientation="horizontal"
-            android:padding="8dp">
+            android:padding="@dimen/pad_sm">
 
             <TextView
                 android:id="@+id/tripEndTimeTitleTextView"
@@ -173,7 +173,7 @@
             android:background="@drawable/white_border"
             android:gravity="center_horizontal"
             android:orientation="vertical"
-            android:padding="8dp">
+            android:padding="@dimen/pad_sm">
 
             <!-- Schedule Status (Ahead, Behind, or On Time) -->
             <!--            <ImageView-->
@@ -449,7 +449,7 @@
         android:layout_marginStart="16dp"
         android:layout_marginTop="4dp"
         android:background="@drawable/button_rounded_background"
-        android:padding="8dp"
+        android:padding="@dimen/pad_sm"
         android:text="         Back to Schedule Table"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
@@ -461,7 +461,7 @@
         android:layout_marginStart="4dp"
         android:layout_marginTop="4dp"
         android:background="@drawable/backbut"
-        android:padding="8dp"
+        android:padding="@dimen/pad_sm"
 
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
