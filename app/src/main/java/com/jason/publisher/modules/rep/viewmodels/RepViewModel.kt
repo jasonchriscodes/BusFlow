@@ -1,4 +1,6 @@
-package com.jason.publisher.modules.map.viewmodels
+package com.jason.publisher.modules.rep.viewmodels
+
+import com.jason.publisher.modules.map.viewmodels.ScheduleStatusManager
 
 import android.annotation.SuppressLint
 import android.location.Location
@@ -39,12 +41,12 @@ import java.util.Locale.getDefault
 import kotlin.math.abs
 import kotlin.toString
 
-class MapViewModel: ViewModel() {
+class RepViewModel: ViewModel() {
     companion object {
         fun provideFactory(): ViewModelProvider.Factory = object: ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return (MapViewModel() as T)
+                return (RepViewModel() as T)
             }
         }
     }
@@ -114,7 +116,7 @@ class MapViewModel: ViewModel() {
     val lastNextTripText by lazy { MutableLiveData<String>() }
     val lastTripEndTimeText by lazy { MutableLiveData<String>() }
 
-    val stopStatusByKey: MutableMap<String, ScheduleStatusManager.StopVisualStatus> = mutableMapOf()
+    val stopStatusByKey: MutableMap<String, RepScheduleStatusManager.StopVisualStatus> = mutableMapOf()
     var lastTimingPointPassedIndex: Int = -1
 
     private val speedFilter = TimeBasedMovingAverageFilterDouble(

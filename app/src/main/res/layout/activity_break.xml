@@ -3,7 +3,7 @@
     android:id="@+id/breakRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="24dp"
+    android:padding="@dimen/pad_md"
     android:gravity="center"
     android:orientation="vertical"
     android:background="@color/colorMain">
@@ -13,9 +13,9 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Break in progress"
-        android:textSize="22sp"
+        android:textSize="@dimen/text_lg"
         android:textColor="@android:color/white"
-        android:layout_marginBottom="8dp"
+        android:layout_marginBottom="@dimen/gap_sm"
         android:textStyle="bold"/>
 
     <TextView
@@ -23,34 +23,33 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Break until 09:15"
-        android:textSize="18sp"
+        android:textSize="@dimen/text_md"
         android:textColor="@android:color/white"
-        android:layout_marginBottom="24dp"/>
+        android:layout_marginBottom="@dimen/gap_md"/>
 
+    <!-- Timer -->
     <TextView
         android:id="@+id/breakTimerText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="15:00"
-        android:textSize="56sp"
+        android:textSize="@dimen/text_timer"
         android:textStyle="bold"
         android:textColor="@android:color/white"
-        android:layout_marginBottom="24dp"/>
+        android:layout_marginBottom="@dimen/gap_md"/>
 
-    <!-- Up-next (until next Break) header -->
     <TextView
         android:id="@+id/upNextHeader"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Up next (until next Break)"
         android:textStyle="bold"
-        android:textSize="18sp"
+        android:textSize="@dimen/text_md"
         android:textColor="@android:color/white"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="8dp"
+        android:layout_marginTop="@dimen/gap_sm"
+        android:layout_marginBottom="@dimen/gap_sm"
         android:visibility="gone" />
 
-    <!-- Simple table-style list -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/upNextRecycler"
         android:layout_width="match_parent"
@@ -61,11 +60,11 @@
     <Button
         android:id="@+id/breakDoneBtn"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_height="@dimen/btn_height"
         android:text="Back to Schedule"
-        android:textSize="18sp"
-        android:paddingLeft="24dp"
-        android:paddingRight="24dp"
+        android:textSize="@dimen/text_btn"
+        android:paddingLeft="@dimen/pad_md"
+        android:paddingRight="@dimen/pad_md"
         android:visibility="gone"
         android:backgroundTint="@color/purple_400"
         android:textColor="@android:color/white"/>

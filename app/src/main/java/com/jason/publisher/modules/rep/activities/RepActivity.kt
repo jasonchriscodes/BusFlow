@@ -47,7 +47,7 @@ import com.jason.publisher.modules.map.utils.calculateDistance
 import com.jason.publisher.modules.map.utils.calculateDurationForUpdate
 import com.jason.publisher.modules.map.utils.formatPanelLabel
 import com.jason.publisher.modules.map.utils.getLastScheduledAddress
-import com.jason.publisher.modules.map.viewmodels.MapViewModel
+import com.jason.publisher.modules.rep.viewmodels.RepViewModel
 import com.jason.publisher.modules.map.viewmodels.TimeManager
 import com.jason.publisher.modules.map.mqtt.helpers.MqttConfigHelper
 import com.jason.publisher.modules.rep.mqtt.helpers.RepMqttHelper
@@ -58,6 +58,7 @@ import com.jason.publisher.R
 import com.jason.publisher.main.utils.convertTimeToMinutes
 import com.jason.publisher.main.utils.getNextScheduleStartTime
 import com.jason.publisher.modules.map.utils.calculateBearing
+import com.jason.publisher.modules.map.viewmodels.ScheduleStatusManager
 import com.jason.publisher.modules.rep.viewmodels.RepDetailPanelController
 import com.jason.publisher.modules.rep.viewmodels.RepMapViewController
 import com.jason.publisher.modules.rep.viewmodels.RepScheduleStatusManager
@@ -86,8 +87,8 @@ class RepActivity : AppCompatActivity() {
     private lateinit var connectionStatusTextView: TextView
     private lateinit var networkStatusIndicator: View
 
-    val viewModel: MapViewModel by viewModels {
-        MapViewModel.provideFactory()
+    val viewModel: RepViewModel by viewModels {
+        RepViewModel.provideFactory()
     }
 
     private lateinit var locationManager: LocationManager
@@ -100,7 +101,7 @@ class RepActivity : AppCompatActivity() {
     }
     lateinit var mapController: RepMapViewController
     lateinit var panelController: RepDetailPanelController
-    private lateinit var scheduleStatusManager: RepScheduleStatusManager
+    lateinit var scheduleStatusManager: RepScheduleStatusManager
     val connectivityManager by lazy(LazyThreadSafetyMode.NONE) {
         getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
     }
@@ -244,11 +245,6 @@ class RepActivity : AppCompatActivity() {
         viewModel.lastSpeedText.observe(this) {
             if (::speedTextView.isInitialized) {
                 speedTextView.text = it
-            }
-        }
-        viewModel.lastNextTripText.observe(this) {
-            if (::nextTripCountdownTextView.isInitialized) {
-                nextTripCountdownTextView.text = it
             }
         }
         viewModel.lastCurrentTimeText.observe(this) {
@@ -695,7 +691,7 @@ class RepActivity : AppCompatActivity() {
         }
 
         // 3) clear & redraw all detection zones _once_
-        mapController.drawDetectionZones(viewModel.stops, viewModel.passedStops)
+        mapController.drawDetectionZones(viewModel.stops, viewModel.passedStops, viewModel.stopStatusByKey)
 
         // 4) snap UI to the snappedStop (if any)
         snappedStop?.let { stop ->
@@ -1017,22 +1013,38 @@ class RepActivity : AppCompatActivity() {
         val nearestRouteIdx = viewModel.findNearestBusRoutePoint(currentLat, currentLon)
 
         // Auto-pass any stops whose route-index ≤ your position
-        var newStopPassed = false
+        // before loop
+        val beforeSize = viewModel.passedStops.size
+
+// Auto-pass any stops whose route-index ≤ your position
         viewModel.stops.forEach { stop ->
             val idx = viewModel.route.indexOfFirst {
                 it.latitude == stop.latitude && it.longitude == stop.longitude
             }
             if (idx != -1 && idx <= nearestRouteIdx && !viewModel.passedStops.contains(stop)) {
                 viewModel.passedStops.add(stop)
-                newStopPassed = true
             }
         }
 
-        // Update detection zones immediately when stops are auto-passed
-        if (newStopPassed) {
-            mapController.drawDetectionZones(viewModel.stops, viewModel.passedStops) // Redraw zones to show passed stops as green
-            val passedStop = viewModel.passedStops.lastOrNull()
-            Log.d("MapActivity", "✅ Stop passed: ${passedStop?.address}")
+        val afterSize = viewModel.passedStops.size
+        val newlyPassed = if (afterSize > beforeSize) {
+            viewModel.passedStops.takeLast(afterSize - beforeSize)
+        } else emptyList()
+
+        if (newlyPassed.isNotEmpty()) {
+            // Make sure schedule status is refreshed so lastCategory is accurate “now”
+            scheduleStatusManager.checkScheduleStatus()
+
+            applyStatusForNewlyPassedStops(newlyPassed)
+
+            // Redraw detection zones using status colors
+            mapController.drawDetectionZones(
+                viewModel.stops,
+                viewModel.passedStops,
+                viewModel.stopStatusByKey
+            )
+
+            Log.d("MapActivity", "✅ Auto-passed ${newlyPassed.size} stop(s); last=${newlyPassed.lastOrNull()?.address}")
         }
 
         // recompute currentStopIndex from passedStops
@@ -1108,14 +1120,28 @@ class RepActivity : AppCompatActivity() {
                 // Log detailed bus stop pass with ETA data
                 viewModel.logBusStopPass(currentLat, currentLon)
 
-                // Track and update detection zones
+                val beforeSize2 = viewModel.passedStops.size
+
                 if (!viewModel.passedStops.contains(nextStop)) {
                     viewModel.passedStops.add(nextStop)
-                    mapController.drawDetectionZones(viewModel.stops, viewModel.passedStops) // Redraw zones to reflect changes
                 }
-
-                viewModel.passedStops.add(nextStop)
                 viewModel.currentStopIndex++
+
+                val afterSize2 = viewModel.passedStops.size
+                val newlyPassed2 = if (afterSize2 > beforeSize2) {
+                    viewModel.passedStops.takeLast(afterSize2 - beforeSize2)
+                } else emptyList()
+
+                if (newlyPassed2.isNotEmpty()) {
+                    scheduleStatusManager.checkScheduleStatus()
+                    applyStatusForNewlyPassedStops(newlyPassed2)
+
+                    mapController.drawDetectionZones(
+                        viewModel.stops,
+                        viewModel.passedStops,
+                        viewModel.stopStatusByKey
+                    )
+                }
 
                 // Ensure the next stop is updated correctly even if a stop is skipped
                 while (viewModel.currentStopIndex < viewModel.stops.size && calculateDistance(
@@ -1450,6 +1476,74 @@ class RepActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e("MapActivity", "Error updating UI elements: ${e.message}", e)
             e.printStackTrace()
+        }
+    }
+
+    private fun applyStatusForNewlyPassedStops(newlyPassed: List<BusStop>) {
+        newlyPassed.forEach { stop ->
+            val key = viewModel.stopKey(stop.latitude, stop.longitude)
+            val isTiming = viewModel.isTimingPointStop(stop)
+
+            if (!isTiming) {
+                // Non-timing stops become orange pending until next timing point decides them
+                viewModel.stopStatusByKey[key] = RepScheduleStatusManager.StopVisualStatus(
+                    category = RepScheduleStatusManager.RepStopPassCategory.PENDING,
+                    isTimingPoint = false
+                )
+                return@forEach
+            }
+
+            // Timing point: use the most recent schedule status result
+            val cat = scheduleStatusManager.lastCategory
+            viewModel.stopStatusByKey[key] =
+                RepScheduleStatusManager.StopVisualStatus(category = cat, isTimingPoint = true)
+
+            // Resolve all previous pending stops since last timing point
+            resolvePendingStopsUsingTimingPointResult(
+                timingPointIndex = viewModel.currentStopIndex,
+                timingPointCategory = cat
+            )
+
+            viewModel.lastTimingPointPassedIndex = viewModel.currentStopIndex
+        }
+    }
+
+    private fun resolvePendingStopsUsingTimingPointResult(
+        timingPointIndex: Int,
+        timingPointCategory: RepScheduleStatusManager.RepStopPassCategory
+    ) {
+        // Decide what pending stops turn into when the timing point is reached
+        val resolvedCategory: RepScheduleStatusManager.RepStopPassCategory = when (timingPointCategory) {
+            RepScheduleStatusManager.RepStopPassCategory.ON_TIME ->
+                RepScheduleStatusManager.RepStopPassCategory.ON_TIME
+
+            // Early => treat as early (red)
+            RepScheduleStatusManager.RepStopPassCategory.SLIGHTLY_AHEAD,
+            RepScheduleStatusManager.RepStopPassCategory.VERY_AHEAD ->
+                RepScheduleStatusManager.RepStopPassCategory.SLIGHTLY_AHEAD
+
+            // Behind => treat as behind (amber)
+            RepScheduleStatusManager.RepStopPassCategory.SLIGHTLY_BEHIND,
+            RepScheduleStatusManager.RepStopPassCategory.VERY_BEHIND ->
+                RepScheduleStatusManager.RepStopPassCategory.SLIGHTLY_BEHIND
+
+            // Shouldn't happen for a timing point, but keep safe default
+            RepScheduleStatusManager.RepStopPassCategory.PENDING ->
+                RepScheduleStatusManager.RepStopPassCategory.ON_TIME
+        }
+
+        val start = (viewModel.lastTimingPointPassedIndex + 1).coerceAtLeast(0)
+        val endExclusive = timingPointIndex.coerceAtMost(viewModel.stops.size)
+
+        for (i in start until endExclusive) {
+            val s = viewModel.stops[i]
+            val key = viewModel.stopKey(s.latitude, s.longitude)
+            val existing = viewModel.stopStatusByKey[key]
+
+            // only resolve those that were pending (orange)
+            if (existing?.category == RepScheduleStatusManager.RepStopPassCategory.PENDING) {
+                viewModel.stopStatusByKey[key] = existing.copy(category = resolvedCategory)
+            }
         }
     }
 

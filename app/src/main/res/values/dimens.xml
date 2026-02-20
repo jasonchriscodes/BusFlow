@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- padding / gaps -->
+    <dimen name="pad_sm">6dp</dimen>
+    <dimen name="pad_md">10dp</dimen>
+    <dimen name="gap_sm">6dp</dimen>
+    <dimen name="gap_md">10dp</dimen>
+    <dimen name="logo_safe_gap">280dp</dimen>
+
+    <!-- text -->
+    <dimen name="text_sm">13sp</dimen>
+    <dimen name="text_md">15sp</dimen>
+    <dimen name="text_lg">17sp</dimen>
+    <dimen name="text_btn">14sp</dimen>
+    <dimen name="text_btn_copy_aid">12sp</dimen>
+
+    <!-- buttons -->
+    <dimen name="btn_height">40dp</dimen>
+    <dimen name="btn_height_small">34dp</dimen>
+    <dimen name="icon_btn">40dp</dimen>
+
+    <!-- indicators/icons -->
+    <dimen name="status_dot">18dp</dimen>
+    <dimen name="topbar_height">44dp</dimen>
+    <dimen name="icon_lg">48dp</dimen>
+
+    <!-- big timer text for Break/Signing -->
+    <dimen name="text_timer">40sp</dimen>
+</resources>

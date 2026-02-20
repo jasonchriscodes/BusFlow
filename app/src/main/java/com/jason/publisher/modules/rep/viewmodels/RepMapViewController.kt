@@ -23,6 +23,7 @@ import com.jason.publisher.modules.map.activities.MapActivity
 import com.jason.publisher.modules.rep.activities.RepActivity
 import com.jason.publisher.modules.map.utils.BUS_STOP_RADIUS
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
+import com.jason.publisher.modules.map.viewmodels.ScheduleStatusManager
 import com.jason.publisher.modules.rep.mqtt.helpers.RepMqttHelper
 import java.io.File
 import java.util.HashMap
@@ -75,10 +76,35 @@ class RepMapViewController(
 
     // Track map layer to ensure it's never removed
     private var mapTileLayer: TileRendererLayer? = null
+    private val checkMarkers = mutableListOf<Marker>()
 
     companion object {
         /** Minimum 100ms between marker updates for smooth movement */
         private const val MARKER_UPDATE_MIN_INTERVAL_MS = 100L
+    }
+
+    private fun dpToPx(dp: Int): Int =
+        TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            dp.toFloat(),
+            activity.resources.displayMetrics
+        ).toInt()
+
+    private fun vectorToAndroidBitmap(
+        @DrawableRes drawableId: Int,
+        sizeDp: Int,
+        tintColor: Int
+    ): android.graphics.Bitmap {
+        val drawable = androidx.core.content.ContextCompat.getDrawable(activity, drawableId)!!
+        val wrapped = androidx.core.graphics.drawable.DrawableCompat.wrap(drawable).mutate()
+        androidx.core.graphics.drawable.DrawableCompat.setTint(wrapped, tintColor)
+
+        val sizePx = dpToPx(sizeDp)
+        val bitmap = android.graphics.Bitmap.createBitmap(sizePx, sizePx, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        wrapped.setBounds(0, 0, canvas.width, canvas.height)
+        wrapped.draw(canvas)
+        return bitmap
     }
 
     /** Monitor other buses every second, logging their count and active/inactive status. */
@@ -313,7 +339,7 @@ class RepMapViewController(
                             mapView.model.mapViewPosition.zoomLevel = 15
                             mapView.model.mapViewPosition.center =
                                 LatLong(activity.viewModel.latitude, activity.viewModel.longitude)
-                            drawDetectionZones(activity.viewModel.stops, activity.viewModel.passedStops)
+                            drawDetectionZones(activity.viewModel.stops, activity.viewModel.passedStops, activity.viewModel.stopStatusByKey)
                             drawPolyline(activity.viewModel.route)
                             addBusStopMarkers(activity.viewModel.stops)
                             addBusMarker(activity.viewModel.latitude, activity.viewModel.longitude)
@@ -420,37 +446,80 @@ class RepMapViewController(
 
     /**
      * Function to add circular markers to represent the detection area for each stop.
+     * - Grey: not passed yet
+     * - Green: passed (no status info)
+     * - Status colors: from ScheduleStatusManager
+     * - ✅ Check icon: ONLY when status.category == ON_TIME
      */
     fun drawDetectionZones(
-        busStops: List<BusStop>,
+        stops: List<BusStop>,
         passedStops: List<BusStop>,
-        radiusMeters: Double = BUS_STOP_RADIUS
+        stopStatusByKey: Map<String, RepScheduleStatusManager.StopVisualStatus> = emptyMap()
     ) {
-        // remove all old circles
         val layers = mapView.layerManager.layers
-        layers.filterIsInstance<Circle>()
-            .forEach { layers.remove(it) }
 
-        // draw fresh ones based on passedStops
-        busStops.forEach { stop ->
-            val passed = passedStops.any {
-                it.latitude == stop.latitude && it.longitude == stop.longitude
+        // 1) remove old circles
+        layers.filterIsInstance<Circle>().forEach { layers.remove(it) }
+
+        // 2) remove old check markers (so they don’t stack every redraw)
+        checkMarkers.forEach { layers.remove(it) }
+        checkMarkers.clear()
+
+        // 3) draw fresh circles + optional check icon
+        stops.forEach { stop ->
+            val passed = passedStops.contains(stop)
+            val key = "${stop.latitude ?: 0.0},${stop.longitude ?: 0.0}"
+            val status = stopStatusByKey[key]
+
+            val zoneColor = when {
+                !passed -> Color.parseColor("#90A4AE") // not passed yet
+                status == null -> Color.parseColor("#2E7D32") // passed but no timing status
+                else -> activity.scheduleStatusManager.repToZoneColor(status.category) // status-based
             }
-            val fill   = if (passed) Color.argb(64, 0,255,0) else Color.argb(64,255,0,0)
-            val stroke = if (passed) Color.GREEN else Color.RED
+
+            val fill = Color.argb(
+                64,
+                Color.red(zoneColor),
+                Color.green(zoneColor),
+                Color.blue(zoneColor)
+            )
+            val stroke = zoneColor
 
             val circle = Circle(
                 LatLong(stop.latitude!!, stop.longitude!!),
-                radiusMeters.toFloat(),
+                BUS_STOP_RADIUS.toFloat(),
                 AndroidGraphicFactory.INSTANCE.createPaint().apply {
-                    color = fill; setStyle(Style.FILL)
+                    color = fill
+                    setStyle(Style.FILL)
                 },
                 AndroidGraphicFactory.INSTANCE.createPaint().apply {
-                    color = stroke; strokeWidth = 2f; setStyle(Style.STROKE)
+                    color = stroke
+                    strokeWidth = 2f
+                    setStyle(Style.STROKE)
                 }
             )
             layers.add(circle)
+
+            // ✅ Add check icon ONLY for ON_TIME
+            if (status?.category == RepScheduleStatusManager.RepStopPassCategory.ON_TIME) {
+                val androidBmp = vectorToAndroidBitmap(
+                    drawableId = R.drawable.ic_check_green,
+                    sizeDp = 18,
+                    tintColor = android.graphics.Color.BLACK
+                )
+
+                val checkMarker = Marker(
+                    LatLong(stop.latitude!!, stop.longitude!!),
+                    AndroidBitmap(androidBmp), // ✅ correct: Mapsforge Bitmap wrapper
+                    dpToPx(14),                // shift right
+                    -dpToPx(14)                // shift up
+                )
+
+                layers.add(checkMarker)
+                checkMarkers.add(checkMarker)
+            }
         }
+
         mapView.invalidate()
     }
 

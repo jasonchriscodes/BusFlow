@@ -1,39 +1,60 @@
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/rootSplash"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Full-screen GIF -->
     <pl.droidsonroids.gif.GifImageView
         android:id="@+id/openerGif"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         android:src="@drawable/busflow_opener_gif"
-        android:scaleType="centerCrop" />
+        android:scaleType="centerCrop"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Button row, centered -->
-    <LinearLayout
-        android:id="@+id/choiceLayout"
+    <!-- Spacer (logo safe-zone) in the middle -->
+    <View
+        android:id="@+id/logoSafeGap"
+        android:layout_width="@dimen/logo_safe_gap"
+        android:layout_height="1dp"
+        android:visibility="invisible"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintVertical_bias="0.50" />
+
+    <!-- Fetch Roster (left of safe-gap) -->
+    <Button
+        android:id="@+id/btnFetchRoster"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:layout_height="@dimen/btn_height"
+        android:text="Fetch Roster"
+        android:textSize="@dimen/text_btn"
+        android:paddingLeft="@dimen/pad_md"
+        android:paddingRight="@dimen/pad_md"
         android:visibility="gone"
-        android:layout_gravity="center"
-        android:gravity="center"
-        android:padding="16dp">
+        android:layout_marginEnd="@dimen/gap_md"
+        app:layout_constraintEnd_toStartOf="@id/logoSafeGap"
+        app:layout_constraintTop_toTopOf="@id/logoSafeGap"
+        app:layout_constraintBottom_toBottomOf="@id/logoSafeGap" />
 
-        <Button
-            android:id="@+id/btnFetchRoster"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Fetch Roster"
-            android:layout_marginEnd="500dp"/>
+    <!-- Use Cache (right of safe-gap) -->
+    <Button
+        android:id="@+id/btnUseCache"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/btn_height"
+        android:text="Use Cache"
+        android:textSize="@dimen/text_btn"
+        android:paddingLeft="@dimen/pad_md"
+        android:paddingRight="@dimen/pad_md"
+        android:visibility="gone"
+        android:layout_marginStart="@dimen/gap_md"
+        app:layout_constraintStart_toEndOf="@id/logoSafeGap"
+        app:layout_constraintTop_toTopOf="@id/logoSafeGap"
+        app:layout_constraintBottom_toBottomOf="@id/logoSafeGap" />
 
-        <Button
-            android:id="@+id/btnUseCache"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Use Cache"/>
-    </LinearLayout>
-
-</FrameLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

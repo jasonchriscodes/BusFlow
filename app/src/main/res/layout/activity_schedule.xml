@@ -21,12 +21,12 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="2025-01-23 14:00:00"
-        android:textSize="16sp"
+        android:textSize="@dimen/text_sm"
         android:textColor="@color/white"
         android:textStyle="bold"
-        android:padding="8dp"
+        android:padding="@dimen/pad_sm"
         android:background="#FF6200EE"
-        android:layout_margin="16dp"
+        android:layout_margin="@dimen/pad_md"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"/>
 
@@ -36,13 +36,13 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Tabulated View"
-        android:textSize="22sp"
+        android:textSize="@dimen/text_lg"
         android:textColor="@color/white"
         android:textStyle="bold"
-        android:padding="8dp"
+        android:padding="@dimen/pad_sm"
         android:background="@drawable/white_border"
         android:gravity="center"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="@dimen/pad_md"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
@@ -62,50 +62,51 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="24dp"/>
 
-    <Button
-        android:id="@+id/copyAidButton"
+    <LinearLayout
+        android:id="@+id/topRightStatusCluster"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Copy AID!"
-        android:textColor="@android:color/white"
-        android:backgroundTint="@color/purple_400"
-        android:paddingLeft="10dp"
-        android:paddingRight="10dp"
-        android:minHeight="36dp"
-        android:elevation="8dp"
-        android:visibility="visible"
-        android:layout_marginEnd="8dp"
-        app:layout_constraintEnd_toStartOf="@id/connectionStatusTextView"
-        app:layout_constraintTop_toTopOf="@id/networkStatusIndicator"
-        app:layout_constraintBottom_toBottomOf="@id/networkStatusIndicator"/>
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_margin="@dimen/pad_md"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
-    <!-- Network Status Indicator (Top Right) -->
-    <View
-        android:id="@+id/networkStatusIndicator"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
-        android:layout_margin="16dp"
-        android:background="@drawable/circle_shape_green"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        <Button
+            android:id="@+id/copyAidButton"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/btn_height_small"
+            android:text="Copy AID"
+            android:textSize="@dimen/text_btn_copy_aid"
+            android:textColor="@android:color/white"
+            android:backgroundTint="@color/purple_400"
+            android:paddingLeft="@dimen/pad_md"
+            android:paddingRight="@dimen/pad_md"
+            android:minHeight="@dimen/btn_height_small"
+            android:elevation="4dp"
+            android:layout_marginEnd="@dimen/gap_sm"/>
 
-    <!-- Connection Status Text (Left of Indicator) -->
-    <TextView
-        android:id="@+id/connectionStatusTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="8dp"
-        android:text="Connected"
-        android:textSize="16sp"
-        android:textColor="@color/whatsapp_green"
-        app:layout_constraintEnd_toStartOf="@id/networkStatusIndicator"
-        app:layout_constraintTop_toTopOf="@id/networkStatusIndicator"/>
+        <TextView
+            android:id="@+id/connectionStatusTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Connected"
+            android:textSize="@dimen/text_sm"
+            android:textColor="@color/whatsapp_green"
+            android:layout_marginEnd="@dimen/gap_sm"/>
+
+        <View
+            android:id="@+id/networkStatusIndicator"
+            android:layout_width="@dimen/status_dot"
+            android:layout_height="@dimen/status_dot"
+            android:background="@drawable/circle_shape_green"/>
+    </LinearLayout>
 
     <ProgressBar
         android:id="@+id/progressBar"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="@dimen/pad_sm"
         android:indeterminate="false"
         android:max="100"
         android:progress="0"
@@ -149,12 +150,13 @@
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/scheduleRecycler"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="@dimen/pad_md"
+        android:layout_marginStart="@dimen/pad_md"
+        android:layout_marginEnd="@dimen/pad_md"
         android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/changeModeButton"
+        app:layout_constraintTop_toBottomOf="@id/progressBar"
+        app:layout_constraintBottom_toTopOf="@id/paginationLayout"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
@@ -172,19 +174,19 @@
 
         <ImageButton
             android:id="@+id/btnPrevious"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="@dimen/icon_btn"
+            android:layout_height="@dimen/icon_btn"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="Previous"
-            android:layout_marginEnd="8dp"/>
+            android:layout_marginEnd="@dimen/gap_sm"/>
 
         <Button
             android:id="@+id/btnPage1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="1"
-            android:padding="8dp"
+            android:padding="@dimen/pad_sm"
             android:layout_marginEnd="8dp"/>
 
         <Button
@@ -192,7 +194,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="2"
-            android:padding="8dp"
+            android:padding="@dimen/pad_sm"
             android:layout_marginEnd="8dp"/>
 
         <Button
@@ -200,7 +202,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="3"
-            android:padding="8dp"
+            android:padding="@dimen/pad_sm"
             android:layout_marginEnd="8dp"/>
 
         <ImageButton
@@ -269,12 +271,12 @@
             android:id="@+id/startRouteButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
+            android:layout_marginEnd="@dimen/gap_md"
             android:backgroundTint="@color/purple_400"
-            android:padding="16dp"
+            android:padding="@dimen/pad_md"
             android:text="Start Route"
             android:textColor="@android:color/white"
-            android:textSize="18sp" />
+            android:textSize="@dimen/text_md" />
 
         <Button
             android:id="@+id/testStartRouteButton"
