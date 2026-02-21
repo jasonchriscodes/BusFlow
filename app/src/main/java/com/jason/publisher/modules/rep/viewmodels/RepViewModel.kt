@@ -116,7 +116,7 @@ class RepViewModel: ViewModel() {
     val lastNextTripText by lazy { MutableLiveData<String>() }
     val lastTripEndTimeText by lazy { MutableLiveData<String>() }
 
-    val stopStatusByKey: MutableMap<String, RepScheduleStatusManager.StopVisualStatus> = mutableMapOf()
+    val stopStatusByKey: MutableMap<String, RepScheduleStatusManager.RepStopVisualStatus> = mutableMapOf()
     var lastTimingPointPassedIndex: Int = -1
 
     private val speedFilter = TimeBasedMovingAverageFilterDouble(

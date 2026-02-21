@@ -23,59 +23,38 @@ class RepScheduleStatusManager(
 ) {
 
     enum class RepStopPassCategory {
-        ON_TIME,
-        SLIGHTLY_AHEAD,
-        VERY_AHEAD,
-        SLIGHTLY_BEHIND,
-        VERY_BEHIND,
-        PENDING
+        ON_TIME,     // green
+        EARLY,       // red (timing points only)
+        LATE_5,      // blue  (>= 5 min late)
+        LATE_10,     // purple(>= 10 min late)
+        PENDING      // orange (non-timing until next timing point)
     }
 
-    data class StopVisualStatus(
+    data class RepStopVisualStatus(
         val category: RepStopPassCategory,
         val isTimingPoint: Boolean
     )
 
-    fun repToZoneColor(category: RepStopPassCategory): Int {
-        return when (category) {
-            RepStopPassCategory.ON_TIME -> Color.parseColor("#2E7D32") // green
-
-            RepStopPassCategory.SLIGHTLY_AHEAD,
-            RepStopPassCategory.VERY_AHEAD -> Color.parseColor("#C62828") // red
-
-            RepStopPassCategory.SLIGHTLY_BEHIND,
-            RepStopPassCategory.VERY_BEHIND -> Color.parseColor("#FF8F00") // amber
-
-            RepStopPassCategory.PENDING -> Color.parseColor("#FB8C00") // orange
-        }
+    fun repToZoneColor(category: RepStopPassCategory): Int = when (category) {
+        RepStopPassCategory.ON_TIME -> Color.parseColor("#2E7D32") // green
+        RepStopPassCategory.EARLY   -> Color.parseColor("#E53935") // red
+        RepStopPassCategory.LATE_5  -> Color.parseColor("#1E88E5") // blue
+        RepStopPassCategory.LATE_10 -> Color.parseColor("#8E24AA") // purple
+        RepStopPassCategory.PENDING -> Color.parseColor("#FB8C00") // orange
     }
 
-    fun RepStopPassCategory.toZoneColorEx(): Int = when (this) {
-        RepStopPassCategory.ON_TIME        -> Color.parseColor("#2E7D32") // green
-        RepStopPassCategory.SLIGHTLY_AHEAD -> Color.parseColor("#E53935") // red
-        RepStopPassCategory.VERY_AHEAD     -> Color.parseColor("#B71C1C") // dark red
-        RepStopPassCategory.SLIGHTLY_BEHIND-> Color.parseColor("#FFC107") // amber
-        RepStopPassCategory.VERY_BEHIND    -> Color.parseColor("#FF6F00") // deep amber/orange
-        RepStopPassCategory.PENDING        -> Color.parseColor("#FB8C00") // orange
-    }
-
-    // inside ScheduleStatusManager
     var lastCategory: RepStopPassCategory = RepStopPassCategory.ON_TIME
         private set
 
-    private fun categorizeDelta(deltaSec: Int): RepStopPassCategory {
-        // ✅ Use YOUR existing thresholds here.
-        // Below is a reasonable default:
+    private fun categorizeTimingDelta(deltaSec: Int): RepStopPassCategory {
+        // deltaSec = scheduled - predicted
+        // positive => predicted before scheduled (EARLY)
+        // negative => predicted after scheduled (LATE)
         return when {
-            deltaSec == 0 -> RepStopPassCategory.ON_TIME
-
-            // ahead (early) => positive
-            deltaSec in 1..59 -> RepStopPassCategory.SLIGHTLY_AHEAD
-            deltaSec >= 60 -> RepStopPassCategory.VERY_AHEAD
-
-            // behind => negative
-            deltaSec in -59..-1 -> RepStopPassCategory.SLIGHTLY_BEHIND
-            else -> RepStopPassCategory.VERY_BEHIND
+            deltaSec > 0          -> RepStopPassCategory.EARLY
+            deltaSec <= -600      -> RepStopPassCategory.LATE_10
+            deltaSec <= -300      -> RepStopPassCategory.LATE_5
+            else                  -> RepStopPassCategory.ON_TIME
         }
     }
 
@@ -272,7 +251,7 @@ class RepScheduleStatusManager(
 
             // --- 5. Compare predicted arrival with Timing Point ---
             val deltaSec = ((timingPointTime.time - predictedArrival.time.time) / 1000).toInt()
-            lastCategory = categorizeDelta(deltaSec)
+            lastCategory = categorizeTimingDelta(deltaSec)
 
             // convert to minutes only (drop seconds)
             val deltaMin = deltaSec / 60               // signed minutes
@@ -282,27 +261,24 @@ class RepScheduleStatusManager(
             val timeDiff = minutesLabel(absMin)
 
             val statusText = when {
-                deltaMin >= 2    -> "Very Ahead (~$timeDiff early)"
-                deltaMin in 1..2    -> "Slightly Ahead (~$timeDiff early)"
+                deltaMin >= 1    -> "Early (~$timeDiff early)"
                 deltaMin in -1..1-> "On Time (~$timeDiff on time)"
-                deltaMin in -2..-1 -> "Slightly Behind (~$timeDiff late)"
+                deltaMin in -5..-1 -> "Slightly Behind (~$timeDiff late)"
                 else   -> "Very Behind (~$timeDiff late)"
             }
 
             val symbolRes = when {
-                deltaMin >= 2       -> R.drawable.ic_schedule_very_ahead
-                deltaMin in 1..2        -> R.drawable.ic_schedule_slightly_ahead
+                deltaMin >= 1       -> R.drawable.ic_schedule_very_ahead
                 deltaMin in -1..1   -> R.drawable.ic_schedule_on_time
-                deltaMin in -2..-1  -> R.drawable.ic_schedule_slightly_behind
+                deltaMin in -5..-1  -> R.drawable.ic_schedule_slightly_behind
                 else      -> R.drawable.ic_schedule_very_behind
             }
 
             val colorRes = when {
-                deltaMin >= 2       -> R.color.blind_red            // Very Ahead
-                deltaMin in 1..2       -> R.color.blind_light_orange   // Slightly Ahead
-                deltaMin in -1..1   -> R.color.blind_cyan           // On Time
-                deltaMin in -2..-1  -> R.color.blind_orange         // Slightly Behind
-                else      -> R.color.blind_orange         // Very Behind
+                deltaMin >= 1       -> Color.parseColor("#E53935")          // Very Ahead, red
+                deltaMin in -1..1   -> Color.parseColor("#2E7D32")        // On Time, green
+                deltaMin in -5..-1  -> Color.parseColor("#1E88E5")         // Slightly Behind, blue
+                else      -> Color.parseColor("#FB8C00")         // Very Behind, purple
             }
 
             // Update UI directly (already on main thread from RepActivity)

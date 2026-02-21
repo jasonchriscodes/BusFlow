@@ -694,7 +694,7 @@ class TestMapActivity : AppCompatActivity() {
             val colorRes = when {
                 deltaSec >= 120 -> R.color.blind_red            // Very Ahead
                 deltaSec in 1..119 -> R.color.blind_light_orange     // Slightly Ahead
-                deltaSec in -179..0 -> R.color.blind_cyan       // On Time
+                deltaSec in -179..0 -> R.color.blind_green       // On Time
                 deltaSec in -299..-180 -> R.color.blind_orange   // Slightly Behind
                 else -> R.color.blind_orange          // Very Behind
             }

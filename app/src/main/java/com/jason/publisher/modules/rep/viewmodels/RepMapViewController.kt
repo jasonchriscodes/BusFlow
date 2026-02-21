@@ -454,7 +454,7 @@ class RepMapViewController(
     fun drawDetectionZones(
         stops: List<BusStop>,
         passedStops: List<BusStop>,
-        stopStatusByKey: Map<String, RepScheduleStatusManager.StopVisualStatus> = emptyMap()
+        stopStatusByKey: Map<String, RepScheduleStatusManager.RepStopVisualStatus> = emptyMap()
     ) {
         val layers = mapView.layerManager.layers
 
