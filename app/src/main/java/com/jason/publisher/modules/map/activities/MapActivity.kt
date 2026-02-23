@@ -60,6 +60,7 @@ import com.jason.publisher.modules.schedule.activities.ScheduleActivity
 import com.jason.publisher.R
 import com.jason.publisher.main.utils.convertTimeToMinutes
 import com.jason.publisher.main.utils.getNextScheduleStartTime
+import com.jason.publisher.main.utils.parseTimeToday
 import com.jason.publisher.modules.map.utils.calculateBearing
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.model.common.Observer
@@ -122,6 +123,8 @@ class MapActivity : AppCompatActivity() {
     private val locationUpdateThrottleMs = 2000L // Minimum 2 seconds between location-based UI updates
     val panelDebounceHandler: Handler = Handler(Looper.getMainLooper())
     var panelDebounceRunnable: Runnable? = null
+    private var lastNextRunSafetyToastAt = 0L
+    private val nextRunSafetyToastCooldownMs = 5 * 60 * 1000L // 5 minutes
 
     @RequiresApi(Build.VERSION_CODES.N)
     @SuppressLint("LongLogTag")
@@ -1420,6 +1423,7 @@ class MapActivity : AppCompatActivity() {
 
             // Update schedule status (this will update scheduleStatusValueTextView and icon)
             scheduleStatusManager.checkScheduleStatus()
+            maybeShowNextRunSafetyWarning()
 
             // Update API time
             updateApiTime()
@@ -1477,6 +1481,30 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
+    private fun maybeShowNextRunSafetyWarning() {
+        val nextTrip = viewModel.scheduleData.firstOrNull() ?: return
+        val nextStartStr = (nextTrip.startTime + ":00")
+        val nextStart = nextStartStr.parseTimeToday()
+
+        val deltaSec = ((nextStart.time - System.currentTimeMillis()) / 1000L).toInt()
+
+        // Warn if already late, or if it's imminent and we're in "10+ min late" state
+        val shouldWarn = (deltaSec < -60) ||
+                (deltaSec in 0..(5 * 60) && scheduleStatusManager.lastCategory == ScheduleStatusManager.StopPassCategory.LATE_10)
+
+        if (!shouldWarn) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastNextRunSafetyToastAt < nextRunSafetyToastCooldownMs) return
+
+        lastNextRunSafetyToastAt = now
+        Toast.makeText(
+            this,
+            "⚠️ You may start the next run late. Stay calm — safety first. You can recover time at timing points.",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
     private fun applyStatusForNewlyPassedStops(newlyPassed: List<BusStop>) {
         newlyPassed.forEach { stop ->
             val key = viewModel.stopKey(stop.latitude, stop.longitude)
@@ -1510,20 +1538,14 @@ class MapActivity : AppCompatActivity() {
         timingPointIndex: Int,
         timingPointCategory: ScheduleStatusManager.StopPassCategory
     ) {
-        // Decide what pending stops turn into when the timing point is reached
-        val resolvedCategory = when (timingPointCategory) {
-            ScheduleStatusManager.StopPassCategory.ON_TIME -> ScheduleStatusManager.StopPassCategory.ON_TIME
-
-            // Early => red
-            ScheduleStatusManager.StopPassCategory.SLIGHTLY_AHEAD,
-            ScheduleStatusManager.StopPassCategory.VERY_AHEAD -> ScheduleStatusManager.StopPassCategory.SLIGHTLY_AHEAD
-
-            // Behind => amber (keep info visible)
-            ScheduleStatusManager.StopPassCategory.SLIGHTLY_BEHIND,
-            ScheduleStatusManager.StopPassCategory.VERY_BEHIND -> ScheduleStatusManager.StopPassCategory.SLIGHTLY_BEHIND
-
-            ScheduleStatusManager.StopPassCategory.PENDING -> ScheduleStatusManager.StopPassCategory.ON_TIME
-        }
+        // Only two outcomes for NON-timing stops:
+        // - green if the timing point is NOT early (driver waited/slowed)
+        // - red if the timing point is early (driver didn't wait)
+        val resolvedCategory =
+            if (timingPointCategory == ScheduleStatusManager.StopPassCategory.EARLY)
+                ScheduleStatusManager.StopPassCategory.EARLY
+            else
+                ScheduleStatusManager.StopPassCategory.ON_TIME
 
         val start = (viewModel.lastTimingPointPassedIndex + 1).coerceAtLeast(0)
         val endExclusive = timingPointIndex.coerceAtMost(viewModel.stops.size)
@@ -1533,7 +1555,6 @@ class MapActivity : AppCompatActivity() {
             val key = viewModel.stopKey(s.latitude, s.longitude)
             val existing = viewModel.stopStatusByKey[key]
 
-            // only resolve those that were pending (orange)
             if (existing?.category == ScheduleStatusManager.StopPassCategory.PENDING) {
                 viewModel.stopStatusByKey[key] = existing.copy(category = resolvedCategory)
             }

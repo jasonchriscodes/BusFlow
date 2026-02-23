@@ -23,12 +23,11 @@ class ScheduleStatusManager(
 ) {
 
     enum class StopPassCategory {
-        ON_TIME,
-        SLIGHTLY_AHEAD,
-        VERY_AHEAD,
-        SLIGHTLY_BEHIND,
-        VERY_BEHIND,
-        PENDING   // orange “not validated yet”
+        ON_TIME,     // green
+        EARLY,       // red (timing points only)
+        LATE_5,      // blue  (>= 5 min late)
+        LATE_10,     // purple(>= 10 min late)
+        PENDING      // orange (non-timing until next timing point)
     }
 
     data class StopVisualStatus(
@@ -36,32 +35,26 @@ class ScheduleStatusManager(
         val isTimingPoint: Boolean
     )
 
-    fun StopPassCategory.toZoneColorEx(): Int = when (this) {
-        StopPassCategory.ON_TIME        -> Color.parseColor("#2E7D32") // green
-        StopPassCategory.SLIGHTLY_AHEAD -> Color.parseColor("#E53935") // red
-        StopPassCategory.VERY_AHEAD     -> Color.parseColor("#B71C1C") // dark red
-        StopPassCategory.SLIGHTLY_BEHIND-> Color.parseColor("#FFC107") // amber
-        StopPassCategory.VERY_BEHIND    -> Color.parseColor("#FF6F00") // deep amber/orange
-        StopPassCategory.PENDING        -> Color.parseColor("#FB8C00") // orange
+    fun toZoneColor(category: StopPassCategory): Int = when (category) {
+        StopPassCategory.ON_TIME -> Color.parseColor("#2E7D32") // green
+        StopPassCategory.EARLY   -> Color.parseColor("#E53935") // red
+        StopPassCategory.LATE_5  -> Color.parseColor("#1E88E5") // blue
+        StopPassCategory.LATE_10 -> Color.parseColor("#8E24AA") // purple
+        StopPassCategory.PENDING -> Color.parseColor("#FB8C00") // orange
     }
 
-    // inside ScheduleStatusManager
     var lastCategory: StopPassCategory = StopPassCategory.ON_TIME
         private set
 
-    private fun categorizeDelta(deltaSec: Int): StopPassCategory {
-        // ✅ Use YOUR existing thresholds here.
-        // Below is a reasonable default:
+    private fun categorizeTimingDelta(deltaSec: Int): StopPassCategory {
+        // deltaSec = scheduled - predicted
+        // positive => predicted before scheduled (EARLY)
+        // negative => predicted after scheduled (LATE)
         return when {
-            deltaSec == 0 -> StopPassCategory.ON_TIME
-
-            // ahead (early) => positive
-            deltaSec in 1..59 -> StopPassCategory.SLIGHTLY_AHEAD
-            deltaSec >= 60 -> StopPassCategory.VERY_AHEAD
-
-            // behind => negative
-            deltaSec in -59..-1 -> StopPassCategory.SLIGHTLY_BEHIND
-            else -> StopPassCategory.VERY_BEHIND
+            deltaSec > 0          -> StopPassCategory.EARLY
+            deltaSec <= -600      -> StopPassCategory.LATE_10
+            deltaSec <= -300      -> StopPassCategory.LATE_5
+            else                  -> StopPassCategory.ON_TIME
         }
     }
 
@@ -258,7 +251,7 @@ class ScheduleStatusManager(
 
             // --- 5. Compare predicted arrival with Timing Point ---
             val deltaSec = ((timingPointTime.time - predictedArrival.time.time) / 1000).toInt()
-            lastCategory = categorizeDelta(deltaSec)
+            lastCategory = categorizeTimingDelta(deltaSec)
 
             // convert to minutes only (drop seconds)
             val deltaMin = deltaSec / 60               // signed minutes
@@ -268,27 +261,24 @@ class ScheduleStatusManager(
             val timeDiff = minutesLabel(absMin)
 
             val statusText = when {
-                deltaMin >= 2    -> "Very Ahead (~$timeDiff early)"
-                deltaMin in 1..2    -> "Slightly Ahead (~$timeDiff early)"
+                deltaMin >= 1    -> "Early (~$timeDiff early)"
                 deltaMin in -1..1-> "On Time (~$timeDiff on time)"
-                deltaMin in -2..-1 -> "Slightly Behind (~$timeDiff late)"
+                deltaMin in -5..-1 -> "Slightly Behind (~$timeDiff late)"
                 else   -> "Very Behind (~$timeDiff late)"
             }
 
             val symbolRes = when {
-                deltaMin >= 2       -> R.drawable.ic_schedule_very_ahead
-                deltaMin in 1..2        -> R.drawable.ic_schedule_slightly_ahead
+                deltaMin >= 1       -> R.drawable.ic_schedule_very_ahead
                 deltaMin in -1..1   -> R.drawable.ic_schedule_on_time
-                deltaMin in -2..-1  -> R.drawable.ic_schedule_slightly_behind
+                deltaMin in -5..-1  -> R.drawable.ic_schedule_slightly_behind
                 else      -> R.drawable.ic_schedule_very_behind
             }
 
             val colorRes = when {
-                deltaMin >= 2       -> R.color.blind_red            // Very Ahead
-                deltaMin in 1..2       -> R.color.blind_light_orange   // Slightly Ahead
-                deltaMin in -1..1   -> R.color.blind_cyan           // On Time
-                deltaMin in -2..-1  -> R.color.blind_orange         // Slightly Behind
-                else      -> R.color.blind_orange         // Very Behind
+                deltaMin >= 1       -> R.color.blind_red         // Very Ahead, red
+                deltaMin in -1..1   -> R.color.blind_green        // On Time, green
+                deltaMin in -5..-1  -> R.color.blind_blue         // Slightly Behind, blue
+                else      -> R.color.blind_purple        // Very Behind, purple
             }
 
             // Update UI directly (already on main thread from MapActivity)
@@ -351,23 +341,6 @@ class ScheduleStatusManager(
             overrideLateStatusForNextSchedule()
         } catch (e: Exception) {
             Log.e("MapActivity checkScheduleStatus", "Error: ${e.localizedMessage}")
-        }
-    }
-
-    fun toZoneColor(category: StopPassCategory): Int {
-        return when (category) {
-            StopPassCategory.ON_TIME -> Color.parseColor("#2E7D32") // green
-
-            // Early => red
-            StopPassCategory.SLIGHTLY_AHEAD,
-            StopPassCategory.VERY_AHEAD -> Color.parseColor("#C62828") // red
-
-            // Behind => amber
-            StopPassCategory.SLIGHTLY_BEHIND,
-            StopPassCategory.VERY_BEHIND -> Color.parseColor("#FF8F00") // amber
-
-            // Pending => orange
-            StopPassCategory.PENDING -> Color.parseColor("#FB8C00") // orange
         }
     }
 

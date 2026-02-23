@@ -19,10 +19,11 @@
     <color name="whatsapp_tick_blue">#5ac6e6</color>
     <color name="red">#FF0000</color>
     <color name="green">#00FF00</color>
-    <color name="blind_red">#FF0C0C</color>
-    <color name="blind_yellow">#E4E26B</color>
-    <color name="blind_cyan">#38E2BF</color>
-    <color name="blind_orange">#FDA115</color>
+    <color name="blind_red">#E53935</color>
+    <color name="blind_blue">#1E88E5</color>
+    <color name="blind_green">#2E7D32</color>
+    <color name="blind_orange">#FB8C00</color>
+    <color name="blind_purple">#8E24AA</color>
     <color name="blind_light_orange">#FCD299</color>
     <color name="grey">#808080</color>
 
