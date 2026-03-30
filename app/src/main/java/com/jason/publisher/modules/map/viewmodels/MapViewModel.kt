@@ -159,7 +159,7 @@ class MapViewModel: ViewModel() {
         FileLogger.d("MapViewModel", "Received route: $route")
         FileLogger.d("MapViewModel", "Received stops: $stops")
         FileLogger.d("MapViewModel", "Received durationBetweenStops: $durationBetweenStops")
-        FileLogger.d("MapViewModel", "Received busRouteData: $busRouteData")
+        FileLogger.d("MapViewModel", "Receive busRouteData: $busRouteData")
         FileLogger.d("MapViewModel", "Received scheduleList: $scheduleList")
         FileLogger.d("MapViewModel", "Received scheduleData: $scheduleData")
     }

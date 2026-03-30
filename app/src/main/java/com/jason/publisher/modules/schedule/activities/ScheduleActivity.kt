@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -147,7 +148,7 @@ class ScheduleActivity : AppCompatActivity() {
         FileLogger.d("ScheduleActivity", "onCreate")
         hookBatteryToasts()
         // Fetch AID from the device
-        viewModel.aid = getAndroidId()
+        viewModel.aid = getOrCreateAID(this)
         Log.d("TimeTableActivity", "Fetched AID: ${viewModel.aid}")
         otaLog("onCreate: installedName=${getInstalledVersionName()} installedCode=${getInstalledVersionCode()} aid=${viewModel.aid}")
         binding.versionTextView.text = "Version ${getInstalledVersionName()}"
@@ -1535,6 +1536,7 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     /** Connects to the MQTT broker and subscribes to the required topics. */
+    @RequiresApi(Build.VERSION_CODES.P)
     private fun connectAndSubscribe() {
         ioScope.launch {
             mqttManager.connect { isConnected ->
@@ -1738,8 +1740,52 @@ class ScheduleActivity : AppCompatActivity() {
 
     /** Fetches the Android ID (AID) of the device. */
     @SuppressLint("HardwareIds")
-    private fun getAndroidId(): String {
-        return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+    fun getOrCreateAID(context: Context): String {
+        return try {
+            // 📂 Path: /Internal storage/Documents/.vlrshiddenfolder/aid.txt
+            val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+            val hiddenFolder = File(documentsDir, ".vlrshiddenfolder")
+            val aidFile = File(hiddenFolder, "aid.txt")
+
+            // 1️⃣ If file exists → read it
+            if (aidFile.exists()) {
+                val storedAID = aidFile.readText().trim()
+
+                if (storedAID.isNotEmpty()) {
+                    Log.d("AID", "Loaded AID from file: $storedAID")
+                    return storedAID
+                }
+            }
+
+            // 2️⃣ If file missing OR empty → get from device
+            val androidId = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ANDROID_ID
+            ) ?: "UNKNOWN"
+
+            Log.d("AID", "Generated AID from device: $androidId")
+
+            // 3️⃣ Ensure folder exists
+            if (!hiddenFolder.exists()) {
+                hiddenFolder.mkdirs()
+            }
+
+            // 4️⃣ Write to file for future use
+            aidFile.writeText(androidId)
+
+            Log.d("AID", "Saved AID to file: ${aidFile.absolutePath}")
+
+            return androidId
+
+        } catch (e: Exception) {
+            Log.e("AID", "Error handling AID file: ${e.message}")
+
+            // fallback (always safe)
+            return Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ANDROID_ID
+            ) ?: "UNKNOWN"
+        }
     }
 
     private fun nextPanelDebugNo(): Int {
