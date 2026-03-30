@@ -1742,9 +1742,9 @@ class ScheduleActivity : AppCompatActivity() {
     @SuppressLint("HardwareIds")
     fun getOrCreateAID(context: Context): String {
         return try {
-            // 📂 Path: /Internal storage/Documents/vlrshiddenfolder/aid.txt
+            // 📂 Path: /Internal storage/Documents/.vlrshiddenfolder/aid.txt
             val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
-            val hiddenFolder = File(documentsDir, "vlrshiddenfolder")
+            val hiddenFolder = File(documentsDir, ".vlrshiddenfolder")
             val aidFile = File(hiddenFolder, "aid.txt")
 
             // 1️⃣ If file exists → read it
