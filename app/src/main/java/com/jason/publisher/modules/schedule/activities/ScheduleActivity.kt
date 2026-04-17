@@ -1400,35 +1400,33 @@ class ScheduleActivity : AppCompatActivity() {
             }
 
             setTimelineVisibility(View.VISIBLE)
-            if (viewModel.activeScheduleData.isEmpty()) {
-                Log.e("ScheduleActivity updateTimeline", "No scheduleData to draw!")
-                return@runOnUiThread
-            }
 
-            // 1) extract raw data
+            val allItems = viewModel.activeScheduleData
             val (workIntervals, runNames) = viewModel.extractWorkIntervalsAndRunNames()
 
-            // 2) decide how many per row
-            val maxPerLine = 3
+            // Split the full roster evenly across the 3 visible timelines
+            val totalItems = allItems.size
+            val itemsPerTimeline = kotlin.math.ceil(totalItems / 3.0).toInt().coerceAtLeast(1)
 
-            // slice the corresponding ScheduleItem lists
-            // slice intervals & names into 3 fixed chunks
-            val intervals1 = workIntervals.take(maxPerLine)
-            val intervals2 = workIntervals.drop(maxPerLine).take(maxPerLine)
-            val intervals3 = workIntervals.drop(2 * maxPerLine).take(maxPerLine)
+            val intervals1 = workIntervals.take(itemsPerTimeline)
+            val intervals2 = workIntervals.drop(itemsPerTimeline).take(itemsPerTimeline)
+            val intervals3 = workIntervals.drop(itemsPerTimeline * 2).take(itemsPerTimeline)
 
-            val names1 = runNames.take(maxPerLine)
-            val names2 = runNames.drop(maxPerLine).take(maxPerLine)
-            val names3 = runNames.drop(2 * maxPerLine).take(maxPerLine)
+            val names1 = runNames.take(itemsPerTimeline)
+            val names2 = runNames.drop(itemsPerTimeline).take(itemsPerTimeline)
+            val names3 = runNames.drop(itemsPerTimeline * 2).take(itemsPerTimeline)
 
-            // 3) slice the corresponding ScheduleItem lists
-            val items1 = viewModel.activeScheduleData.take(maxPerLine)
-            val items2 = viewModel.activeScheduleData.drop(maxPerLine).take(maxPerLine)
-            val items3 = viewModel.activeScheduleData.drop(2 * maxPerLine).take(maxPerLine)
+            val items1 = allItems.take(itemsPerTimeline)
+            val items2 = allItems.drop(itemsPerTimeline).take(itemsPerTimeline)
+            val items3 = allItems.drop(itemsPerTimeline * 2).take(itemsPerTimeline)
 
             updateSingleTimeline(intervals1, names1, items1, timeline1)
             updateSingleTimeline(intervals2, names2, items2, timeline2)
             updateSingleTimeline(intervals3, names3, items3, timeline3)
+
+            timeline1.visibility = if (items1.isNotEmpty()) View.VISIBLE else View.GONE
+            timeline2.visibility = if (items2.isNotEmpty()) View.VISIBLE else View.GONE
+            timeline3.visibility = if (items3.isNotEmpty()) View.VISIBLE else View.GONE
         }
     }
 
