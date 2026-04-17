@@ -168,7 +168,8 @@
         android:gravity="center"
         android:visibility="gone"
         android:layout_marginTop="12dp"
-        app:layout_constraintTop_toBottomOf="@id/scheduleRecycler"
+        android:layout_marginBottom="90dp"
+        app:layout_constraintBottom_toTopOf="@id/startRouteButtonContainer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -217,15 +218,16 @@
 
 
     <LinearLayout
+        android:id="@+id/timelineContainer"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:orientation="vertical"
         android:paddingTop="0dp"
-        app:layout_constraintTop_toBottomOf="@id/paginationLayout"
+        app:layout_constraintTop_toBottomOf="@id/progressBar"
+        app:layout_constraintBottom_toTopOf="@id/startRouteButtonContainer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Timeline 1 -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
@@ -235,7 +237,6 @@
                 android:layout_height="wrap_content" />
         </FrameLayout>
 
-        <!-- Timeline 2 -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
@@ -245,7 +246,6 @@
                 android:layout_height="wrap_content" />
         </FrameLayout>
 
-        <!-- Timeline 3 -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
@@ -256,9 +256,9 @@
         </FrameLayout>
     </LinearLayout>
 
-
     <!-- Start and Test Buttons (At Bottom Center, Side by Side) -->
     <LinearLayout
+        android:id="@+id/startRouteButtonContainer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"

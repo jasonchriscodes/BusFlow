@@ -130,6 +130,7 @@ class ScheduleActivity : AppCompatActivity() {
     private var otaCheckInFlight = false
     private var otaProgressDialog: AlertDialog? = null
     private var otaProgressText: TextView? = null
+    private lateinit var timelineContainer: LinearLayout
 
     companion object {
         private const val REQUEST_PERIODIC_TIME = 5000L
@@ -184,6 +185,7 @@ class ScheduleActivity : AppCompatActivity() {
         fetchingText = findViewById(R.id.fetchingText)
         fetchingIcon = findViewById(R.id.fetchingIcon)
         emptyStateText = findViewById(R.id.emptyStateText)
+        timelineContainer = findViewById(R.id.timelineContainer)
 
         // add a light gray 1dp divider without any XML
         val divider = DividerItemDecoration(this, DividerItemDecoration.VERTICAL)
@@ -379,17 +381,18 @@ class ScheduleActivity : AppCompatActivity() {
             viewModel.isTabulatedView = !viewModel.isTabulatedView
 
             if (viewModel.isTabulatedView) {
+                viewModel.currentPage = viewModel.currentPage.coerceIn(0, maxOf(viewModel.totalPages - 1, 0))
                 setSchedulePaginationVisibility(View.VISIBLE)
                 setTimelineVisibility(View.GONE)
                 changeModeButton.text = "Timeline View"
+                updateScheduleTablePaged()   // IMPORTANT
             } else {
                 setSchedulePaginationVisibility(View.GONE)
                 setTimelineVisibility(View.VISIBLE)
                 changeModeButton.text = "Tabulated View"
+                updateTimeline()
+                updateEmptyState()
             }
-
-            // optional but helps keep it consistent after async updates
-            updateEmptyState()
         }
 
         btnPrevious.setOnClickListener {
@@ -1130,9 +1133,7 @@ class ScheduleActivity : AppCompatActivity() {
     }
 
     private fun setTimelineVisibility(visibility: Int) {
-        timeline1.visibility = visibility
-        timeline2.visibility = visibility
-        timeline3.visibility = visibility
+        timelineContainer.visibility = visibility
     }
 
     /**
