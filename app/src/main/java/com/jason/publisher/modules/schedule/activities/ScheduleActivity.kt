@@ -28,6 +28,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
@@ -471,6 +472,27 @@ class ScheduleActivity : AppCompatActivity() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.M)
+    private val signingLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val updatedList =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        result.data?.getParcelableArrayListExtra(
+                            "UPDATED_FULL_SCHEDULE_DATA",
+                            ScheduleItem::class.java
+                        )
+                    } else {
+                        @Suppress("DEPRECATION")
+                        result.data?.getParcelableArrayListExtra("UPDATED_FULL_SCHEDULE_DATA")
+                    }
+
+                if (updatedList != null) {
+                    updateActiveScheduleDataOnLaunch(updatedList)
+                }
+            }
+        }
+
     private fun showOtaProgress(message: String) {
         runOnUiThread {
             if (otaProgressDialog?.isShowing == true) {
@@ -899,7 +921,7 @@ class ScheduleActivity : AppCompatActivity() {
             Log.w("ScheduleActivity", "⚠️ Active trip detected, keeping first schedule in cache")
         }
 
-        startActivity(intent)
+        signingLauncher.launch(intent)
     }
 
     /**

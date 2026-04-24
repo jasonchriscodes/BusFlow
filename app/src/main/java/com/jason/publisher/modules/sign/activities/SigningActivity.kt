@@ -1,6 +1,7 @@
 package com.jason.publisher.modules.signing.activities
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
@@ -213,7 +214,16 @@ class SigningActivity : AppCompatActivity() {
             showFinished()
         }
 
-        doneBtn.setOnClickListener { finish() }
+        doneBtn.setOnClickListener {
+            val remainingAfterSigning = ArrayList(fullRemaining.drop(1))
+
+            val resultIntent = Intent().apply {
+                putParcelableArrayListExtra("UPDATED_FULL_SCHEDULE_DATA", remainingAfterSigning)
+            }
+
+            setResult(RESULT_OK, resultIntent)
+            finish()
+        }
     }
 
     private fun inferSigningAction(runName: String): String {
