@@ -1,15 +1,17 @@
 package com.jason.publisher.modules.map.mqtt.services
 
 import android.util.Log
+import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.model.BusItem
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
+import org.eclipse.paho.client.mqttv3.MqttCallbackExtended
 import org.eclipse.paho.client.mqttv3.MqttClient
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions
-import org.eclipse.paho.client.mqttv3.MqttException
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONException
@@ -25,16 +27,21 @@ import java.io.IOException
  */
 class MqttManager(
     serverUri: String = SERVER_URI,
-    clientId: String = CLIENT_ID,
+    clientId: String = newClientId(),
     private var username: String = "BEXBIArF3URHeYBslJE2" // Config Data
 ) {
     private val persistence = MemoryPersistence()
     private val mqttClient = MqttClient(serverUri, clientId, persistence)
     private val connectOptions = MqttConnectOptions()
+    @Volatile
+    private var manuallyDisconnected = false
 
     companion object {
         const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
-        const val CLIENT_ID = "jasonAndroidClientId"
+
+        fun newClientId(): String {
+            return "jasonAndroidClientId-${System.currentTimeMillis()}-${(1000..9999).random()}"
+        }
     }
 
     init {
@@ -42,7 +49,37 @@ class MqttManager(
         connectOptions.isCleanSession = true
         connectOptions.connectionTimeout = 10
         connectOptions.keepAliveInterval = 60
+
+        mqttClient.setCallback(object : MqttCallbackExtended {
+            override fun connectComplete(reconnect: Boolean, serverURI: String?) {
+                Log.d("MqttManager", "MQTT connectComplete reconnect=$reconnect server=$serverURI")
+                FileLogger.d("MqttManager", "MQTT connectComplete reconnect=$reconnect server=$serverURI")
+            }
+
+            override fun connectionLost(cause: Throwable?) {
+                if (manuallyDisconnected) {
+                    Log.d("MqttManager", "MQTT disconnected manually")
+                    return
+                }
+
+                Log.w("MqttManager", "MQTT connection lost: ${cause?.message}", cause)
+
+                // Important: do not throw here.
+                // Just log it. Optional reconnect can be added later.
+            }
+
+            override fun messageArrived(topic: String?, message: MqttMessage?) {
+                // You use mqttClient.subscribe(topic) { _, msg -> ... }
+                // so this can stay empty.
+            }
+
+            override fun deliveryComplete(token: IMqttDeliveryToken?) {
+                // no-op
+            }
+        })
+
         Log.d("MqttManager", "Initializing MQTT client")
+        FileLogger.d("MqttManager", "Initializing MQTT client")
     }
 
     private val client = OkHttpClient()
@@ -121,14 +158,19 @@ class MqttManager(
 
     fun connect(callback: (Boolean) -> Unit) {
         if (mqttClient.isConnected) {
-            callback(true); return
+            callback(true)
+            return
         }
+
         if (connecting) {
             Log.w("MqttManager", "Connect skipped: already connecting")
-            callback(false); return
+            callback(false)
+            return
         }
 
         connecting = true
+        manuallyDisconnected = false
+
         val ok = try {
             mqttClient.connect(connectOptions)
             true
@@ -202,6 +244,8 @@ class MqttManager(
 
     /** Disconnect safely (won't crash if already disconnected) */
     fun disconnect() {
+        manuallyDisconnected = true
+
         try {
             if (mqttClient.isConnected) {
                 mqttClient.disconnect()
@@ -210,10 +254,11 @@ class MqttManager(
             Log.w("MqttManager", "Disconnect failed: ${e.message}", e)
         }
 
-        // optional but nice: release resources
         try {
             mqttClient.close()
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w("MqttManager", "Close failed: ${e.message}", e)
+        }
     }
 
 

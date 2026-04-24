@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
-import android.provider.Settings
 import androidx.annotation.RequiresApi
 import androidx.core.content.FileProvider
 import com.jason.publisher.main.loggers.FileLogger

@@ -221,6 +221,16 @@ class SigningActivity : AppCompatActivity() {
                 putParcelableArrayListExtra("UPDATED_FULL_SCHEDULE_DATA", remainingAfterSigning)
             }
 
+            try {
+                heartbeatHandler.removeCallbacksAndMessages(null)
+                cd?.cancel()
+                if (::mqttManager.isInitialized) {
+                    mqttManager.disconnect()
+                }
+            } catch (e: Exception) {
+                FileLogger.e("SigningActivity", "MQTT cleanup failed: ${e.message}")
+            }
+
             setResult(RESULT_OK, resultIntent)
             finish()
         }
@@ -318,6 +328,15 @@ class SigningActivity : AppCompatActivity() {
         clearActiveSegmentAndRefresh()
         super.onDestroy()
         // DO NOT DISCONNECT MQTT HERE (same as BreakActivity)
+        try {
+            heartbeatHandler.removeCallbacksAndMessages(null)
+            cd?.cancel()
+            if (::mqttManager.isInitialized) {
+                mqttManager.disconnect()
+            }
+        } catch (e: Exception) {
+            FileLogger.e("SigningActivity", "onDestroy cleanup failed: ${e.message}")
+        }
     }
 
     private fun formatHMS(ms: Long): String {

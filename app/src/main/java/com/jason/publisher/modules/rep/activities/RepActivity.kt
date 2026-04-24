@@ -59,7 +59,6 @@ import com.jason.publisher.main.utils.convertTimeToMinutes
 import com.jason.publisher.main.utils.getNextScheduleStartTime
 import com.jason.publisher.main.utils.parseTimeToday
 import com.jason.publisher.modules.map.utils.calculateBearing
-import com.jason.publisher.modules.map.viewmodels.ScheduleStatusManager
 import com.jason.publisher.modules.rep.viewmodels.RepDetailPanelController
 import com.jason.publisher.modules.rep.viewmodels.RepMapViewController
 import com.jason.publisher.modules.rep.viewmodels.RepScheduleStatusManager
@@ -305,38 +304,11 @@ class RepActivity : AppCompatActivity() {
                         networkStatusIndicator
                     )
 
-                    // re-fetch config (to repopulate arrBusData & token)
-                    mqttConfigHelper.fetchConfig { configList ->
-                        val success = configList.isNotEmpty()
-                        if (success) {
-                            // rebuild your MQTT client with the new token
-                            viewModel.config = configList
-                            viewModel.token = MqttConfigHelper.getAccessToken(
-                                viewModel.aid,
-                                viewModel.config.orEmpty()
-                            )
-                            mqttManager = MqttManager(username = viewModel.token)
-                            // tell ThingsBoard to re-send shared data
-                            mqttHelper.requestAdminMessage()
-                            // (re)subscribe to the shared message topic
-                            mqttHelper.connectAndSubscribe()
-                            // now poll each bus once, then resume polling loop
-                            // only start polling if mqttManager is ready
-                            if (::mqttManager.isInitialized) {
-                                mqttHelper.refreshAllAttributes()
-                                mqttHelper.startAttributePolling()
-                            }
-                            // and redraw your detail panel
-                            mapController.getDefaultConfigValue()
-                            panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
-                            // Log immediately
-                            if (!panelController.hasDumpedPanelLog) {
-                                panelController.logPanelDebugFromDetailPanel()
-                                panelController.hasDumpedPanelLog = true
-                            }
-                            mapController.startActivityMonitor()
-                        }
-                    }
+                    // Do not create/connect another MQTT client here.
+// The main mqttConfigHelper.fetchConfig block below already connects MQTT.
+// Just update the UI.
+                    mapController.getDefaultConfigValue()
+                    panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
                 }
             }
 
@@ -1701,37 +1673,36 @@ class RepActivity : AppCompatActivity() {
     override fun onDestroy() {
         FileLogger.markAppClosed("RepActivity")
         super.onDestroy()
+
         panelController.panelDebugEnabled = false
 
         clearActiveSegmentAndRefresh()
 
-        // Stop location updates
         if (::fusedLocationClient.isInitialized && ::locationCallback.isInitialized) {
             fusedLocationClient.removeLocationUpdates(locationCallback)
         }
 
-        // Stop MQTT polling
         if (::mqttHelper.isInitialized) {
             mqttHelper.stopAttributePolling()
         }
 
+        try {
+            if (::mqttManager.isInitialized) {
+                mqttManager.disconnect()
+            }
+        } catch (e: Exception) {
+            Log.w("RepActivity", "MQTT disconnect failed: ${e.message}")
+        }
+
         if (::mapController.isInitialized) {
-            // Stop activity monitor
             mapController.stopActivityMonitor()
-
             mapController.currentBusMarker = null
-
-            // Remove polyline from Mapsforge map
             mapController.clearPolyline()
             Log.d("RepActivity", "🗑️ Removed polyline on destroy.")
         }
 
-        // Cleanup time manager
         timeManager.cleanup()
-
-        // Stop periodic UI update
         stopPeriodicUIUpdate()
-
     }
 
     override fun onStop() {

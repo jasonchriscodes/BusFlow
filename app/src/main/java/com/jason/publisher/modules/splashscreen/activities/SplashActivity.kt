@@ -12,8 +12,6 @@ import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
@@ -26,7 +24,6 @@ import com.jason.publisher.main.services.background.ScreenRecordService
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.schedule.activities.ScheduleActivity
-import com.jason.publisher.modules.schedule.helpers.OtaCheckResult
 import com.jason.publisher.modules.schedule.helpers.OtaUpdateManager
 import kotlinx.coroutines.launch
 import pl.droidsonroids.gif.GifDrawable
