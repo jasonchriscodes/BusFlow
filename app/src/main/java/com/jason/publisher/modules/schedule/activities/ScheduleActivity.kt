@@ -1026,6 +1026,15 @@ class ScheduleActivity : AppCompatActivity() {
             updateActiveScheduleDataOnLaunch(scheduleDataToPass)
         }
 
+        stopAdminPolling()
+        try {
+            if (::mqttManager.isInitialized) {
+                mqttManager.disconnect()
+            }
+        } catch (e: Exception) {
+            Log.w("ScheduleActivity", "MQTT disconnect before RepActivity failed: ${e.message}")
+        }
+
         startActivity(intent)
     }
 
