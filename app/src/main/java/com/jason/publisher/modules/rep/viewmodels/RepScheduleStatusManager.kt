@@ -287,7 +287,7 @@ class RepScheduleStatusManager(
                 activity.runOnUiThread {
                     try {
                         binding.scheduleStatusValueTextView.text = statusText
-                        binding.scheduleStatusValueTextView.setTextColor(ContextCompat.getColor(activity, colorRes))
+                        binding.scheduleStatusValueTextView.setTextColor(colorRes)
 
                         // Try to find icon using findViewById
                         val iconView = activity.findViewById<ImageView>(R.id.scheduleAheadIcon)
