@@ -212,15 +212,22 @@ class MapActivity : AppCompatActivity() {
         }
         panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
 
-        // Prefer the exact RouteData sent via Intent, else index, else first
-        @Suppress("DEPRECATION") // for getSerializableExtra() on older APIs
+        // Prefer SELECTED_ROUTE_DATA from Intent.
+// If it is null, fallback to SELECTED_ROUTE_INDEX.
+// If index also fails, fallback to first route.
+        val selectedIdx = intent.getIntExtra("SELECTED_ROUTE_INDEX", -1)
+
+        val selectedRouteFromIntent =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra("SELECTED_ROUTE_DATA", RouteData::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra("SELECTED_ROUTE_DATA")
+            }
+
         viewModel.selectedRouteData =
-            intent.getParcelableExtra("SELECTED_ROUTE_DATA")
-                ?: run {
-                    // Fallback to index if only SELECTED_ROUTE_INDEX was sent
-                    val idx = intent.getIntExtra("SELECTED_ROUTE_INDEX", -1)
-                    viewModel.busRouteData.getOrNull(idx)
-                }
+            selectedRouteFromIntent
+                ?: viewModel.busRouteData.getOrNull(selectedIdx)
                         ?: viewModel.busRouteData.firstOrNull()
 
         // If we have a selected route, derive the map vectors from it

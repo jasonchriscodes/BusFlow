@@ -815,26 +815,46 @@ class ScheduleActivity : AppCompatActivity() {
     private fun findRouteIndexForScheduleItem(item: ScheduleItem): Int {
         val routes = viewModel.busRouteData
         if (routes.isEmpty()) return -1
+        if (item.busStops.isEmpty()) return -1
 
-        val (lat, lon) = pickMatchPoint(item) ?: return -1
+        val firstStop = item.busStops.firstOrNull() ?: return -1
+        val lastStop = item.busStops.lastOrNull() ?: return -1
 
-        // 1) exact-ish match first
-        val exactIdx = routes.indexOfFirst { rd ->
-            nearlySame(rd.startingPoint.latitude, lat) && nearlySame(rd.startingPoint.longitude, lon)
-        }
-        if (exactIdx != -1) return exactIdx
+        val startLat = firstStop.latitude ?: return -1
+        val startLon = firstStop.longitude ?: return -1
+        val endLat = lastStop.latitude ?: return -1
+        val endLon = lastStop.longitude ?: return -1
 
-        // 2) fallback: nearest startingPoint within a tolerance (meters)
         var bestIdx = -1
-        var bestMeters = Double.MAX_VALUE
-        routes.forEachIndexed { idx, rd ->
-            val d = distanceMeters(lat, lon, rd.startingPoint.latitude, rd.startingPoint.longitude)
-            if (d < bestMeters) {
-                bestMeters = d
+        var bestScore = Double.MAX_VALUE
+
+        routes.forEachIndexed { idx, route ->
+            val routeStart = route.startingPoint
+            val routeEnd = route.nextPoints.lastOrNull() ?: return@forEachIndexed
+
+            val startDistance = distanceMeters(
+                startLat,
+                startLon,
+                routeStart.latitude,
+                routeStart.longitude
+            )
+
+            val endDistance = distanceMeters(
+                endLat,
+                endLon,
+                routeEnd.latitude,
+                routeEnd.longitude
+            )
+
+            val score = startDistance + endDistance
+
+            if (score < bestScore) {
+                bestScore = score
                 bestIdx = idx
             }
         }
-        return if (bestMeters <= 120.0) bestIdx else -1 // 120m tolerance for GPS/rounding
+
+        return if (bestScore <= 250.0) bestIdx else -1
     }
 
     private fun pickMatchPoint(item: ScheduleItem): Pair<Double, Double>? {
@@ -864,16 +884,6 @@ class ScheduleActivity : AppCompatActivity() {
                 kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
         val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
         return r * c
-    }
-
-    /**
-     * Optional: once we assign a RouteData to a started segment, remove it from the pool
-     * so future segments cannot accidentally reuse it.
-     */
-    private fun consumeRouteDataIfPossible(selectedIdx: Int) {
-        if (selectedIdx < 0) return
-        if (selectedIdx >= viewModel.busRouteData.size) return
-        viewModel.busRouteData = viewModel.busRouteData.toMutableList().apply { removeAt(selectedIdx) }
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -1000,9 +1010,12 @@ class ScheduleActivity : AppCompatActivity() {
             putExtra("JSON_STRING", viewModel.jsonString)
 
             // ✅ REP MUST USE ROUTE DATA
-            putExtra("BUS_ROUTE_DATA", ArrayList(viewModel.busRouteData))
+            putParcelableArrayListExtra("BUS_ROUTE_DATA", ArrayList(viewModel.busRouteData))
             putExtra("SELECTED_ROUTE_INDEX", selectedIdx)
-            selectedRouteData?.let { putExtra("SELECTED_ROUTE_DATA", it) }
+
+            if (selectedRouteData != null) {
+                putExtra("SELECTED_ROUTE_DATA", selectedRouteData)
+            }
 
             putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
             putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleDataToPass))
@@ -1016,9 +1029,6 @@ class ScheduleActivity : AppCompatActivity() {
 
         if (!hasActiveTrip) {
             updateActiveScheduleDataOnLaunch(scheduleDataToPass)
-
-            // ✅ ONLY REP/TRIP consume route data
-            consumeRouteDataIfPossible(selectedIdx)
         }
 
         startActivity(intent)
@@ -1073,9 +1083,6 @@ class ScheduleActivity : AppCompatActivity() {
 
         if (!hasActiveTrip) {
             updateActiveScheduleDataOnLaunch(scheduleDataToPass)
-
-            // ✅ ONLY REP/TRIP consume route data
-            consumeRouteDataIfPossible(selectedIdx)
         }
 
         startActivity(intent)

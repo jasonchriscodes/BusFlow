@@ -134,7 +134,7 @@ class RepActivity : AppCompatActivity() {
         AndroidGraphicFactory.createInstance(application)
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        FileLogger.d("MapActivity", "onCreate")
+        FileLogger.d("RepActivity", "onCreate")
 
         // Reset final stop message flag for new trip
         viewModel.hasShownFinalStopMessage = false
@@ -146,7 +146,7 @@ class RepActivity : AppCompatActivity() {
 
         // Add logger
         FileLogger.init(this)
-        FileLogger.markAppOpened("MapActivity")
+        FileLogger.markAppOpened("RepActivity")
 
         // ── ADD THIS: initialize mqttManager for offline use ──
         mqttManager = MqttManager()
@@ -196,10 +196,10 @@ class RepActivity : AppCompatActivity() {
             "RepActivity INTENT | no=$no | FIRST_SCHEDULE_ITEM=${viewModel.scheduleList.firstOrNull()}"
         )
 
-        Log.d("MapActivity onCreate retrieve", "▶ Received timelineLabels = $timelineLabels")
+        Log.d("RepActivity onCreate retrieve", "▶ Received timelineLabels = $timelineLabels")
         viewModel.logReceivedStates()
 
-        // Log MapActivity opened with route info AFTER scheduleList is initialized
+        // Log RepActivity opened with route info AFTER scheduleList is initialized
         viewModel.logMapActivityOpening()
 
         // Log detailed activity entry
@@ -213,15 +213,22 @@ class RepActivity : AppCompatActivity() {
         }
         panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
 
-        // Prefer the exact RouteData sent via Intent, else index, else first
-        @Suppress("DEPRECATION") // for getSerializableExtra() on older APIs
+        // Prefer SELECTED_ROUTE_DATA from Intent.
+// If it is null, fallback to SELECTED_ROUTE_INDEX.
+// If index also fails, fallback to first route.
+        val selectedIdx = intent.getIntExtra("SELECTED_ROUTE_INDEX", -1)
+
+        val selectedRouteFromIntent =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra("SELECTED_ROUTE_DATA", RouteData::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra("SELECTED_ROUTE_DATA")
+            }
+
         viewModel.selectedRouteData =
-            intent.getParcelableExtra("SELECTED_ROUTE_DATA")
-                ?: run {
-                    // Fallback to index if only SELECTED_ROUTE_INDEX was sent
-                    val idx = intent.getIntExtra("SELECTED_ROUTE_INDEX", -1)
-                    viewModel.busRouteData.getOrNull(idx)
-                }
+            selectedRouteFromIntent
+                ?: viewModel.busRouteData.getOrNull(selectedIdx)
                         ?: viewModel.busRouteData.firstOrNull()
 
         // If we have a selected route, derive the map vectors from it
@@ -383,7 +390,7 @@ class RepActivity : AppCompatActivity() {
                     // --- FAILURE HANDLING ---
                     // ensure mqttManager is assigned even on config-fetch failure
                     mqttManager = MqttManager()
-                    Log.e("MapActivity", "Failed to fetch config, entering offline mode.")
+                    Log.e("RepActivity", "Failed to fetch config, entering offline mode.")
                     Toast.makeText(
                         this@RepActivity,
                         "Unable to connect. Falling back to offline map…",
@@ -485,7 +492,7 @@ class RepActivity : AppCompatActivity() {
                 val zoomChanged = zoom != lastZoom
                 if (zoomChanged) {
                     lastZoom = zoom
-                    Log.d("MapActivity", "Zoom changed to $zoom")
+                    Log.d("RepActivity", "Zoom changed to $zoom")
                 }
                 runOnUiThread {
                     panelController.refreshDetailPanelIcons(zoom)
@@ -664,22 +671,22 @@ class RepActivity : AppCompatActivity() {
     private var isManualMode = false
     @SuppressLint("LongLogTag")
     private fun confirmArrival() {
-        Log.d("MapActivity confirmArrival", "🚨 ConfirmArrival Triggered - Starting Process")
+        Log.d("RepActivity confirmArrival", "🚨 ConfirmArrival Triggered - Starting Process")
 
         viewModel.selectedRouteData?.startingPoint?.let { sp ->
             BusStop(latitude = sp.latitude, longitude = sp.longitude, address = sp.address)
         }
 
         if (viewModel.stops.isEmpty() || viewModel.route.isEmpty()) {
-            Log.e("MapActivity confirmArrival", "❌ No stops or route data available.")
+            Log.e("RepActivity confirmArrival", "❌ No stops or route data available.")
             return
         }
 
-        Log.d("MapActivity confirmArrival", "🔎 Starting nearest route point search...")
+        Log.d("RepActivity confirmArrival", "🔎 Starting nearest route point search...")
 
         // 1) find nearest route‑point index
         val nearestIndex = viewModel.findNearestBusRoutePoint(viewModel.latitude, viewModel.longitude)
-        Log.d("MapActivity confirmArrival", "✅ Nearest Route Point Found at Index: $nearestIndex")
+        Log.d("RepActivity confirmArrival", "✅ Nearest Route Point Found at Index: $nearestIndex")
 
         // 2) mark every stop up to that point as passed
         var snappedStop: BusStop? = null
@@ -708,7 +715,7 @@ class RepActivity : AppCompatActivity() {
 
         // 5) continue with API‑time, schedule status updates, live GPS restart…
         // 🔹 Ensure schedule status updates correctly
-        Log.d("MapActivity confirmArrival", "🔄 Updating API Time...")
+        Log.d("RepActivity confirmArrival", "🔄 Updating API Time...")
         val busStopIndex = getBusStopIndex(viewModel.latitude, viewModel.longitude, viewModel.stops)
         viewModel.currentStopIndex = maxOf(0, getBusStopIndex(viewModel.latitude, viewModel.longitude, viewModel.stops))
 
@@ -725,7 +732,7 @@ class RepActivity : AppCompatActivity() {
             set(Calendar.SECOND, 0)
         }
 
-        Log.d("MapActivity updateApiTime", "Total duration in minutes: $totalDurationUntilArrive")
+        Log.d("RepActivity updateApiTime", "Total duration in minutes: $totalDurationUntilArrive")
 
         // Add the duration (in seconds) to the start time.
         val additionalSeconds = (totalDurationUntilArrive * 60).toInt()
@@ -736,19 +743,19 @@ class RepActivity : AppCompatActivity() {
         apiTimeValueTextView.text = viewModel.lockedApiTime
         updateApiTime()
 
-        Log.d("MapActivity confirmArrival", "🔄 Initializing Timing Point...")
+        Log.d("RepActivity confirmArrival", "🔄 Initializing Timing Point...")
         timingPointValueTextView.text = viewModel.initializeTimingPoint()
 
         viewModel.apiTimeLocked = false    // Unlock the API time to allow updates
-        Log.d("MapActivity confirmArrival", "🔓 API Time Unlocked")
+        Log.d("RepActivity confirmArrival", "🔓 API Time Unlocked")
 
         scheduleStatusManager.checkScheduleStatus()   // Immediately refresh the schedule status
-        Log.d("MapActivity confirmArrival", "✅ Schedule Status Checked")
+        Log.d("RepActivity confirmArrival", "✅ Schedule Status Checked")
 
-        Log.d("MapActivity confirmArrival", "✅ Arrival confirmed at: ${viewModel.stopAddress}")
+        Log.d("RepActivity confirmArrival", "✅ Arrival confirmed at: ${viewModel.stopAddress}")
 
         startLocationUpdate()   // Continue marker updates
-        Log.d("MapActivity confirmArrival", "✅ Tracking resumed after arrival confirmation.")
+        Log.d("RepActivity confirmArrival", "✅ Tracking resumed after arrival confirmation.")
 
         Toast.makeText(this, "✅ Tracking resumed after arrival confirmation.", Toast.LENGTH_SHORT).show()
     }
@@ -941,7 +948,7 @@ class RepActivity : AppCompatActivity() {
             upcomingAddress.equals(lastScheduledAddress, ignoreCase = true)) {
             viewModel.apiTimeLocked = true
             viewModel.lockedApiTime = updatedApiTime
-            Log.d("MapActivity", "✅ API time locked at final stop: $updatedApiTime")
+            Log.d("RepActivity", "✅ API time locked at final stop: $updatedApiTime")
         }
     }
 
@@ -965,7 +972,7 @@ class RepActivity : AppCompatActivity() {
         if (viewModel.upcomingStop == "Unknown") {
             viewModel.upcomingStop = stopList.first().time
             timingPointValueTextView.text = viewModel.upcomingStop
-            Log.d("MapActivity", "🔹 Initial timing point set to: ${viewModel.upcomingStop}")
+            Log.d("RepActivity", "🔹 Initial timing point set to: ${viewModel.upcomingStop}")
         }
 
         // Check which timing point to display
@@ -978,7 +985,7 @@ class RepActivity : AppCompatActivity() {
 
             if (distance <= stopPassThreshold) {
                 Log.d(
-                    "MapActivity updateTimingPointBasedOnLocation",
+                    "RepActivity updateTimingPointBasedOnLocation",
                     "✅ Passed stop ${stop.name} at ${stop.time} (Distance: ${"%.2f".format(distance)}m)"
                 )
 
@@ -988,7 +995,7 @@ class RepActivity : AppCompatActivity() {
                     firstSchedule.endTime + ":00" // Last stop reached
                 }
                 viewModel.nextTimingPoint.postValue(nextTimingPoint)
-                Log.d("MapActivity updateTimingPointBasedOnLocation", "🔹 Next timing point: $nextTimingPoint")
+                Log.d("RepActivity updateTimingPointBasedOnLocation", "🔹 Next timing point: $nextTimingPoint")
                 return
             }
         }
@@ -1047,7 +1054,7 @@ class RepActivity : AppCompatActivity() {
                 viewModel.stopStatusByKey
             )
 
-            Log.d("MapActivity", "✅ Auto-passed ${newlyPassed.size} stop(s); last=${newlyPassed.lastOrNull()?.address}")
+            Log.d("RepActivity", "✅ Auto-passed ${newlyPassed.size} stop(s); last=${newlyPassed.lastOrNull()?.address}")
         }
 
         // recompute currentStopIndex from passedStops
@@ -1079,7 +1086,7 @@ class RepActivity : AppCompatActivity() {
         // Only update API time if this timing point stop is different than last one
         if (isTimingPoint && viewModel.stopAddress != viewModel.lastTimingPointStopAddress) {
             // ✅Only log timing point changes (not every check)
-            Log.d("MapActivity", "⏱️ Timing point: ${viewModel.stopAddress}")
+            Log.d("RepActivity", "⏱️ Timing point: ${viewModel.stopAddress}")
             viewModel.lastTimingPointStopAddress = viewModel.stopAddress
             updateApiTime()
         }
@@ -1106,7 +1113,7 @@ class RepActivity : AppCompatActivity() {
                     return
                 } else {
                     viewModel.hasPassedFirstStopAgain = true
-                    Log.d("MapActivity", "🔄 Passed first stop a second time, preparing to end the trip.")
+                    Log.d("RepActivity", "🔄 Passed first stop a second time, preparing to end the trip.")
                 }
             }
 
@@ -1116,7 +1123,7 @@ class RepActivity : AppCompatActivity() {
                 upcomingBusStopTextView.text = viewModel.stopAddress
                 viewModel.upcomingStop = viewModel.stopAddress
                 FileLogger.d(
-                    "MapActivity checkPassedStops",
+                    "RepActivity checkPassedStops",
                     "✅ Arrived at: ${viewModel.stopAddress}"
                 )
 
@@ -1262,9 +1269,9 @@ class RepActivity : AppCompatActivity() {
                         if (nearestIndex == 0) {
                             viewModel.hasPassedFirstStop = true // Mark the first bus stop as passed
                             viewModel.nearestRouteIndex = 0
-                            Log.d("MapActivity", "✅ First bus stop passed. Rules activated.")
+                            Log.d("RepActivity", "✅ First bus stop passed. Rules activated.")
                         } else {
-                            Log.d("MapActivity", "⚠️ Waiting for first bus stop to be passed.")
+                            Log.d("RepActivity", "⚠️ Waiting for first bus stop to be passed.")
                             // Use live GPS data until the first stop is passed
                             // Always update marker position in real-time
                             runOnUiThread {
@@ -1279,7 +1286,7 @@ class RepActivity : AppCompatActivity() {
                                         updateUIElementsThrottled()
                                     }
                                 } catch (e: Exception) {
-                                    Log.e("MapActivity", "Error updating before first stop: ${e.message}", e)
+                                    Log.e("RepActivity", "Error updating before first stop: ${e.message}", e)
                                 }
                             }
                             return
@@ -1288,7 +1295,7 @@ class RepActivity : AppCompatActivity() {
 
                     // Allow small backward movement (within 3 points) to handle GPS drift
                     if (nearestIndex < viewModel.nearestRouteIndex - 3) {
-                        Log.d("MapActivity", "⚠️ Ignoring large backward movement: $nearestIndex < ${viewModel.nearestRouteIndex - 3}")
+                        Log.d("RepActivity", "⚠️ Ignoring large backward movement: $nearestIndex < ${viewModel.nearestRouteIndex - 3}")
                         // Only update marker, not full UI if movement is ignored
                         runOnUiThread {
                             mapController.updateBusMarkerPosition(viewModel.latitude, viewModel.longitude, viewModel.bearing)
@@ -1307,7 +1314,7 @@ class RepActivity : AppCompatActivity() {
 
                     // Allow gradual forward movement (don't block if within reasonable range)
                     if (nearestIndex > viewModel.nearestRouteIndex + viewModel.jumpThreshold * 2) {
-                        Log.d("MapActivity", "⚠️ Ignoring sudden jump: $nearestIndex > ${viewModel.nearestRouteIndex + viewModel.jumpThreshold * 2}")
+                        Log.d("RepActivity", "⚠️ Ignoring sudden jump: $nearestIndex > ${viewModel.nearestRouteIndex + viewModel.jumpThreshold * 2}")
                         // Only update marker, not full UI if movement is ignored
                         runOnUiThread {
                             mapController.updateBusMarkerPosition(viewModel.latitude, viewModel.longitude, viewModel.bearing)
@@ -1367,7 +1374,7 @@ class RepActivity : AppCompatActivity() {
                                 LastLocationStore.save(this@RepActivity, viewModel.latitude, viewModel.longitude)
                             }
                         } catch (e: Exception) {
-                            Log.e("MapActivity", "Error in location update: ${e.message}", e)
+                            Log.e("RepActivity", "Error in location update: ${e.message}", e)
                         }
                     }
                 }
@@ -1382,7 +1389,7 @@ class RepActivity : AppCompatActivity() {
                 fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
             }
             .addOnFailureListener { e ->
-                Log.e("MapActivity", "❌ GPS settings error: ${e.localizedMessage}")
+                Log.e("RepActivity", "❌ GPS settings error: ${e.localizedMessage}")
                 Toast.makeText(this, "Please enable GPS for accurate tracking.", Toast.LENGTH_LONG).show()
             }
 
@@ -1441,7 +1448,7 @@ class RepActivity : AppCompatActivity() {
                     val nextTripStartTime = viewModel.scheduleData.getNextScheduleStartTime()
                     viewModel.updateNextTripText(nextTripStartTime)
                 } catch (e: Exception) {
-                    Log.e("MapActivity", "Error updating nextTripCountdownTextView: ${e.message}", e)
+                    Log.e("RepActivity", "Error updating nextTripCountdownTextView: ${e.message}", e)
                 }
             }
 
@@ -1478,7 +1485,7 @@ class RepActivity : AppCompatActivity() {
             )
 
         } catch (e: Exception) {
-            Log.e("MapActivity", "Error updating UI elements: ${e.message}", e)
+            Log.e("RepActivity", "Error updating UI elements: ${e.message}", e)
             e.printStackTrace()
         }
     }
@@ -1577,7 +1584,7 @@ class RepActivity : AppCompatActivity() {
                     updateUIElementsThrottled()
                     periodicUIUpdateHandler?.postDelayed(this, 3000)
                 } catch (e: Exception) {
-                    Log.e("MapActivity", "Error in periodic UI update: ${e.message}", e)
+                    Log.e("RepActivity", "Error in periodic UI update: ${e.message}", e)
                 }
             }
         }
@@ -1624,7 +1631,7 @@ class RepActivity : AppCompatActivity() {
                     upcomingBusStopTextView.text = nextStop.address ?: "Unknown Stop"
                     viewModel.upcomingStop = nextStop.address ?: "Unknown Stop"
                     // ✅ OPTIMIZED: Only log when stop actually changes
-                    Log.d("MapActivity", "✅ Stop passed, next: ${nextStop.address}")
+                    Log.d("RepActivity", "✅ Stop passed, next: ${nextStop.address}")
                     // If the new upcoming stop has a timing point (red mark), update its API time.
                     if (viewModel.redBusStops.contains(nextStop.address)) {
                         updateApiTime()
@@ -1633,7 +1640,7 @@ class RepActivity : AppCompatActivity() {
                     // End of route reached.
                     upcomingBusStopTextView.text = "End of Route"
                     viewModel.upcomingStop = "End of Route"
-                    Log.d("MapActivity", "✅ Reached end of route")
+                    Log.d("RepActivity", "✅ Reached end of route")
                 }
             }
         }
@@ -1692,7 +1699,7 @@ class RepActivity : AppCompatActivity() {
     /** Cleans up resources on activity destruction. */
     @RequiresApi(Build.VERSION_CODES.M)
     override fun onDestroy() {
-        FileLogger.markAppClosed("MapActivity")
+        FileLogger.markAppClosed("RepActivity")
         super.onDestroy()
         panelController.panelDebugEnabled = false
 
@@ -1716,7 +1723,7 @@ class RepActivity : AppCompatActivity() {
 
             // Remove polyline from Mapsforge map
             mapController.clearPolyline()
-            Log.d("MapActivity", "🗑️ Removed polyline on destroy.")
+            Log.d("RepActivity", "🗑️ Removed polyline on destroy.")
         }
 
         // Cleanup time manager
@@ -1753,7 +1760,7 @@ class RepActivity : AppCompatActivity() {
             try {
                 publishActiveSegment("") // re-uses your existing publisher
             } catch (e: Exception) {
-                Log.w("MapActivity", "publishActiveSegment(\"\") failed: ${e.message}")
+                Log.w("RepActivity", "publishActiveSegment(\"\") failed: ${e.message}")
             }
 
             // 2) ask ThingsBoard to re-broadcast and then force a poll/refresh
@@ -1761,7 +1768,7 @@ class RepActivity : AppCompatActivity() {
                 if (::mqttHelper.isInitialized) {
                     // this triggers any admin broadcast side-effects you use
                     try { mqttHelper.requestAdminMessage() } catch (e: Exception) {
-                        Log.w("MapActivity", "requestAdminMessage failed: ${e.message}")
+                        Log.w("RepActivity", "requestAdminMessage failed: ${e.message}")
                     }
 
                     // give the server a moment to process the publish, then refresh attributes
@@ -1771,7 +1778,7 @@ class RepActivity : AppCompatActivity() {
                                 mqttHelper.refreshAllAttributes()
                             }
                         } catch (e: Exception) {
-                            Log.w("MapActivity", "refreshAllAttributes failed: ${e.message}")
+                            Log.w("RepActivity", "refreshAllAttributes failed: ${e.message}")
                         }
 
                         // Refresh local UI and log after the attribute refresh attempt
@@ -1780,14 +1787,14 @@ class RepActivity : AppCompatActivity() {
                     return
                 }
             } catch (e: Exception) {
-                Log.w("MapActivity", "mqttHelper interaction failed: ${e.message}")
+                Log.w("RepActivity", "mqttHelper interaction failed: ${e.message}")
             }
 
             // If mqttHelper not initialized or above failed, still refresh UI locally
             panelController.refreshPanelDetailWithLogging(binding.map.model.mapViewPosition.zoomLevel.toDouble())
 
         } catch (e: Exception) {
-            Log.w("MapActivity", "clearActiveSegmentAndRefresh failed: ${e.message}")
+            Log.w("RepActivity", "clearActiveSegmentAndRefresh failed: ${e.message}")
         }
     }
 
@@ -1807,11 +1814,11 @@ class RepActivity : AppCompatActivity() {
                 try {
                     if (::mqttHelper.isInitialized) mqttHelper.refreshAllAttributes()
                 } catch (e: Exception) {
-                    Log.w("MapActivity","refreshAllAttributes failed: ${e.message}")
+                    Log.w("RepActivity","refreshAllAttributes failed: ${e.message}")
                 }
             }, 200L)
         } catch (e: Exception) {
-            Log.w("MapActivity", "publishActiveSegment follow-up failed: ${e.message}")
+            Log.w("RepActivity", "publishActiveSegment follow-up failed: ${e.message}")
         }
     }
 }
