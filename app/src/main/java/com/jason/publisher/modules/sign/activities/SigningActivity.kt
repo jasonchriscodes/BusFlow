@@ -293,16 +293,14 @@ class SigningActivity : AppCompatActivity() {
         val jsonObject = JSONObject().apply {
             put("sharedKeys", "message,busRoute,busStop,config")
         }
-        mqttManager.publish(MqttHelper.Companion.PUB_MSG_TOPIC, jsonObject.toString())
-        Handler(Looper.getMainLooper()).post(object : Runnable {
-            override fun run() {
+
+        try {
+            if (::mqttManager.isInitialized && mqttManager.isConnected()) {
                 mqttManager.publish(MqttHelper.Companion.PUB_MSG_TOPIC, jsonObject.toString())
-                Handler(Looper.getMainLooper()).postDelayed(
-                    this,
-                    MqttHelper.Companion.REQUEST_PERIODIC_TIME
-                )
             }
-        })
+        } catch (e: Exception) {
+            FileLogger.e("SigningActivity", "requestAdminMessage failed: ${e.message}")
+        }
     }
 
     private val heartbeatRunnable = object : Runnable {
@@ -324,21 +322,21 @@ class SigningActivity : AppCompatActivity() {
 
     @RequiresApi(Build.VERSION_CODES.M)
     override fun onDestroy() {
-        cd?.cancel()
-        heartbeatHandler.removeCallbacksAndMessages(null)
-        clearActiveSegmentAndRefresh()
-        super.onDestroy()
-        // DO NOT DISCONNECT MQTT HERE (same as BreakActivity)
         try {
-            heartbeatHandler.removeCallbacksAndMessages(null)
             cd?.cancel()
+            heartbeatHandler.removeCallbacksAndMessages(null)
+
+            // one-shot publish only, no repeating Handler
+            clearActiveSegmentAndRefresh()
 
             if (::mqttManager.isInitialized) {
                 mqttManager.disconnect()
             }
         } catch (e: Exception) {
-            FileLogger.e("SigningActivity", "MQTT cleanup failed: ${e.message}")
+            FileLogger.e("SigningActivity", "onDestroy cleanup failed: ${e.message}")
         }
+
+        super.onDestroy()
     }
 
     private fun formatHMS(ms: Long): String {
