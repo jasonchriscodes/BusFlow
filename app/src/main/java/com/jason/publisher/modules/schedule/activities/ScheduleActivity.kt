@@ -1,12 +1,10 @@
 package com.jason.publisher.modules.schedule.activities
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.net.ConnectivityManager
@@ -34,11 +32,9 @@ import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.graphics.toColorInt
-import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -62,7 +58,6 @@ import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
 import com.jason.publisher.modules.schedule.adapters.ScheduleAdapter
-import com.jason.publisher.modules.schedule.helpers.OtaCheckResult
 import com.jason.publisher.modules.schedule.helpers.OtaInfo
 import com.jason.publisher.modules.schedule.helpers.OtaUpdateManager
 import com.jason.publisher.modules.schedule.helpers.TbAdminOtaLatest

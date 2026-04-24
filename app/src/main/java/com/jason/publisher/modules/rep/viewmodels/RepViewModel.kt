@@ -1,7 +1,5 @@
 package com.jason.publisher.modules.rep.viewmodels
 
-import com.jason.publisher.modules.map.viewmodels.ScheduleStatusManager
-
 import android.annotation.SuppressLint
 import android.location.Location
 import android.util.Log
