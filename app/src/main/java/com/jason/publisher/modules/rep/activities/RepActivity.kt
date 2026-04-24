@@ -131,9 +131,32 @@ class RepActivity : AppCompatActivity() {
     @SuppressLint("LongLogTag")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                FileLogger.e(
+                    "RepActivity CRASH",
+                    """
+            FATAL CRASH in thread=${thread.name}
+            error=${throwable::class.java.name}
+            message=${throwable.message}
+            stack=${Log.getStackTraceString(throwable)}
+            """.trimIndent()
+                )
+            } catch (_: Exception) {
+            }
+
+            android.os.Process.killProcess(android.os.Process.myPid())
+            kotlin.system.exitProcess(10)
+        }
+
+        repStep("01 onCreate START")
         AndroidGraphicFactory.createInstance(application)
+        repStep("02 AndroidGraphicFactory OK")
         binding = ActivityMapBinding.inflate(layoutInflater)
+        repStep("03 binding inflated OK")
         setContentView(binding.root)
+        repStep("04 setContentView OK")
         FileLogger.d("RepActivity", "onCreate")
 
         // Reset final stop message flag for new trip
@@ -153,6 +176,7 @@ class RepActivity : AppCompatActivity() {
         mqttHelper = RepMqttHelper(this, binding)
         panelController = RepDetailPanelController(this, binding.detailIconsContainer)
         mapController = RepMapViewController(this, binding.map, mqttHelper)
+        repStep("05 managers initialized OK")
 
         // Retrieve data passed from TimeTableActivity
         viewModel.aid = intent.getStringExtra("AID") ?: "Unknown"
@@ -176,6 +200,16 @@ class RepActivity : AppCompatActivity() {
             viewModel.scheduleList = intent.getParcelableArrayListExtra("FIRST_SCHEDULE_ITEM") ?: emptyList()
             viewModel.scheduleData = intent.getParcelableArrayListExtra("FULL_SCHEDULE_DATA") ?: emptyList()
         }
+
+        repStep(
+            "06 intent extras loaded | " +
+                    "config=${viewModel.config?.size ?: 0}, " +
+                    "route=${viewModel.route.size}, " +
+                    "stops=${viewModel.stops.size}, " +
+                    "busRouteData=${viewModel.busRouteData.size}, " +
+                    "scheduleList=${viewModel.scheduleList.size}, " +
+                    "scheduleData=${viewModel.scheduleData.size}"
+        )
 
         val no = intent.getIntExtra("EXTRA_PANEL_DEBUG_NO", -1)
         val idx = intent.getIntExtra("SELECTED_ROUTE_INDEX", -1)
@@ -223,20 +257,54 @@ class RepActivity : AppCompatActivity() {
                 intent.getParcelableExtra("SELECTED_ROUTE_DATA")
             }
 
+        repStep(
+            "07 before selectedRoute fallback | selectedIdx=$selectedIdx | " +
+                    "selectedRouteFromIntent=$selectedRouteFromIntent | " +
+                    "busRouteAtIdx=${viewModel.busRouteData.getOrNull(selectedIdx)}"
+        )
+
         viewModel.selectedRouteData =
             selectedRouteFromIntent
                 ?: viewModel.busRouteData.getOrNull(selectedIdx)
                         ?: viewModel.busRouteData.firstOrNull()
 
+        repStep("08 selectedRouteData=${viewModel.selectedRouteData}")
+
         // If we have a selected route, derive the map vectors from it
-        viewModel.deriveMapVectors()
+        try {
+            repStep("09 before deriveMapVectors")
+            viewModel.deriveMapVectors()
+            repStep(
+                "10 after deriveMapVectors | " +
+                        "route=${viewModel.route.size}, " +
+                        "stops=${viewModel.stops.size}, " +
+                        "durations=${viewModel.durationBetweenStops.size}"
+            )
+        } catch (e: Exception) {
+            FileLogger.e("RepActivity CRASH_POINT", "deriveMapVectors failed: ${Log.getStackTraceString(e)}")
+            throw e
+        }
 
         dumpMapVectors("RepActivity", no)
 
-        viewModel.extractRedBusStops()
+        try {
+            repStep("11 before extractRedBusStops")
+            viewModel.extractRedBusStops()
+            repStep("12 after extractRedBusStops | redBusStops=${viewModel.redBusStops.size}")
+        } catch (e: Exception) {
+            FileLogger.e("RepActivity CRASH_POINT", "extractRedBusStops failed: ${Log.getStackTraceString(e)}")
+            throw e
+        }
 
         // Initialize UI components
-        initializeUIComponents()
+        try {
+            repStep("13 before initializeUIComponents")
+            initializeUIComponents()
+            repStep("14 after initializeUIComponents")
+        } catch (e: Exception) {
+            FileLogger.e("RepActivity CRASH_POINT", "initializeUIComponents failed: ${Log.getStackTraceString(e)}")
+            throw e
+        }
 
         viewModel.nextTimingPoint.observe(this) {
             if (::timingPointValueTextView.isInitialized) {
@@ -281,12 +349,34 @@ class RepActivity : AppCompatActivity() {
         updateApiTime() // Ensure API time is updated at the start
 
         // Start periodic UI update to ensure UI stays updated even if location doesn't change
-        startPeriodicUIUpdate()
+        try {
+            repStep("15 before startPeriodicUIUpdate")
+            startPeriodicUIUpdate()
+            repStep("16 after startPeriodicUIUpdate")
+        } catch (e: Exception) {
+            FileLogger.e("RepActivity CRASH_POINT", "startPeriodicUIUpdate failed: ${Log.getStackTraceString(e)}")
+            throw e
+        }
 
-        timingPointValueTextView.text = viewModel.initializeTimingPoint()
+        try {
+            repStep("17 before initializeTimingPoint")
+            val timingPoint = viewModel.initializeTimingPoint()
+            repStep("18 initializeTimingPoint result=$timingPoint")
+            timingPointValueTextView.text = timingPoint
+        } catch (e: Exception) {
+            FileLogger.e("RepActivity CRASH_POINT", "initializeTimingPoint failed: ${Log.getStackTraceString(e)}")
+            throw e
+        }
 
         // Ensure locationManager is initialized
-        locationManager = LocationManager(this)
+        try {
+            repStep("19 before LocationManager")
+            locationManager = LocationManager(this)
+            repStep("20 LocationManager OK")
+        } catch (e: Exception) {
+            FileLogger.e("RepActivity CRASH_POINT", "LocationManager failed: ${Log.getStackTraceString(e)}")
+            throw e
+        }
 
         // Set up network status UI
         NetworkStatusHelper.setupNetworkStatus(this, binding.connectionStatusTextView, binding.networkStatusIndicator)
@@ -363,7 +453,14 @@ class RepActivity : AppCompatActivity() {
                         Toast.LENGTH_LONG
                     ).show()
 
-                    mapController.openMapFromAssets()
+                    try {
+                        repStep("21 before openMapFromAssets")
+                        mapController.openMapFromAssets()
+                        repStep("22 after openMapFromAssets")
+                    } catch (e: Exception) {
+                        FileLogger.e("RepActivity CRASH_POINT", "openMapFromAssets failed: ${Log.getStackTraceString(e)}")
+                        throw e
+                    }
                     mapController.getDefaultConfigValue()
                     panelController.activeSegment = selfLabel
                     panelController.refreshDetailPanelIcons(
@@ -385,7 +482,14 @@ class RepActivity : AppCompatActivity() {
         mapController.openMapFromAssets()
 
         // Start tracking the location and updating the marker
-        startLocationUpdate()
+        try {
+            repStep("23 before startLocationUpdate")
+            startLocationUpdate()
+            repStep("24 after startLocationUpdate")
+        } catch (e: Exception) {
+            FileLogger.e("RepActivity CRASH_POINT", "startLocationUpdate failed: ${Log.getStackTraceString(e)}")
+            throw e
+        }
 
         // Mock data to check scheduleStatusValueTextView
         if (viewModel.forceAheadStatus) {
@@ -440,7 +544,14 @@ class RepActivity : AppCompatActivity() {
                         // small delay so UI settles (optional)
                         binding.arriveButton.postDelayed({
                             // will invoke your existing setOnClickListener { confirmArrival() }
+                            FileLogger.d(
+                                "RepActivity AUTO_CLICK",
+                                "before auto arrive click | scheduleList=${viewModel.scheduleList.size} | stops=${viewModel.stops.size} | route=${viewModel.route.size}"
+                            )
+
                             binding.arriveButton.performClick()
+
+                            FileLogger.d("RepActivity AUTO_CLICK", "after auto arrive click")
                         }, 400)
                     }
                 }
@@ -547,6 +658,10 @@ class RepActivity : AppCompatActivity() {
         }
     }
 
+    private fun repStep(step: String) {
+        FileLogger.d("RepActivity STEP", step)
+    }
+
     // ===== DEBUG: log everything used to build bus stop symbols + polyline =====
 
     private fun dumpMapVectors(tag: String, no: Int) {
@@ -635,6 +750,10 @@ class RepActivity : AppCompatActivity() {
     private var isManualMode = false
     @SuppressLint("LongLogTag")
     private fun confirmArrival() {
+        FileLogger.d(
+            "RepActivity confirmArrival",
+            "START | scheduleList=${viewModel.scheduleList.size} | route=${viewModel.route.size} | stops=${viewModel.stops.size} | currentStopIndex=${viewModel.currentStopIndex}"
+        )
         Log.d("RepActivity confirmArrival", "🚨 ConfirmArrival Triggered - Starting Process")
 
         viewModel.selectedRouteData?.startingPoint?.let { sp ->
@@ -713,7 +832,9 @@ class RepActivity : AppCompatActivity() {
         viewModel.apiTimeLocked = false    // Unlock the API time to allow updates
         Log.d("RepActivity confirmArrival", "🔓 API Time Unlocked")
 
-        scheduleStatusManager.checkScheduleStatus()   // Immediately refresh the schedule status
+        FileLogger.d("RepActivity confirmArrival", "before checkScheduleStatus")
+        scheduleStatusManager.checkScheduleStatus()
+        FileLogger.d("RepActivity confirmArrival", "after checkScheduleStatus")   // Immediately refresh the schedule status
         Log.d("RepActivity confirmArrival", "✅ Schedule Status Checked")
 
         Log.d("RepActivity confirmArrival", "✅ Arrival confirmed at: ${viewModel.stopAddress}")
