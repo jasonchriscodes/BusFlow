@@ -125,6 +125,7 @@ class RepActivity : AppCompatActivity() {
     var panelDebounceRunnable: Runnable? = null
     private var lastNextRunSafetyToastAt = 0L
     private val nextRunSafetyToastCooldownMs = 5 * 60 * 1000L // 5 minutes
+    private var mqttStarted = false
 
     @RequiresApi(Build.VERSION_CODES.N)
     @SuppressLint("LongLogTag")
@@ -146,9 +147,6 @@ class RepActivity : AppCompatActivity() {
         // Add logger
         FileLogger.init(this)
         FileLogger.markAppOpened("RepActivity")
-
-        // ── ADD THIS: initialize mqttManager for offline use ──
-        mqttManager = MqttManager()
 
         // Initialize Managers before using it
         scheduleStatusManager = RepScheduleStatusManager(this, binding)
@@ -295,33 +293,31 @@ class RepActivity : AppCompatActivity() {
 
         connectivityManager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                // we’re back online → force a one-off refresh, then resume polling
                 runOnUiThread {
-                    // reuse the same helper to flip your dot + text
                     NetworkStatusHelper.setupNetworkStatus(
                         this@RepActivity,
                         connectionStatusTextView,
                         networkStatusIndicator
                     )
 
-                    // Do not create/connect another MQTT client here.
-// The main mqttConfigHelper.fetchConfig block below already connects MQTT.
-// Just update the UI.
+                    // Do NOT reconnect MQTT here.
+                    // MQTT is already started in the main fetchConfig block below.
                     mapController.getDefaultConfigValue()
-                    panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
+                    panelController.refreshDetailPanelIcons(
+                        binding.map.model.mapViewPosition.zoomLevel.toDouble()
+                    )
                 }
             }
 
             override fun onLost(network: Network) {
-                // went offline → stop polling
                 runOnUiThread {
                     NetworkStatusHelper.setupNetworkStatus(
                         this@RepActivity,
                         connectionStatusTextView,
                         networkStatusIndicator
                     )
-                    // only stop polling if mqttManager is ready
-                    if (::mqttManager.isInitialized) {
+
+                    if (::mqttHelper.isInitialized) {
                         mqttHelper.stopAttributePolling()
                     }
                 }
@@ -332,6 +328,7 @@ class RepActivity : AppCompatActivity() {
         // Always switch back to the main thread before touching any views:
         mqttConfigHelper.fetchConfig { configList ->
             val success = configList.isNotEmpty()
+
             runOnUiThread {
                 if (success) {
                     viewModel.config = configList
@@ -339,47 +336,42 @@ class RepActivity : AppCompatActivity() {
                         viewModel.aid,
                         viewModel.config.orEmpty()
                     )
-                    mqttManager = MqttManager(username  = viewModel.token)
 
-                    // build your markers etc.
+                    mqttManager = MqttManager(username = viewModel.token)
+
                     mapController.getDefaultConfigValue()
                     panelController.activeSegment = selfLabel
-                    panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
+                    panelController.refreshDetailPanelIcons(
+                        binding.map.model.mapViewPosition.zoomLevel.toDouble()
+                    )
 
-                    // Log immediately
-                    panelController.logPanelDebugFromDetailPanel()
+                    if (!mqttStarted) {
+                        mqttStarted = true
 
-                    // Log again shortly after MQTT polling begins (gives time for other buses to populate)
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        panelController.logPanelDebugFromDetailPanel()
-                    }, 1200)
-
-                    mqttHelper.requestAdminMessage()
-                    mqttHelper.connectAndSubscribe()
-                    mqttHelper.startAttributePolling()
-                    mapController.startActivityMonitor()
+                        mqttHelper.requestAdminMessage()
+                        mqttHelper.connectAndSubscribe()
+                        mqttHelper.startAttributePolling()
+                        mapController.startActivityMonitor()
+                    }
                 } else {
-                    // --- FAILURE HANDLING ---
-                    // ensure mqttManager is assigned even on config-fetch failure
                     mqttManager = MqttManager()
                     Log.e("RepActivity", "Failed to fetch config, entering offline mode.")
+
                     Toast.makeText(
                         this@RepActivity,
                         "Unable to connect. Falling back to offline map…",
                         Toast.LENGTH_LONG
                     ).show()
 
-                    // load your offline map immediately
                     mapController.openMapFromAssets()
-
-                    // **populate the detail-panel** exactly as in online mode
                     mapController.getDefaultConfigValue()
                     panelController.activeSegment = selfLabel
-                    panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
+                    panelController.refreshDetailPanelIcons(
+                        binding.map.model.mapViewPosition.zoomLevel.toDouble()
+                    )
 
-                    // disable any UI that needs live data
                     binding.startSimulationButton.isEnabled = false
-                    binding.stopSimulationButton.isEnabled  = false
+                    binding.stopSimulationButton.isEnabled = false
                 }
             }
         }

@@ -224,6 +224,7 @@ class SigningActivity : AppCompatActivity() {
             try {
                 heartbeatHandler.removeCallbacksAndMessages(null)
                 cd?.cancel()
+
                 if (::mqttManager.isInitialized) {
                     mqttManager.disconnect()
                 }
@@ -331,11 +332,12 @@ class SigningActivity : AppCompatActivity() {
         try {
             heartbeatHandler.removeCallbacksAndMessages(null)
             cd?.cancel()
+
             if (::mqttManager.isInitialized) {
                 mqttManager.disconnect()
             }
         } catch (e: Exception) {
-            FileLogger.e("SigningActivity", "onDestroy cleanup failed: ${e.message}")
+            FileLogger.e("SigningActivity", "MQTT cleanup failed: ${e.message}")
         }
     }
 
