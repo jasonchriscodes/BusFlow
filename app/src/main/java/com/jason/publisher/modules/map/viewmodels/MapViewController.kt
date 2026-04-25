@@ -15,6 +15,7 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import com.jason.publisher.R
+import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.LifecycleLogger
 import com.jason.publisher.main.model.BusRoute
 import com.jason.publisher.main.model.BusStop
@@ -283,7 +284,22 @@ class MapViewController(
             mapView.model.frameBufferModel.overdrawFactor
         )
         // 1) copy it out of assets into cacheDir
-        val mapFile = copyAssetToFile("new-zealand.map")
+        val mapFile = File(activity.viewModel.getHiddenFolder(), "new-zealand.map")
+
+        if (!mapFile.exists() || mapFile.length() <= 0L) {
+            FileLogger.e(
+                "MapViewController",
+                "Offline map missing/empty | path=${mapFile.absolutePath} | exists=${mapFile.exists()} | size=${mapFile.length()}"
+            )
+
+            Toast.makeText(
+                activity,
+                "Offline map missing. Return to Schedule to download it.",
+                Toast.LENGTH_LONG
+            ).show()
+
+            return
+        }
 
         // 2) now you know it’s there
         if (!mapFile.exists()) {
@@ -362,21 +378,6 @@ class MapViewController(
                 }
             }
         }
-    }
-
-    /**
-     * Copy a file from assets into cacheDir and return the File handle.
-     */
-    private fun copyAssetToFile(assetName: String): File {
-        val outFile = File(activity.cacheDir, assetName)
-        if (!outFile.exists()) {
-            activity.assets.open(assetName).use { input ->
-                outFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-        }
-        return outFile
     }
 
     /** Place the bus marker at a given latitude and longitude */

@@ -83,6 +83,9 @@ import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.InternalRenderTheme
 import org.osmdroid.config.Configuration
+import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
 class ScheduleActivity : AppCompatActivity() {
     private lateinit var binding: ActivityScheduleBinding
@@ -134,6 +137,14 @@ class ScheduleActivity : AppCompatActivity() {
         private const val PANEL_DEBUG_NO_KEY = "panel_debug_no"
         private const val PREF_PENDING_OTA_APK_PATH = "pending_ota_apk_path"
         private const val PREF_PENDING_OTA_VERSION  = "pending_ota_version"
+        private const val OFFLINE_MAP_FILE_NAME = "new-zealand.map"
+
+        private const val GITHUB_MAP_URL =
+            "https://github.com/jasonchriscodes/BusFlow/releases/download/maps-v1/new-zealand.map"
+
+        // Minimum size to avoid using a 0-byte / corrupted file.
+// Change this if your actual .map file is smaller.
+        private const val MIN_VALID_MAP_BYTES = 10L * 1024L * 1024L // 10 MB
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -309,6 +320,8 @@ class ScheduleActivity : AppCompatActivity() {
         // 1. Initialize Mapsforge
         AndroidGraphicFactory.createInstance(application)
 
+        ensureOfflineMapAvailable()
+
         // 2. Find the hidden MapView
         val preloadMap: MapView = findViewById(R.id.preloadMapView)
         preloadMap.isClickable = false
@@ -435,6 +448,29 @@ class ScheduleActivity : AppCompatActivity() {
                 // Log now (works for Trip or Break)
                 viewModel.logPanelDebugPreStart(no, first)
 
+                if (!isValidOfflineMapFile(offlineMapFile())) {
+                    FileLogger.e(
+                        "ScheduleActivity MAP",
+                        "Route launch blocked. Offline map missing/invalid."
+                    )
+
+                    ensureOfflineMapAvailable {
+                        Toast.makeText(
+                            this,
+                            "Map downloaded. Please press Start Route again.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+
+                    Toast.makeText(
+                        this,
+                        "Preparing offline map. Please wait.",
+                        Toast.LENGTH_LONG
+                    ).show()
+
+                    return@setOnClickListener
+                }
+
                 when {
                     first.isBreak()      -> launchBreakActivity(first, no)
                     first.isSigning()    -> launchSigningActivity(first, no)
@@ -487,6 +523,200 @@ class ScheduleActivity : AppCompatActivity() {
                 }
             }
         }
+
+    private fun offlineMapFile(): File {
+        val hiddenFolder = viewModel.getHiddenFolder()
+
+        if (!hiddenFolder.exists()) {
+            hiddenFolder.mkdirs()
+        }
+
+        return File(hiddenFolder, OFFLINE_MAP_FILE_NAME)
+    }
+
+    private fun isValidOfflineMapFile(file: File): Boolean {
+        return file.exists() && file.isFile && file.length() >= MIN_VALID_MAP_BYTES
+    }
+
+    private fun ensureOfflineMapAvailable(onReady: (() -> Unit)? = null) {
+        val mapFile = offlineMapFile()
+
+        FileLogger.d(
+            "ScheduleActivity MAP",
+            "Checking offline map | path=${mapFile.absolutePath} | exists=${mapFile.exists()} | size=${mapFile.length()}"
+        )
+
+        if (isValidOfflineMapFile(mapFile)) {
+            FileLogger.d(
+                "ScheduleActivity MAP",
+                "Offline map already available | size=${mapFile.length()}"
+            )
+            onReady?.invoke()
+            return
+        }
+
+        if (!NetworkStatusHelper.isNetworkAvailable(this)) {
+            FileLogger.e(
+                "ScheduleActivity MAP",
+                "Offline map missing/invalid and no network | path=${mapFile.absolutePath}"
+            )
+
+            Toast.makeText(
+                this,
+                "Offline map missing. Connect to internet to download it.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        downloadOfflineMapFromGitHub(mapFile, onReady)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.N)
+    private fun downloadOfflineMapFromGitHub(targetFile: File, onReady: (() -> Unit)? = null) {
+        lifecycleScope.launch {
+            Toast.makeText(
+                this@ScheduleActivity,
+                "Downloading offline map…",
+                Toast.LENGTH_SHORT
+            ).show()
+
+            val result = withContext(Dispatchers.IO) {
+                val tempFile = File(targetFile.parentFile, "${targetFile.name}.download")
+
+                try {
+                    if (tempFile.exists()) {
+                        tempFile.delete()
+                    }
+
+                    FileLogger.d(
+                        "ScheduleActivity MAP",
+                        "Starting GitHub map download | url=$GITHUB_MAP_URL | target=${targetFile.absolutePath}"
+                    )
+
+                    val connection = (URL(GITHUB_MAP_URL).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 20_000
+                        readTimeout = 60_000
+                        instanceFollowRedirects = true
+                        requestMethod = "GET"
+                    }
+
+                    connection.connect()
+
+                    val responseCode = connection.responseCode
+                    val contentLength = connection.contentLengthLong
+
+                    FileLogger.d(
+                        "ScheduleActivity MAP",
+                        "GitHub response | code=$responseCode | contentLength=$contentLength"
+                    )
+
+                    if (responseCode !in 200..299) {
+                        connection.disconnect()
+                        return@withContext Result.failure<File>(
+                            IllegalStateException("Download failed. HTTP $responseCode")
+                        )
+                    }
+
+                    connection.inputStream.use { input ->
+                        FileOutputStream(tempFile).use { output ->
+                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                            var downloaded = 0L
+                            var lastLoggedPercent = -1
+
+                            while (true) {
+                                val read = input.read(buffer)
+                                if (read == -1) break
+
+                                output.write(buffer, 0, read)
+                                downloaded += read
+
+                                if (contentLength > 0) {
+                                    val percent = ((downloaded * 100) / contentLength).toInt()
+                                    if (percent >= lastLoggedPercent + 10) {
+                                        lastLoggedPercent = percent
+                                        FileLogger.d(
+                                            "ScheduleActivity MAP",
+                                            "Download progress: $percent% ($downloaded/$contentLength)"
+                                        )
+                                    }
+                                }
+                            }
+
+                            output.flush()
+                        }
+                    }
+
+                    connection.disconnect()
+
+                    FileLogger.d(
+                        "ScheduleActivity MAP",
+                        "Download finished | tempSize=${tempFile.length()}"
+                    )
+
+                    if (!isValidOfflineMapFile(tempFile)) {
+                        tempFile.delete()
+                        return@withContext Result.failure<File>(
+                            IllegalStateException("Downloaded map is invalid or too small.")
+                        )
+                    }
+
+                    if (targetFile.exists()) {
+                        targetFile.delete()
+                    }
+
+                    val renamed = tempFile.renameTo(targetFile)
+
+                    if (!renamed) {
+                        tempFile.inputStream().use { input ->
+                            FileOutputStream(targetFile).use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        tempFile.delete()
+                    }
+
+                    Result.success(targetFile)
+
+                } catch (e: Exception) {
+                    tempFile.delete()
+                    FileLogger.e(
+                        "ScheduleActivity MAP",
+                        "GitHub map download failed: ${Log.getStackTraceString(e)}"
+                    )
+                    Result.failure(e)
+                }
+            }
+
+            result
+                .onSuccess { file ->
+                    FileLogger.d(
+                        "ScheduleActivity MAP",
+                        "Offline map ready | path=${file.absolutePath} | size=${file.length()}"
+                    )
+
+                    Toast.makeText(
+                        this@ScheduleActivity,
+                        "Offline map ready.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    onReady?.invoke()
+                }
+                .onFailure { e ->
+                    FileLogger.e(
+                        "ScheduleActivity MAP",
+                        "Offline map unavailable: ${e.message}"
+                    )
+
+                    Toast.makeText(
+                        this@ScheduleActivity,
+                        "Failed to download offline map: ${e.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+        }
+    }
 
     private fun showOtaProgress(message: String) {
         runOnUiThread {
