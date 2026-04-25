@@ -2,6 +2,7 @@ package com.jason.publisher.modules.rep.viewmodels
 
 import android.annotation.SuppressLint
 import android.location.Location
+import android.os.Environment
 import android.util.Log
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -31,6 +32,7 @@ import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -121,6 +123,17 @@ class RepViewModel: ViewModel() {
         windowMillis = 15000,
         minValidValue = 1.8  // 1.8 km/h = 0.5 m/s - filter out very low speeds when bus is stopped
     )
+
+    fun getHiddenFolder(): File {
+        val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+        val hiddenFolder = File(documentsDir, ".vlrshiddenfolder")
+
+        if (!hiddenFolder.exists()) {
+            hiddenFolder.mkdirs()
+        }
+
+        return hiddenFolder
+    }
 
     val locationListener = object : LocationListener {
         override fun onLocationUpdate(location: Location) {
