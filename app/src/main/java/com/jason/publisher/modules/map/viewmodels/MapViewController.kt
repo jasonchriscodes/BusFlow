@@ -286,10 +286,15 @@ class MapViewController(
         // 1) copy it out of assets into cacheDir
         val mapFile = File(activity.viewModel.getHiddenFolder(), "new-zealand.map")
 
+        FileLogger.d(
+            "MapViewController",
+            "Opening offline map from hidden folder | path=${mapFile.absolutePath} | exists=${mapFile.exists()} | size=${mapFile.length()}"
+        )
+
         if (!mapFile.exists() || mapFile.length() <= 0L) {
             FileLogger.e(
                 "MapViewController",
-                "Offline map missing/empty | path=${mapFile.absolutePath} | exists=${mapFile.exists()} | size=${mapFile.length()}"
+                "Offline map missing/empty. Return to ScheduleActivity to download it."
             )
 
             Toast.makeText(
