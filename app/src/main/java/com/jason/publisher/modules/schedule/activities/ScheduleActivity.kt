@@ -317,17 +317,12 @@ class ScheduleActivity : AppCompatActivity() {
         // Start updating the date/time
         startDateTimeUpdater()
 
-        // 1. Initialize Mapsforge
         AndroidGraphicFactory.createInstance(application)
 
-        ensureOfflineMapAvailable()
-
-        // 2. Find the hidden MapView
         val preloadMap: MapView = findViewById(R.id.preloadMapView)
         preloadMap.isClickable = false
         preloadMap.isFocusable = false
 
-        // 3. Create tile cache
         val cache = AndroidUtil.createTileCache(
             this,
             "preloadCache",
@@ -336,49 +331,8 @@ class ScheduleActivity : AppCompatActivity() {
             preloadMap.model.frameBufferModel.overdrawFactor
         )
 
-        // 4. Open the .map file off the main thread
-        val mapFile = File(viewModel.getHiddenFolder(), "new-zealand.map")
-        if (!mapFile.exists()) {
-            Log.e("ScheduleActivity", "Map file not found at: ${mapFile.absolutePath}")
-//            Toast.makeText(
-//                this,
-//                "Offline map unavailable. Other features will still work.",
-//                Toast.LENGTH_SHORT
-//            ).show()
-        } else {
-            ioScope.launch {
-                // Open the .map file on IO
-                val mapStore = try {
-                    MapFile(mapFile)
-                } catch (e: Exception) {
-                    Log.e("ScheduleActivity", "Failed to open MapFile: ${e.message}")
-                    null
-                }
-                if (mapStore != null) {
-                    // Create the renderer off the main thread
-                    val renderer = TileRendererLayer(
-                        cache,
-                        mapStore,
-                        preloadMap.model.mapViewPosition,
-                        AndroidGraphicFactory.INSTANCE
-                    ).apply {
-                        setXmlRenderTheme(InternalRenderTheme.DEFAULT)
-                    }
-
-                    // Switch back to UI thread to add the layer and center/map invalidate
-                    withContext(Dispatchers.Main) {
-                        preloadMap.layerManager.layers.add(renderer)
-                        preloadMap.post {
-                            preloadMap.model.mapViewPosition.zoomLevel = 16
-                            preloadMap.model.mapViewPosition.center = LatLong(
-                                -36.855647,
-                                174.765249
-                            )
-                            preloadMap.invalidate()
-                        }
-                    }
-                }
-            }
+        ensureOfflineMapAvailable {
+            preloadOfflineMapIfAvailable(preloadMap, cache)
         }
 
         FileLogger.d(
@@ -425,6 +379,7 @@ class ScheduleActivity : AppCompatActivity() {
                     Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
+
                 val no = nextPanelDebugNo()
                 val first = viewModel.activeScheduleData.first()
 
@@ -440,15 +395,17 @@ class ScheduleActivity : AppCompatActivity() {
                     "ScheduleActivity START_ROUTE",
                     "ScheduleActivity START_ROUTE | no=$no | first.busStops.size=${first.busStops.size} | firstStop=${first.busStops.firstOrNull()} | lastStop=${first.busStops.lastOrNull()}"
                 )
+
                 FileLogger.d(
                     "ScheduleActivity START_ROUTE",
                     "ScheduleActivity START_ROUTE | no=$no | selectedRouteData=${viewModel.busRouteData.getOrNull(selectedIdx)}"
                 )
 
-                // Log now (works for Trip or Break)
                 viewModel.logPanelDebugPreStart(no, first)
 
-                if (!isValidOfflineMapFile(offlineMapFile())) {
+                // Only REP and normal route need the offline map.
+                // Sign On and Break can still open without map.
+                if (!first.isSigning() && !first.isBreak() && !isValidOfflineMapFile(offlineMapFile())) {
                     FileLogger.e(
                         "ScheduleActivity MAP",
                         "Route launch blocked. Offline map missing/invalid."
@@ -503,6 +460,61 @@ class ScheduleActivity : AppCompatActivity() {
         }
     }
 
+    private fun preloadOfflineMapIfAvailable(
+        preloadMap: MapView,
+        cache: org.mapsforge.map.layer.cache.TileCache
+    ) {
+        val mapFile = offlineMapFile()
+
+        if (!isValidOfflineMapFile(mapFile)) {
+            FileLogger.e(
+                "ScheduleActivity MAP",
+                "Preload skipped. Map invalid | path=${mapFile.absolutePath} | exists=${mapFile.exists()} | size=${mapFile.length()}"
+            )
+            return
+        }
+
+        ioScope.launch {
+            val mapStore = try {
+                MapFile(mapFile)
+            } catch (e: Exception) {
+                FileLogger.e(
+                    "ScheduleActivity MAP",
+                    "Failed to open MapFile: ${Log.getStackTraceString(e)}"
+                )
+                null
+            }
+
+            if (mapStore != null) {
+                val renderer = TileRendererLayer(
+                    cache,
+                    mapStore,
+                    preloadMap.model.mapViewPosition,
+                    AndroidGraphicFactory.INSTANCE
+                ).apply {
+                    setXmlRenderTheme(InternalRenderTheme.DEFAULT)
+                }
+
+                withContext(Dispatchers.Main) {
+                    preloadMap.layerManager.layers.add(renderer)
+                    preloadMap.post {
+                        preloadMap.model.mapViewPosition.zoomLevel = 16
+                        preloadMap.model.mapViewPosition.center = LatLong(
+                            -36.855647,
+                            174.765249
+                        )
+                        preloadMap.invalidate()
+                    }
+
+                    FileLogger.d(
+                        "ScheduleActivity MAP",
+                        "Preloaded offline map successfully | path=${mapFile.absolutePath}"
+                    )
+                }
+            }
+        }
+    }
+
     @RequiresApi(Build.VERSION_CODES.M)
     private val signingLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -549,7 +561,7 @@ class ScheduleActivity : AppCompatActivity() {
         if (isValidOfflineMapFile(mapFile)) {
             FileLogger.d(
                 "ScheduleActivity MAP",
-                "Offline map already available | size=${mapFile.length()}"
+                "Offline map already valid. Reusing existing file | path=${mapFile.absolutePath} | size=${mapFile.length()}"
             )
             onReady?.invoke()
             return
@@ -558,7 +570,7 @@ class ScheduleActivity : AppCompatActivity() {
         if (!NetworkStatusHelper.isNetworkAvailable(this)) {
             FileLogger.e(
                 "ScheduleActivity MAP",
-                "Offline map missing/invalid and no network | path=${mapFile.absolutePath}"
+                "Offline map missing/invalid and no internet | path=${mapFile.absolutePath} | exists=${mapFile.exists()} | size=${mapFile.length()}"
             )
 
             Toast.makeText(
@@ -572,7 +584,6 @@ class ScheduleActivity : AppCompatActivity() {
         downloadOfflineMapFromGitHub(mapFile, onReady)
     }
 
-    @RequiresApi(Build.VERSION_CODES.N)
     private fun downloadOfflineMapFromGitHub(targetFile: File, onReady: (() -> Unit)? = null) {
         lifecycleScope.launch {
             Toast.makeText(
@@ -585,9 +596,7 @@ class ScheduleActivity : AppCompatActivity() {
                 val tempFile = File(targetFile.parentFile, "${targetFile.name}.download")
 
                 try {
-                    if (tempFile.exists()) {
-                        tempFile.delete()
-                    }
+                    if (tempFile.exists()) tempFile.delete()
 
                     FileLogger.d(
                         "ScheduleActivity MAP",
@@ -596,7 +605,7 @@ class ScheduleActivity : AppCompatActivity() {
 
                     val connection = (URL(GITHUB_MAP_URL).openConnection() as HttpURLConnection).apply {
                         connectTimeout = 20_000
-                        readTimeout = 60_000
+                        readTimeout = 120_000
                         instanceFollowRedirects = true
                         requestMethod = "GET"
                     }
@@ -1452,6 +1461,9 @@ class ScheduleActivity : AppCompatActivity() {
      */
     @RequiresApi(Build.VERSION_CODES.M)
     private fun enterOnlineMode() {
+        FileLogger.d("ScheduleActivity MAP", "Online mode started. Checking offline map with roster fetch.")
+        ensureOfflineMapAvailable()
+
         if (onlineInitStarted || connecting) return
         onlineInitStarted = true
         connecting = true
