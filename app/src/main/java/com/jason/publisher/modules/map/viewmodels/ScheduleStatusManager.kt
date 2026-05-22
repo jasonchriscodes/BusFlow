@@ -243,7 +243,7 @@ class ScheduleStatusManager(
             val t1 = d1 / effectiveSpeed  // d1 is the distance to the red stop in meters
 
             val predictedArrival = Calendar.getInstance().apply {
-                timeInMillis = System.currentTimeMillis()
+                timeInMillis = activity.getScheduleStatusNowMillis()
                 add(Calendar.SECOND, t1.toInt())
             }
 
@@ -363,7 +363,10 @@ class ScheduleStatusManager(
 
         val t1 = activity.viewModel.getExpectedDurationForNextSchedule() ?: return
 
-        val deltaNextSec = activity.viewModel.scheduleData.getDeltaNextSec(t1) ?: return
+        val deltaNextSec = activity.viewModel.scheduleData.getDeltaNextSec(
+            t1,
+            activity.getScheduleStatusNowMillis()
+        ) ?: return
 
         if (deltaNextSec in -86400..300) {
             val overrideValue = if (deltaNextSec < 0) (-deltaNextSec) + 300 else deltaNextSec

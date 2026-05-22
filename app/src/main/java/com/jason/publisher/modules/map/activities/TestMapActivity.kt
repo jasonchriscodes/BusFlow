@@ -12,22 +12,35 @@ import android.widget.Toast
 import com.jason.publisher.R
 import com.jason.publisher.modules.map.utils.calculateBearing
 import com.jason.publisher.modules.map.utils.calculateDistance
+import java.util.Calendar
 
 class TestMapActivity : MapActivity() {
     private val simulationHandler = Handler(Looper.getMainLooper())
     private var simulationRunnable: Runnable? = null
     private var currentRouteDistance = 0.0
     private var lastSimulationMillis = 0L
+    private var simulatedElapsedMillis = 0L
+    private var scheduleStartMillis = 0L
     private var simulationSpeedText: TextView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         findViewById<View>(R.id.hiddenUIContainer)?.alpha = 1f
+        scheduleStartMillis = resolveScheduleStartMillis()
         viewModel.speed = 0f
-        viewModel.updateSpeedText()
-        updateSimulationSpeedText()
+        applySimulationSpeed()
         addSimulationControls()
     }
+
+    override fun getScheduleStatusNowMillis(): Long {
+        return if (scheduleStartMillis > 0L) {
+            scheduleStartMillis + simulatedElapsedMillis
+        } else {
+            super.getScheduleStatusNowMillis()
+        }
+    }
+
+    override fun getDisplayNowMillis(): Long = getScheduleStatusNowMillis()
 
     private fun addSimulationControls() {
         val container = findViewById<LinearLayout>(R.id.scheduleStatusContainer) ?: return
@@ -61,13 +74,11 @@ class TestMapActivity : MapActivity() {
 
         addButton("Slow") {
             viewModel.speed = (viewModel.speed - 5f).coerceAtLeast(0f)
-            viewModel.updateSpeedText()
-            updateSimulationSpeedText()
+            applySimulationSpeed()
         }
         addButton("Speed") {
             viewModel.speed = if (viewModel.speed <= 0f) 5f else viewModel.speed + 5f
-            viewModel.updateSpeedText()
-            updateSimulationSpeedText()
+            applySimulationSpeed()
         }
 
         container.addView(controls)
@@ -81,7 +92,19 @@ class TestMapActivity : MapActivity() {
     }
 
     private fun updateSimulationSpeedText() {
-        simulationSpeedText?.text = "Simulation speed: ${viewModel.speed.toInt()} km/h"
+        simulationSpeedText?.text = "Current speed: ${viewModel.speed.toInt()} km/h"
+    }
+
+    private fun applySimulationSpeed() {
+        viewModel.updateSpeed(viewModel.speed)
+        viewModel.smoothedSpeed = viewModel.speed
+        viewModel.updateSpeedText()
+        updateSimulationSpeedText()
+        try {
+            scheduleStatusManager.checkScheduleStatus()
+        } catch (e: UninitializedPropertyAccessException) {
+            Log.d("TestMapActivity", "Schedule status manager not ready yet")
+        }
     }
 
     override fun startLocationUpdate() {
@@ -92,8 +115,8 @@ class TestMapActivity : MapActivity() {
             mapController.updateBusMarkerPosition(viewModel.latitude, viewModel.longitude, 0f)
         }
         viewModel.speed = 0f
-        viewModel.updateSpeedText()
-        updateSimulationSpeedText()
+        applySimulationSpeed()
+        simulatedElapsedMillis = 0L
         lastSimulationMillis = System.currentTimeMillis()
         startSimulatedLocationUpdates()
         Toast.makeText(this, "Test route simulation started", Toast.LENGTH_SHORT).show()
@@ -118,8 +141,12 @@ class TestMapActivity : MapActivity() {
 
     private fun simulateMovementTick() {
         val now = System.currentTimeMillis()
-        val elapsedSeconds = ((now - lastSimulationMillis).coerceAtLeast(0L) / 1000.0)
+        val elapsedMillis = (now - lastSimulationMillis).coerceAtLeast(0L)
+        val elapsedSeconds = elapsedMillis / 1000.0
         lastSimulationMillis = now
+        simulatedElapsedMillis += elapsedMillis
+        viewModel.updateSpeed(viewModel.speed)
+        viewModel.smoothedSpeed = viewModel.speed
         if (viewModel.route.isEmpty() || viewModel.speed <= 0f) return
 
         val speedMps = (viewModel.speed * viewModel.simulationSpeedFactor) / 3.6
@@ -154,8 +181,21 @@ class TestMapActivity : MapActivity() {
         viewModel.longitude = last.longitude ?: viewModel.longitude
         mapController.updateBusMarkerPosition(viewModel.latitude, viewModel.longitude, viewModel.bearing)
         viewModel.speed = 0f
-        viewModel.updateSpeedText()
-        updateSimulationSpeedText()
+        applySimulationSpeed()
+    }
+
+    private fun resolveScheduleStartMillis(): Long {
+        val first = viewModel.scheduleList.firstOrNull() ?: return 0L
+        val parts = first.startTime.split(":")
+        if (parts.size != 2) return 0L
+        val hour = parts[0].toIntOrNull() ?: return 0L
+        val minute = parts[1].toIntOrNull() ?: return 0L
+        return Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
     }
 
     override fun onDestroy() {

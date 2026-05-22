@@ -16,9 +16,9 @@ fun List<ScheduleItem>.getNextScheduleStartTime(): String? {
  * Get how many seconds to wait from predicted arrival until the next schedule.
  * @param t1 How many seconds until the next arrival.
  * */
-fun List<ScheduleItem>.getDeltaNextSec(t1: Double): Int? {
+fun List<ScheduleItem>.getDeltaNextSec(t1: Double, nowMillis: Long = System.currentTimeMillis()): Int? {
     val predictedArrival = Calendar.getInstance().apply {
-        timeInMillis = System.currentTimeMillis()
+        timeInMillis = nowMillis
         add(Calendar.SECOND, t1.toInt())
     }
 

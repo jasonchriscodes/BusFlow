@@ -410,9 +410,9 @@ class MapViewModel: ViewModel() {
         }
     }
 
-    fun updateCurrentTimeText() {
+    fun updateCurrentTimeText(nowMillis: Long = System.currentTimeMillis()) {
         val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
-        val currentTimeText = timeFormat.format(System.currentTimeMillis())
+        val currentTimeText = timeFormat.format(nowMillis)
         if (currentTimeText != lastCurrentTimeText.value) {
             lastCurrentTimeText.postValue(currentTimeText)
         }

@@ -90,6 +90,9 @@ open class MapActivity : AppCompatActivity() {
         MapViewModel.provideFactory()
     }
 
+    open fun getScheduleStatusNowMillis(): Long = System.currentTimeMillis()
+    open fun getDisplayNowMillis(): Long = System.currentTimeMillis()
+
     private lateinit var locationManager: LocationManager
 
     private lateinit var mqttHelper: MqttHelper
@@ -266,7 +269,7 @@ open class MapActivity : AppCompatActivity() {
         }
 
         // Start the current time counter
-        timeManager.startCurrentTimeUpdater { /* no-op */ }
+        timeManager.startCurrentTimeUpdater(timeProvider = { getDisplayNowMillis() }) { /* no-op */ }
         timeManager.currentTime.observe(this) { currentTimeTextView.text = it }
 
         // Start the next trip countdown updater
@@ -274,7 +277,7 @@ open class MapActivity : AppCompatActivity() {
             addAll(viewModel.scheduleList)  // current (REP)
             addAll(viewModel.scheduleData)  // remaining (Run 3, etc)
         }
-        timeManager.startNextTripCountdownUpdater(countdownList)
+        timeManager.startNextTripCountdownUpdater(countdownList, timeProvider = { getDisplayNowMillis() })
 
         timeManager.nextTripCountdown.observe(this) { nextTripCountdownTextView.text = it }
 
@@ -808,7 +811,7 @@ open class MapActivity : AppCompatActivity() {
 
             val nextStartMinutes = nextTrip.startTime.convertTimeToMinutes()
             val currentTime = Calendar.getInstance().apply {
-                timeInMillis = System.currentTimeMillis()
+                timeInMillis = getDisplayNowMillis()
             }
             val currentMinutes = currentTime.get(Calendar.HOUR_OF_DAY) * 60 +
                     currentTime.get(Calendar.MINUTE)
@@ -1433,7 +1436,7 @@ open class MapActivity : AppCompatActivity() {
 
             // Explicitly update currentTimeTextView from TimeManager (only if changed)
             if (::currentTimeTextView.isInitialized) {
-                viewModel.updateCurrentTimeText()
+                viewModel.updateCurrentTimeText(getDisplayNowMillis())
             }
 
             // Explicitly update nextTripCountdownTextView (only if changed)
@@ -1489,7 +1492,7 @@ open class MapActivity : AppCompatActivity() {
         val nextStartStr = (nextTrip.startTime + ":00")
         val nextStart = nextStartStr.parseTimeToday()
 
-        val deltaSec = ((nextStart.time - System.currentTimeMillis()) / 1000L).toInt()
+        val deltaSec = ((nextStart.time - getDisplayNowMillis()) / 1000L).toInt()
 
         // Warn if already late, or if it's imminent and we're in "10+ min late" state
         val shouldWarn = (deltaSec < -60) ||
