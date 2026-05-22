@@ -274,11 +274,11 @@ class RepScheduleStatusManager(
                 else      -> R.drawable.ic_schedule_very_behind
             }
 
-            val colorRes = when {
-                deltaMin >= 1       -> Color.parseColor("#E53935")          // Very Ahead, red
-                deltaMin in -1..1   -> Color.parseColor("#2E7D32")        // On Time, green
-                deltaMin in -5..-1  -> Color.parseColor("#1E88E5")         // Slightly Behind, blue
-                else      -> Color.parseColor("#FB8C00")         // Very Behind, purple
+            val statusColor = when {
+                deltaMin >= 1       -> ContextCompat.getColor(activity, R.color.blind_red)    // Very Ahead, red
+                deltaMin in -1..1   -> ContextCompat.getColor(activity, R.color.blind_green)  // On Time, green
+                deltaMin in -5..-1  -> ContextCompat.getColor(activity, R.color.blind_blue)   // Slightly Behind, blue
+                else                -> ContextCompat.getColor(activity, R.color.blind_purple) // Very Behind, purple
             }
 
             // Update UI directly (already on main thread from RepActivity)
@@ -287,17 +287,19 @@ class RepScheduleStatusManager(
                 activity.runOnUiThread {
                     try {
                         binding.scheduleStatusValueTextView.text = statusText
-                        binding.scheduleStatusValueTextView.setTextColor(colorRes)
+                        binding.scheduleStatusValueTextView.setTextColor(statusColor)
 
                         // Try to find icon using findViewById
                         val iconView = activity.findViewById<ImageView>(R.id.scheduleAheadIcon)
                         if (iconView != null) {
                             iconView.setImageResource(symbolRes)
+                            iconView.setColorFilter(statusColor)
                         } else {
                             // Fallback: try to access via binding if available
                             try {
                                 val bindingIcon = binding.root.findViewById<ImageView>(R.id.scheduleAheadIcon)
                                 bindingIcon?.setImageResource(symbolRes)
+                                bindingIcon?.setColorFilter(statusColor)
                             } catch (e3: Exception) {
                                 Log.e("ScheduleStatusManager", "Error accessing icon: ${e3.message}", e3)
                             }
@@ -397,6 +399,7 @@ class RepScheduleStatusManager(
                     val iconView = activity.findViewById<ImageView>(R.id.scheduleAheadIcon)
                     if (iconView != null) {
                         iconView.setImageResource(R.drawable.ic_schedule_late)
+                        iconView.setColorFilter(ContextCompat.getColor(activity, R.color.blind_red))
                         Log.d(logTag, "✅ Overridden status: \"$overrideStatusText\" ($logFormattedValue)")
                     } else {
                         Log.w(logTag, "⚠️ scheduleAheadIcon not found when updating override status")
