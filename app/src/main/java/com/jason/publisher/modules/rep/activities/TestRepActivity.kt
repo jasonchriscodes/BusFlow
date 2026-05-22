@@ -1,4 +1,4 @@
-package com.jason.publisher.modules.map.activities
+package com.jason.publisher.modules.rep.activities
 
 import android.annotation.SuppressLint
 import android.os.Bundle
@@ -28,7 +28,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
-import com.jason.publisher.databinding.ActivityTestmapBinding
+import com.jason.publisher.databinding.ActivityTestrepBinding
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.LifecycleLogger
 import com.jason.publisher.main.model.BusItem
@@ -41,7 +41,7 @@ import com.jason.publisher.modules.map.models.BusStopWithTimingPoint
 import com.jason.publisher.modules.map.utils.BUS_STOP_RADIUS
 import com.jason.publisher.modules.map.utils.calculateDistance
 import com.jason.publisher.modules.map.utils.calculateDurationForUpdate
-import com.jason.publisher.modules.map.viewmodels.MapViewModel
+import com.jason.publisher.modules.rep.viewmodels.RepViewModel
 import com.jason.publisher.modules.map.viewmodels.TimeManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
 import com.jason.publisher.modules.schedule.activities.ScheduleActivity
@@ -66,9 +66,9 @@ import java.util.Locale.getDefault
 import kotlin.math.abs
 import kotlin.math.min
 
-class TestMapActivity : AppCompatActivity() {
+class TestRepActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityTestmapBinding
+    private lateinit var binding: ActivityTestrepBinding
 
     private lateinit var speedTextView: TextView
     lateinit var upcomingBusStopTextView: TextView
@@ -85,8 +85,8 @@ class TestMapActivity : AppCompatActivity() {
     private lateinit var connectionStatusTextView: TextView
     private lateinit var networkStatusIndicator: View
 
-    val viewModel: MapViewModel by viewModels {
-        MapViewModel.provideFactory()
+    val viewModel: RepViewModel by viewModels {
+        RepViewModel.provideFactory()
     }
 
     val timeManager: TimeManager by viewModels {
@@ -119,9 +119,9 @@ class TestMapActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         AndroidGraphicFactory.createInstance(application)
-        binding = ActivityTestmapBinding.inflate(layoutInflater)
+        binding = ActivityTestrepBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        FileLogger.d("TestMapActivity", "onCreate - Simulation Mode")
+        FileLogger.d("TestRepActivity", "onCreate - Simulation Mode")
 
         viewModel.hasShownFinalStopMessage = false
         hookBatteryToasts()
@@ -442,7 +442,7 @@ class TestMapActivity : AppCompatActivity() {
             binding.scheduleAheadIcon.setImageResource(symbolRes)
             
         } catch (e: Exception) {
-            Log.e("TestMapActivity", "Error checkScheduleStatus: ${e.message}")
+            Log.e("TestRepActivity", "Error checkScheduleStatus: ${e.message}")
         }
     }
 

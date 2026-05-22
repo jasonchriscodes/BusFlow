@@ -50,6 +50,7 @@ import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.TripLog
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.map.activities.MapActivity
+import com.jason.publisher.modules.map.activities.TestMapActivity
 import com.jason.publisher.modules.rep.activities.RepActivity
 import com.jason.publisher.modules.map.utils.formatPanelLabel
 import com.jason.publisher.modules.map.utils.safeRunName
@@ -57,6 +58,7 @@ import com.jason.publisher.modules.map.mqtt.helpers.MqttConfigHelper
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
+import com.jason.publisher.modules.rep.activities.TestRepActivity
 import com.jason.publisher.modules.schedule.adapters.ScheduleAdapter
 import com.jason.publisher.modules.schedule.helpers.OtaInfo
 import com.jason.publisher.modules.schedule.helpers.OtaUpdateManager
@@ -455,9 +457,82 @@ class ScheduleActivity : AppCompatActivity() {
             when {
                 first.isBreak()   -> launchBreakActivity(first, no)
                 first.isSigning() -> launchSigningActivity(first, no)
-                else              -> launchMapActivity(no)
+                first.isReposition() -> launchTestRepActivity(first, no)
+                else              -> launchTestMapActivity(no)
             }
         }
+    }
+
+    private fun launchTestMapActivity(no: Int) {
+        if (viewModel.activeScheduleData.isEmpty()) {
+            Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val firstScheduleItem = viewModel.activeScheduleData.first()
+        val selectedIdx = findRouteIndexForScheduleItem(firstScheduleItem)
+        val selectedRouteData = viewModel.busRouteData.getOrNull(selectedIdx)
+
+        val hasActiveTrip = TripLog.hasActive(this)
+        val scheduleDataToPass = if (hasActiveTrip) {
+            viewModel.activeScheduleData
+        } else {
+            viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
+        }
+
+        val intent = Intent(this, TestMapActivity::class.java).apply {
+            val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
+            putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
+
+            putExtra("AID", viewModel.aid)
+            putExtra("CONFIG", ArrayList(viewModel.config ?: emptyList()))
+            putExtra("JSON_STRING", viewModel.jsonString)
+
+            putExtra("BUS_ROUTE_DATA", ArrayList(viewModel.busRouteData))
+            putExtra("SELECTED_ROUTE_INDEX", selectedIdx)
+            selectedRouteData?.let { putExtra("SELECTED_ROUTE_DATA", it) }
+
+            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+            putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleDataToPass))
+            putExtra("EXTRA_PANEL_DEBUG_NO", no)
+        }
+        startActivity(intent)
+    }
+
+    private fun launchTestRepActivity(first: ScheduleItem, no: Int) {
+        if (viewModel.activeScheduleData.isEmpty()) {
+            Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val firstScheduleItem = viewModel.activeScheduleData.first()
+        val selectedIdx = findRouteIndexForScheduleItem(firstScheduleItem)
+        val selectedRouteData = viewModel.busRouteData.getOrNull(selectedIdx)
+
+        val hasActiveTrip = TripLog.hasActive(this)
+        val scheduleDataToPass = if (hasActiveTrip) {
+            viewModel.activeScheduleData
+        } else {
+            viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
+        }
+
+        val intent = Intent(this, TestRepActivity::class.java).apply {
+            val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
+            putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
+
+            putExtra("AID", viewModel.aid)
+            putExtra("CONFIG", ArrayList(viewModel.config ?: emptyList()))
+            putExtra("JSON_STRING", viewModel.jsonString)
+
+            putExtra("BUS_ROUTE_DATA", ArrayList(viewModel.busRouteData))
+            putExtra("SELECTED_ROUTE_INDEX", selectedIdx)
+            selectedRouteData?.let { putExtra("SELECTED_ROUTE_DATA", it) }
+
+            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+            putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleDataToPass))
+            putExtra("EXTRA_PANEL_DEBUG_NO", no)
+        }
+        startActivity(intent)
     }
 
     private fun preloadOfflineMapIfAvailable(
@@ -1437,7 +1512,7 @@ class ScheduleActivity : AppCompatActivity() {
         changeModeButton.text = "Today's Overview"
 
         setRouteActionButtonsVisibility(View.VISIBLE)
-        hideTestButton()
+//        hideTestButton()
         if (viewModel.isTabulatedView) {
             setSchedulePaginationVisibility(View.VISIBLE)
         } else {
@@ -1607,7 +1682,7 @@ class ScheduleActivity : AppCompatActivity() {
                 updateTimeline()
 
                 setRouteActionButtonsVisibility(View.VISIBLE)
-                hideTestButton()
+//                hideTestButton()
             }
             .show()
     }
@@ -2102,7 +2177,7 @@ class ScheduleActivity : AppCompatActivity() {
                 setTimelineVisibility(View.VISIBLE)
             }
             setRouteActionButtonsVisibility(View.VISIBLE)
-            hideTestButton()
+//            hideTestButton()
         }
     }
 

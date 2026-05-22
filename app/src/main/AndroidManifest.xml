@@ -81,6 +81,11 @@
             android:exported="false"
             android:screenOrientation="landscape"
             android:configChanges="orientation|keyboardHidden|screenSize" />
+        <activity
+            android:name=".modules.rep.activities.TestRepActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|keyboardHidden|screenSize" />
         <activity android:name=".modules.signing.activities.SigningActivity" android:configChanges="orientation|screenSize|keyboardHidden"
             android:screenOrientation="landscape"
             android:exported="false" />
