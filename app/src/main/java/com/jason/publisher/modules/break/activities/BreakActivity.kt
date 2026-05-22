@@ -29,7 +29,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-class BreakActivity : AppCompatActivity() {
+open class BreakActivity : AppCompatActivity() {
 
     private lateinit var timerText: TextView
     private lateinit var infoText: TextView
@@ -43,7 +43,6 @@ class BreakActivity : AppCompatActivity() {
     private lateinit var breakLabel: String
 
     companion object {
-        private const val USE_DYNAMIC = false
         private const val FALLBACK_SECONDS = 30L
     }
 
@@ -195,17 +194,9 @@ class BreakActivity : AppCompatActivity() {
         }
 
         // ===== Timer =====
-        val durationMs = if (!USE_DYNAMIC) {
-            FALLBACK_SECONDS * 1000L
-        } else {
-            computeRemainingMillis(breakItem.endTime)
-                .takeIf { it > 0 } ?: (FALLBACK_SECONDS * 1000L)
-        }
+        val durationMs = computeTimerDurationMillis(breakItem)
 
-        val endAt = System.currentTimeMillis() + durationMs
-        endAtText.text = "Break until ${
-            SimpleDateFormat("HH:mm:ss").format(Date(endAt))
-        }"
+        endAtText.text = getEndAtText(breakItem, durationMs)
 
         if (durationMs > 0) {
             cd = object : CountDownTimer(durationMs, 1000) {
@@ -330,6 +321,44 @@ class BreakActivity : AppCompatActivity() {
         val s = sec % 60
         return if (h > 0) "%02d:%02d:%02d".format(h, m, s)
         else "%02d:%02d".format(m, s)
+    }
+
+    protected open fun computeTimerDurationMillis(item: ScheduleItem): Long {
+        return computeRemainingMillis(item.endTime)
+            .takeIf { it > 0 } ?: (FALLBACK_SECONDS * 1000L)
+    }
+
+    protected open fun getEndAtText(item: ScheduleItem, durationMs: Long): String {
+        val endAt = System.currentTimeMillis() + durationMs
+        return "Break until ${SimpleDateFormat("HH:mm:ss").format(Date(endAt))}"
+    }
+
+    protected fun computeScheduledDurationMillis(startHHmm: String, endHHmm: String): Long {
+        val startParts = startHHmm.split(":").mapNotNull { it.toIntOrNull() }
+        val endParts = endHHmm.split(":").mapNotNull { it.toIntOrNull() }
+        if (startParts.size < 2 || endParts.size < 2) return 0L
+
+        val startCal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, startParts[0])
+            set(Calendar.MINUTE, startParts[1])
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val endCal = startCal.clone() as Calendar
+        endCal.set(Calendar.HOUR_OF_DAY, endParts[0])
+        endCal.set(Calendar.MINUTE, endParts[1])
+        endCal.set(Calendar.SECOND, 0)
+        endCal.set(Calendar.MILLISECOND, 0)
+        if (endCal.timeInMillis <= startCal.timeInMillis) {
+            endCal.add(Calendar.DATE, 1)
+        }
+
+        return endCal.timeInMillis - startCal.timeInMillis
+    }
+
+    protected fun formatScheduleTime(time: String): String {
+        val parts = time.split(":").mapNotNull { it.toIntOrNull() }
+        return if (parts.size >= 2) "%02d:%02d".format(parts[0], parts[1]) else time
     }
 
     private fun computeRemainingMillis(endHHmm: String): Long {

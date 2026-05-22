@@ -44,6 +44,7 @@ import com.jason.publisher.BuildConfig
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityScheduleBinding
 import com.jason.publisher.modules.`break`.activities.BreakActivity
+import com.jason.publisher.modules.`break`.activities.TestBreakActivity
 import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.loggers.FileLogger
@@ -66,6 +67,7 @@ import com.jason.publisher.modules.schedule.helpers.TbAdminOtaLatest
 import com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
 import com.jason.publisher.modules.schedule.viewmodels.ScheduleViewModel
 import com.jason.publisher.modules.signing.activities.SigningActivity
+import com.jason.publisher.modules.signing.activities.TestSigningActivity
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -455,8 +457,8 @@ class ScheduleActivity : AppCompatActivity() {
             viewModel.logPanelDebugPreStart(no, first)
 
             when {
-                first.isBreak()   -> launchBreakActivity(first, no)
-                first.isSigning() -> launchSigningActivity(first, no)
+                first.isBreak()   -> launchTestBreakActivity(first, no)
+                first.isSigning() -> launchTestSigningActivity(first, no)
                 first.isReposition() -> launchTestRepActivity(first, no)
                 else              -> launchTestMapActivity(no)
             }
@@ -532,6 +534,69 @@ class ScheduleActivity : AppCompatActivity() {
             putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleDataToPass))
             putExtra("EXTRA_PANEL_DEBUG_NO", no)
         }
+        startActivity(intent)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun launchTestBreakActivity(firstScheduleItem: ScheduleItem, no: Int) {
+        if (viewModel.activeScheduleData.isEmpty()) {
+            Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val breakLabel = formatPanelLabel(firstScheduleItem)
+        viewModel.loadAccessToken()
+
+        val intent = Intent(this, TestBreakActivity::class.java).apply {
+            putExtra("AID", viewModel.aid)
+            putExtra("ACCESS_TOKEN", viewModel.token)
+            putExtra("BREAK_LABEL", breakLabel)
+            putExtra("SELECTED_ROUTE_INDEX", -1)
+            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+            putExtra("FULL_SCHEDULE_DATA", ArrayList(viewModel.activeScheduleData))
+            putExtra("EXTRA_PANEL_DEBUG_NO", no)
+        }
+
+        publishActiveSegment(breakLabel)
+
+        FileLogger.d(
+            "ScheduleActivity -> TestBreakActivity",
+            "ScheduleActivity -> TestBreakActivity | no=$no | label=$breakLabel | selectedIdx=-1 (NO ROUTE)"
+        )
+
+        startActivity(intent)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun launchTestSigningActivity(firstScheduleItem: ScheduleItem, no: Int) {
+        if (viewModel.activeScheduleData.isEmpty()) {
+            Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val label = formatPanelLabel(firstScheduleItem)
+        val action = firstScheduleItem.signingAction()
+        viewModel.loadAccessToken()
+
+        val intent = Intent(this, TestSigningActivity::class.java).apply {
+            putExtra("AID", viewModel.aid)
+            putExtra("ACCESS_TOKEN", viewModel.token)
+            putExtra("SIGNING_LABEL", label)
+            putExtra("SIGNING_ACTION", action)
+            putExtra("SIGNING_RUN_NAME", firstScheduleItem.runName)
+            putExtra("SELECTED_ROUTE_INDEX", -1)
+            putExtra("FIRST_SCHEDULE_ITEM", ArrayList(listOf(firstScheduleItem)))
+            putExtra("FULL_SCHEDULE_DATA", ArrayList(viewModel.activeScheduleData))
+            putExtra("EXTRA_PANEL_DEBUG_NO", no)
+        }
+
+        publishActiveSegment(label)
+
+        FileLogger.d(
+            "ScheduleActivity -> TestSigningActivity",
+            "ScheduleActivity -> TestSigningActivity | no=$no | label=$label action=$action | selectedIdx=-1 (NO ROUTE)"
+        )
+
         startActivity(intent)
     }
 

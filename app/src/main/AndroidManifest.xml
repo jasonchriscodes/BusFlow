@@ -77,6 +77,11 @@
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:exported="false" />
         <activity
+            android:name=".modules.break.activities.TestBreakActivity"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="false" />
+        <activity
             android:name=".modules.rep.activities.RepActivity"
             android:exported="false"
             android:screenOrientation="landscape"
@@ -87,6 +92,9 @@
             android:screenOrientation="landscape"
             android:configChanges="orientation|keyboardHidden|screenSize" />
         <activity android:name=".modules.signing.activities.SigningActivity" android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="landscape"
+            android:exported="false" />
+        <activity android:name=".modules.signing.activities.TestSigningActivity" android:configChanges="orientation|screenSize|keyboardHidden"
             android:screenOrientation="landscape"
             android:exported="false" />
 
