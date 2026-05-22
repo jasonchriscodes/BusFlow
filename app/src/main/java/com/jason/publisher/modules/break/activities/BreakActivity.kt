@@ -212,8 +212,12 @@ open class BreakActivity : AppCompatActivity() {
         }
 
         doneBtn.setOnClickListener {
-            finish()
+            onDoneClicked(fullRemaining)
         }
+    }
+
+    protected open fun onDoneClicked(fullRemaining: ArrayList<ScheduleItem>) {
+        finish()
     }
 
     // ===== MQTT payload =====

@@ -564,7 +564,7 @@ class ScheduleActivity : AppCompatActivity() {
             "ScheduleActivity -> TestBreakActivity | no=$no | label=$breakLabel | selectedIdx=-1 (NO ROUTE)"
         )
 
-        startActivity(intent)
+        signingLauncher.launch(intent)
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -597,7 +597,7 @@ class ScheduleActivity : AppCompatActivity() {
             "ScheduleActivity -> TestSigningActivity | no=$no | label=$label action=$action | selectedIdx=-1 (NO ROUTE)"
         )
 
-        startActivity(intent)
+        signingLauncher.launch(intent)
     }
 
     private fun preloadOfflineMapIfAvailable(

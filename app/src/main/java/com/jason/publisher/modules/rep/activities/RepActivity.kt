@@ -66,7 +66,7 @@ import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.model.common.Observer
 import java.util.Locale.getDefault
 
-class RepActivity : AppCompatActivity() {
+open class RepActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMapBinding
 
@@ -170,6 +170,8 @@ class RepActivity : AppCompatActivity() {
         // Add logger
         FileLogger.init(this)
         FileLogger.markAppOpened("RepActivity")
+
+        mqttManager = MqttManager()
 
         // Initialize Managers before using it
         scheduleStatusManager = RepScheduleStatusManager(this, binding)
@@ -1318,7 +1320,7 @@ class RepActivity : AppCompatActivity() {
     private lateinit var locationCallback: LocationCallback
 
     @SuppressLint("MissingPermission", "LongLogTag")
-    private fun startLocationUpdate() {
+    protected open fun startLocationUpdate() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         // Reduced location update frequency to save battery and improve performance
@@ -1485,7 +1487,7 @@ class RepActivity : AppCompatActivity() {
      * Only updates UI if enough time has passed since last update
      * NOTE: Marker position is updated separately in real-time, not here
      */
-    private fun updateUIElementsThrottled() {
+    protected fun updateUIElementsThrottled() {
         try {
             // Ensure we're on the main thread
             if (Looper.myLooper() != Looper.getMainLooper()) {
