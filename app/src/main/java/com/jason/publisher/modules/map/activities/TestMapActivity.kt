@@ -106,6 +106,7 @@ class TestMapActivity : MapActivity() {
                 try {
                     simulateMovementTick()
                     updateUIElementsThrottled()
+                    viewModel.updateClientAttributes()
                 } catch (e: Exception) {
                     Log.e("TestMapActivity", "Simulation update failed: ${e.message}", e)
                 }

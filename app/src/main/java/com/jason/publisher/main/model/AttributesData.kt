@@ -18,5 +18,6 @@ data class AttributesData(
     val speed: Float?,
     val direction: String?,
     val scheduleData: String? = null,
-    val currentTripLabel: String? = null
+    val currentTripLabel: String? = null,
+    val updatedAt: Long? = null
 )

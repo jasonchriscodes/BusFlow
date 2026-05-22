@@ -106,6 +106,7 @@ class TestRepActivity : RepActivity() {
                 try {
                     simulateMovementTick()
                     updateUIElementsThrottled()
+                    viewModel.updateClientAttributes()
                 } catch (e: Exception) {
                     Log.e("TestRepActivity", "Simulation update failed: ${e.message}", e)
                 }
