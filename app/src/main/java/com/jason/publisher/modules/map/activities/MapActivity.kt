@@ -56,7 +56,6 @@ import com.jason.publisher.modules.map.mqtt.helpers.MqttConfigHelper
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
-import com.jason.publisher.modules.schedule.activities.ScheduleActivity
 import com.jason.publisher.R
 import com.jason.publisher.main.utils.convertTimeToMinutes
 import com.jason.publisher.main.utils.getNextScheduleStartTime
@@ -543,10 +542,7 @@ open class MapActivity : AppCompatActivity() {
                     clearActiveSegmentAndRefresh()
                     val enteredCode = numberPadInput.text.toString()
                     if (enteredCode == "0000") {
-                        val intent = Intent(this, ScheduleActivity::class.java)
-                        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        startActivity(intent)
-                        finish()
+                        finishToScheduleWithRemainingTrips()
                     } else {
                         Toast.makeText(this, "❌ Incorrect code. Please enter 0000.", Toast.LENGTH_LONG).show()
                     }
@@ -829,7 +825,7 @@ open class MapActivity : AppCompatActivity() {
             .setMessage(messageText)
             .setPositiveButton("View Next Trip") { dialog, _ ->
                 dialog.dismiss()
-                startActivity(Intent(this, ScheduleActivity::class.java))
+                finishToScheduleWithRemainingTrips()
             }
             .create()
         tripEndDialog?.show()
@@ -1818,5 +1814,22 @@ open class MapActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.w("MapActivity", "publishActiveSegment follow-up failed: ${e.message}")
         }
+    }
+
+    private fun finishToScheduleWithRemainingTrips() {
+        val resultIntent = Intent().apply {
+            putParcelableArrayListExtra("UPDATED_FULL_SCHEDULE_DATA", getRemainingScheduleFromIntent())
+        }
+        setResult(RESULT_OK, resultIntent)
+        finish()
+    }
+
+    private fun getRemainingScheduleFromIntent(): ArrayList<ScheduleItem> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableArrayListExtra("FULL_SCHEDULE_DATA", ScheduleItem::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableArrayListExtra("FULL_SCHEDULE_DATA")
+        } ?: arrayListOf()
     }
 }

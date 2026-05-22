@@ -217,6 +217,11 @@ open class BreakActivity : AppCompatActivity() {
     }
 
     protected open fun onDoneClicked(fullRemaining: ArrayList<ScheduleItem>) {
+        val remainingAfterBreak = ArrayList(fullRemaining.drop(1))
+        val resultIntent = android.content.Intent().apply {
+            putParcelableArrayListExtra("UPDATED_FULL_SCHEDULE_DATA", remainingAfterBreak)
+        }
+        setResult(RESULT_OK, resultIntent)
         finish()
     }
 

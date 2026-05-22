@@ -498,7 +498,7 @@ class ScheduleActivity : AppCompatActivity() {
             putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleDataToPass))
             putExtra("EXTRA_PANEL_DEBUG_NO", no)
         }
-        startActivity(intent)
+        signingLauncher.launch(intent)
     }
 
     private fun launchTestRepActivity(first: ScheduleItem, no: Int) {
@@ -534,7 +534,7 @@ class ScheduleActivity : AppCompatActivity() {
             putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleDataToPass))
             putExtra("EXTRA_PANEL_DEBUG_NO", no)
         }
-        startActivity(intent)
+        signingLauncher.launch(intent)
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -1352,7 +1352,7 @@ class ScheduleActivity : AppCompatActivity() {
             Log.w("ScheduleActivity", "⚠️ Active trip detected, keeping first schedule in cache")
         }
 
-        startActivity(intent)
+        signingLauncher.launch(intent)
     }
 
     /** Launches RepActivity to handle a single-stop reposition trip. */
@@ -1414,7 +1414,7 @@ class ScheduleActivity : AppCompatActivity() {
             Log.w("ScheduleActivity", "MQTT disconnect before RepActivity failed: ${e.message}")
         }
 
-        startActivity(intent)
+        signingLauncher.launch(intent)
     }
 
     /**
@@ -1468,7 +1468,7 @@ class ScheduleActivity : AppCompatActivity() {
             updateActiveScheduleDataOnLaunch(scheduleDataToPass)
         }
 
-        startActivity(intent)
+        signingLauncher.launch(intent)
     }
 
     /** */
