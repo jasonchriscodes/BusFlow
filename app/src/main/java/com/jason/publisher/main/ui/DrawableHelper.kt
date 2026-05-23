@@ -25,8 +25,14 @@ object DrawableHelper {
      * @param totalStops The maximum bus stop number.
      * @return A drawable with the bus stop symbol and number.
      */
-    fun createBusStopSymbol(context: Context, busStopIndex: Int, totalStops: Int, isRed: Boolean): Drawable {
-        val adjustedNumber = when (busStopIndex) {
+    fun createBusStopSymbol(
+        context: Context,
+        busStopIndex: Int,
+        totalStops: Int,
+        isRed: Boolean,
+        labelOverride: String? = null
+    ): Drawable {
+        val adjustedNumber = labelOverride?.toStopMarkerLabel() ?: when (busStopIndex) {
             0 -> "S"
             totalStops - 1 -> "E"
             else -> busStopIndex.toString() // Numbered stops
@@ -52,5 +58,12 @@ object DrawableHelper {
         canvas.drawText(adjustedNumber, x, y, paint)
 
         return bitmap.toDrawable(context.resources)
+    }
+
+    private fun String.toStopMarkerLabel(): String {
+        return trim()
+            .removePrefix("Stop")
+            .trim()
+            .ifBlank { this }
     }
 }

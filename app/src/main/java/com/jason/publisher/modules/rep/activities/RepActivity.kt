@@ -535,32 +535,32 @@ open class RepActivity : AppCompatActivity() {
             scheduleStatusManager.checkScheduleStatus()
         }
 
-        binding.map.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
-            override fun onGlobalLayout() {
-                // ensure we only do this once and the map is actually visible
-                if (!autoTapArrivalDone && binding.map.width > 0 && binding.map.height > 0) {
-                    autoTapArrivalDone = true
-                    binding.map.viewTreeObserver.removeOnGlobalLayoutListener(this)
-
-                    // only auto-tap if it makes sense
-                    val canConfirm = viewModel.scheduleList.isNotEmpty() && viewModel.stops.isNotEmpty()
-                    if (canConfirm && binding.arriveButton.isShown && !isFinishing) {
-                        // small delay so UI settles (optional)
-                        binding.arriveButton.postDelayed({
-                            // will invoke your existing setOnClickListener { confirmArrival() }
-                            FileLogger.d(
-                                "RepActivity AUTO_CLICK",
-                                "before auto arrive click | scheduleList=${viewModel.scheduleList.size} | stops=${viewModel.stops.size} | route=${viewModel.route.size}"
-                            )
-
-                            binding.arriveButton.performClick()
-
-                            FileLogger.d("RepActivity AUTO_CLICK", "after auto arrive click")
-                        }, 400)
-                    }
-                }
-            }
-        })
+//        binding.map.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+//            override fun onGlobalLayout() {
+//                // ensure we only do this once and the map is actually visible
+//                if (!autoTapArrivalDone && binding.map.width > 0 && binding.map.height > 0) {
+//                    autoTapArrivalDone = true
+//                    binding.map.viewTreeObserver.removeOnGlobalLayoutListener(this)
+//
+//                    // only auto-tap if it makes sense
+//                    val canConfirm = viewModel.scheduleList.isNotEmpty() && viewModel.stops.isNotEmpty()
+//                    if (canConfirm && binding.arriveButton.isShown && !isFinishing) {
+//                        // small delay so UI settles (optional)
+//                        binding.arriveButton.postDelayed({
+//                            // will invoke your existing setOnClickListener { confirmArrival() }
+//                            FileLogger.d(
+//                                "RepActivity AUTO_CLICK",
+//                                "before auto arrive click | scheduleList=${viewModel.scheduleList.size} | stops=${viewModel.stops.size} | route=${viewModel.route.size}"
+//                            )
+//
+//                            binding.arriveButton.performClick()
+//
+//                            FileLogger.d("RepActivity AUTO_CLICK", "after auto arrive click")
+//                        }, 400)
+//                    }
+//                }
+//            }
+//        })
 
         binding.map.model.mapViewPosition.addObserver(object : Observer {
             private var lastZoom = -1.0
@@ -1112,14 +1112,22 @@ open class RepActivity : AppCompatActivity() {
         // before loop
         val beforeSize = viewModel.passedStops.size
 
-// Auto-pass any stops whose route-index ≤ your position
-        viewModel.stops.forEach { stop ->
-            val idx = viewModel.route.indexOfFirst {
-                it.latitude == stop.latitude && it.longitude == stop.longitude
-            }
-            if (idx != -1 && idx <= nearestRouteIdx && !viewModel.passedStops.contains(stop)) {
-                viewModel.passedStops.add(stop)
-            }
+        val candidateStop = viewModel.stops.getOrNull(viewModel.currentStopIndex) ?: return
+
+        val isFirstStop = viewModel.currentStopIndex == 0
+
+        val distanceToCandidateStop = calculateDistance(
+            currentLat,
+            currentLon,
+            candidateStop.latitude ?: return,
+            candidateStop.longitude ?: return
+        )
+
+        if (!isFirstStop &&
+            distanceToCandidateStop <= BUS_STOP_RADIUS &&
+            !viewModel.passedStops.contains(candidateStop)
+        ) {
+            viewModel.passedStops.add(candidateStop)
         }
 
         val afterSize = viewModel.passedStops.size
@@ -1148,15 +1156,41 @@ open class RepActivity : AppCompatActivity() {
             .takeIf { it >= 0 } ?: viewModel.stops.size
 
         if (viewModel.currentStopIndex >= viewModel.stops.size) {
-            val routeName = viewModel.scheduleList.firstOrNull()?.runName ?: "Unknown"
-            LifecycleLogger.logTripComplete(routeName, "AllStopsPassed")
+            val finalStop = viewModel.stops.lastOrNull()
 
-            // update UI to "end of route" and fire the summary dialog:
+            val finalLat = finalStop?.latitude
+            val finalLon = finalStop?.longitude
+
+            val isActuallyAtFinalStop =
+                finalLat != null &&
+                        finalLon != null &&
+                        calculateDistance(currentLat, currentLon, finalLat, finalLon) <= BUS_STOP_RADIUS
+
+            if (!isActuallyAtFinalStop) {
+                FileLogger.d(
+                    "MapActivity checkPassedStops",
+                    "Blocked false trip completion. currentLat=$currentLat, currentLon=$currentLon, finalStop=${finalStop?.address}"
+                )
+
+                // Do not complete the trip. Point back to final stop.
+                viewModel.currentStopIndex = viewModel.stops.lastIndex
+                viewModel.passedStops.remove(finalStop)
+                viewModel.upcomingStop = finalStop?.address ?: "Unknown"
+                upcomingBusStopTextView.text = viewModel.upcomingStop
+                return
+            }
+
+            val routeName = viewModel.scheduleList.firstOrNull()?.runName ?: "Unknown"
+            LifecycleLogger.logTripComplete(routeName, "ReachedFinalStop")
+
             upcomingBusStopTextView.text = "End of Route"
+            viewModel.upcomingStop = "End of Route"
+
             if (!viewModel.hasShownFinalStopMessage) {
                 Toast.makeText(this@RepActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
                 viewModel.hasShownFinalStopMessage = true
             }
+
             showSummaryDialog()
             return
         }
@@ -1250,18 +1284,44 @@ open class RepActivity : AppCompatActivity() {
                     viewModel.currentStopIndex++
                 }
 
-                // Automatically detect if this was the final stop
                 if (viewModel.currentStopIndex >= viewModel.stops.size) {
-                    viewModel.upcomingStop = "End of Route"
+                    val finalStop = viewModel.stops.lastOrNull()
+
+                    val finalLat = finalStop?.latitude
+                    val finalLon = finalStop?.longitude
+
+                    val isActuallyAtFinalStop =
+                        finalLat != null &&
+                                finalLon != null &&
+                                calculateDistance(currentLat, currentLon, finalLat, finalLon) <= BUS_STOP_RADIUS
+
+                    if (!isActuallyAtFinalStop) {
+                        FileLogger.d(
+                            "MapActivity checkPassedStops",
+                            "Blocked false trip completion. currentLat=$currentLat, currentLon=$currentLon, finalStop=${finalStop?.address}"
+                        )
+
+                        // Do not complete the trip. Point back to final stop.
+                        viewModel.currentStopIndex = viewModel.stops.lastIndex
+                        viewModel.passedStops.remove(finalStop)
+                        viewModel.upcomingStop = finalStop?.address ?: "Unknown"
+                        upcomingBusStopTextView.text = viewModel.upcomingStop
+                        return
+                    }
+
+                    val routeName = viewModel.scheduleList.firstOrNull()?.runName ?: "Unknown"
+                    LifecycleLogger.logTripComplete(routeName, "ReachedFinalStop")
+
                     upcomingBusStopTextView.text = "End of Route"
-                    // Only show final stop message once
+                    viewModel.upcomingStop = "End of Route"
+
                     if (!viewModel.hasShownFinalStopMessage) {
                         Toast.makeText(this@RepActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
                         viewModel.hasShownFinalStopMessage = true
                     }
 
-                    // Trigger trip completion dialog
                     showSummaryDialog()
+                    return
                 }
             } else {
                 val upcomingStop = viewModel.stops[viewModel.currentStopIndex]

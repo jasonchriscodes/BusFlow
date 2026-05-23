@@ -108,16 +108,19 @@ class TestMapActivity : MapActivity() {
     }
 
     override fun startLocationUpdate() {
+        currentRouteDistance = 0.0
+        simulatedElapsedMillis = 0L
+        lastSimulationMillis = System.currentTimeMillis()
+
         if (viewModel.route.isNotEmpty()) {
             val first = viewModel.route.first()
             viewModel.latitude = first.latitude ?: 0.0
             viewModel.longitude = first.longitude ?: 0.0
             mapController.updateBusMarkerPosition(viewModel.latitude, viewModel.longitude, 0f)
         }
+
         viewModel.speed = 0f
         applySimulationSpeed()
-        simulatedElapsedMillis = 0L
-        lastSimulationMillis = System.currentTimeMillis()
         startSimulatedLocationUpdates()
         Toast.makeText(this, "Test route simulation started", Toast.LENGTH_SHORT).show()
     }
