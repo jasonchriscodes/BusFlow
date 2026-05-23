@@ -30,7 +30,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-class SigningActivity : AppCompatActivity() {
+open class SigningActivity : AppCompatActivity() {
 
     private lateinit var timerText: TextView
     private lateinit var infoText: TextView
@@ -46,7 +46,6 @@ class SigningActivity : AppCompatActivity() {
     private lateinit var signingAction: String // "IN" or "OFF"
 
     companion object {
-        private const val USE_DYNAMIC = true      // for signing this makes more sense
         private const val FALLBACK_SECONDS = 30L  // safety fallback
     }
 
@@ -195,11 +194,7 @@ class SigningActivity : AppCompatActivity() {
         endAtText.text = "Before ${signItem.endTime}"
 
         // ===== Timer =====
-        val durationMs = if (!USE_DYNAMIC) {
-            FALLBACK_SECONDS * 1000L
-        } else {
-            computeRemainingMillis(signItem.endTime).takeIf { it > 0 } ?: (FALLBACK_SECONDS * 1000L)
-        }
+        val durationMs = computeTimerDurationMillis(signItem)
 
         if (durationMs > 0) {
             cd = object : CountDownTimer(durationMs, 1000) {
@@ -347,6 +342,33 @@ class SigningActivity : AppCompatActivity() {
         val s = sec % 60
         return if (h > 0) "%02d:%02d:%02d".format(h, m, s)
         else "%02d:%02d".format(m, s)
+    }
+
+    protected open fun computeTimerDurationMillis(item: ScheduleItem): Long {
+        return computeRemainingMillis(item.endTime).takeIf { it > 0 } ?: (FALLBACK_SECONDS * 1000L)
+    }
+
+    protected fun computeScheduledDurationMillis(startHHmm: String, endHHmm: String): Long {
+        val startParts = startHHmm.split(":").mapNotNull { it.toIntOrNull() }
+        val endParts = endHHmm.split(":").mapNotNull { it.toIntOrNull() }
+        if (startParts.size < 2 || endParts.size < 2) return 0L
+
+        val startCal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, startParts[0])
+            set(Calendar.MINUTE, startParts[1])
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val endCal = startCal.clone() as Calendar
+        endCal.set(Calendar.HOUR_OF_DAY, endParts[0])
+        endCal.set(Calendar.MINUTE, endParts[1])
+        endCal.set(Calendar.SECOND, 0)
+        endCal.set(Calendar.MILLISECOND, 0)
+        if (endCal.timeInMillis <= startCal.timeInMillis) {
+            endCal.add(Calendar.DATE, 1)
+        }
+
+        return endCal.timeInMillis - startCal.timeInMillis
     }
 
     private fun computeRemainingMillis(endHHmm: String): Long {

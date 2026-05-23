@@ -42,7 +42,7 @@ class MqttHelper(
         /** Topic path for subscribing to shared data */
         const val SUB_MSG_TOPIC = "v1/devices/me/attributes/response/+"
         const val PUB_POS_TOPIC = "v1/devices/me/telemetry"
-        private const val CLIENT_KEYS = "latitude,longitude,bearing,speed,direction,scheduleData,currentTripLabel"
+        private const val CLIENT_KEYS = "latitude,longitude,bearing,speed,direction,scheduleData,currentTripLabel,updatedAt"
         const val REQUEST_PERIODIC_TIME = 1000L
         private const val MIN_FETCH_INTERVAL_MS = 2_000L
         /** Minimum distance change to consider as movement (in meters) */
@@ -175,6 +175,18 @@ class MqttHelper(
                 response: Response<ClientAttributesResponse>
             ) {
                 val client = response.body()?.client ?: return
+                val peerUpdatedAt = client.updatedAt ?: 0L
+                if (peerUpdatedAt <= 0L || now - peerUpdatedAt > MAX_INACTIVE_TIME_MS) {
+                    owner.runOnUiThread {
+                        owner.mapController.removeBusMarker(token, invalidateImmediately = true)
+                        owner.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
+                    }
+                    Log.d(
+                        "MqttHelper getAttributes",
+                        "Ignoring $token - no active heartbeat (updatedAt=$peerUpdatedAt)"
+                    )
+                    return
+                }
 
                 // resolve a stable label for "other bus"
                 var labelUpdated = false

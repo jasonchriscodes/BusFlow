@@ -90,6 +90,7 @@ class RepViewModel: ViewModel() {
 
     // for self
     private var prevOwnCoordinate: Pair<Double,Double>? = null
+    private var lastOwnAttributePostMillis = 0L
 
     /** Track stops that have been passed */
     val passedStops = mutableListOf<BusStop>()
@@ -409,9 +410,9 @@ class RepViewModel: ViewModel() {
         }
     }
 
-    fun updateCurrentTimeText() {
+    fun updateCurrentTimeText(nowMillis: Long = System.currentTimeMillis()) {
         val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
-        val currentTimeText = timeFormat.format(System.currentTimeMillis())
+        val currentTimeText = timeFormat.format(nowMillis)
         if (currentTimeText != lastCurrentTimeText.value) {
             lastCurrentTimeText.postValue(currentTimeText)
         }
@@ -636,6 +637,7 @@ class RepViewModel: ViewModel() {
             put("direction", direction)
             put("speed", speed)
             put("aid", aid)
+            put("updatedAt", System.currentTimeMillis())
         }
     }
 
@@ -649,14 +651,17 @@ class RepViewModel: ViewModel() {
             return
         }
 
-        // Validation: make sure only update when the coordinate change
+        val now = System.currentTimeMillis()
+
+        // Post a heartbeat even when parked so other tablets can tell this tablet is still active.
         val curr = latitude to longitude
-        if (prevOwnCoordinate == curr) {
-            // No log needed for optimization
+        val coordinateChanged = prevOwnCoordinate != curr
+        val heartbeatDue = now - lastOwnAttributePostMillis >= 15_000L
+        if (!coordinateChanged && !heartbeatDue) {
             return
-        } else {
-            prevOwnCoordinate = curr
         }
+        prevOwnCoordinate = curr
+        lastOwnAttributePostMillis = now
 
         val url = ApiService.BASE_URL + "$token/attributes"
         val scheduleJson = Gson().toJson(scheduleData)
@@ -671,6 +676,7 @@ class RepViewModel: ViewModel() {
             direction       = direction,
             scheduleData    = scheduleJson,
             currentTripLabel = currentLabel,
+            updatedAt       = now
         )
 
         Log.d("MapActivity updateClientAttributes", "Posting client-attrs for aid=$aid → $attributesData")

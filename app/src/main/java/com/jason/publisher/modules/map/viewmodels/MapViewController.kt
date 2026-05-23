@@ -25,6 +25,7 @@ import com.jason.publisher.modules.map.utils.BUS_STOP_RADIUS
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
 import java.io.File
 import java.util.HashMap
+import java.util.Locale.getDefault
 import kotlin.math.abs
 import kotlin.math.min
 import kotlinx.coroutines.CoroutineScope
@@ -411,7 +412,11 @@ class MapViewController(
             // 1) get the Drawable from your helper
             val symDrawable: Drawable =
                 DrawableHelper.createBusStopSymbol(
-                    activity, idx, total, isRed
+                    activity,
+                    idx,
+                    total,
+                    isRed,
+                    labelOverride = if (isRed) scheduledStopLabel(stop) else null
                 )
 
             // 2) prepare a square bitmap
@@ -445,6 +450,25 @@ class MapViewController(
         }
 
         mapView.invalidate()
+    }
+
+    private fun scheduledStopLabel(stop: BusStop): String? {
+        val stopLat = stop.latitude ?: return null
+        val stopLon = stop.longitude ?: return null
+        val stopAddress = stop.address?.trim()?.lowercase(getDefault())
+
+        return activity.viewModel.scheduleList
+            .firstOrNull()
+            ?.busStops
+            ?.firstOrNull { scheduled ->
+                val coordinateMatch = abs(scheduled.latitude - stopLat) < 0.0001 &&
+                        abs(scheduled.longitude - stopLon) < 0.0001
+                val addressMatch = !stopAddress.isNullOrBlank() &&
+                        scheduled.address.trim().lowercase(getDefault()) == stopAddress
+                coordinateMatch || addressMatch
+            }
+            ?.name
+            ?.takeIf { it.isNotBlank() }
     }
 
     /**

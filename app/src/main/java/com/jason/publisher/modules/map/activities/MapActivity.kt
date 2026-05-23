@@ -56,7 +56,6 @@ import com.jason.publisher.modules.map.mqtt.helpers.MqttConfigHelper
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
-import com.jason.publisher.modules.schedule.activities.ScheduleActivity
 import com.jason.publisher.R
 import com.jason.publisher.main.utils.convertTimeToMinutes
 import com.jason.publisher.main.utils.getNextScheduleStartTime
@@ -66,7 +65,7 @@ import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.model.common.Observer
 import java.util.Locale.getDefault
 
-class MapActivity : AppCompatActivity() {
+open class MapActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMapBinding
 
@@ -90,6 +89,9 @@ class MapActivity : AppCompatActivity() {
     val viewModel: MapViewModel by viewModels {
         MapViewModel.provideFactory()
     }
+
+    open fun getScheduleStatusNowMillis(): Long = System.currentTimeMillis()
+    open fun getDisplayNowMillis(): Long = System.currentTimeMillis()
 
     private lateinit var locationManager: LocationManager
 
@@ -267,7 +269,7 @@ class MapActivity : AppCompatActivity() {
         }
 
         // Start the current time counter
-        timeManager.startCurrentTimeUpdater { /* no-op */ }
+        timeManager.startCurrentTimeUpdater(timeProvider = { getDisplayNowMillis() }) { /* no-op */ }
         timeManager.currentTime.observe(this) { currentTimeTextView.text = it }
 
         // Start the next trip countdown updater
@@ -275,7 +277,7 @@ class MapActivity : AppCompatActivity() {
             addAll(viewModel.scheduleList)  // current (REP)
             addAll(viewModel.scheduleData)  // remaining (Run 3, etc)
         }
-        timeManager.startNextTripCountdownUpdater(countdownList)
+        timeManager.startNextTripCountdownUpdater(countdownList, timeProvider = { getDisplayNowMillis() })
 
         timeManager.nextTripCountdown.observe(this) { nextTripCountdownTextView.text = it }
 
@@ -461,25 +463,25 @@ class MapActivity : AppCompatActivity() {
             scheduleStatusManager.checkScheduleStatus()
         }
 
-        binding.map.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
-            override fun onGlobalLayout() {
-                // ensure we only do this once and the map is actually visible
-                if (!autoTapArrivalDone && binding.map.width > 0 && binding.map.height > 0) {
-                    autoTapArrivalDone = true
-                    binding.map.viewTreeObserver.removeOnGlobalLayoutListener(this)
-
-                    // only auto-tap if it makes sense
-                    val canConfirm = viewModel.scheduleList.isNotEmpty() && viewModel.stops.isNotEmpty()
-                    if (canConfirm && binding.arriveButton.isShown && !isFinishing) {
-                        // small delay so UI settles (optional)
-                        binding.arriveButton.postDelayed({
-                            // will invoke your existing setOnClickListener { confirmArrival() }
-                            binding.arriveButton.performClick()
-                        }, 400)
-                    }
-                }
-            }
-        })
+//        binding.map.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+//            override fun onGlobalLayout() {
+//                // ensure we only do this once and the map is actually visible
+//                if (!autoTapArrivalDone && binding.map.width > 0 && binding.map.height > 0) {
+//                    autoTapArrivalDone = true
+//                    binding.map.viewTreeObserver.removeOnGlobalLayoutListener(this)
+//
+//                    // only auto-tap if it makes sense
+//                    val canConfirm = viewModel.scheduleList.isNotEmpty() && viewModel.stops.isNotEmpty()
+//                    if (canConfirm && binding.arriveButton.isShown && !isFinishing) {
+//                        // small delay so UI settles (optional)
+//                        binding.arriveButton.postDelayed({
+//                            // will invoke your existing setOnClickListener { confirmArrival() }
+//                            binding.arriveButton.performClick()
+//                        }, 400)
+//                    }
+//                }
+//            }
+//        })
 
         binding.map.model.mapViewPosition.addObserver(object : Observer {
             private var lastZoom = -1.0
@@ -543,10 +545,7 @@ class MapActivity : AppCompatActivity() {
                     clearActiveSegmentAndRefresh()
                     val enteredCode = numberPadInput.text.toString()
                     if (enteredCode == "0000") {
-                        val intent = Intent(this, ScheduleActivity::class.java)
-                        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        startActivity(intent)
-                        finish()
+                        finishToScheduleWithRemainingTrips()
                     } else {
                         Toast.makeText(this, "❌ Incorrect code. Please enter 0000.", Toast.LENGTH_LONG).show()
                     }
@@ -812,7 +811,7 @@ class MapActivity : AppCompatActivity() {
 
             val nextStartMinutes = nextTrip.startTime.convertTimeToMinutes()
             val currentTime = Calendar.getInstance().apply {
-                timeInMillis = System.currentTimeMillis()
+                timeInMillis = getDisplayNowMillis()
             }
             val currentMinutes = currentTime.get(Calendar.HOUR_OF_DAY) * 60 +
                     currentTime.get(Calendar.MINUTE)
@@ -829,7 +828,7 @@ class MapActivity : AppCompatActivity() {
             .setMessage(messageText)
             .setPositiveButton("View Next Trip") { dialog, _ ->
                 dialog.dismiss()
-                startActivity(Intent(this, ScheduleActivity::class.java))
+                finishToScheduleWithRemainingTrips()
             }
             .create()
         tripEndDialog?.show()
@@ -1024,14 +1023,22 @@ class MapActivity : AppCompatActivity() {
         // before loop
         val beforeSize = viewModel.passedStops.size
 
-// Auto-pass any stops whose route-index ≤ your position
-        viewModel.stops.forEach { stop ->
-            val idx = viewModel.route.indexOfFirst {
-                it.latitude == stop.latitude && it.longitude == stop.longitude
-            }
-            if (idx != -1 && idx <= nearestRouteIdx && !viewModel.passedStops.contains(stop)) {
-                viewModel.passedStops.add(stop)
-            }
+        val candidateStop = viewModel.stops.getOrNull(viewModel.currentStopIndex) ?: return
+
+        val isFirstStop = viewModel.currentStopIndex == 0
+
+        val distanceToCandidateStop = calculateDistance(
+            currentLat,
+            currentLon,
+            candidateStop.latitude ?: return,
+            candidateStop.longitude ?: return
+        )
+
+        if (!isFirstStop &&
+            distanceToCandidateStop <= BUS_STOP_RADIUS &&
+            !viewModel.passedStops.contains(candidateStop)
+        ) {
+            viewModel.passedStops.add(candidateStop)
         }
 
         val afterSize = viewModel.passedStops.size
@@ -1060,15 +1067,41 @@ class MapActivity : AppCompatActivity() {
             .takeIf { it >= 0 } ?: viewModel.stops.size
 
         if (viewModel.currentStopIndex >= viewModel.stops.size) {
-            val routeName = viewModel.scheduleList.firstOrNull()?.runName ?: "Unknown"
-            LifecycleLogger.logTripComplete(routeName, "AllStopsPassed")
+            val finalStop = viewModel.stops.lastOrNull()
 
-            // update UI to "end of route" and fire the summary dialog:
+            val finalLat = finalStop?.latitude
+            val finalLon = finalStop?.longitude
+
+            val isActuallyAtFinalStop =
+                finalLat != null &&
+                        finalLon != null &&
+                        calculateDistance(currentLat, currentLon, finalLat, finalLon) <= BUS_STOP_RADIUS
+
+            if (!isActuallyAtFinalStop) {
+                FileLogger.d(
+                    "MapActivity checkPassedStops",
+                    "Blocked false trip completion. currentLat=$currentLat, currentLon=$currentLon, finalStop=${finalStop?.address}"
+                )
+
+                // Do not complete the trip. Point back to final stop.
+                viewModel.currentStopIndex = viewModel.stops.lastIndex
+                viewModel.passedStops.remove(finalStop)
+                viewModel.upcomingStop = finalStop?.address ?: "Unknown"
+                upcomingBusStopTextView.text = viewModel.upcomingStop
+                return
+            }
+
+            val routeName = viewModel.scheduleList.firstOrNull()?.runName ?: "Unknown"
+            LifecycleLogger.logTripComplete(routeName, "ReachedFinalStop")
+
             upcomingBusStopTextView.text = "End of Route"
+            viewModel.upcomingStop = "End of Route"
+
             if (!viewModel.hasShownFinalStopMessage) {
                 Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
                 viewModel.hasShownFinalStopMessage = true
             }
+
             showSummaryDialog()
             return
         }
@@ -1162,18 +1195,44 @@ class MapActivity : AppCompatActivity() {
                     viewModel.currentStopIndex++
                 }
 
-                // Automatically detect if this was the final stop
                 if (viewModel.currentStopIndex >= viewModel.stops.size) {
-                    viewModel.upcomingStop = "End of Route"
+                    val finalStop = viewModel.stops.lastOrNull()
+
+                    val finalLat = finalStop?.latitude
+                    val finalLon = finalStop?.longitude
+
+                    val isActuallyAtFinalStop =
+                        finalLat != null &&
+                                finalLon != null &&
+                                calculateDistance(currentLat, currentLon, finalLat, finalLon) <= BUS_STOP_RADIUS
+
+                    if (!isActuallyAtFinalStop) {
+                        FileLogger.d(
+                            "MapActivity checkPassedStops",
+                            "Blocked false trip completion. currentLat=$currentLat, currentLon=$currentLon, finalStop=${finalStop?.address}"
+                        )
+
+                        // Do not complete the trip. Point back to final stop.
+                        viewModel.currentStopIndex = viewModel.stops.lastIndex
+                        viewModel.passedStops.remove(finalStop)
+                        viewModel.upcomingStop = finalStop?.address ?: "Unknown"
+                        upcomingBusStopTextView.text = viewModel.upcomingStop
+                        return
+                    }
+
+                    val routeName = viewModel.scheduleList.firstOrNull()?.runName ?: "Unknown"
+                    LifecycleLogger.logTripComplete(routeName, "ReachedFinalStop")
+
                     upcomingBusStopTextView.text = "End of Route"
-                    // Only show final stop message once
+                    viewModel.upcomingStop = "End of Route"
+
                     if (!viewModel.hasShownFinalStopMessage) {
                         Toast.makeText(this@MapActivity, "✅ You have reached the final stop.", Toast.LENGTH_SHORT).show()
                         viewModel.hasShownFinalStopMessage = true
                     }
 
-                    // Trigger trip completion dialog
                     showSummaryDialog()
+                    return
                 }
             } else {
                 val upcomingStop = viewModel.stops[viewModel.currentStopIndex]
@@ -1231,7 +1290,7 @@ class MapActivity : AppCompatActivity() {
     private lateinit var locationCallback: LocationCallback
 
     @SuppressLint("MissingPermission", "LongLogTag")
-    private fun startLocationUpdate() {
+    protected open fun startLocationUpdate() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         // Reduced location update frequency to save battery and improve performance
@@ -1398,7 +1457,7 @@ class MapActivity : AppCompatActivity() {
      * Only updates UI if enough time has passed since last update
      * NOTE: Marker position is updated separately in real-time, not here
      */
-    private fun updateUIElementsThrottled() {
+    protected fun updateUIElementsThrottled() {
         try {
             // Ensure we're on the main thread
             if (Looper.myLooper() != Looper.getMainLooper()) {
@@ -1437,7 +1496,7 @@ class MapActivity : AppCompatActivity() {
 
             // Explicitly update currentTimeTextView from TimeManager (only if changed)
             if (::currentTimeTextView.isInitialized) {
-                viewModel.updateCurrentTimeText()
+                viewModel.updateCurrentTimeText(getDisplayNowMillis())
             }
 
             // Explicitly update nextTripCountdownTextView (only if changed)
@@ -1493,7 +1552,7 @@ class MapActivity : AppCompatActivity() {
         val nextStartStr = (nextTrip.startTime + ":00")
         val nextStart = nextStartStr.parseTimeToday()
 
-        val deltaSec = ((nextStart.time - System.currentTimeMillis()) / 1000L).toInt()
+        val deltaSec = ((nextStart.time - getDisplayNowMillis()) / 1000L).toInt()
 
         // Warn if already late, or if it's imminent and we're in "10+ min late" state
         val shouldWarn = (deltaSec < -60) ||
@@ -1818,5 +1877,22 @@ class MapActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.w("MapActivity", "publishActiveSegment follow-up failed: ${e.message}")
         }
+    }
+
+    private fun finishToScheduleWithRemainingTrips() {
+        val resultIntent = Intent().apply {
+            putParcelableArrayListExtra("UPDATED_FULL_SCHEDULE_DATA", getRemainingScheduleFromIntent())
+        }
+        setResult(RESULT_OK, resultIntent)
+        finish()
+    }
+
+    private fun getRemainingScheduleFromIntent(): ArrayList<ScheduleItem> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableArrayListExtra("FULL_SCHEDULE_DATA", ScheduleItem::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableArrayListExtra("FULL_SCHEDULE_DATA")
+        } ?: arrayListOf()
     }
 }

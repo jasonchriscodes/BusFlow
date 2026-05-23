@@ -40,7 +40,10 @@ class TimeManager(): ViewModel() {
     /**
      * Starts the simulated clock which will update [currentTime] every second based on the system's clock.
      */
-    fun startCurrentTimeUpdater(onUpdateCallback: () -> Unit) {
+    fun startCurrentTimeUpdater(
+        timeProvider: () -> Long = { System.currentTimeMillis() },
+        onUpdateCallback: () -> Unit
+    ) {
         // Stop any existing timer first
         stopCurrentTime()
 
@@ -50,7 +53,7 @@ class TimeManager(): ViewModel() {
             override fun run() {
                 try {
                     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                    currentTime.postValue(timeFormat.format(System.currentTimeMillis()))
+                    currentTime.postValue(timeFormat.format(timeProvider()))
                     onUpdateCallback()
 
                     // Schedule next update only if handler is still valid
@@ -67,7 +70,10 @@ class TimeManager(): ViewModel() {
     /**
      * function to calculate and display the remaining time until the next scheduled run
      */
-    fun startNextTripCountdownUpdater(scheduleData: List<ScheduleItem>) {
+    fun startNextTripCountdownUpdater(
+        scheduleData: List<ScheduleItem>,
+        timeProvider: () -> Long = { System.currentTimeMillis() }
+    ) {
         // Stop any existing countdown timer first
         stopNextTripCountdown()
 
@@ -76,7 +82,7 @@ class TimeManager(): ViewModel() {
             override fun run() {
                 try {
                     val currentTime = Calendar.getInstance().apply {
-                        timeInMillis = System.currentTimeMillis()
+                        timeInMillis = timeProvider()
                     }
                     val nextTripStartTime = scheduleData.getNextScheduleStartTime()
 

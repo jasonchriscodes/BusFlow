@@ -1,4 +1,4 @@
-package com.jason.publisher.modules.map.activities
+package com.jason.publisher.modules.rep.activities
 
 import android.os.Bundle
 import android.os.Handler
@@ -14,7 +14,7 @@ import com.jason.publisher.modules.map.utils.calculateBearing
 import com.jason.publisher.modules.map.utils.calculateDistance
 import java.util.Calendar
 
-class TestMapActivity : MapActivity() {
+class TestRepActivity : RepActivity() {
     private val simulationHandler = Handler(Looper.getMainLooper())
     private var simulationRunnable: Runnable? = null
     private var currentRouteDistance = 0.0
@@ -103,24 +103,21 @@ class TestMapActivity : MapActivity() {
         try {
             scheduleStatusManager.checkScheduleStatus()
         } catch (e: UninitializedPropertyAccessException) {
-            Log.d("TestMapActivity", "Schedule status manager not ready yet")
+            Log.d("TestRepActivity", "Schedule status manager not ready yet")
         }
     }
 
     override fun startLocationUpdate() {
-        currentRouteDistance = 0.0
-        simulatedElapsedMillis = 0L
-        lastSimulationMillis = System.currentTimeMillis()
-
         if (viewModel.route.isNotEmpty()) {
             val first = viewModel.route.first()
             viewModel.latitude = first.latitude ?: 0.0
             viewModel.longitude = first.longitude ?: 0.0
             mapController.updateBusMarkerPosition(viewModel.latitude, viewModel.longitude, 0f)
         }
-
         viewModel.speed = 0f
         applySimulationSpeed()
+        simulatedElapsedMillis = 0L
+        lastSimulationMillis = System.currentTimeMillis()
         startSimulatedLocationUpdates()
         Toast.makeText(this, "Test route simulation started", Toast.LENGTH_SHORT).show()
     }
@@ -134,7 +131,7 @@ class TestMapActivity : MapActivity() {
                     updateUIElementsThrottled()
                     viewModel.updateClientAttributes()
                 } catch (e: Exception) {
-                    Log.e("TestMapActivity", "Simulation update failed: ${e.message}", e)
+                    Log.e("TestRepActivity", "Simulation update failed: ${e.message}", e)
                 }
                 simulationHandler.postDelayed(this, 100L)
             }
