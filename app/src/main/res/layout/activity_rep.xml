@@ -27,33 +27,22 @@
             android:layout_height="wrap_content"
             android:layout_weight="1">
 
-            <FrameLayout
-                android:id="@+id/backButtonContainer"
+            <android.widget.Button
+                android:id="@+id/backButton"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_height="@dimen/topbar_height"
                 android:layout_marginStart="@dimen/pad_md"
-                android:layout_marginTop="2dp">
-
-                <android.widget.Button
-                    android:id="@+id/backButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="@dimen/topbar_height"
-                    android:backgroundTint="@color/purple_500"
-                    android:background="@drawable/button_rounded_background_outline"
-                    android:padding="@dimen/pad_sm"
-                    android:textColor="@color/white"
-                    android:textSize="@dimen/text_btn"
-                    android:text="             End Trip" />
-
-                <android.widget.Button
-                    android:id="@+id/backButtonArrow"
-                    android:layout_width="@dimen/topbar_height"
-                    android:layout_height="@dimen/topbar_height"
-                    android:layout_gravity="start|center_vertical"
-                    android:background="@drawable/backbut"
-                    android:padding="@dimen/pad_sm"
-                    android:contentDescription="Back"/>
-            </FrameLayout>
+                android:layout_marginTop="2dp"
+                android:backgroundTint="@color/purple_500"
+                android:background="@drawable/button_rounded_background_outline"
+                android:padding="@dimen/pad_sm"
+                android:drawableStart="@drawable/backbut"
+                android:drawablePadding="@dimen/pad_sm"
+                android:gravity="center_vertical"
+                android:textColor="@color/white"
+                android:textSize="@dimen/text_btn"
+                android:text="End Trip"
+                android:contentDescription="End Trip" />
         </LinearLayout>
 
         <!-- Network Status Container -->

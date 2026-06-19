@@ -511,6 +511,17 @@ open class MapActivity : AppCompatActivity() {
             resetSimulationState()
             Toast.makeText(this, "Simulation stopped and state reset", Toast.LENGTH_SHORT).show()
         }
+        // Shrink the arrow icon baked into backbut.png so it doesn't dwarf the "End Trip" text,
+        // and snap it tight to the button's left edge.
+        // NOTE: must read/write the *Relative* (start/end) compound drawables here, not the
+        // absolute left/right ones - those aren't populated from drawableStart until the view's
+        // RTL direction is resolved during layout, which hasn't happened yet in onCreate.
+        binding.backButton.compoundDrawablesRelative.getOrNull(0)?.let { icon ->
+            val iconSizePx = dpToPx(18)
+            icon.setBounds(0, 0, iconSizePx, iconSizePx)
+            binding.backButton.setCompoundDrawablesRelative(icon, null, null, null)
+            binding.backButton.compoundDrawablePadding = dpToPx(4)
+        }
         binding.backButton.setOnClickListener {
             if (viewModel.speed > 30.0) {  // Treat speeds above 30 km/h as "moving"
                 Toast.makeText(this, "❌ Bus must be moving slower than 30 km/h before ending the trip.", Toast.LENGTH_LONG).show()
