@@ -260,25 +260,27 @@ class RepScheduleStatusManager(
             fun minutesLabel(m: Int) = if (m == 1) "1 min" else "$m min"
             val timeDiff = minutesLabel(absMin)
 
+            // On Time is an exact, symmetric +/-60s window (matches how Google Maps shows
+            // live transit status); only outside that window do we fall back to minute labels.
             val statusText = when {
-                deltaMin >= 1    -> "Early (~$timeDiff early)"
-                deltaMin in -1..1-> "On Time (~$timeDiff on time)"
-                deltaMin in -5..-1 -> "Slightly Behind (~$timeDiff late)"
-                else   -> "Very Behind (~$timeDiff late)"
+                deltaSec > 30         -> "Early (~$timeDiff early)"
+                deltaSec >= -30       -> "On Time"
+                deltaSec >= -300      -> "Slightly Behind (~$timeDiff late)"
+                else                  -> "Very Behind (~$timeDiff late)"
             }
 
             val symbolRes = when {
-                deltaMin >= 1       -> R.drawable.ic_schedule_very_ahead
-                deltaMin in -1..1   -> R.drawable.ic_schedule_on_time
-                deltaMin in -5..-1  -> R.drawable.ic_schedule_slightly_behind
-                else      -> R.drawable.ic_schedule_very_behind
+                deltaSec > 30         -> R.drawable.ic_schedule_very_ahead
+                deltaSec >= -30       -> R.drawable.ic_schedule_on_time
+                deltaSec >= -300      -> R.drawable.ic_schedule_slightly_behind
+                else                  -> R.drawable.ic_schedule_very_behind
             }
 
             val statusColor = when {
-                deltaMin >= 1       -> ContextCompat.getColor(activity, R.color.blind_red)    // Very Ahead, red
-                deltaMin in -1..1   -> ContextCompat.getColor(activity, R.color.blind_green)  // On Time, green
-                deltaMin in -5..-1  -> ContextCompat.getColor(activity, R.color.blind_blue)   // Slightly Behind, blue
-                else                -> ContextCompat.getColor(activity, R.color.blind_purple) // Very Behind, purple
+                deltaSec > 30         -> ContextCompat.getColor(activity, R.color.blind_red)    // Very Ahead, red
+                deltaSec >= -30       -> ContextCompat.getColor(activity, R.color.blind_green)  // On Time, green
+                deltaSec >= -300      -> ContextCompat.getColor(activity, R.color.blind_blue)   // Slightly Behind, blue
+                else                  -> ContextCompat.getColor(activity, R.color.blind_purple) // Very Behind, purple
             }
 
             // Update UI directly (already on main thread from RepActivity)
