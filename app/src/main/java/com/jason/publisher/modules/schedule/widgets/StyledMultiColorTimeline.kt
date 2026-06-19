@@ -116,6 +116,12 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
 
             val startTime = workIntervals[i].first
             val firstStopAbbr = item?.busStops?.firstOrNull()?.abbreviation ?:"?"
+            val lastStopAbbr = item?.busStops?.lastOrNull()?.abbreviation ?: "?"
+            // REP / Sign On / Sign Off boxes show where the bus ends up after this duty
+            // (matching the rest-stop label that follows them), not where it started -
+            // except for the very first box in the timeline, which has no "previous" stop
+            // to show that starting point otherwise.
+            val repOrSignStopAbbr = if (i == 0) firstStopAbbr else lastStopAbbr
 
             Log.d(
                 "StyledMultiColorTimeline renderTimeline",
@@ -170,7 +176,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                         }
 
                         val stopLabel = TextView(context).apply {
-                            text = firstStopAbbr
+                            text = repOrSignStopAbbr
                             textSize = 14f
                             gravity = Gravity.CENTER
                             setTextColor(Color.WHITE)
@@ -188,7 +194,7 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
                             setTextColor(Color.WHITE)
                         }
                         val stopLabel = TextView(context).apply {
-                            text = firstStopAbbr
+                            text = repOrSignStopAbbr
                             textSize = 14f
                             gravity = Gravity.CENTER
                             setTextColor(Color.WHITE)
@@ -216,7 +222,6 @@ class StyledMultiColorTimeline @JvmOverloads constructor(
 
                     }
                     else -> {
-                        val lastStopAbbr = item?.busStops?.lastOrNull()?.abbreviation ?: "?"
                         if (singleLineMode) {
                             // 1-line:
                             addView(TextView(context).apply {
