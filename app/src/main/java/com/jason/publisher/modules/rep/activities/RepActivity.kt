@@ -591,8 +591,8 @@ open class RepActivity : AppCompatActivity() {
             Toast.makeText(this, "Simulation stopped and state reset", Toast.LENGTH_SHORT).show()
         }
         binding.backButton.setOnClickListener {
-            if (viewModel.speed > 5.0) {  // Treat speeds above 5 km/h as "moving"
-                Toast.makeText(this, "❌ Bus must be moving slower than 5 km/h before ending the trip.", Toast.LENGTH_LONG).show()
+            if (viewModel.speed > 30.0) {  // Treat speeds above 30 km/h as "moving"
+                Toast.makeText(this, "❌ Bus must be moving slower than 30 km/h before ending the trip.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
