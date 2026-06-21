@@ -43,31 +43,24 @@ import com.google.gson.Gson
 import com.jason.publisher.BuildConfig
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityScheduleBinding
-import com.jason.publisher.modules.`break`.activities.BreakActivity
-import com.jason.publisher.modules.`break`.activities.TestBreakActivity
+import com.jason.publisher.modules.confirmation.activities.ConfirmationActivity
 import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.TripLog
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
-import com.jason.publisher.modules.map.activities.MapActivity
-import com.jason.publisher.modules.map.activities.TestMapActivity
-import com.jason.publisher.modules.rep.activities.RepActivity
 import com.jason.publisher.modules.map.utils.formatPanelLabel
 import com.jason.publisher.modules.map.utils.safeRunName
 import com.jason.publisher.modules.map.mqtt.helpers.MqttConfigHelper
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
-import com.jason.publisher.modules.rep.activities.TestRepActivity
 import com.jason.publisher.modules.schedule.adapters.ScheduleAdapter
 import com.jason.publisher.modules.schedule.helpers.OtaInfo
 import com.jason.publisher.modules.schedule.helpers.OtaUpdateManager
 import com.jason.publisher.modules.schedule.helpers.TbAdminOtaLatest
 import com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
 import com.jason.publisher.modules.schedule.viewmodels.ScheduleViewModel
-import com.jason.publisher.modules.signing.activities.SigningActivity
-import com.jason.publisher.modules.signing.activities.TestSigningActivity
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -482,7 +475,8 @@ class ScheduleActivity : AppCompatActivity() {
             viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
         }
 
-        val intent = Intent(this, TestMapActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_TEST_MAP)
             val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
             putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 
@@ -518,7 +512,8 @@ class ScheduleActivity : AppCompatActivity() {
             viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
         }
 
-        val intent = Intent(this, TestRepActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_TEST_REP)
             val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
             putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 
@@ -547,7 +542,8 @@ class ScheduleActivity : AppCompatActivity() {
         val breakLabel = formatPanelLabel(firstScheduleItem)
         viewModel.loadAccessToken()
 
-        val intent = Intent(this, TestBreakActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_TEST_BREAK)
             putExtra("AID", viewModel.aid)
             putExtra("ACCESS_TOKEN", viewModel.token)
             putExtra("BREAK_LABEL", breakLabel)
@@ -578,7 +574,8 @@ class ScheduleActivity : AppCompatActivity() {
         val action = firstScheduleItem.signingAction()
         viewModel.loadAccessToken()
 
-        val intent = Intent(this, TestSigningActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_TEST_SIGNING)
             putExtra("AID", viewModel.aid)
             putExtra("ACCESS_TOKEN", viewModel.token)
             putExtra("SIGNING_LABEL", label)
@@ -1273,7 +1270,8 @@ class ScheduleActivity : AppCompatActivity() {
         val action = firstScheduleItem.signingAction()
         viewModel.loadAccessToken()
 
-        val intent = Intent(this, SigningActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_SIGNING)
             putExtra("AID", viewModel.aid)
             putExtra("ACCESS_TOKEN", viewModel.token)
 
@@ -1323,7 +1321,8 @@ class ScheduleActivity : AppCompatActivity() {
         val breakLabel = formatPanelLabel(firstScheduleItem)
         viewModel.loadAccessToken()
 
-        val intent = Intent(this, BreakActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_BREAK)
             putExtra("AID", viewModel.aid)
             putExtra("ACCESS_TOKEN", viewModel.token)
             putExtra("BREAK_LABEL", breakLabel)
@@ -1375,7 +1374,8 @@ class ScheduleActivity : AppCompatActivity() {
             viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
         }
 
-        val intent = Intent(this, RepActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_REP)
             val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
             putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 
@@ -1441,7 +1441,8 @@ class ScheduleActivity : AppCompatActivity() {
             viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
         }
 
-        val intent = Intent(this, MapActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_MAP)
             val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
             putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 

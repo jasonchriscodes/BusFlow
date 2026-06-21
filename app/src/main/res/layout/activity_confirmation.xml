@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/confirmationRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="@dimen/pad_md"
+    android:background="@color/colorMain">
+
+    <!-- Top row: top-left + top-right sections -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="0.8"
+        android:layout_marginBottom="@dimen/gap_md"
+        android:orientation="horizontal">
+
+        <!-- Top-left section: BDC / Hanover signage checklist -->
+        <LinearLayout
+            android:id="@+id/confirmationTopLeft"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="@dimen/gap_sm"
+            android:background="@drawable/white_border"
+            android:orientation="vertical"
+            android:gravity="center_vertical"
+            android:padding="@dimen/pad_md">
+
+            <LinearLayout
+                android:id="@+id/bdcRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:clickable="true"
+                android:focusable="true">
+
+                <com.varunest.sparkbutton.SparkButton
+                    android:id="@+id/bdcSparkButton"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    app:sparkbutton_iconSize="28dp"
+                    app:sparkbutton_activeImage="@drawable/ic_check_green"
+                    app:sparkbutton_inActiveImage="@drawable/checklist_box_unchecked"
+                    app:sparkbutton_primaryColor="@color/green"
+                    app:sparkbutton_secondaryColor="@color/blind_green"/>
+
+                <TextView
+                    android:id="@+id/bdcLabelText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="@dimen/gap_sm"
+                    android:text="BDC Set to"
+                    android:textColor="@android:color/white"
+                    android:textSize="@dimen/text_md"
+                    android:textStyle="bold"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/hanoverRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/gap_md"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:clickable="true"
+                android:focusable="true">
+
+                <com.varunest.sparkbutton.SparkButton
+                    android:id="@+id/hanoverSparkButton"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    app:sparkbutton_iconSize="28dp"
+                    app:sparkbutton_activeImage="@drawable/ic_check_green"
+                    app:sparkbutton_inActiveImage="@drawable/checklist_box_unchecked"
+                    app:sparkbutton_primaryColor="@color/green"
+                    app:sparkbutton_secondaryColor="@color/blind_green"/>
+
+                <TextView
+                    android:id="@+id/hanoverLabelText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="@dimen/gap_sm"
+                    android:text="Hanover Set to"
+                    android:textColor="@android:color/white"
+                    android:textSize="@dimen/text_md"
+                    android:textStyle="bold"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Top-right section: warning + Duty Screen button -->
+        <LinearLayout
+            android:id="@+id/confirmationTopRight"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="@dimen/gap_sm"
+            android:background="@drawable/white_border"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="@dimen/pad_md">
+
+            <TextView
+                android:id="@+id/confirmationWarningText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Please confirm BDC and Hanover"
+                android:textColor="@android:color/white"
+                android:textSize="@dimen/text_md"
+                android:textStyle="bold"
+                android:gravity="center"/>
+
+            <Button
+                android:id="@+id/dutyScreenButton"
+                android:layout_width="wrap_content"
+                android:layout_height="@dimen/btn_height"
+                android:layout_marginTop="@dimen/gap_md"
+                android:text="Duty Screen"
+                android:textSize="@dimen/text_btn"
+                android:paddingLeft="@dimen/pad_md"
+                android:paddingRight="@dimen/pad_md"
+                android:backgroundTint="@color/purple_400"
+                android:textColor="@android:color/white"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Bottom section: schedule until next break -->
+    <LinearLayout
+        android:id="@+id/confirmationBottom"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="2.4"
+        android:background="@drawable/white_border"
+        android:orientation="vertical"
+        android:padding="@dimen/pad_md">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/confirmationScheduleRecycler"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone"/>
+
+            <LinearLayout
+                android:id="@+id/confirmationTimelineContainer"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical">
+
+                <com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
+                    android:id="@+id/confirmationTimelinePart1"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"/>
+
+                <com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
+                    android:id="@+id/confirmationTimelinePart2"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:layout_marginTop="@dimen/gap_sm"/>
+            </LinearLayout>
+        </FrameLayout>
+
+        <Button
+            android:id="@+id/confirmationChangeModeButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="@dimen/gap_sm"
+            android:text="Tabulated View"
+            android:textSize="@dimen/text_btn"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:padding="@dimen/pad_sm"
+            android:background="@drawable/white_border"/>
+    </LinearLayout>
+</LinearLayout>
