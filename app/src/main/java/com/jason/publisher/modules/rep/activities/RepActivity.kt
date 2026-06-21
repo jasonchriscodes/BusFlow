@@ -1414,7 +1414,11 @@ open class RepActivity : AppCompatActivity() {
                     if (!isManualMode) {
                         viewModel.latitude = location.latitude
                         viewModel.longitude = location.longitude
-                        viewModel.updateSpeed(location.speed * 3.6f)
+                        // Cap at 20-50 km/h, same band TestRepActivity's Slow/Speed buttons
+                        // are restricted to, but driven by the actual GPS speed here.
+                        val cappedSpeedKmh = (location.speed * 3.6f).coerceIn(20f, 50f)
+                        viewModel.speed = cappedSpeedKmh
+                        viewModel.updateSpeed(cappedSpeedKmh)
                         viewModel.bearing = location.bearing
                     }
 
