@@ -9,7 +9,10 @@ import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -23,6 +26,8 @@ import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.`break`.adapters.BreakUpcomingAdapter
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
+import com.varunest.sparkbutton.SparkButton
+import com.varunest.sparkbutton.SparkEventListener
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -61,7 +66,7 @@ open class BreakActivity : AppCompatActivity() {
         doneBtn   = findViewById(R.id.breakDoneBtn)
 
         doneBtn.visibility = View.VISIBLE
-        doneBtn.isEnabled = true
+        doneBtn.isEnabled = false
         doneBtn.text = "Back to Schedule" // or: "End break early"
 
         val token = intent.getStringExtra("ACCESS_TOKEN")
@@ -72,6 +77,9 @@ open class BreakActivity : AppCompatActivity() {
         }
 
         breakLabel = intent.getStringExtra("BREAK_LABEL") ?: "Break"
+
+        // ===== Hanover acknowledgement =====
+        setUpAcknowledgement()
 
         val firstList =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -214,6 +222,40 @@ open class BreakActivity : AppCompatActivity() {
         doneBtn.setOnClickListener {
             onDoneClicked(fullRemaining)
         }
+    }
+
+    /**
+     * Requires the driver to tick a checklist item confirming Hanover is set to
+     * "Out of Service" before "Back to Schedule" is enabled or back-press is
+     * allowed. This holds even after the countdown reaches zero.
+     */
+    private fun setUpAcknowledgement() {
+        val ackSparkButton = findViewById<SparkButton>(R.id.breakAckSparkButton)
+        val ackRow = findViewById<View>(R.id.breakAckRow)
+
+        ackRow.setOnClickListener { ackSparkButton.performClick() }
+
+        ackSparkButton.setEventListener(object : SparkEventListener {
+            override fun onEvent(button: ImageView, buttonState: Boolean) {}
+            override fun onEventAnimationStart(button: ImageView, buttonState: Boolean) {}
+            override fun onEventAnimationEnd(button: ImageView, buttonState: Boolean) {
+                if (buttonState) doneBtn.isEnabled = true
+            }
+        })
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (ackSparkButton.isChecked) {
+                    finish()
+                } else {
+                    Toast.makeText(
+                        this@BreakActivity,
+                        "Please confirm Hanover before continuing",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        })
     }
 
     protected open fun onDoneClicked(fullRemaining: ArrayList<ScheduleItem>) {

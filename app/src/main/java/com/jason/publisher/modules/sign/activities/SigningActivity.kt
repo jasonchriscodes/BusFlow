@@ -10,7 +10,10 @@ import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -24,6 +27,8 @@ import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.`break`.adapters.BreakUpcomingAdapter
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
+import com.varunest.sparkbutton.SparkButton
+import com.varunest.sparkbutton.SparkEventListener
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -64,7 +69,7 @@ open class SigningActivity : AppCompatActivity() {
         doneBtn   = findViewById(R.id.signingDoneBtn)
 
         doneBtn.visibility = View.VISIBLE
-        doneBtn.isEnabled = true
+        doneBtn.isEnabled = false
         doneBtn.text = "Back to Schedule" // or: "I've signed — Back to Schedule"
 
 
@@ -193,6 +198,9 @@ open class SigningActivity : AppCompatActivity() {
         infoText.text = if (signingAction == "OFF") "Please sign off" else "Please sign on"
         endAtText.text = "Before ${signItem.endTime}"
 
+        // ===== Handover / Hanover acknowledgement =====
+        setUpAcknowledgement()
+
         // ===== Timer =====
         val durationMs = computeTimerDurationMillis(signItem)
 
@@ -230,6 +238,48 @@ open class SigningActivity : AppCompatActivity() {
             setResult(RESULT_OK, resultIntent)
             finish()
         }
+    }
+
+    /**
+     * Requires the driver to tick a checklist item before "Back to Schedule" is
+     * enabled or back-press is allowed: handover confirmation on sign-on, Hanover
+     * confirmation on sign-off. This holds even after the countdown reaches zero.
+     */
+    private fun setUpAcknowledgement() {
+        val ackSparkButton = findViewById<SparkButton>(R.id.signingAckSparkButton)
+        val ackRow = findViewById<View>(R.id.signingAckRow)
+        val ackLabelText = findViewById<TextView>(R.id.signingAckLabelText)
+
+        ackLabelText.text = if (signingAction == "OFF") {
+            "Hanover set to \"Out of Service\""
+        } else {
+            "Yes, I have handed over the BDC for trip $signingLabel"
+        }
+
+        ackRow.setOnClickListener { ackSparkButton.performClick() }
+
+        ackSparkButton.setEventListener(object : SparkEventListener {
+            override fun onEvent(button: ImageView, buttonState: Boolean) {}
+            override fun onEventAnimationStart(button: ImageView, buttonState: Boolean) {}
+            override fun onEventAnimationEnd(button: ImageView, buttonState: Boolean) {
+                if (buttonState) doneBtn.isEnabled = true
+            }
+        })
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (ackSparkButton.isChecked) {
+                    finish()
+                } else {
+                    val message = if (signingAction == "OFF") {
+                        "Please confirm Hanover before continuing"
+                    } else {
+                        "Please confirm handover before continuing"
+                    }
+                    Toast.makeText(this@SigningActivity, message, Toast.LENGTH_SHORT).show()
+                }
+            }
+        })
     }
 
     private fun inferSigningAction(runName: String): String {
