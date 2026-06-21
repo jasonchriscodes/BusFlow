@@ -92,7 +92,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Top-right section: warning + Duty Screen button -->
+        <!-- Top-right section: warning + start time -->
         <LinearLayout
             android:id="@+id/confirmationTopRight"
             android:layout_width="0dp"
@@ -108,22 +108,26 @@
                 android:id="@+id/confirmationWarningText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Please confirm BDC and Hanover"
+                android:text="Please confirm BDC and Hanover before"
                 android:textColor="@android:color/white"
                 android:textSize="@dimen/text_md"
                 android:textStyle="bold"
                 android:gravity="center"/>
 
-            <Button
-                android:id="@+id/dutyScreenButton"
-                android:layout_width="wrap_content"
-                android:layout_height="@dimen/btn_height"
+            <TextView
+                android:id="@+id/confirmationStartTimeText"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
                 android:layout_marginTop="@dimen/gap_md"
-                android:text="Duty Screen"
-                android:textSize="@dimen/text_btn"
-                android:paddingLeft="@dimen/pad_md"
-                android:paddingRight="@dimen/pad_md"
-                android:backgroundTint="@color/purple_400"
+                android:text="00:00"
+                android:gravity="center"
+                android:maxLines="1"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="@dimen/text_lg"
+                android:autoSizeMaxTextSize="@dimen/text_timer"
+                android:autoSizeStepGranularity="1sp"
+                android:textStyle="bold"
                 android:textColor="@android:color/white"/>
         </LinearLayout>
     </LinearLayout>

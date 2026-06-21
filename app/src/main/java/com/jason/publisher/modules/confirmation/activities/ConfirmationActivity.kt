@@ -86,16 +86,12 @@ class ConfirmationActivity : AppCompatActivity() {
         val bdcLabelText = findViewById<TextView>(R.id.bdcLabelText)
         val hanoverLabelText = findViewById<TextView>(R.id.hanoverLabelText)
         val warningText = findViewById<TextView>(R.id.confirmationWarningText)
-        val dutyScreenButton = findViewById<Button>(R.id.dutyScreenButton)
+        val startTimeText = findViewById<TextView>(R.id.confirmationStartTimeText)
 
         bdcLabelText.text = "BDC Set to $tripLabel"
         hanoverLabelText.text = "Hanover Set to $tripLabel"
-        warningText.text = firstScheduleItem?.startTime
-            ?.let { "Please confirm BDC and Hanover before $it" }
-            ?: "Please confirm BDC and Hanover before starting"
-
-        dutyScreenButton.isEnabled = false
-        dutyScreenButton.setOnClickListener { finish() }
+        warningText.text = "Please confirm BDC and Hanover before"
+        startTimeText.text = firstScheduleItem?.startTime ?: "--:--"
 
         bdcRow.setOnClickListener { bdcSparkButton.performClick() }
         hanoverRow.setOnClickListener { hanoverSparkButton.performClick() }
@@ -115,7 +111,6 @@ class ConfirmationActivity : AppCompatActivity() {
         val onSignageAnimationEnd = {
             if (!signageConfirmed) {
                 signageConfirmed = true
-                dutyScreenButton.isEnabled = true
                 launchTarget()
             }
         }
