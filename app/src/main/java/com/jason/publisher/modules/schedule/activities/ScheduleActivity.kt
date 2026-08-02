@@ -1600,6 +1600,83 @@ class ScheduleActivity : AppCompatActivity() {
      *     • Subscribes for admin messages and telemetry
      *   On failure, falls back to offline mode
      */
+    /** Returns the next unused bus letter name, e.g. "Bus C" if A and B are taken. */
+    private fun nextBusName(): String {
+        val used = (viewModel.config ?: emptyList())
+            .map { it.bus.trim().lowercase() }
+            .toSet()
+        for (c in 'A'..'Z') {
+            val candidate = "Bus $c"
+            if (candidate.lowercase() !in used) return candidate
+        }
+        return "Bus A"
+    }
+
+    private fun showRegistrationDialog() {
+        val input = android.widget.EditText(this).apply {
+            setText(nextBusName())
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            val p = (16 * resources.displayMetrics.density).toInt()
+            setPadding(p, p / 2, p, p / 2)
+            selectAll()
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Register This Device")
+            .setMessage("This device is not registered yet. Enter the bus name to register it automatically.")
+            .setView(input)
+            .setCancelable(false)
+            .setPositiveButton("Register") { _, _ ->
+                val busName = input.text.toString().trim()
+                when {
+                    busName.isBlank() -> {
+                        Toast.makeText(this, "Bus name cannot be empty.", Toast.LENGTH_SHORT).show()
+                        showRegistrationDialog()
+                    }
+                    viewModel.config?.any { it.bus.equals(busName, ignoreCase = true) } == true -> {
+                        Toast.makeText(this, "\"$busName\" already exists. Choose a different name.", Toast.LENGTH_LONG).show()
+                        showRegistrationDialog()
+                    }
+                    else -> {
+                        startFetchingAnimation()
+                        val templateToken = viewModel.config?.firstOrNull()?.accessToken ?: ""
+                        autoRegisterDevice(busName, templateToken)
+                    }
+                }
+            }
+            .setNegativeButton("Go Offline") { _, _ ->
+                connecting = false
+                onlineInitStarted = false
+                enterOfflineMode()
+            }
+            .show()
+    }
+
+    private fun autoRegisterDevice(busName: String, templateToken: String) {
+        com.jason.publisher.main.services.DeviceRegistrationHelper().register(
+            aid = viewModel.aid ?: "",
+            busName = busName,
+            templateToken = templateToken,
+            onProgress = { msg -> runOnUiThread { fetchingText.text = msg } },
+            onSuccess = {
+                runOnUiThread {
+                    Toast.makeText(this, "\"$busName\" registered successfully!", Toast.LENGTH_LONG).show()
+                    connecting = false
+                    onlineInitStarted = false
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) enterOnlineMode()
+                }
+            },
+            onError = { msg ->
+                runOnUiThread {
+                    connecting = false
+                    onlineInitStarted = false
+                    stopFetchingAnimation()
+                    Toast.makeText(this, "Registration failed: $msg", Toast.LENGTH_LONG).show()
+                    enterOfflineMode()
+                }
+            }
+        )
+    }
+
     @RequiresApi(Build.VERSION_CODES.M)
     private fun enterOnlineMode() {
         FileLogger.d("ScheduleActivity MAP", "Online mode started. Checking offline map with roster fetch.")
@@ -1629,6 +1706,14 @@ class ScheduleActivity : AppCompatActivity() {
                 }
 
                 viewModel.config = configList
+
+                val aidRegistered = configList.any { it.aid == viewModel.aid }
+                if (!aidRegistered) {
+                    stopFetchingAnimation()
+                    showRegistrationDialog()
+                    return@runOnUiThread
+                }
+
                 viewModel.loadAccessToken()
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -2024,6 +2109,12 @@ class ScheduleActivity : AppCompatActivity() {
 
                         // Mark as updated so offline mode does not reload cache unnecessarily
                         viewModel.isScheduleUpdatedFromServer = true
+                    } else if (viewModel.activeScheduleData.isEmpty() && !viewModel.isScheduleUpdatedFromServer) {
+                        Toast.makeText(
+                            this,
+                            "Device registered but no schedule has been assigned yet. Contact your admin.",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
 
                     // **Rewrite cache when online**
