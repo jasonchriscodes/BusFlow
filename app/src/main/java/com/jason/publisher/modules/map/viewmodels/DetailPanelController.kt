@@ -154,20 +154,17 @@ class DetailPanelController(
                         setBackgroundColor(Color.LTGRAY)
                     })
                 }
-                try {
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        try {
-                            activity.runOnUiThread {
-                                logPanelDetailTextOnly()
-                            }
-                        } catch (e: Exception) {
-                            Log.w("MapViewController", "Failed to call logPanelDetailTextOnly(): ${e.message}")
-                        }
-                    }, 120L)
-                } catch (e: Exception) {
-                    Log.w("MapViewController", "postDelayed logPanelDetailTextOnly failed: ${e.message}")
-                }
             }
+
+            Handler(Looper.getMainLooper()).postDelayed({
+                try {
+                    activity.runOnUiThread {
+                        logPanelDetailTextOnly()
+                    }
+                } catch (e: Exception) {
+                    Log.w("MapViewController", "Failed to call logPanelDetailTextOnly(): ${e.message}")
+                }
+            }, 120L)
 
             if (allActiveOthers.isEmpty() && !isReallyOnline()) {
                 val hint = TextView(activity).apply {

@@ -61,7 +61,13 @@ class ScheduleAdapter(
 
     // 2 holders: header vs. normal row
     class HeaderVH(view: View) : RecyclerView.ViewHolder(view)
-    class ItemVH(val view: View) : RecyclerView.ViewHolder(view)
+    class ItemVH(view: View) : RecyclerView.ViewHolder(view) {
+        val runNo: TextView = view.findViewById(R.id.routeNo)
+        val activityText: TextView = view.findViewById(R.id.activityText)
+        val startTime: TextView = view.findViewById(R.id.startTime)
+        val endTime: TextView = view.findViewById(R.id.endTime)
+        val routeName: TextView = view.findViewById(R.id.routeName)
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         val inflater = LayoutInflater.from(parent.context)
@@ -89,20 +95,12 @@ class ScheduleAdapter(
         if (getItemViewType(pos) == TYPE_ITEM) {
             val real = items[pos - 1]
             val itemHolder = holder as ItemVH
-
-            val runNo = itemHolder.view.findViewById<TextView>(R.id.routeNo)
-            val activityText = itemHolder.view.findViewById<TextView>(R.id.activityText)
-            val startTime = itemHolder.view.findViewById<TextView>(R.id.startTime)
-            val endTime = itemHolder.view.findViewById<TextView>(R.id.endTime)
-            val routeName = itemHolder.view.findViewById<TextView>(R.id.routeName)
-
             val activity = real.activityLabel()
-
-            runNo.text = real.runNo
-            activityText.text = activity
-            startTime.text = real.startTime
-            endTime.text = real.endTime
-            routeName.text = real.routeDescription(activity)
+            itemHolder.runNo.text = real.runNo
+            itemHolder.activityText.text = activity
+            itemHolder.startTime.text = real.startTime
+            itemHolder.endTime.text = real.endTime
+            itemHolder.routeName.text = real.routeDescription(activity)
         }
     }
 

@@ -23,6 +23,8 @@ class TimeManager(): ViewModel() {
         }
     }
 
+    private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
     val currentTime: MutableLiveData<String> by lazy {
         val systemCurrentMillis = System.currentTimeMillis()
         val systemTimeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -52,7 +54,6 @@ class TimeManager(): ViewModel() {
             @SuppressLint("LongLogTag")
             override fun run() {
                 try {
-                    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                     currentTime.postValue(timeFormat.format(timeProvider()))
                     onUpdateCallback()
 

@@ -493,8 +493,9 @@ class MapViewController(
         checkMarkers.clear()
 
         // 3) draw fresh circles + optional check icon
+        val passedSet = passedStops.toHashSet()
         stops.forEach { stop ->
-            val passed = passedStops.contains(stop)
+            val passed = passedSet.contains(stop)
             val key = "${stop.latitude ?: 0.0},${stop.longitude ?: 0.0}"
             val status = stopStatusByKey[key]
 

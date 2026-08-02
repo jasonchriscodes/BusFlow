@@ -46,6 +46,11 @@ class ScheduleStatusManager(
     var lastCategory: StopPassCategory = StopPassCategory.ON_TIME
         private set
 
+    private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    private var cachedRedStopIndex: Int = -1
+    private var cachedRouteSize: Int = 0
+    private var cachedD2: Double = -1.0
+
     private fun categorizeTimingDelta(deltaSec: Int): StopPassCategory {
         // deltaSec = scheduled - predicted
         // positive => predicted before scheduled (EARLY)
@@ -138,8 +143,6 @@ class ScheduleStatusManager(
 
         if (activity.viewModel.scheduleList.isEmpty()) return
 
-        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-
         if (activity.viewModel.latitude == 0.0 && activity.viewModel.longitude == 0.0) {
             Log.w("checkScheduleStatus", "Skipping status check: Invalid location (0.0, 0.0)")
             return
@@ -183,9 +186,14 @@ class ScheduleStatusManager(
             val apiTime = apiTimeStr.parseTimeToday()
 
             // ✅ Find next stop that is a red timing point
-            var redStopIndex = activity.viewModel.stops.indexOfFirst { stop ->
-                activity.viewModel.redBusStops.contains(stop.address ?: "") &&
-                        activity.viewModel.stops.indexOf(stop) >= activity.viewModel.currentStopIndex
+            var redStopIndex = -1
+            val stops = activity.viewModel.stops
+            val startIdx = activity.viewModel.currentStopIndex
+            for (i in startIdx until stops.size) {
+                if (activity.viewModel.redBusStops.contains(stops[i].address ?: "")) {
+                    redStopIndex = i
+                    break
+                }
             }
 
             // 🔁 Fallback: If no red timing point found, use last stop instead
@@ -202,15 +210,20 @@ class ScheduleStatusManager(
             val d1 = calculateDistance(activity.viewModel.latitude, activity.viewModel.longitude, stopLat, stopLon)
 
             // --- 2. Total distance from route start to this red timing point (d2) ---
-            val upcomingIndex = activity.viewModel.route.indexOfLast {
-                calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
-            }.coerceAtLeast(1)
-
-            val d2 = (0 until upcomingIndex).sumOf { i ->
-                val p1 = activity.viewModel.route[i]
-                val p2 = activity.viewModel.route[i + 1]
-                calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
+            val routeSize = activity.viewModel.route.size
+            if (cachedRedStopIndex != redStopIndex || cachedRouteSize != routeSize) {
+                val upcomingIndex = activity.viewModel.route.indexOfLast {
+                    calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
+                }.coerceAtLeast(1)
+                cachedD2 = (0 until upcomingIndex).sumOf { i ->
+                    val p1 = activity.viewModel.route[i]
+                    val p2 = activity.viewModel.route[i + 1]
+                    calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
+                }
+                cachedRedStopIndex = redStopIndex
+                cachedRouteSize = routeSize
             }
+            val d2 = cachedD2
 
             if (d2 == 0.0) {
                 Log.e("checkScheduleStatus", "❌ d2 (total distance) is 0. Cannot compute estimated time.")

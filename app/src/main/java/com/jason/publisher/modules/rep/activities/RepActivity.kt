@@ -114,6 +114,8 @@ open class RepActivity : AppCompatActivity() {
     private var periodicUIUpdateHandler: Handler? = null
     private var periodicUIUpdateRunnable: Runnable? = null
 
+    private val apiTimeFormat = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+
     /** Throttling and debouncing for better performance */
     private var lastUIUpdateTime = 0L
     private val uiUpdateThrottleMs = 500L // Minimum 500ms between UI updates
@@ -780,7 +782,7 @@ open class RepActivity : AppCompatActivity() {
         Log.d("RepActivity confirmArrival", "🔎 Starting nearest route point search...")
 
         // 1) find nearest route‑point index
-        val nearestIndex = viewModel.findNearestBusRoutePoint(viewModel.latitude, viewModel.longitude)
+        val nearestIndex = viewModel.findNearestBusRoutePoint(viewModel.latitude, viewModel.longitude, fullSearch = true)
         Log.d("RepActivity confirmArrival", "✅ Nearest Route Point Found at Index: $nearestIndex")
 
         // 2) mark every stop up to that point as passed
@@ -833,8 +835,7 @@ open class RepActivity : AppCompatActivity() {
         val additionalSeconds = (totalDurationUntilArrive * 60).toInt()
         startCalendar.add(Calendar.SECOND, additionalSeconds)
 
-        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
-        viewModel.lockedApiTime = timeFormat.format(startCalendar.time)
+        viewModel.lockedApiTime = apiTimeFormat.format(startCalendar.time)
         apiTimeValueTextView.text = viewModel.lockedApiTime
         updateApiTime()
 
@@ -983,8 +984,7 @@ open class RepActivity : AppCompatActivity() {
         }
 
         // Build timing list.
-        val baseRoute = viewModel.selectedRouteData ?: viewModel.busRouteData.firstOrNull()
-        val timingList = baseRoute?.let { BusStopWithTimingPoint.fromRouteData(it) } ?: emptyList()
+        val timingList = viewModel.cachedTimingList
 
         val upcomingAddress = viewModel.stopAddress
         if (upcomingAddress.isBlank() || upcomingAddress == "Unknown") {
@@ -1001,8 +1001,7 @@ open class RepActivity : AppCompatActivity() {
                 if (totalDurationMinutes != null) {
                     val additionalSeconds = (totalDurationMinutes * 60).toInt()
                     startCalendar.add(Calendar.SECOND, additionalSeconds)
-                    val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
-                    val updatedApiTime = timeFormat.format(startCalendar.time)
+                    val updatedApiTime = apiTimeFormat.format(startCalendar.time)
                     // Already on main thread
                     apiTimeValueTextView.text = updatedApiTime
                 }
@@ -1019,8 +1018,7 @@ open class RepActivity : AppCompatActivity() {
                 if (fallbackDuration != null) {
                     val additionalSeconds = (fallbackDuration * 60).toInt()
                     startCalendar.add(Calendar.SECOND, additionalSeconds)
-                    val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
-                    val updatedApiTime = timeFormat.format(startCalendar.time)
+                    val updatedApiTime = apiTimeFormat.format(startCalendar.time)
                     // Already on main thread
                     apiTimeValueTextView.text = updatedApiTime
                 }
@@ -1032,8 +1030,7 @@ open class RepActivity : AppCompatActivity() {
         val additionalSeconds = (totalDurationMinutes * 60).toInt()
         startCalendar.add(Calendar.SECOND, additionalSeconds)
 
-        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
-        val updatedApiTime = timeFormat.format(startCalendar.time)
+        val updatedApiTime = apiTimeFormat.format(startCalendar.time)
 
         // Always update API time (removed condition that was preventing updates)
         // Already on main thread from updateUIElements()
@@ -1341,8 +1338,7 @@ open class RepActivity : AppCompatActivity() {
             }
 
             // Build timing list and update API time only if the stop exists in it
-            val baseRoute = viewModel.selectedRouteData ?: viewModel.busRouteData.firstOrNull()
-            val timingList = baseRoute?.let { BusStopWithTimingPoint.fromRouteData(it) } ?: emptyList()
+            val timingList = viewModel.cachedTimingList
             if (timingList.any { it.address?.equals(viewModel.stopAddress, ignoreCase = true) == true }) {
                 updateApiTime()
             }
@@ -1873,6 +1869,7 @@ open class RepActivity : AppCompatActivity() {
 
         if (::mqttHelper.isInitialized) {
             mqttHelper.stopAttributePolling()
+            mqttHelper.stopAdminMessagePolling()
         }
 
         try {
@@ -1897,7 +1894,10 @@ open class RepActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         panelController.panelDebugEnabled = false
-        if (::mqttHelper.isInitialized) mqttHelper.stopAttributePolling()
+        if (::mqttHelper.isInitialized) {
+            mqttHelper.stopAttributePolling()
+            mqttHelper.stopAdminMessagePolling()
+        }
         // remove any observers/timers you set that could call logPanelDebugFromDetailPanel()
     }
 
