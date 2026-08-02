@@ -13,6 +13,7 @@ import com.jason.publisher.main.model.BusRoute
 import com.jason.publisher.main.model.BusStop
 import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
+import com.jason.publisher.main.utils.extractWorkIntervalsAndRunNames
 import com.jason.publisher.modules.map.utils.formatPanelLabel
 import com.jason.publisher.modules.map.utils.safeRunName
 import com.jason.publisher.modules.map.mqtt.helpers.MqttConfigHelper
@@ -284,20 +285,7 @@ class ScheduleViewModel: ViewModel() {
      * Extracts work intervals and duty names from the schedule data dynamically.
      */
     fun extractWorkIntervalsAndRunNames(): Pair<List<Pair<String, String>>, List<String>> {
-        val workIntervals = mutableListOf<Pair<String, String>>()
-        val runNames = mutableListOf<String>()
-
-        for (item in activeScheduleData) { // Limit to first 3 entries directly
-            val startTime = item.startTime
-            val endTime = item.endTime
-            val runName = item.runName
-
-            if (startTime.isNotEmpty() && endTime.isNotEmpty()) {
-                workIntervals.add(Pair(startTime, endTime))
-                runNames.add(runName)
-            }
-        }
-
+        val (workIntervals, runNames) = activeScheduleData.extractWorkIntervalsAndRunNames()
         Log.d("ScheduleViewModel", "✅ Extracted Work Intervals: $workIntervals")
         Log.d("ScheduleViewModel", "✅ Extracted Duty Names: $runNames")
         return Pair(workIntervals, runNames)

@@ -7,27 +7,44 @@
 
     <TextView
         android:layout_width="0dp" android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:text="Route No."
-        android:textSize="24sp"
+        android:layout_weight="0.10"
+        android:text="No."
+        android:textSize="20sp"
         android:textStyle="bold"
         android:textColor="@color/white"/>
 
     <TextView
         android:layout_width="0dp" android:layout_height="wrap_content"
-        android:layout_weight="1"
+        android:layout_weight="0.42"
+        android:text="Route"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/white"/>
+
+    <TextView
+        android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_weight="0.16"
+        android:gravity="center"
+        android:text="Activity"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/white"/>
+
+    <TextView
+        android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_weight="0.16"
         android:gravity="center"
         android:text="Start Time"
-        android:textSize="24sp"
+        android:textSize="20sp"
         android:textStyle="bold"
         android:textColor="@color/white"/>
 
     <TextView
         android:layout_width="0dp" android:layout_height="wrap_content"
-        android:layout_weight="1"
+        android:layout_weight="0.16"
         android:gravity="end"
         android:text="End Time"
-        android:textSize="24sp"
+        android:textSize="20sp"
         android:textStyle="bold"
         android:textColor="@color/white"/>
 </LinearLayout>

@@ -46,6 +46,11 @@ class ScheduleStatusManager(
     var lastCategory: StopPassCategory = StopPassCategory.ON_TIME
         private set
 
+    private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    private var cachedRedStopIndex: Int = -1
+    private var cachedRouteSize: Int = 0
+    private var cachedD2: Double = -1.0
+
     private fun categorizeTimingDelta(deltaSec: Int): StopPassCategory {
         // deltaSec = scheduled - predicted
         // positive => predicted before scheduled (EARLY)
@@ -138,8 +143,6 @@ class ScheduleStatusManager(
 
         if (activity.viewModel.scheduleList.isEmpty()) return
 
-        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-
         if (activity.viewModel.latitude == 0.0 && activity.viewModel.longitude == 0.0) {
             Log.w("checkScheduleStatus", "Skipping status check: Invalid location (0.0, 0.0)")
             return
@@ -183,9 +186,14 @@ class ScheduleStatusManager(
             val apiTime = apiTimeStr.parseTimeToday()
 
             // ✅ Find next stop that is a red timing point
-            var redStopIndex = activity.viewModel.stops.indexOfFirst { stop ->
-                activity.viewModel.redBusStops.contains(stop.address ?: "") &&
-                        activity.viewModel.stops.indexOf(stop) >= activity.viewModel.currentStopIndex
+            var redStopIndex = -1
+            val stops = activity.viewModel.stops
+            val startIdx = activity.viewModel.currentStopIndex
+            for (i in startIdx until stops.size) {
+                if (activity.viewModel.redBusStops.contains(stops[i].address ?: "")) {
+                    redStopIndex = i
+                    break
+                }
             }
 
             // 🔁 Fallback: If no red timing point found, use last stop instead
@@ -202,15 +210,20 @@ class ScheduleStatusManager(
             val d1 = calculateDistance(activity.viewModel.latitude, activity.viewModel.longitude, stopLat, stopLon)
 
             // --- 2. Total distance from route start to this red timing point (d2) ---
-            val upcomingIndex = activity.viewModel.route.indexOfLast {
-                calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
-            }.coerceAtLeast(1)
-
-            val d2 = (0 until upcomingIndex).sumOf { i ->
-                val p1 = activity.viewModel.route[i]
-                val p2 = activity.viewModel.route[i + 1]
-                calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
+            val routeSize = activity.viewModel.route.size
+            if (cachedRedStopIndex != redStopIndex || cachedRouteSize != routeSize) {
+                val upcomingIndex = activity.viewModel.route.indexOfLast {
+                    calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
+                }.coerceAtLeast(1)
+                cachedD2 = (0 until upcomingIndex).sumOf { i ->
+                    val p1 = activity.viewModel.route[i]
+                    val p2 = activity.viewModel.route[i + 1]
+                    calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
+                }
+                cachedRedStopIndex = redStopIndex
+                cachedRouteSize = routeSize
             }
+            val d2 = cachedD2
 
             if (d2 == 0.0) {
                 Log.e("checkScheduleStatus", "❌ d2 (total distance) is 0. Cannot compute estimated time.")
@@ -260,25 +273,27 @@ class ScheduleStatusManager(
             fun minutesLabel(m: Int) = if (m == 1) "1 min" else "$m min"
             val timeDiff = minutesLabel(absMin)
 
+            // On Time is an exact, symmetric +/-60s window (matches how Google Maps shows
+            // live transit status); only outside that window do we fall back to minute labels.
             val statusText = when {
-                deltaMin >= 1    -> "Early (~$timeDiff early)"
-                deltaMin in -1..1-> "On Time (~$timeDiff on time)"
-                deltaMin in -5..-1 -> "Slightly Behind (~$timeDiff late)"
-                else   -> "Very Behind (~$timeDiff late)"
+                deltaSec > 30         -> "Early (~$timeDiff early)"
+                deltaSec >= -30       -> "On Time"
+                deltaSec >= -300      -> "Slightly Behind (~$timeDiff late)"
+                else                  -> "Very Behind (~$timeDiff late)"
             }
 
             val symbolRes = when {
-                deltaMin >= 1       -> R.drawable.ic_schedule_very_ahead
-                deltaMin in -1..1   -> R.drawable.ic_schedule_on_time
-                deltaMin in -5..-1  -> R.drawable.ic_schedule_slightly_behind
-                else      -> R.drawable.ic_schedule_very_behind
+                deltaSec > 30         -> R.drawable.ic_schedule_very_ahead
+                deltaSec >= -30       -> R.drawable.ic_schedule_on_time
+                deltaSec >= -300      -> R.drawable.ic_schedule_slightly_behind
+                else                  -> R.drawable.ic_schedule_very_behind
             }
 
             val statusColor = when {
-                deltaMin >= 1       -> ContextCompat.getColor(activity, R.color.blind_red)    // Very Ahead, red
-                deltaMin in -1..1   -> ContextCompat.getColor(activity, R.color.blind_green)  // On Time, green
-                deltaMin in -5..-1  -> ContextCompat.getColor(activity, R.color.blind_blue)   // Slightly Behind, blue
-                else                -> ContextCompat.getColor(activity, R.color.blind_purple) // Very Behind, purple
+                deltaSec > 30         -> ContextCompat.getColor(activity, R.color.blind_red)    // Very Ahead, red
+                deltaSec >= -30       -> ContextCompat.getColor(activity, R.color.blind_green)  // On Time, green
+                deltaSec >= -300      -> ContextCompat.getColor(activity, R.color.blind_blue)   // Slightly Behind, blue
+                else                  -> ContextCompat.getColor(activity, R.color.blind_purple) // Very Behind, purple
             }
 
             // Update UI directly (already on main thread from MapActivity)

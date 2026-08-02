@@ -56,6 +56,9 @@ class MqttHelper(
     // track when we last fetched attributes for each token
     private val lastFetchTime = mutableMapOf<String, Long>()
 
+    private val adminHandler = Handler(Looper.getMainLooper())
+    private var adminRunnable: Runnable? = null
+
     /**
      * Connects to the MQTT broker and subscribes to shared data topic.
      */
@@ -471,13 +474,19 @@ class MqttHelper(
         val jsonObject = JSONObject().apply {
             put("sharedKeys", "message,busRoute,busStop,config")
         }
-        mqttManager.publish(PUB_MSG_TOPIC, jsonObject.toString())
-        Handler(Looper.getMainLooper()).post(object : Runnable {
+        stopAdminMessagePolling()
+        adminRunnable = object : Runnable {
             override fun run() {
                 mqttManager.publish(PUB_MSG_TOPIC, jsonObject.toString())
-                Handler(Looper.getMainLooper()).postDelayed(this, REQUEST_PERIODIC_TIME)
+                adminHandler.postDelayed(this, REQUEST_PERIODIC_TIME)
             }
-        })
+        }
+        adminHandler.post(adminRunnable!!)
+    }
+
+    fun stopAdminMessagePolling() {
+        adminRunnable?.let { adminHandler.removeCallbacks(it) }
+        adminRunnable = null
     }
 
     /**

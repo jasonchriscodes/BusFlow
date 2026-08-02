@@ -48,6 +48,11 @@
         </provider>
 
         <activity
+            android:name=".modules.confirmation.activities.ConfirmationActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+        <activity
             android:name=".modules.map.activities.MapActivity"
             android:exported="false"
             android:screenOrientation="landscape" />

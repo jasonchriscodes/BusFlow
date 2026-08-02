@@ -114,6 +114,8 @@ open class MapActivity : AppCompatActivity() {
     private var periodicUIUpdateHandler: Handler? = null
     private var periodicUIUpdateRunnable: Runnable? = null
 
+    private val apiTimeFormat = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+
     /** Throttling and debouncing for better performance */
     private var lastUIUpdateTime = 0L
     private val uiUpdateThrottleMs = 500L // Minimum 500ms between UI updates
@@ -511,9 +513,20 @@ open class MapActivity : AppCompatActivity() {
             resetSimulationState()
             Toast.makeText(this, "Simulation stopped and state reset", Toast.LENGTH_SHORT).show()
         }
+        // Shrink the arrow icon baked into backbut.png so it doesn't dwarf the "End Trip" text,
+        // and snap it tight to the button's left edge.
+        // NOTE: must read/write the *Relative* (start/end) compound drawables here, not the
+        // absolute left/right ones - those aren't populated from drawableStart until the view's
+        // RTL direction is resolved during layout, which hasn't happened yet in onCreate.
+        binding.backButton.compoundDrawablesRelative.getOrNull(0)?.let { icon ->
+            val iconSizePx = dpToPx(18)
+            icon.setBounds(0, 0, iconSizePx, iconSizePx)
+            binding.backButton.setCompoundDrawablesRelative(icon, null, null, null)
+            binding.backButton.compoundDrawablePadding = dpToPx(4)
+        }
         binding.backButton.setOnClickListener {
-            if (viewModel.speed > 5.0) {  // Treat speeds above 5 km/h as "moving"
-                Toast.makeText(this, "❌ Bus must be moving slower than 5 km/h before ending the trip.", Toast.LENGTH_LONG).show()
+            if (viewModel.speed > 30.0) {  // Treat speeds above 30 km/h as "moving"
+                Toast.makeText(this, "❌ Bus must be moving slower than 30 km/h before ending the trip.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
@@ -682,7 +695,7 @@ open class MapActivity : AppCompatActivity() {
         Log.d("MapActivity confirmArrival", "🔎 Starting nearest route point search...")
 
         // 1) find nearest route‑point index
-        val nearestIndex = viewModel.findNearestBusRoutePoint(viewModel.latitude, viewModel.longitude)
+        val nearestIndex = viewModel.findNearestBusRoutePoint(viewModel.latitude, viewModel.longitude, fullSearch = true)
         Log.d("MapActivity confirmArrival", "✅ Nearest Route Point Found at Index: $nearestIndex")
 
         // 2) mark every stop up to that point as passed
@@ -735,8 +748,7 @@ open class MapActivity : AppCompatActivity() {
         val additionalSeconds = (totalDurationUntilArrive * 60).toInt()
         startCalendar.add(Calendar.SECOND, additionalSeconds)
 
-        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
-        viewModel.lockedApiTime = timeFormat.format(startCalendar.time)
+        viewModel.lockedApiTime = apiTimeFormat.format(startCalendar.time)
         apiTimeValueTextView.text = viewModel.lockedApiTime
         updateApiTime()
 
@@ -883,8 +895,7 @@ open class MapActivity : AppCompatActivity() {
         }
 
         // Build timing list.
-        val baseRoute = viewModel.selectedRouteData ?: viewModel.busRouteData.firstOrNull()
-        val timingList = baseRoute?.let { BusStopWithTimingPoint.fromRouteData(it) } ?: emptyList()
+        val timingList = viewModel.cachedTimingList
 
         val upcomingAddress = viewModel.stopAddress
         if (upcomingAddress.isBlank() || upcomingAddress == "Unknown") {
@@ -901,8 +912,7 @@ open class MapActivity : AppCompatActivity() {
                 if (totalDurationMinutes != null) {
                     val additionalSeconds = (totalDurationMinutes * 60).toInt()
                     startCalendar.add(Calendar.SECOND, additionalSeconds)
-                    val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
-                    val updatedApiTime = timeFormat.format(startCalendar.time)
+                    val updatedApiTime = apiTimeFormat.format(startCalendar.time)
                     // Already on main thread
                     apiTimeValueTextView.text = updatedApiTime
                 }
@@ -919,8 +929,7 @@ open class MapActivity : AppCompatActivity() {
                 if (fallbackDuration != null) {
                     val additionalSeconds = (fallbackDuration * 60).toInt()
                     startCalendar.add(Calendar.SECOND, additionalSeconds)
-                    val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
-                    val updatedApiTime = timeFormat.format(startCalendar.time)
+                    val updatedApiTime = apiTimeFormat.format(startCalendar.time)
                     // Already on main thread
                     apiTimeValueTextView.text = updatedApiTime
                 }
@@ -932,8 +941,7 @@ open class MapActivity : AppCompatActivity() {
         val additionalSeconds = (totalDurationMinutes * 60).toInt()
         startCalendar.add(Calendar.SECOND, additionalSeconds)
 
-        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
-        val updatedApiTime = timeFormat.format(startCalendar.time)
+        val updatedApiTime = apiTimeFormat.format(startCalendar.time)
 
         // Always update API time (removed condition that was preventing updates)
         // Already on main thread from updateUIElements()
@@ -1241,8 +1249,7 @@ open class MapActivity : AppCompatActivity() {
             }
 
             // Build timing list and update API time only if the stop exists in it
-            val baseRoute = viewModel.selectedRouteData ?: viewModel.busRouteData.firstOrNull()
-            val timingList = baseRoute?.let { BusStopWithTimingPoint.fromRouteData(it) } ?: emptyList()
+            val timingList = viewModel.cachedTimingList
             if (timingList.any { it.address?.equals(viewModel.stopAddress, ignoreCase = true) == true }) {
                 updateApiTime()
             }
@@ -1314,7 +1321,11 @@ open class MapActivity : AppCompatActivity() {
                     if (!isManualMode) {
                         viewModel.latitude = location.latitude
                         viewModel.longitude = location.longitude
-                        viewModel.updateSpeed(location.speed * 3.6f)
+                        // Cap at 20-50 km/h, same band TestMapActivity's Slow/Speed buttons
+                        // are restricted to, but driven by the actual GPS speed here.
+                        val cappedSpeedKmh = (location.speed * 3.6f).coerceIn(20f, 50f)
+                        viewModel.speed = cappedSpeedKmh
+                        viewModel.updateSpeed(cappedSpeedKmh)
                         viewModel.bearing = location.bearing
                     }
 
@@ -1770,6 +1781,7 @@ open class MapActivity : AppCompatActivity() {
         // Stop MQTT polling
         if (::mqttHelper.isInitialized) {
             mqttHelper.stopAttributePolling()
+            mqttHelper.stopAdminMessagePolling()
         }
 
         if (::mapController.isInitialized) {
@@ -1794,7 +1806,10 @@ open class MapActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         panelController.panelDebugEnabled = false
-        if (::mqttHelper.isInitialized) mqttHelper.stopAttributePolling()
+        if (::mqttHelper.isInitialized) {
+            mqttHelper.stopAttributePolling()
+            mqttHelper.stopAdminMessagePolling()
+        }
         // remove any observers/timers you set that could call logPanelDebugFromDetailPanel()
     }
 

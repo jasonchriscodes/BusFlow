@@ -43,31 +43,24 @@ import com.google.gson.Gson
 import com.jason.publisher.BuildConfig
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityScheduleBinding
-import com.jason.publisher.modules.`break`.activities.BreakActivity
-import com.jason.publisher.modules.`break`.activities.TestBreakActivity
+import com.jason.publisher.modules.confirmation.activities.ConfirmationActivity
 import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.TripLog
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
-import com.jason.publisher.modules.map.activities.MapActivity
-import com.jason.publisher.modules.map.activities.TestMapActivity
-import com.jason.publisher.modules.rep.activities.RepActivity
 import com.jason.publisher.modules.map.utils.formatPanelLabel
 import com.jason.publisher.modules.map.utils.safeRunName
 import com.jason.publisher.modules.map.mqtt.helpers.MqttConfigHelper
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
-import com.jason.publisher.modules.rep.activities.TestRepActivity
 import com.jason.publisher.modules.schedule.adapters.ScheduleAdapter
 import com.jason.publisher.modules.schedule.helpers.OtaInfo
 import com.jason.publisher.modules.schedule.helpers.OtaUpdateManager
 import com.jason.publisher.modules.schedule.helpers.TbAdminOtaLatest
 import com.jason.publisher.modules.schedule.widgets.StyledMultiColorTimeline
 import com.jason.publisher.modules.schedule.viewmodels.ScheduleViewModel
-import com.jason.publisher.modules.signing.activities.SigningActivity
-import com.jason.publisher.modules.signing.activities.TestSigningActivity
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -482,7 +475,8 @@ class ScheduleActivity : AppCompatActivity() {
             viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
         }
 
-        val intent = Intent(this, TestMapActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_TEST_MAP)
             val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
             putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 
@@ -518,7 +512,8 @@ class ScheduleActivity : AppCompatActivity() {
             viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
         }
 
-        val intent = Intent(this, TestRepActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_TEST_REP)
             val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
             putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 
@@ -547,7 +542,8 @@ class ScheduleActivity : AppCompatActivity() {
         val breakLabel = formatPanelLabel(firstScheduleItem)
         viewModel.loadAccessToken()
 
-        val intent = Intent(this, TestBreakActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_TEST_BREAK)
             putExtra("AID", viewModel.aid)
             putExtra("ACCESS_TOKEN", viewModel.token)
             putExtra("BREAK_LABEL", breakLabel)
@@ -578,7 +574,8 @@ class ScheduleActivity : AppCompatActivity() {
         val action = firstScheduleItem.signingAction()
         viewModel.loadAccessToken()
 
-        val intent = Intent(this, TestSigningActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_TEST_SIGNING)
             putExtra("AID", viewModel.aid)
             putExtra("ACCESS_TOKEN", viewModel.token)
             putExtra("SIGNING_LABEL", label)
@@ -1273,7 +1270,8 @@ class ScheduleActivity : AppCompatActivity() {
         val action = firstScheduleItem.signingAction()
         viewModel.loadAccessToken()
 
-        val intent = Intent(this, SigningActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_SIGNING)
             putExtra("AID", viewModel.aid)
             putExtra("ACCESS_TOKEN", viewModel.token)
 
@@ -1323,7 +1321,8 @@ class ScheduleActivity : AppCompatActivity() {
         val breakLabel = formatPanelLabel(firstScheduleItem)
         viewModel.loadAccessToken()
 
-        val intent = Intent(this, BreakActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_BREAK)
             putExtra("AID", viewModel.aid)
             putExtra("ACCESS_TOKEN", viewModel.token)
             putExtra("BREAK_LABEL", breakLabel)
@@ -1375,7 +1374,8 @@ class ScheduleActivity : AppCompatActivity() {
             viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
         }
 
-        val intent = Intent(this, RepActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_REP)
             val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
             putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 
@@ -1441,7 +1441,8 @@ class ScheduleActivity : AppCompatActivity() {
             viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
         }
 
-        val intent = Intent(this, MapActivity::class.java).apply {
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(ConfirmationActivity.EXTRA_TARGET, ConfirmationActivity.TARGET_MAP)
             val labels = scheduleDataToPass.map { item -> formatPanelLabel(item) }
             putStringArrayListExtra("TIMELINE_LABELS", ArrayList(labels))
 
@@ -1599,6 +1600,83 @@ class ScheduleActivity : AppCompatActivity() {
      *     • Subscribes for admin messages and telemetry
      *   On failure, falls back to offline mode
      */
+    /** Returns the next unused bus letter name, e.g. "Bus C" if A and B are taken. */
+    private fun nextBusName(): String {
+        val used = (viewModel.config ?: emptyList())
+            .map { it.bus.trim().lowercase() }
+            .toSet()
+        for (c in 'A'..'Z') {
+            val candidate = "Bus $c"
+            if (candidate.lowercase() !in used) return candidate
+        }
+        return "Bus A"
+    }
+
+    private fun showRegistrationDialog() {
+        val input = android.widget.EditText(this).apply {
+            setText(nextBusName())
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            val p = (16 * resources.displayMetrics.density).toInt()
+            setPadding(p, p / 2, p, p / 2)
+            selectAll()
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Register This Device")
+            .setMessage("This device is not registered yet. Enter the bus name to register it automatically.")
+            .setView(input)
+            .setCancelable(false)
+            .setPositiveButton("Register") { _, _ ->
+                val busName = input.text.toString().trim()
+                when {
+                    busName.isBlank() -> {
+                        Toast.makeText(this, "Bus name cannot be empty.", Toast.LENGTH_SHORT).show()
+                        showRegistrationDialog()
+                    }
+                    viewModel.config?.any { it.bus.equals(busName, ignoreCase = true) } == true -> {
+                        Toast.makeText(this, "\"$busName\" already exists. Choose a different name.", Toast.LENGTH_LONG).show()
+                        showRegistrationDialog()
+                    }
+                    else -> {
+                        startFetchingAnimation()
+                        val templateToken = viewModel.config?.firstOrNull()?.accessToken ?: ""
+                        autoRegisterDevice(busName, templateToken)
+                    }
+                }
+            }
+            .setNegativeButton("Go Offline") { _, _ ->
+                connecting = false
+                onlineInitStarted = false
+                enterOfflineMode()
+            }
+            .show()
+    }
+
+    private fun autoRegisterDevice(busName: String, templateToken: String) {
+        com.jason.publisher.main.services.DeviceRegistrationHelper().register(
+            aid = viewModel.aid ?: "",
+            busName = busName,
+            templateToken = templateToken,
+            onProgress = { msg -> runOnUiThread { fetchingText.text = msg } },
+            onSuccess = {
+                runOnUiThread {
+                    Toast.makeText(this, "\"$busName\" registered successfully!", Toast.LENGTH_LONG).show()
+                    connecting = false
+                    onlineInitStarted = false
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) enterOnlineMode()
+                }
+            },
+            onError = { msg ->
+                runOnUiThread {
+                    connecting = false
+                    onlineInitStarted = false
+                    stopFetchingAnimation()
+                    Toast.makeText(this, "Registration failed: $msg", Toast.LENGTH_LONG).show()
+                    enterOfflineMode()
+                }
+            }
+        )
+    }
+
     @RequiresApi(Build.VERSION_CODES.M)
     private fun enterOnlineMode() {
         FileLogger.d("ScheduleActivity MAP", "Online mode started. Checking offline map with roster fetch.")
@@ -1628,6 +1706,14 @@ class ScheduleActivity : AppCompatActivity() {
                 }
 
                 viewModel.config = configList
+
+                val aidRegistered = configList.any { it.aid == viewModel.aid }
+                if (!aidRegistered) {
+                    stopFetchingAnimation()
+                    showRegistrationDialog()
+                    return@runOnUiThread
+                }
+
                 viewModel.loadAccessToken()
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -2023,6 +2109,12 @@ class ScheduleActivity : AppCompatActivity() {
 
                         // Mark as updated so offline mode does not reload cache unnecessarily
                         viewModel.isScheduleUpdatedFromServer = true
+                    } else if (viewModel.activeScheduleData.isEmpty() && !viewModel.isScheduleUpdatedFromServer) {
+                        Toast.makeText(
+                            this,
+                            "Device registered but no schedule has been assigned yet. Contact your admin.",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
 
                     // **Rewrite cache when online**

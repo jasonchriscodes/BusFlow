@@ -1,46 +1,58 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginVertical="4dp"
     android:padding="@dimen/pad_sm"
     android:background="@drawable/dark_white_border"
-    android:foreground="?attr/selectableItemBackground">
+    android:foreground="?attr/selectableItemBackground"
+    android:orientation="horizontal"
+    android:gravity="center_vertical">
 
     <TextView
         android:id="@+id/routeNo"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_weight="0.10"
         android:textColor="@color/white"
         android:textStyle="bold"
-        android:textSize="16sp"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintWidth_percent="0.33"
-        tools:ignore="MissingConstraints" />
+        android:textSize="16sp"/>
+
+    <TextView
+        android:id="@+id/routeName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.42"
+        android:layout_marginEnd="@dimen/gap_sm"
+        android:textColor="@color/white"
+        android:textSize="16sp"/>
+
+    <TextView
+        android:id="@+id/activityText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.16"
+        android:gravity="center"
+        android:textColor="@color/white"
+        android:textStyle="bold"
+        android:textSize="16sp"/>
 
     <TextView
         android:id="@+id/startTime"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:textColor="@color/white"
-        android:textSize="16sp"
+        android:layout_weight="0.16"
         android:gravity="center"
-        app:layout_constraintStart_toEndOf="@id/routeNo"
-        app:layout_constraintWidth_percent="0.33"
-        tools:ignore="MissingConstraints" />
+        android:textColor="@color/white"
+        android:textSize="16sp"/>
 
     <TextView
         android:id="@+id/endTime"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:textColor="@color/white"
-        android:textSize="16sp"
+        android:layout_weight="0.16"
         android:gravity="end"
-        app:layout_constraintStart_toEndOf="@id/startTime"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintWidth_percent="0.33"
-        tools:ignore="MissingConstraints" />
-</androidx.constraintlayout.widget.ConstraintLayout>
+        android:textColor="@color/white"
+        android:textSize="16sp"/>
+</LinearLayout>

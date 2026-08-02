@@ -120,6 +120,32 @@ class MapViewModel: ViewModel() {
     val stopStatusByKey: MutableMap<String, ScheduleStatusManager.StopVisualStatus> = mutableMapOf()
     var lastTimingPointPassedIndex: Int = -1
 
+    // Cached SimpleDateFormat (not thread-safe, but all calls are on main thread)
+    private val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
+
+    // Flat coordinate→address lookup built once from busRouteData (avoids triple-nested loop on every GPS update)
+    private data class CoordEntry(val lat: Double, val lon: Double, val address: String)
+    private var coordCache: List<CoordEntry> = emptyList()
+
+    // Pre-normalized (lowercase, trimmed) set of timing-point strings for O(1) isTimingPointStop checks
+    private var redBusStopsNormalized: Set<String> = emptySet()
+
+    // Cached timing list for updateApiTime / loadLockedApiTime (built once per route)
+    private var _cachedTimingList: List<BusStopWithTimingPoint>? = null
+    val cachedTimingList: List<BusStopWithTimingPoint>
+        get() {
+            return _cachedTimingList ?: run {
+                val baseRoute = selectedRouteData ?: busRouteData.firstOrNull()
+                val list = baseRoute?.let { BusStopWithTimingPoint.fromRouteData(it) } ?: emptyList()
+                if (list.isNotEmpty()) _cachedTimingList = list
+                list
+            }
+        }
+
+    // Cached route distance to the final stop (only recomputed when route changes)
+    private var cachedFinalRouteIndex: Int = -1
+    private var cachedFinalD2: Double = -1.0
+
     private val speedFilter = TimeBasedMovingAverageFilterDouble(
         windowMillis = 15000,
         minValidValue = 1.8  // 1.8 km/h = 0.5 m/s - filter out very low speeds when bus is stopped
@@ -139,12 +165,8 @@ class MapViewModel: ViewModel() {
 
     fun isTimingPointStop(stop: BusStop): Boolean {
         val addr = stop.address?.trim()?.lowercase(getDefault()) ?: ""
-        val key = "${stop.latitude ?: 0.0},${stop.longitude ?: 0.0}".trim().lowercase(getDefault())
-
-        return redBusStops.any { tp ->
-            val t = tp.trim().lowercase(getDefault())
-            t == addr || t == key
-        }
+        val key = "${stop.latitude ?: 0.0},${stop.longitude ?: 0.0}"
+        return addr in redBusStopsNormalized || key in redBusStopsNormalized
     }
 
     fun logReceivedStates() {
@@ -278,13 +300,33 @@ class MapViewModel: ViewModel() {
     fun deriveMapVectors() {
         selectedRouteData?.let { rd ->
             val (r, s, d) = processSingleRouteData(rd)
-            route = r            // override flat polyline for this trip
-            stops = s            // override stop list for this trip
-            durationBetweenStops = d // override per-leg durations
+            route = r
+            stops = s
+            durationBetweenStops = d
+            // Invalidate all derived caches that depend on route/stops
+            _cachedTimingList = null
+            cachedFinalRouteIndex = -1
+            cachedFinalD2 = -1.0
+            buildCoordCache()
             Log.d("MapViewModel", "✅ Using selectedRouteData with ${stops.size} stops and ${route.size} polyline points")
         } ?: run {
             Log.w("MapViewModel", "⚠️ No selectedRouteData; leaving existing route/stops as-is")
         }
+    }
+
+    private fun buildCoordCache() {
+        val list = ArrayList<CoordEntry>()
+        busRouteData.forEach { routeData ->
+            val sp = routeData.startingPoint
+            list.add(CoordEntry(sp.latitude, sp.longitude, sp.address))
+            routeData.nextPoints.forEach { nextPoint ->
+                list.add(CoordEntry(nextPoint.latitude, nextPoint.longitude, nextPoint.address))
+                nextPoint.routeCoordinates.forEach { coords ->
+                    if (coords.size >= 2) list.add(CoordEntry(coords[1], coords[0], nextPoint.address))
+                }
+            }
+        }
+        coordCache = list
     }
 
     /** Turn a single RouteData into flat polyline, stops, and durations */
@@ -350,7 +392,6 @@ class MapViewModel: ViewModel() {
             val firstSchedule = scheduleList.first()
             Log.d("MapViewModel", "extractRedBusStops schedule: $firstSchedule")
 
-            // take the first ScheduleItem’s busStops and turn each into a "lat,lon" string
             scheduleList.firstOrNull()?.busStops
                 ?.map { "${it.latitude},${it.longitude}" }
                 ?.let { redBusStops.addAll(it) }
@@ -360,12 +401,17 @@ class MapViewModel: ViewModel() {
             Log.d("MapViewModel", "extractRedBusStops stops: $stops")
         }
         Log.d("MapViewModel", "Updated Red bus stops: $redBusStops")
+        buildRedBusStopsNormalized()
 
         // Print the stop index → name list at startup
         logAllStopsWithIndex()
 
         // Print the red timing-point indices → names
         logRedStopsWithIndex()
+    }
+
+    private fun buildRedBusStopsNormalized() {
+        redBusStopsNormalized = redBusStops.mapTo(mutableSetOf()) { it.trim().lowercase(getDefault()) }
     }
 
     /**
@@ -411,7 +457,6 @@ class MapViewModel: ViewModel() {
     }
 
     fun updateCurrentTimeText(nowMillis: Long = System.currentTimeMillis()) {
-        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
         val currentTimeText = timeFormat.format(nowMillis)
         if (currentTimeText != lastCurrentTimeText.value) {
             lastCurrentTimeText.postValue(currentTimeText)
@@ -460,16 +505,11 @@ class MapViewModel: ViewModel() {
     }
 
     fun loadLockedApiTime(): String? {
-        val timeFormat = SimpleDateFormat("HH:mm:ss", getDefault())
-
-        // Parse the locked time into a Calendar object
         val lockedCal = Calendar.getInstance().apply {
             time = timeFormat.parse(lockedApiTime!!) ?: return null
         }
 
-        // Get timing list and last red timing point
-        val baseRoute = selectedRouteData ?: busRouteData.firstOrNull()
-        val timingList = baseRoute?.let { BusStopWithTimingPoint.fromRouteData(it) } ?: emptyList()
+        val timingList = cachedTimingList
         val lastScheduledAddress = getLastScheduledAddress(timingList, scheduleList)
         val lastTimingPointIndex = timingList.indexOfFirst { it.address == lastScheduledAddress }
         val finalStopIndex = timingList.lastIndex
@@ -535,43 +575,35 @@ class MapViewModel: ViewModel() {
     }
 
     /**
-     * Finds the address for a given latitude and longitude from the busRouteData.
+     * Finds the address for a given latitude and longitude. Uses a pre-built flat cache to avoid
+     * triple-nested iteration over busRouteData on every GPS update.
      */
     fun findAddressByCoordinates(latitude: Double, longitude: Double): String? {
-        // Check starting point first
-        busRouteData.forEach { routeData ->
-            if (abs(routeData.startingPoint.latitude - latitude) < 0.0001 &&
-                abs(routeData.startingPoint.longitude - longitude) < 0.0001
-            ) {
-                return routeData.startingPoint.address
-            }
-
-            // Iterate through next points
-            routeData.nextPoints.forEach { nextPoint ->
-                if (abs(nextPoint.latitude - latitude) < 0.0001 &&
-                    abs(nextPoint.longitude - longitude) < 0.0001
-                ) {
-                    return nextPoint.address
-                }
-
-                // Iterate through routeCoordinates inside each nextPoint
-                nextPoint.routeCoordinates.forEach { coordinates ->
-                    if (abs(coordinates[1] - latitude) < 0.0001 &&
-                        abs(coordinates[0] - longitude) < 0.0001
-                    ) {
-                        return nextPoint.address
-                    }
-                }
-            }
-        }
-        return null // Address not found
+        return coordCache.firstOrNull { e ->
+            abs(e.lat - latitude) < 0.0001 && abs(e.lon - longitude) < 0.0001
+        }?.address?.takeIf { it.isNotBlank() }
     }
 
-    /** Find nearest route‐point index for smoothing, etc. */
-    fun findNearestBusRoutePoint(currentLat: Double, currentLon: Double): Int {
-        var idx = 0
+    /**
+     * Find nearest route-point index. Uses a windowed search around the last known position
+     * (O(window) instead of O(n)) for hot-path calls. Pass fullSearch=true for one-off calls
+     * where the bus position may be anywhere on the route (e.g. confirmArrival).
+     */
+    fun findNearestBusRoutePoint(currentLat: Double, currentLon: Double, fullSearch: Boolean = false): Int {
+        if (route.isEmpty()) return 0
+        val start: Int
+        val end: Int
+        if (fullSearch || nearestRouteIndex == 0) {
+            start = 0
+            end = route.lastIndex
+        } else {
+            start = (nearestRouteIndex - 5).coerceAtLeast(0)
+            end = (nearestRouteIndex + 60).coerceAtMost(route.lastIndex)
+        }
+        var idx = start
         var minD = Double.MAX_VALUE
-        route.forEachIndexed { i, pt ->
+        for (i in start..end) {
+            val pt = route[i]
             val d = calculateDistance(currentLat, currentLon, pt.latitude!!, pt.longitude!!)
             if (d < minD) { minD = d; idx = i }
         }
@@ -589,20 +621,25 @@ class MapViewModel: ViewModel() {
     }
 
     fun getExpectedDuration(start: Date, end: Date): Double? {
+        if (stops.isEmpty()) return null
         val finalStop = stops.last()
         val stopLat = finalStop.latitude!!
         val stopLon = finalStop.longitude!!
 
         val d1 = calculateDistance(latitude, longitude, stopLat, stopLon)
 
-        val finalStopRouteIndex = route.indexOfLast {
-            calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
-        }.coerceAtLeast(1)
-        val d2 = (0 until finalStopRouteIndex).sumOf { i ->
-            val p1 = route[i]
-            val p2 = route[i + 1]
-            calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
+        // Cache the total route distance to the final stop — route never changes mid-trip
+        if (cachedFinalRouteIndex < 0) {
+            cachedFinalRouteIndex = route.indexOfLast {
+                calculateDistance(it.latitude!!, it.longitude!!, stopLat, stopLon) < 30.0
+            }.coerceAtLeast(1)
+            cachedFinalD2 = (0 until cachedFinalRouteIndex).sumOf { i ->
+                val p1 = route[i]
+                val p2 = route[i + 1]
+                calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
+            }
         }
+        val d2 = cachedFinalD2
         if (d2 == 0.0) {
             Log.e("getExpectedDuration", "Total route distance is zero; cannot compute predicted arrival.")
             return null

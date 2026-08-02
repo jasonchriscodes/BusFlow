@@ -73,11 +73,11 @@ class TestMapActivity : MapActivity() {
         }
 
         addButton("Slow") {
-            viewModel.speed = (viewModel.speed - 5f).coerceAtLeast(0f)
+            viewModel.speed = (viewModel.speed - 5f).coerceAtLeast(20f)
             applySimulationSpeed()
         }
         addButton("Speed") {
-            viewModel.speed = if (viewModel.speed <= 0f) 5f else viewModel.speed + 5f
+            viewModel.speed = if (viewModel.speed < 20f) 20f else (viewModel.speed + 5f).coerceAtMost(50f)
             applySimulationSpeed()
         }
 
@@ -119,7 +119,7 @@ class TestMapActivity : MapActivity() {
             mapController.updateBusMarkerPosition(viewModel.latitude, viewModel.longitude, 0f)
         }
 
-        viewModel.speed = 0f
+        viewModel.speed = 20f
         applySimulationSpeed()
         startSimulatedLocationUpdates()
         Toast.makeText(this, "Test route simulation started", Toast.LENGTH_SHORT).show()
@@ -183,8 +183,6 @@ class TestMapActivity : MapActivity() {
         viewModel.latitude = last.latitude ?: viewModel.latitude
         viewModel.longitude = last.longitude ?: viewModel.longitude
         mapController.updateBusMarkerPosition(viewModel.latitude, viewModel.longitude, viewModel.bearing)
-        viewModel.speed = 0f
-        applySimulationSpeed()
     }
 
     private fun resolveScheduleStartMillis(): Long {

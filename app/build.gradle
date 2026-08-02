@@ -13,6 +13,9 @@ def googleApiKey = System.getenv("GOOGLE_API_KEY") ?: ""
 def openRouteServiceApiKey = System.getenv("OpenRouteService_API_KEY") ?: ""
 def mailerSenderApiKey = System.getenv("MAILERSEND_API_KEY") ?: ""
 def googleAppPass = System.getenv("GOOGLE_APP_PASS") ?: ""
+def tbUser = (project.findProperty("TB_USER") ?: System.getenv("TB_USER") ?: "").toString()
+def tbPass = (project.findProperty("TB_PASS") ?: System.getenv("TB_PASS") ?: "").toString()
+def tbConfigDeviceId = (project.findProperty("TB_CONFIG_DEVICE_ID") ?: System.getenv("TB_CONFIG_DEVICE_ID") ?: "").toString()
 
 // support local development with local.properties, load it conditionally
 def propertiesFile = file("${rootDir}/local.properties")
@@ -49,6 +52,9 @@ if (propertiesFile.exists()) {
     openRouteServiceApiKey = properties.getProperty("OpenRouteService_API_KEY", openRouteServiceApiKey)
     mailerSenderApiKey = properties.getProperty("MAILERSEND_API_KEY", mailerSenderApiKey)
     googleAppPass = properties.getProperty("GOOGLE_APP_PASS", googleAppPass)
+    tbUser = properties.getProperty("TB_USER", tbUser)
+    tbPass = properties.getProperty("TB_PASS", tbPass)
+    tbConfigDeviceId = properties.getProperty("TB_CONFIG_DEVICE_ID", tbConfigDeviceId)
 }
 
 android {
@@ -75,12 +81,10 @@ android {
         if (ciCode != null) versionCode = Integer.parseInt(ciCode.toString())
 
         def TB_HOST = (project.findProperty("TB_HOST") ?: System.getenv("TB_HOST") ?: "https://thingsboard.cloud").toString()
-        def TB_USER = (project.findProperty("TB_USER") ?: System.getenv("TB_USER") ?: "").toString()
-        def TB_PASS = (project.findProperty("TB_PASS") ?: System.getenv("TB_PASS") ?: "").toString()
-
         buildConfigField "String", "TB_HOST", "\"${TB_HOST}\""
-        buildConfigField "String", "TB_USER", "\"${TB_USER}\""
-        buildConfigField "String", "TB_PASS", "\"${TB_PASS}\""
+        buildConfigField "String", "TB_USER", "\"${tbUser}\""
+        buildConfigField "String", "TB_PASS", "\"${tbPass}\""
+        buildConfigField "String", "TB_CONFIG_DEVICE_ID", "\"${tbConfigDeviceId}\""
     }
 
     signingConfigs {
@@ -188,6 +192,7 @@ dependencies {
     implementation 'com.google.android.gms:play-services-location:21.0.1'
     implementation 'pl.droidsonroids.gif:android-gif-drawable:1.2.+'
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.8.0"
+    implementation 'com.github.varunest:sparkbutton:1.0.6'
 }
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
     kotlinOptions {

@@ -23,6 +23,8 @@ class TimeManager(): ViewModel() {
         }
     }
 
+    private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
     val currentTime: MutableLiveData<String> by lazy {
         val systemCurrentMillis = System.currentTimeMillis()
         val systemTimeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -52,7 +54,6 @@ class TimeManager(): ViewModel() {
             @SuppressLint("LongLogTag")
             override fun run() {
                 try {
-                    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                     currentTime.postValue(timeFormat.format(timeProvider()))
                     onUpdateCallback()
 
@@ -89,6 +90,10 @@ class TimeManager(): ViewModel() {
                     val newNextTripText: String
                     if (nextTripStartTime != null) {
                         val timeParts = nextTripStartTime.split(":").map { it.toInt() }
+                        // Next trip is always today's upcoming run (no more trips today is
+                        // handled separately above) - don't roll to tomorrow once the target
+                        // is reached, otherwise the countdown can never show "late" and either
+                        // freezes near 0:00 or jumps to a ~24h overflow once the time passes.
                         val nextTripCalendar = Calendar.getInstance().apply {
                             set(Calendar.YEAR, currentTime.get(Calendar.YEAR))
                             set(Calendar.MONTH, currentTime.get(Calendar.MONTH))
@@ -96,7 +101,7 @@ class TimeManager(): ViewModel() {
                             set(Calendar.HOUR_OF_DAY, timeParts[0])
                             set(Calendar.MINUTE, timeParts[1])
                             set(Calendar.SECOND, 0)
-                            if (timeInMillis <= currentTime.timeInMillis) add(Calendar.DATE, 1)
+                            set(Calendar.MILLISECOND, 0)
                         }
                         val diff = nextTripCalendar.timeInMillis - currentTime.timeInMillis
                         if (diff > 0) {
