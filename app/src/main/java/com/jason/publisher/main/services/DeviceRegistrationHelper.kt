@@ -187,37 +187,55 @@ class DeviceRegistrationHelper {
     // ── Step 5 ────────────────────────────────────────────────────────────────
 
     private fun readConfigData(jwt: String, callback: (List<BusItem>?) -> Unit) {
-        enqueue(
-            Request.Builder()
-                .url("$base/plugins/telemetry/DEVICE/${BuildConfig.TB_CONFIG_DEVICE_ID}/attributes/SHARED_SCOPE?keys=config")
-                .header("X-Authorization", "Bearer $jwt").get().build(),
-            onError = { callback(null) }
-        ) { responseBody ->
-            try {
-                // Admin API returns: [{ "key": "config", "value": { "busConfig": [...] } }]
-                val arr = JSONArray(responseBody)
-                val configEntry = (0 until arr.length())
-                    .map { arr.getJSONObject(it) }
-                    .firstOrNull { it.optString("key") == "config" }
-                val busConfigArr = configEntry?.optJSONObject("value")?.optJSONArray("busConfig")
-                val list = buildList {
-                    busConfigArr?.let {
-                        for (i in 0 until it.length()) {
-                            val item = it.getJSONObject(i)
-                            add(BusItem(
-                                aid = item.getString("aid"),
-                                bus = item.getString("bus"),
-                                accessToken = item.getString("accessToken")
-                            ))
-                        }
-                    }
-                }
-                callback(list)
-            } catch (e: Exception) {
-                Log.e(TAG, "readConfigData parse error", e)
+        // ThingsBoard admin REST API: GET uses /values/attributes/, POST uses /attributes/
+        val request = Request.Builder()
+            .url("$base/plugins/telemetry/DEVICE/${BuildConfig.TB_CONFIG_DEVICE_ID}/values/attributes/SHARED_SCOPE?keys=config")
+            .header("X-Authorization", "Bearer $jwt").get().build()
+
+        client.newCall(request).enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: IOException) {
+                Log.e(TAG, "readConfigData network failure", e)
                 callback(null)
             }
-        }
+
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                val body = response.body?.string() ?: ""
+                if (response.code == 404) {
+                    // No 'config' attribute on Config Data yet — safe to treat as empty for first registration
+                    callback(emptyList())
+                    return
+                }
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "readConfigData → ${response.code}: $body")
+                    callback(null)
+                    return
+                }
+                try {
+                    // Admin API returns: [{ "key": "config", "value": { "busConfig": [...] } }]
+                    val arr = JSONArray(body)
+                    val configEntry = (0 until arr.length())
+                        .map { arr.getJSONObject(it) }
+                        .firstOrNull { it.optString("key") == "config" }
+                    val busConfigArr = configEntry?.optJSONObject("value")?.optJSONArray("busConfig")
+                    val list = buildList {
+                        busConfigArr?.let {
+                            for (i in 0 until it.length()) {
+                                val item = it.getJSONObject(i)
+                                add(BusItem(
+                                    aid = item.getString("aid"),
+                                    bus = item.getString("bus"),
+                                    accessToken = item.getString("accessToken")
+                                ))
+                            }
+                        }
+                    }
+                    callback(list)
+                } catch (e: Exception) {
+                    Log.e(TAG, "readConfigData parse error", e)
+                    callback(null)
+                }
+            }
+        })
     }
 
     // ── Step 6 ────────────────────────────────────────────────────────────────
