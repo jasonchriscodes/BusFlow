@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.content.FileProvider
 import com.jason.publisher.main.loggers.FileLogger
@@ -86,7 +87,7 @@ class OtaUpdateManager(
             otaLog("checkDownloadAndPromptInstall: DONE")
             true
         }.getOrElse { e ->
-            FileLogger.e("OtaUpdate", "OTA check failed: ${e.message}")
+            FileLogger.e("OtaUpdate", "OTA check failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             otaLog("checkDownloadAndPromptInstall: EXCEPTION ${e.message}")
             false
         }
@@ -331,7 +332,7 @@ class OtaUpdateManager(
             otaLog("promptInstall: launched installer intent ACTION_INSTALL_PACKAGE")
         } catch (t: Throwable) {
             otaLog("promptInstall: EXCEPTION ${t.javaClass.simpleName}: ${t.message}")
-            FileLogger.e("OtaUpdate", "promptInstall exception: ${t.message}")
+            FileLogger.e("OtaUpdate", "promptInstall exception | ${t.javaClass.simpleName}: ${t.message}\n${Log.getStackTraceString(t)}")
         }
     }
 
@@ -362,6 +363,7 @@ class OtaUpdateManager(
             OtaCheckResult.UpdateAvailable(ota)
         }.getOrElse { e ->
             otaLog("checkForUpdateOnly: Failed ${e.message}")
+            FileLogger.e("OtaUpdate", "checkForUpdateOnly failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             OtaCheckResult.Failed(e.message ?: "Unknown error")
         }
     }
@@ -375,8 +377,9 @@ class OtaUpdateManager(
             withContext(Dispatchers.Main) { promptInstall(apk) }
             otaLog("downloadAndInstall: DONE")
             true
-        }.getOrElse {
-            otaLog("downloadAndInstall: EXCEPTION ${it.message}")
+        }.getOrElse { e ->
+            otaLog("downloadAndInstall: EXCEPTION ${e.message}")
+            FileLogger.e("OtaUpdate", "downloadAndInstall failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             false
         }
     }

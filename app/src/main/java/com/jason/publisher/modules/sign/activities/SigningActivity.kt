@@ -20,6 +20,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.jason.publisher.R
 import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
+import com.jason.publisher.main.loggers.UserActionLogger
 import com.jason.publisher.main.loggers.TripLog
 import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
@@ -218,6 +220,7 @@ open class SigningActivity : AppCompatActivity() {
         }
 
         doneBtn.setOnClickListener {
+            UserActionLogger.click("SigningActivity", "doneBtn", "signingLabel=$signingLabel signingAction=$signingAction")
             val remainingAfterSigning = ArrayList(fullRemaining.drop(1))
 
             val resultIntent = Intent().apply {
@@ -232,7 +235,7 @@ open class SigningActivity : AppCompatActivity() {
                     mqttManager.disconnect()
                 }
             } catch (e: Exception) {
-                FileLogger.e("SigningActivity", "MQTT cleanup failed: ${e.message}")
+                FileLogger.e("SigningActivity", "MQTT cleanup failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
             }
 
             setResult(RESULT_OK, resultIntent)
@@ -256,18 +259,25 @@ open class SigningActivity : AppCompatActivity() {
             "Yes, I have handed over the BDC for trip $signingLabel"
         }
 
-        ackRow.setOnClickListener { ackSparkButton.performClick() }
+        ackRow.setOnClickListener {
+            UserActionLogger.click("SigningActivity", "ackRow", "signingAction=$signingAction")
+            ackSparkButton.performClick()
+        }
 
         ackSparkButton.setEventListener(object : SparkEventListener {
             override fun onEvent(button: ImageView, buttonState: Boolean) {}
             override fun onEventAnimationStart(button: ImageView, buttonState: Boolean) {}
             override fun onEventAnimationEnd(button: ImageView, buttonState: Boolean) {
-                if (buttonState) doneBtn.isEnabled = true
+                if (buttonState) {
+                    UserActionLogger.stateChanged("SigningActivity", "doneBtn.isEnabled", false, true)
+                    doneBtn.isEnabled = true
+                }
             }
         })
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                UserActionLogger.click("SigningActivity", "systemBackPressed")
                 if (ackSparkButton.isChecked) {
                     finish()
                 } else {
@@ -276,6 +286,7 @@ open class SigningActivity : AppCompatActivity() {
                     } else {
                         "Please confirm handover before continuing"
                     }
+                    UserActionLogger.shown("SigningActivity", "toast", message)
                     Toast.makeText(this@SigningActivity, message, Toast.LENGTH_SHORT).show()
                 }
             }
@@ -300,7 +311,7 @@ open class SigningActivity : AppCompatActivity() {
         try {
             mqttManager.publish(MqttHelper.Companion.ATTR_TOPIC, payload)
         } catch (e: Exception) {
-            FileLogger.e("SigningActivity", "Publish failed: ${e.message}")
+            FileLogger.e("SigningActivity", "Publish failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
         }
     }
 
@@ -315,22 +326,22 @@ open class SigningActivity : AppCompatActivity() {
                 try {
                     requestAdminMessage()
                 } catch (e: Exception) {
-                    Log.w("SigningActivity", "requestAdminMessage follow-up failed: ${e.message}")
+                    FileLogger.w("SigningActivity", "requestAdminMessage follow-up failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 }
             } catch (e: Exception) {
-                Log.w("SigningActivity", "publishActiveSegment(\"\") failed: ${e.message}")
+                FileLogger.w("SigningActivity", "publishActiveSegment(\"\") failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             }
 
             try {
                 try { requestAdminMessage() } catch (e: Exception) {
-                    Log.w("SigningActivity", "requestAdminMessage failed: ${e.message}")
+                    FileLogger.w("SigningActivity", "requestAdminMessage failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 }
                 return
             } catch (e: Exception) {
-                Log.w("SigningActivity", "mqtt interaction failed: ${e.message}")
+                FileLogger.w("SigningActivity", "mqtt interaction failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             }
         } catch (e: Exception) {
-            Log.w("SigningActivity", "clearActiveSegmentAndRefresh failed: ${e.message}")
+            FileLogger.w("SigningActivity", "clearActiveSegmentAndRefresh failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
         }
     }
 
@@ -344,7 +355,7 @@ open class SigningActivity : AppCompatActivity() {
                 mqttManager.publish(MqttHelper.Companion.PUB_MSG_TOPIC, jsonObject.toString())
             }
         } catch (e: Exception) {
-            FileLogger.e("SigningActivity", "requestAdminMessage failed: ${e.message}")
+            FileLogger.e("SigningActivity", "requestAdminMessage failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
         }
     }
 
@@ -378,7 +389,7 @@ open class SigningActivity : AppCompatActivity() {
                 mqttManager.disconnect()
             }
         } catch (e: Exception) {
-            FileLogger.e("SigningActivity", "onDestroy cleanup failed: ${e.message}")
+            FileLogger.e("SigningActivity", "onDestroy cleanup failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
         }
 
         super.onDestroy()

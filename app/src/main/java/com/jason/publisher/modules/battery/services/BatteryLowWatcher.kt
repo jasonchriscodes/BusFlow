@@ -11,6 +11,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.BatteryManager
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -98,8 +99,9 @@ object BatteryLowWatcher {
         val app = context.applicationContext
         try {
             app.unregisterReceiver(sysReceiver)
-        } catch (_: IllegalArgumentException) {
-            // already unregistered – ignore
+        } catch (e: IllegalArgumentException) {
+            // already unregistered – ignore, but capture it in case it indicates a real lifecycle bug
+            FileLogger.w("BatteryLowWatcher", "unregisterReceiver: already unregistered | ${e.javaClass.simpleName}: ${e.message}")
         }
         isRegistered = false
         lastPct = -1
@@ -175,7 +177,7 @@ object BatteryLowWatcher {
             val details = se.message ?: se.javaClass.simpleName
             FileLogger.e(
                 "BatteryLowWatcher",
-                "SecurityException posting notification: $details"
+                "SecurityException posting notification: $details\n${Log.getStackTraceString(se)}"
             )
         }
     }

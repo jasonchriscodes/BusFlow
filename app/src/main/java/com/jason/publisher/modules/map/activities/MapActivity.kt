@@ -34,6 +34,8 @@ import com.google.android.gms.location.*
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.LifecycleLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
+import com.jason.publisher.main.loggers.UserActionLogger
 import com.jason.publisher.main.model.BusItem
 import com.jason.publisher.main.model.BusStop
 import com.jason.publisher.main.model.RouteData
@@ -138,6 +140,7 @@ open class MapActivity : AppCompatActivity() {
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
         FileLogger.d("MapActivity", "onCreate")
+        TripStateSnapshot.onActivityEntered("MapActivity")
 
         // Reset final stop message flag for new trip
         viewModel.hasShownFinalStopMessage = false
@@ -147,12 +150,14 @@ open class MapActivity : AppCompatActivity() {
 
         hideSystemUI()
 
-        // Add logger
+        // Add logger. resumeSession() is defensive: Android can recreate this activity directly
+        // after a crash, skipping SplashActivity's Fetch Roster/Use Cache click entirely.
         FileLogger.init(this)
+        FileLogger.resumeSession(this)
         FileLogger.markAppOpened("MapActivity")
 
         // ── ADD THIS: initialize mqttManager for offline use ──
-        mqttManager = MqttManager()
+        replaceMqttManager(MqttManager())
 
         // Initialize Managers before using it
         scheduleStatusManager = ScheduleStatusManager(this, binding)
@@ -317,7 +322,7 @@ open class MapActivity : AppCompatActivity() {
                                 viewModel.aid,
                                 viewModel.config.orEmpty()
                             )
-                            mqttManager = MqttManager(username = viewModel.token)
+                            replaceMqttManager(MqttManager(username = viewModel.token))
                             // tell ThingsBoard to re-send shared data
                             mqttHelper.requestAdminMessage()
                             // (re)subscribe to the shared message topic
@@ -369,7 +374,7 @@ open class MapActivity : AppCompatActivity() {
                         viewModel.aid,
                         viewModel.config.orEmpty()
                     )
-                    mqttManager = MqttManager(username  = viewModel.token)
+                    replaceMqttManager(MqttManager(username  = viewModel.token))
 
                     // build your markers etc.
                     mapController.getDefaultConfigValue()
@@ -391,8 +396,8 @@ open class MapActivity : AppCompatActivity() {
                 } else {
                     // --- FAILURE HANDLING ---
                     // ensure mqttManager is assigned even on config-fetch failure
-                    mqttManager = MqttManager()
-                    Log.e("MapActivity", "Failed to fetch config, entering offline mode.")
+                    replaceMqttManager(MqttManager())
+                    FileLogger.e("MapActivity", "Failed to fetch config, entering offline mode. | ${TripStateSnapshot.describe()}")
                     Toast.makeText(
                         this@MapActivity,
                         "Unable to connect. Falling back to offline map…",
@@ -507,9 +512,11 @@ open class MapActivity : AppCompatActivity() {
         })
 
         binding.startSimulationButton.setOnClickListener {
+            UserActionLogger.click("MapActivity", "startSimulationButton")
 //            startSimulation()
         }
         binding.stopSimulationButton.setOnClickListener {
+            UserActionLogger.click("MapActivity", "stopSimulationButton")
             resetSimulationState()
             Toast.makeText(this, "Simulation stopped and state reset", Toast.LENGTH_SHORT).show()
         }
@@ -525,7 +532,9 @@ open class MapActivity : AppCompatActivity() {
             binding.backButton.compoundDrawablePadding = dpToPx(4)
         }
         binding.backButton.setOnClickListener {
+            UserActionLogger.click("MapActivity", "backButton (End Trip)")
             if (viewModel.speed > 30.0) {  // Treat speeds above 30 km/h as "moving"
+                UserActionLogger.shown("MapActivity", "End Trip blocked", "speed=${viewModel.speed}km/h > 30km/h")
                 Toast.makeText(this, "❌ Bus must be moving slower than 30 km/h before ending the trip.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
@@ -554,16 +563,22 @@ open class MapActivity : AppCompatActivity() {
             dlgBuilder.setView(numberPadView)
                 .setTitle("Enter Passcode")
                 .setPositiveButton("Confirm") { _, _ ->
+                    UserActionLogger.click("MapActivity", "endTripPasscodeDialog.Confirm")
                     // ensure attribute is cleared (defensive — also called at final stop)
                     clearActiveSegmentAndRefresh()
                     val enteredCode = numberPadInput.text.toString()
                     if (enteredCode == "0000") {
+                        UserActionLogger.shown("MapActivity", "End Trip confirmed", TripStateSnapshot.describe())
                         finishToScheduleWithRemainingTrips()
                     } else {
+                        UserActionLogger.shown("MapActivity", "End Trip rejected", "incorrect passcode")
                         Toast.makeText(this, "❌ Incorrect code. Please enter 0000.", Toast.LENGTH_LONG).show()
                     }
                 }
-                .setNegativeButton("Cancel") { d, _ -> d.dismiss() }
+                .setNegativeButton("Cancel") { d, _ ->
+                    UserActionLogger.click("MapActivity", "endTripPasscodeDialog.Cancel")
+                    d.dismiss()
+                }
 
             val dialog = dlgBuilder.create()
 
@@ -581,14 +596,17 @@ open class MapActivity : AppCompatActivity() {
         }
 
         binding.speedUpButton.setOnClickListener {
+            UserActionLogger.click("MapActivity", "speedUpButton")
             viewModel.speedUp()
         }
 
         binding.slowDownButton.setOnClickListener {
+            UserActionLogger.click("MapActivity", "slowDownButton")
             viewModel.slowDown()
         }
 
         binding.arriveButton.setOnClickListener {
+            UserActionLogger.click("MapActivity", "arriveButton")
             confirmArrival()
         }
     }
@@ -688,7 +706,7 @@ open class MapActivity : AppCompatActivity() {
         }
 
         if (viewModel.stops.isEmpty() || viewModel.route.isEmpty()) {
-            Log.e("MapActivity confirmArrival", "❌ No stops or route data available.")
+            FileLogger.e("MapActivity confirmArrival", "No stops or route data available. | ${TripStateSnapshot.describe()}")
             return
         }
 
@@ -1354,7 +1372,7 @@ open class MapActivity : AppCompatActivity() {
                                         updateUIElementsThrottled()
                                     }
                                 } catch (e: Exception) {
-                                    Log.e("MapActivity", "Error updating before first stop: ${e.message}", e)
+                                    FileLogger.e("MapActivity", "Error updating before first stop | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                                 }
                             }
                             return
@@ -1442,7 +1460,7 @@ open class MapActivity : AppCompatActivity() {
                                 LastLocationStore.save(this@MapActivity, viewModel.latitude, viewModel.longitude)
                             }
                         } catch (e: Exception) {
-                            Log.e("MapActivity", "Error in location update: ${e.message}", e)
+                            FileLogger.e("MapActivity", "Error in location update | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                         }
                     }
                 }
@@ -1457,7 +1475,7 @@ open class MapActivity : AppCompatActivity() {
                 fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
             }
             .addOnFailureListener { e ->
-                Log.e("MapActivity", "❌ GPS settings error: ${e.localizedMessage}")
+                FileLogger.e("MapActivity", "GPS settings error | ${e.javaClass.simpleName}: ${e.localizedMessage} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 Toast.makeText(this, "Please enable GPS for accurate tracking.", Toast.LENGTH_LONG).show()
             }
 
@@ -1516,7 +1534,7 @@ open class MapActivity : AppCompatActivity() {
                     val nextTripStartTime = viewModel.scheduleData.getNextScheduleStartTime()
                     viewModel.updateNextTripText(nextTripStartTime)
                 } catch (e: Exception) {
-                    Log.e("MapActivity", "Error updating nextTripCountdownTextView: ${e.message}", e)
+                    FileLogger.e("MapActivity", "Error updating nextTripCountdownTextView | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 }
             }
 
@@ -1552,9 +1570,16 @@ open class MapActivity : AppCompatActivity() {
                 upcomingStopName, currentStopName, etaText, statusText
             )
 
+            // Keep the always-on error-context snapshot fresh (cheap: field writes only, no I/O)
+            TripStateSnapshot.updatePosition(viewModel.latitude, viewModel.longitude, viewModel.speed, viewModel.bearing)
+            TripStateSnapshot.updateStops(
+                upcomingStopName, currentStopName,
+                viewModel.passedStops.size, viewModel.passedStops.lastOrNull()?.address
+            )
+            TripStateSnapshot.updateScheduleStatus(statusText)
+
         } catch (e: Exception) {
-            Log.e("MapActivity", "Error updating UI elements: ${e.message}", e)
-            e.printStackTrace()
+            FileLogger.e("MapActivity", "Error updating UI elements | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
         }
     }
 
@@ -1652,7 +1677,7 @@ open class MapActivity : AppCompatActivity() {
                     updateUIElementsThrottled()
                     periodicUIUpdateHandler?.postDelayed(this, 3000)
                 } catch (e: Exception) {
-                    Log.e("MapActivity", "Error in periodic UI update: ${e.message}", e)
+                    FileLogger.e("MapActivity", "Error in periodic UI update | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 }
             }
         }
@@ -1764,6 +1789,24 @@ open class MapActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Swaps in a freshly-built [MqttManager], disconnecting whatever client [mqttManager]
+     * currently points at first. [mqttManager] gets rebuilt with a new access token multiple
+     * times per activity instance (initial offline placeholder, config fetch, every network
+     * reconnect) - without this, each replaced client's underlying Paho connection (and its
+     * background receiver/sender threads) is orphaned and keeps reconnecting forever.
+     */
+    private fun replaceMqttManager(new: MqttManager) {
+        if (::mqttManager.isInitialized) {
+            try {
+                mqttManager.disconnect()
+            } catch (e: Exception) {
+                FileLogger.w("MapActivity", "Failed to disconnect previous MQTT client before replacing | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
+            }
+        }
+        mqttManager = new
+    }
+
     /** Cleans up resources on activity destruction. */
     @RequiresApi(Build.VERSION_CODES.M)
     override fun onDestroy() {
@@ -1782,6 +1825,17 @@ open class MapActivity : AppCompatActivity() {
         if (::mqttHelper.isInitialized) {
             mqttHelper.stopAttributePolling()
             mqttHelper.stopAdminMessagePolling()
+        }
+
+        // Without this, the underlying Paho client (now with automatic reconnect enabled) keeps
+        // its receiver/sender threads alive and reconnecting in the background forever - leaking
+        // one zombie MQTT client per MapActivity instance.
+        try {
+            if (::mqttManager.isInitialized) {
+                mqttManager.disconnect()
+            }
+        } catch (e: Exception) {
+            FileLogger.w("MapActivity", "MQTT disconnect on onDestroy failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
         }
 
         if (::mapController.isInitialized) {
@@ -1832,7 +1886,7 @@ open class MapActivity : AppCompatActivity() {
             try {
                 publishActiveSegment("") // re-uses your existing publisher
             } catch (e: Exception) {
-                Log.w("MapActivity", "publishActiveSegment(\"\") failed: ${e.message}")
+                FileLogger.w("MapActivity", "publishActiveSegment(\"\") failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
             }
 
             // 2) ask ThingsBoard to re-broadcast and then force a poll/refresh
@@ -1840,7 +1894,7 @@ open class MapActivity : AppCompatActivity() {
                 if (::mqttHelper.isInitialized) {
                     // this triggers any admin broadcast side-effects you use
                     try { mqttHelper.requestAdminMessage() } catch (e: Exception) {
-                        Log.w("MapActivity", "requestAdminMessage failed: ${e.message}")
+                        FileLogger.w("MapActivity", "requestAdminMessage failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
                     }
 
                     // give the server a moment to process the publish, then refresh attributes
@@ -1850,7 +1904,7 @@ open class MapActivity : AppCompatActivity() {
                                 mqttHelper.refreshAllAttributes()
                             }
                         } catch (e: Exception) {
-                            Log.w("MapActivity", "refreshAllAttributes failed: ${e.message}")
+                            FileLogger.w("MapActivity", "refreshAllAttributes failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
                         }
 
                         // Refresh local UI and log after the attribute refresh attempt
@@ -1859,14 +1913,14 @@ open class MapActivity : AppCompatActivity() {
                     return
                 }
             } catch (e: Exception) {
-                Log.w("MapActivity", "mqttHelper interaction failed: ${e.message}")
+                FileLogger.w("MapActivity", "mqttHelper interaction failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
             }
 
             // If mqttHelper not initialized or above failed, still refresh UI locally
             panelController.refreshPanelDetailWithLogging(binding.map.model.mapViewPosition.zoomLevel.toDouble())
 
         } catch (e: Exception) {
-            Log.w("MapActivity", "clearActiveSegmentAndRefresh failed: ${e.message}")
+            FileLogger.w("MapActivity", "clearActiveSegmentAndRefresh failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
         }
     }
 
@@ -1886,11 +1940,11 @@ open class MapActivity : AppCompatActivity() {
                 try {
                     if (::mqttHelper.isInitialized) mqttHelper.refreshAllAttributes()
                 } catch (e: Exception) {
-                    Log.w("MapActivity","refreshAllAttributes failed: ${e.message}")
+                    FileLogger.w("MapActivity", "refreshAllAttributes failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
                 }
             }, 200L)
         } catch (e: Exception) {
-            Log.w("MapActivity", "publishActiveSegment follow-up failed: ${e.message}")
+            FileLogger.w("MapActivity", "publishActiveSegment follow-up failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
         }
     }
 

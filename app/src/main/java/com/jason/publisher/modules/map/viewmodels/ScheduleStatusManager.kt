@@ -7,7 +7,9 @@ import android.widget.ImageView
 import androidx.core.content.ContextCompat
 import com.jason.publisher.R
 import com.jason.publisher.databinding.ActivityMapBinding
+import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.LifecycleLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
 import com.jason.publisher.main.utils.getDeltaNextSec
 import com.jason.publisher.main.utils.parseTimeToday
 import com.jason.publisher.modules.map.activities.MapActivity
@@ -129,12 +131,12 @@ class ScheduleStatusManager(
                 binding.scheduleStatusValueTextView.text = "Please wait..."
                 Log.d("ScheduleStatusManager", "✅ UI updated: Please wait...")
             } catch (e: Exception) {
-                Log.e("ScheduleStatusManager", "Error updating 'Please wait' status: ${e.message}", e)
+                FileLogger.e("ScheduleStatusManager", "Error updating 'Please wait' status | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 activity.runOnUiThread {
                     try {
                         binding.scheduleStatusValueTextView.text = "Please wait..."
                     } catch (e2: Exception) {
-                        Log.e("ScheduleStatusManager", "Error in fallback: ${e2.message}", e2)
+                        FileLogger.e("ScheduleStatusManager", "Error in fallback | ${e2.javaClass.simpleName}: ${e2.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e2)}")
                     }
                 }
             }
@@ -316,17 +318,15 @@ class ScheduleStatusManager(
                                 bindingIcon?.setImageResource(symbolRes)
                                 bindingIcon?.setColorFilter(statusColor)
                             } catch (e3: Exception) {
-                                Log.e("ScheduleStatusManager", "Error accessing icon: ${e3.message}", e3)
+                                FileLogger.e("ScheduleStatusManager", "Error accessing icon | ${e3.javaClass.simpleName}: ${e3.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e3)}")
                             }
                         }
                     } catch (e2: Exception) {
-                        Log.e("ScheduleStatusManager", "Error in UI update: ${e2.message}", e2)
-                        e2.printStackTrace()
+                        FileLogger.e("ScheduleStatusManager", "Error in UI update | ${e2.javaClass.simpleName}: ${e2.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e2)}")
                     }
                 }
             } catch (e: Exception) {
-                Log.e("ScheduleStatusManager", "Error updating UI: ${e.message}", e)
-                e.printStackTrace()
+                FileLogger.e("ScheduleStatusManager", "Error updating UI | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
             }
 
             // Store ETA calculation data for logging
@@ -357,7 +357,7 @@ class ScheduleStatusManager(
 
             overrideLateStatusForNextSchedule()
         } catch (e: Exception) {
-            Log.e("MapActivity checkScheduleStatus", "Error: ${e.localizedMessage}")
+            FileLogger.e("MapActivity checkScheduleStatus", "Error computing schedule status | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
         }
     }
 
@@ -420,8 +420,7 @@ class ScheduleStatusManager(
                         Log.w(logTag, "⚠️ scheduleAheadIcon not found when updating override status")
                     }
                 } catch (e: Exception) {
-                    Log.e(logTag, "Error updating override status: ${e.message}", e)
-                    e.printStackTrace()
+                    FileLogger.e(logTag, "Error updating override status | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 }
             }
         } else {

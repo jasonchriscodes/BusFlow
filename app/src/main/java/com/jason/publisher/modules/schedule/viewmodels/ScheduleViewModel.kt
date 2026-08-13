@@ -7,7 +7,9 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.google.gson.Gson
+import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.LifecycleLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
 import com.jason.publisher.main.model.BusItem
 import com.jason.publisher.main.model.BusRoute
 import com.jason.publisher.main.model.BusStop
@@ -144,7 +146,7 @@ class ScheduleViewModel: ViewModel() {
                 // Extract `route`, `stops`, and `durationBetweenStops` from `busRouteData`
                 processBusRouteData()
             } catch (e: Exception) {
-                Log.e("ScheduleViewModel", "Error reading bus data cache: ${e.message}")
+                FileLogger.e("ScheduleViewModel", "Error reading bus data cache | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
             }
         } else {
             Log.e("ScheduleViewModel", "No cached bus data found.")

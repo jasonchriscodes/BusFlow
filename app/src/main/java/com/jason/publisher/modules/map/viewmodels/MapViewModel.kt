@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.google.gson.Gson
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.LifecycleLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
 import com.jason.publisher.main.model.AttributesData
 import com.jason.publisher.main.model.BusItem
 import com.jason.publisher.main.model.BusRoute
@@ -560,7 +561,7 @@ class MapViewModel: ViewModel() {
             }
             nearest ?: "Unknown Stop"
         } catch (e: Exception) {
-            Log.e("MapActivity getUpcomingBusStopName", "Error: ${e.localizedMessage}", e)
+            FileLogger.e("MapActivity getUpcomingBusStopName", "Error computing upcoming bus stop name | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
             "Unknown Stop"
         }
     }

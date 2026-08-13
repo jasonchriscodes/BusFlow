@@ -16,7 +16,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.annotation.RequiresApi
+import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.TripLog
+import com.jason.publisher.main.loggers.TripStateSnapshot
 import com.jason.publisher.modules.map.activities.MapActivity
 import com.jason.publisher.modules.rep.activities.RepActivity
 import com.jason.publisher.modules.map.utils.formatPanelLabel
@@ -46,10 +48,14 @@ class RepDetailPanelController(
     fun refreshPanelDetailWithLogging(zoom: Double) {
         try {
             refreshDetailPanelIcons(zoom)
-        } catch (_: Exception) { /* ignore */ }
+        } catch (e: Exception) {
+            FileLogger.w("RepDetailPanelController", "refreshDetailPanelIcons failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
+        }
         try {
             activity.runOnUiThread { logPanelDetailTextOnly() }
-        } catch (_: Exception) { /* ignore */ }
+        } catch (e: Exception) {
+            FileLogger.w("RepDetailPanelController", "logPanelDetailTextOnly (via runOnUiThread) failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
+        }
     }
 
     /** Call this any time you re-draw or move markers on the map */
@@ -162,11 +168,11 @@ class RepDetailPanelController(
                                 logPanelDetailTextOnly()
                             }
                         } catch (e: Exception) {
-                            Log.w("MapViewController", "Failed to call logPanelDetailTextOnly(): ${e.message}")
+                            FileLogger.w("RepMapViewController", "Failed to call logPanelDetailTextOnly() | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                         }
                     }, 120L)
                 } catch (e: Exception) {
-                    Log.w("MapViewController", "postDelayed logPanelDetailTextOnly failed: ${e.message}")
+                    FileLogger.w("RepMapViewController", "postDelayed logPanelDetailTextOnly failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 }
             }
 
@@ -254,7 +260,7 @@ class RepDetailPanelController(
             lastPanelDump = dump
             Log.d("PanelDebug", dump)
         } catch (e: Exception) {
-            Log.e("PanelDebug", "Error logging detail panel: ${e.message}", e)
+            FileLogger.e("PanelDebug", "Error logging detail panel | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
         }
     }
 

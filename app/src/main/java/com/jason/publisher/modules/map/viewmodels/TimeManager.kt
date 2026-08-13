@@ -7,6 +7,8 @@ import android.util.Log
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.utils.getNextScheduleStartTime
 import java.text.SimpleDateFormat
@@ -60,7 +62,7 @@ class TimeManager(): ViewModel() {
                     // Schedule next update only if handler is still valid
                     currentTimeHandler?.postDelayed(this, 1000)
                 } catch (e: Exception) {
-                    Log.e("TimeManager", "Error in timer runnable: ${e.message}", e)
+                    FileLogger.e("TimeManager", "Error in timer runnable | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 }
             }
         }
@@ -119,7 +121,7 @@ class TimeManager(): ViewModel() {
                     // Schedule next update only if handler is still valid
                     nextTripHandler?.postDelayed(this, 1000)
                 } catch (e: Exception) {
-                    Log.e("TimeManager", "Error in countdown runnable: ${e.message}", e)
+                    FileLogger.e("TimeManager", "Error in countdown runnable | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 }
             }
         }

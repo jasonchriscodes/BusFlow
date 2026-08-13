@@ -21,6 +21,7 @@ import android.os.Environment
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.jason.publisher.R
+import com.jason.publisher.main.loggers.FileLogger
 import java.util.Locale
 import android.os.Handler
 import android.provider.Settings
@@ -156,7 +157,9 @@ class ScreenRecordService : Service() {
 
             outputFd = contentResolver.openFileDescriptor(outUri, "w")?.fileDescriptor
                 ?: return START_NOT_STICKY
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e("SRService", "Failed to create output file: ${e.message}", e)
+            FileLogger.e("SRService", "Failed to create output file | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             return START_NOT_STICKY
         }
 
@@ -175,6 +178,7 @@ class ScreenRecordService : Service() {
                 } catch (e: RuntimeException) {
                     // mic busy/blocked → retry silently without audio on a clean instance
                     Log.w("SRService", "Audio source unavailable, recording without audio: ${e.message}")
+                    FileLogger.w("SRService", "Audio source unavailable, recording without audio | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                     runCatching { r.reset(); r.release() }
                     audioEnabled = false
                     r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -214,6 +218,8 @@ class ScreenRecordService : Service() {
                 return r to audioEnabled
             } catch (e: Exception) {
                 // Clean up on error
+                Log.e("SRService", "buildRecorder failed: ${e.message}", e)
+                FileLogger.e("SRService", "buildRecorder failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 runCatching { r.reset(); r.release() }
                 throw e
             }
@@ -224,6 +230,7 @@ class ScreenRecordService : Service() {
             buildRecorder(wantAudio)
         } catch (e: Exception) {
             Log.e("SRService", "Failed to build recorder: ${e.message}", e)
+            FileLogger.e("SRService", "Failed to build recorder | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             cleanupResources()
             return START_NOT_STICKY
         }
@@ -244,6 +251,7 @@ class ScreenRecordService : Service() {
             Log.d("SRService", "Recording started successfully (${width}x${height} @ ${15}fps, ${2_000_000/1_000_000}Mbps)")
         } catch (e: Exception) {
             Log.e("SRService", "Failed to start recording: ${e.message}", e)
+            FileLogger.e("SRService", "Failed to start recording | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             cleanupResources()
             return START_NOT_STICKY
         }
@@ -278,16 +286,19 @@ class ScreenRecordService : Service() {
                     stop()
                 } catch (e: Exception) {
                     Log.w("SRService", "Error stopping recorder: ${e.message}")
+                    FileLogger.w("SRService", "Error stopping recorder | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 }
                 try {
                     reset()
                 } catch (e: Exception) {
                     Log.w("SRService", "Error resetting recorder: ${e.message}")
+                    FileLogger.w("SRService", "Error resetting recorder | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 }
                 try {
                     release()
                 } catch (e: Exception) {
                     Log.w("SRService", "Error releasing recorder: ${e.message}")
+                    FileLogger.w("SRService", "Error releasing recorder | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 }
             }
             recorder = null
@@ -363,6 +374,7 @@ class ScreenRecordService : Service() {
             nm.notify(NOTIF_ID, buildNotification(elapsedSec))
         } catch (e: Exception) {
             Log.w("SRService", "Failed to update notification: ${e.message}")
+            FileLogger.w("SRService", "Failed to update notification | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             // If notification fails, stop the ticker to prevent repeated failures
             tickHandler.removeCallbacks(ticker)
         }
@@ -477,7 +489,7 @@ class ScreenRecordService : Service() {
                 for (i in 0 until extras) {
                     val delUri = ContentUris.withAppendedId(uri, ids[i])
                     runCatching { contentResolver.delete(delUri, null, null) }
-                        .onFailure { e -> Log.w("SRService", "Delete failed: $delUri", e) }
+                        .onFailure { e -> Log.w("SRService", "Delete failed: $delUri", e); FileLogger.w("SRService", "Delete failed: $delUri | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}") }
                 }
             } else {
                 // Pre-Q fallback: delete from /Movies/BusFlow by file API
@@ -492,12 +504,13 @@ class ScreenRecordService : Service() {
                     val extras = (files.size - maxKeep).coerceAtLeast(0)
                     for (i in 0 until extras) {
                         runCatching { files[i].delete() }
-                            .onFailure { e -> Log.w("SRService", "Delete failed: ${files[i]}", e) }
+                            .onFailure { e -> Log.w("SRService", "Delete failed: ${files[i]}", e); FileLogger.w("SRService", "Delete failed: ${files[i]} | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}") }
                     }
                 }
             }
         }.onFailure { e ->
             Log.w("SRService", "Prune failed", e)
+            FileLogger.w("SRService", "Prune failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
         }
     }
 }

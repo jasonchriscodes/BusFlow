@@ -2,6 +2,7 @@ package com.jason.publisher.modules.feedback.activities
 
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.view.Gravity
 import android.widget.Button
 import android.widget.EditText
@@ -10,6 +11,8 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.jason.publisher.BuildConfig
 import com.jason.publisher.R
+import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.UserActionLogger
 import com.jason.publisher.modules.feedback.fragments.LoadingDialogFragment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +58,7 @@ class FeedbackActivity : AppCompatActivity() {
         submitFeedbackButton.setOnClickListener {
             val name = nameEditText.text.toString()
             val feedback = feedbackEditText.text.toString()
+            UserActionLogger.click("FeedbackActivity", "submitFeedbackButton", "nameLen=${name.length} feedbackLen=${feedback.length}")
 
             if (name.isNotEmpty() && feedback.isNotEmpty()) {
                 showLoading(true)
@@ -66,6 +70,7 @@ class FeedbackActivity : AppCompatActivity() {
 
         // Handle back button click
         backButton.setOnClickListener {
+            UserActionLogger.click("FeedbackActivity", "backButton")
             finish() // Closes FeedbackActivity and goes back to MainActivity
         }
     }
@@ -87,6 +92,7 @@ class FeedbackActivity : AppCompatActivity() {
                     showCustomToast("Your message has been successfully sent.", true)
                 }
             } catch (e: Exception) {
+                FileLogger.e("FeedbackActivity", "sendFeedback failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 runOnUiThread {
                     showLoading(false)
                     showCustomToast("Your message failed to send.", false)
@@ -133,6 +139,7 @@ class FeedbackActivity : AppCompatActivity() {
      * @param success Indicates whether the operation was successful (true) or failed (false).
      */
     private fun showCustomToast(message: String, success: Boolean) {
+        UserActionLogger.shown("FeedbackActivity", "Toast", "success=$success | message=$message")
         val toast = Toast.makeText(this, message, Toast.LENGTH_LONG)
         val toastView = toast.view
         val text = toastView?.findViewById<TextView>(android.R.id.message)
