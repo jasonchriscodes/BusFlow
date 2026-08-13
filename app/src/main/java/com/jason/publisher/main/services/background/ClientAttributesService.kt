@@ -7,11 +7,11 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.provider.Settings
 import android.util.Log
 import androidx.annotation.RequiresApi
 import com.jason.publisher.main.loggers.FetchSessionStore
 import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.utils.getOrCreateDeviceAid
 import com.jason.publisher.modules.map.mqtt.helpers.MqttConfigHelper
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper.Companion.ATTR_TOPIC
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper.Companion.PUB_MSG_TOPIC
@@ -35,7 +35,11 @@ class ClientAttributesService : Service() {
     @SuppressLint("HardwareIds")
     override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
         mqttConfigHelper.fetchConfig { configList ->
-            val aid = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            // Must use the app's canonical AID (aid.txt if present), not the raw hardware
+            // ANDROID_ID - they can differ, and the bus config is keyed on the former. This was
+            // silently resolving to an empty token before (confirmed on-device), meaning this
+            // service's currentTripLabel clearing was publishing under no proper device identity.
+            val aid = getOrCreateDeviceAid(applicationContext)
             token = MqttConfigHelper.getAccessToken(aid, configList)
             mqttManager = if (token.isNotEmpty()) MqttManager(username = token) else MqttManager()
             Log.d("ClientAttributesService", "access token: $token")

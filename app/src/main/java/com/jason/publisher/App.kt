@@ -15,6 +15,7 @@ import com.jason.publisher.main.services.background.ScreenRecordService
 import com.jason.publisher.modules.battery.services.BatteryLowWatcher
 import com.jason.publisher.main.loggers.FetchSessionStore
 import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.RemoteLogPublisher
 import com.jason.publisher.main.loggers.TripStateSnapshot
 import android.Manifest
 import android.util.Log
@@ -48,6 +49,10 @@ class App : Application(), Application.ActivityLifecycleCallbacks {
             // chosen this open, so the next open shows the normal Fetch/Use Cache choice again
             // instead of silently treating it like a crash-restart.
             FetchSessionStore.clear(applicationContext)
+
+            // One last publish so whatever was logged right up to close is visible remotely,
+            // not just whatever was captured at the last activity change.
+            RemoteLogPublisher.publishIfChanged(applicationContext)
         }
     }
 
@@ -140,6 +145,11 @@ class App : Application(), Application.ActivityLifecycleCallbacks {
         // Fallback page tracker for the crash handler in case an activity never called
         // TripStateSnapshot.onActivityEntered() itself (e.g. a screen we haven't wired up yet).
         TripStateSnapshot.currentActivity = activity.javaClass.simpleName
+
+        // Publish the log on every screen change rather than on a timer, so checking
+        // ThingsBoard remotely reflects "up to the driver's last screen" without generating
+        // any network traffic during quiet stretches. No-ops if the buffer hasn't changed.
+        RemoteLogPublisher.publishIfChanged(applicationContext)
 
         activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 

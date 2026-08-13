@@ -49,6 +49,42 @@ object FileLogger {
     @Volatile
     private var lastActivity: String? = null
 
+    // === In-memory buffer for remote publishing (RemoteLogPublisher reads this) ===
+    // Holds the tail of the CURRENT session's log text - capped so a busy stretch (e.g. an MQTT
+    // reconnect storm) can't grow this without bound or blow past ThingsBoard's attribute size
+    // limit. The on-disk file is unaffected by this cap; it keeps everything. Trimmed from the
+    // front (oldest first) so what's visible remotely is always the most recent activity, which
+    // is what actually matters for live crash triage. 400K chars comfortably covers a normal
+    // shift's full log in one place; only an unusually bad session (e.g. a reconnect storm) would
+    // ever trim anything, and even then it keeps the most recent (most diagnostically useful) part.
+    private const val REMOTE_BUFFER_CAP_CHARS = 400_000
+    private val remoteBufferLock = ReentrantLock()
+    private val remoteBuffer = StringBuilder()
+    @Volatile
+    private var remoteBufferVersion = 0L
+
+    private fun appendToRemoteBuffer(text: String) {
+        remoteBufferLock.withLock {
+            remoteBuffer.append(text).append('\n')
+            val excess = remoteBuffer.length - REMOTE_BUFFER_CAP_CHARS
+            if (excess > 0) remoteBuffer.delete(0, excess)
+            remoteBufferVersion++
+        }
+    }
+
+    private fun resetRemoteBuffer() {
+        remoteBufferLock.withLock {
+            remoteBuffer.setLength(0)
+            remoteBufferVersion++
+        }
+    }
+
+    /** Current session's buffered log tail, for publishing to ThingsBoard. */
+    fun getBufferedLogText(): String = remoteBufferLock.withLock { remoteBuffer.toString() }
+
+    /** Monotonic counter that changes whenever the buffer changes - lets a poller skip no-op publishes. */
+    fun getBufferedLogVersion(): Long = remoteBufferVersion
+
     private fun ready(): Boolean = ::appContext.isInitialized
 
     // init() is called from App.onCreate() plus every top-level Activity's onCreate() as a
@@ -69,6 +105,13 @@ object FileLogger {
     private const val KEY_SESSION_FILE = "session_file_name"
     private fun sessionPrefs() = appContext.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
 
+    /**
+     * Foundational setup only (writer executor, log directory) - does NOT attach to or create
+     * any file. Safe to call as early and as often as needed (App.onCreate, every Activity's
+     * onCreate safety net) without writing a single byte to the front/animation page before the
+     * driver has made a choice. A file only ever gets attached via [startNewSession] (Fetch
+     * Roster) or [resumeSession] (Use Cache / crash-recovery / any screen reached after that).
+     */
     fun init(context: Context) {
         appContext = context.applicationContext
         if (initialized) return
@@ -80,23 +123,36 @@ object FileLogger {
             }
         }
         try { getLogDir().mkdirs() } catch (_: Exception) {}
+    }
 
-        // Default until the driver picks a button: continue whatever the most recent log was,
-        // same as "Use Cache" would (covers early boot-time logging, and the crash-restart path
-        // where SplashActivity auto-selects Use Cache without the driver clicking anything).
-        beginSession(resumedName = sessionPrefs().getString(KEY_SESSION_FILE, null))
+    /**
+     * Attaches to the existing session file, if any was recorded by a previous [startNewSession]
+     * call - a no-op if there isn't one (nothing has ever been fetched yet) or if already
+     * attached this process. Call this from "Use Cache", the crash-recovery auto-bypass, and
+     * defensively from ScheduleActivity/MapActivity/RepActivity's own onCreate() - Android can
+     * recreate those directly after a crash, skipping SplashActivity (and its button click)
+     * entirely, so this is the only thing several different entry points can all safely call.
+     */
+    fun resumeSession(context: Context) {
+        appContext = context.applicationContext
+        if (fileDisplayName != null) return
+        val resumedName = sessionPrefs().getString(KEY_SESSION_FILE, null) ?: return
+        beginSession(resumedName)
     }
 
     /**
      * Forces a brand new log file starting now, abandoning whatever was previously active - call
      * this when the driver picks "Fetch Roster", since that's the one action that means "start
      * over," matching the schedule reset with a clean log instead of mixing a new shift into an
-     * old file. "Use Cache" needs no corresponding call: init()'s default already continues the
-     * most recent log.
+     * old file. This is the ONLY thing that ever creates a file - nothing is written on the
+     * front/animation page, or anywhere else, until this has been called at least once.
      */
     fun startNewSession() {
-        if (!ready()) return
-        line("=== Switching to a new log (Fetch Roster selected) ===")
+        if (!::appContext.isInitialized) return
+        if (fileDisplayName != null) {
+            line("=== Switching to a new log (Fetch Roster selected) ===")
+        }
+        resetRemoteBuffer()
         beginSession(resumedName = null)
     }
 
@@ -173,6 +229,7 @@ object FileLogger {
         if (!ready()) {
             Log.w(TAG, "Called before init(); dropping line"); return
         }
+        appendToRemoteBuffer(text)
         val exec = writerExecutor
         if (exec == null) {
             Log.w(TAG, "Writer not ready; dropping line"); return

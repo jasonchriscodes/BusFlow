@@ -122,6 +122,7 @@ class SplashActivity : AppCompatActivity() {
             startScheduleActivity(fetch = true)
         }
         btnUseCache.setOnClickListener {
+            FileLogger.resumeSession(this)
             UserActionLogger.click("SplashActivity", "btnUseCache")
             startScheduleActivity(fetch = false)
         }
@@ -142,6 +143,7 @@ class SplashActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     private fun showChoiceButtons() {
         if (FetchSessionStore.hasFetchedThisOpen(this) || TripLog.hasActive(this)) {
+            FileLogger.resumeSession(this)
             UserActionLogger.shown("SplashActivity", "Auto-resumed interrupted session", "skipped Fetch Roster/Use Cache choice")
             startScheduleActivity(fetch = false)
             return

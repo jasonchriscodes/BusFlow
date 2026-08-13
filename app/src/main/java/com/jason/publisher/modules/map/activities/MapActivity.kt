@@ -150,8 +150,10 @@ open class MapActivity : AppCompatActivity() {
 
         hideSystemUI()
 
-        // Add logger
+        // Add logger. resumeSession() is defensive: Android can recreate this activity directly
+        // after a crash, skipping SplashActivity's Fetch Roster/Use Cache click entirely.
         FileLogger.init(this)
+        FileLogger.resumeSession(this)
         FileLogger.markAppOpened("MapActivity")
 
         // ── ADD THIS: initialize mqttManager for offline use ──

@@ -51,6 +51,7 @@ import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.TripStateSnapshot
 import com.jason.publisher.main.loggers.UserActionLogger
 import com.jason.publisher.main.loggers.TripLog
+import com.jason.publisher.main.utils.getOrCreateDeviceAid
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.map.utils.formatPanelLabel
 import com.jason.publisher.modules.map.utils.safeRunName
@@ -153,6 +154,10 @@ class ScheduleActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityScheduleBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // Defensive: Android can recreate this activity directly using its original intent after
+        // a crash, skipping SplashActivity - and its Fetch Roster/Use Cache click - entirely.
+        // No-op if already attached or if nothing's ever been fetched yet.
+        FileLogger.resumeSession(this)
         FileLogger.d("ScheduleActivity", "onCreate")
         hookBatteryToasts()
         // Fetch AID from the device
@@ -2329,54 +2334,7 @@ class ScheduleActivity : AppCompatActivity() {
 
 
     /** Fetches the Android ID (AID) of the device. */
-    @SuppressLint("HardwareIds")
-    fun getOrCreateAID(context: Context): String {
-        return try {
-            // 📂 Path: /Internal storage/Documents/.vlrshiddenfolder/aid.txt
-            val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
-            val hiddenFolder = File(documentsDir, ".vlrshiddenfolder")
-            val aidFile = File(hiddenFolder, "aid.txt")
-
-            // 1️⃣ If file exists → read it
-            if (aidFile.exists()) {
-                val storedAID = aidFile.readText().trim()
-
-                if (storedAID.isNotEmpty()) {
-                    Log.d("AID", "Loaded AID from file: $storedAID")
-                    return storedAID
-                }
-            }
-
-            // 2️⃣ If file missing OR empty → get from device
-            val androidId = Settings.Secure.getString(
-                context.contentResolver,
-                Settings.Secure.ANDROID_ID
-            ) ?: "UNKNOWN"
-
-            Log.d("AID", "Generated AID from device: $androidId")
-
-            // 3️⃣ Ensure folder exists
-            if (!hiddenFolder.exists()) {
-                hiddenFolder.mkdirs()
-            }
-
-            // 4️⃣ Write to file for future use
-            aidFile.writeText(androidId)
-
-            Log.d("AID", "Saved AID to file: ${aidFile.absolutePath}")
-
-            return androidId
-
-        } catch (e: Exception) {
-            FileLogger.e("AID", "Error handling AID file | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
-
-            // fallback (always safe)
-            return Settings.Secure.getString(
-                context.contentResolver,
-                Settings.Secure.ANDROID_ID
-            ) ?: "UNKNOWN"
-        }
-    }
+    fun getOrCreateAID(context: Context): String = getOrCreateDeviceAid(context)
 
     private fun nextPanelDebugNo(): Int {
         val sp = getSharedPreferences(PANEL_DEBUG_PREF, MODE_PRIVATE)
