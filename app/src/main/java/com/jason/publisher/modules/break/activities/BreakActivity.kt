@@ -20,6 +20,8 @@ import androidx.recyclerview.widget.RecyclerView
 import com.jason.publisher.R
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
+import com.jason.publisher.main.loggers.UserActionLogger
 import com.jason.publisher.main.loggers.TripLog
 import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
@@ -220,6 +222,7 @@ open class BreakActivity : AppCompatActivity() {
         }
 
         doneBtn.setOnClickListener {
+            UserActionLogger.click("BreakActivity", "doneBtn", "breakLabel=$breakLabel")
             onDoneClicked(fullRemaining)
         }
     }
@@ -233,21 +236,29 @@ open class BreakActivity : AppCompatActivity() {
         val ackSparkButton = findViewById<SparkButton>(R.id.breakAckSparkButton)
         val ackRow = findViewById<View>(R.id.breakAckRow)
 
-        ackRow.setOnClickListener { ackSparkButton.performClick() }
+        ackRow.setOnClickListener {
+            UserActionLogger.click("BreakActivity", "ackRow", "breakLabel=$breakLabel")
+            ackSparkButton.performClick()
+        }
 
         ackSparkButton.setEventListener(object : SparkEventListener {
             override fun onEvent(button: ImageView, buttonState: Boolean) {}
             override fun onEventAnimationStart(button: ImageView, buttonState: Boolean) {}
             override fun onEventAnimationEnd(button: ImageView, buttonState: Boolean) {
-                if (buttonState) doneBtn.isEnabled = true
+                if (buttonState) {
+                    UserActionLogger.stateChanged("BreakActivity", "doneBtn.isEnabled", false, true)
+                    doneBtn.isEnabled = true
+                }
             }
         })
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                UserActionLogger.click("BreakActivity", "systemBackPressed")
                 if (ackSparkButton.isChecked) {
                     finish()
                 } else {
+                    UserActionLogger.shown("BreakActivity", "toast", "Please confirm Hanover before continuing")
                     Toast.makeText(
                         this@BreakActivity,
                         "Please confirm Hanover before continuing",
@@ -280,7 +291,7 @@ open class BreakActivity : AppCompatActivity() {
         try {
             mqttManager.publish(MqttHelper.Companion.ATTR_TOPIC, payload)
         } catch (e: Exception) {
-            FileLogger.e("BreakActivity", "Publish failed: ${e.message}")
+            FileLogger.e("BreakActivity", "Publish failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
         }
     }
 
@@ -302,25 +313,25 @@ open class BreakActivity : AppCompatActivity() {
                 try {
                     requestAdminMessage()
                 } catch (e: Exception) {
-                    Log.w("BreakActivity", "publishActiveSegment follow-up failed: ${e.message}")
+                    FileLogger.w("BreakActivity", "publishActiveSegment follow-up failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 }
             } catch (e: Exception) {
-                Log.w("BreakActivity", "publishActiveSegment(\"\") failed: ${e.message}")
+                FileLogger.w("BreakActivity", "publishActiveSegment(\"\") failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             }
 
             // 2) ask ThingsBoard to re-broadcast and then force a poll/refresh
             try {
                 // this triggers any admin broadcast side-effects you use
                 try { requestAdminMessage() } catch (e: Exception) {
-                    Log.w("BreakActivity", "requestAdminMessage failed: ${e.message}")
+                    FileLogger.w("BreakActivity", "requestAdminMessage failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 }
                 return
             } catch (e: Exception) {
-                Log.w("BreakActivity", "mqttHelper interaction failed: ${e.message}")
+                FileLogger.w("BreakActivity", "mqttHelper interaction failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             }
 
         } catch (e: Exception) {
-            Log.w("BreakActivity", "clearActiveSegmentAndRefresh failed: ${e.message}")
+            FileLogger.w("BreakActivity", "clearActiveSegmentAndRefresh failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
         }
     }
 

@@ -10,6 +10,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import com.jason.publisher.R
+import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
+import com.jason.publisher.main.loggers.UserActionLogger
 import com.jason.publisher.modules.map.utils.calculateBearing
 import com.jason.publisher.modules.map.utils.calculateDistance
 import java.util.Calendar
@@ -73,11 +76,17 @@ class TestRepActivity : RepActivity() {
         }
 
         addButton("Slow") {
+            UserActionLogger.click("TestRepActivity", "btnSimSlow", "speedBefore=${viewModel.speed}")
+            val oldSpeed = viewModel.speed
             viewModel.speed = (viewModel.speed - 5f).coerceAtLeast(20f)
+            UserActionLogger.stateChanged("TestRepActivity", "viewModel.speed", oldSpeed, viewModel.speed)
             applySimulationSpeed()
         }
         addButton("Speed") {
+            UserActionLogger.click("TestRepActivity", "btnSimSpeed", "speedBefore=${viewModel.speed}")
+            val oldSpeed = viewModel.speed
             viewModel.speed = if (viewModel.speed < 20f) 20f else (viewModel.speed + 5f).coerceAtMost(50f)
+            UserActionLogger.stateChanged("TestRepActivity", "viewModel.speed", oldSpeed, viewModel.speed)
             applySimulationSpeed()
         }
 
@@ -104,6 +113,7 @@ class TestRepActivity : RepActivity() {
             scheduleStatusManager.checkScheduleStatus()
         } catch (e: UninitializedPropertyAccessException) {
             Log.d("TestRepActivity", "Schedule status manager not ready yet")
+            FileLogger.w("TestRepActivity", "checkScheduleStatus skipped, scheduleStatusManager not ready | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
         }
     }
 
@@ -119,6 +129,7 @@ class TestRepActivity : RepActivity() {
         simulatedElapsedMillis = 0L
         lastSimulationMillis = System.currentTimeMillis()
         startSimulatedLocationUpdates()
+        UserActionLogger.shown("TestRepActivity", "Toast: Test route simulation started")
         Toast.makeText(this, "Test route simulation started", Toast.LENGTH_SHORT).show()
     }
 
@@ -132,6 +143,7 @@ class TestRepActivity : RepActivity() {
                     viewModel.updateClientAttributes()
                 } catch (e: Exception) {
                     Log.e("TestRepActivity", "Simulation update failed: ${e.message}", e)
+                    FileLogger.e("TestRepActivity", "Simulation update failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 }
                 simulationHandler.postDelayed(this, 100L)
             }

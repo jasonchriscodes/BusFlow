@@ -21,7 +21,10 @@ import androidx.lifecycle.lifecycleScope
 import com.jason.publisher.R
 import com.jason.publisher.main.services.background.ClientAttributesService
 import com.jason.publisher.main.services.background.ScreenRecordService
+import com.jason.publisher.main.loggers.FetchSessionStore
 import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.TripLog
+import com.jason.publisher.main.loggers.UserActionLogger
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.schedule.activities.ScheduleActivity
 import com.jason.publisher.modules.schedule.helpers.OtaUpdateManager
@@ -77,11 +80,11 @@ class SplashActivity : AppCompatActivity() {
             FileLogger.d("SplashActivity", "Screen recording permission requested - service is optimized to prevent lag")
         } catch (e: SecurityException) {
             // Handle security exception (e.g., if permission is denied)
-            FileLogger.e("SplashActivity", "Security exception requesting screen capture: ${e.message}")
+            FileLogger.e("SplashActivity", "Security exception requesting screen capture | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             Log.e("SplashActivity", "Security exception requesting screen capture", e)
         } catch (e: Exception) {
             // If permission request fails for any other reason, log but don't crash
-            FileLogger.e("SplashActivity", "Failed to request screen capture permission: ${e.message}")
+            FileLogger.e("SplashActivity", "Failed to request screen capture permission | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             Log.e("SplashActivity", "Failed to request screen capture permission", e)
         }
 
@@ -109,11 +112,41 @@ class SplashActivity : AppCompatActivity() {
             startOnboardingOnceThenShowButtons()
         }
 
-        btnFetch.setOnClickListener { startScheduleActivity(fetch = true) }
-        btnUseCache.setOnClickListener { startScheduleActivity(fetch = false) }
+        btnFetch.setOnClickListener {
+            UserActionLogger.click("SplashActivity", "btnFetchRoster")
+            FileLogger.startNewSession()
+            // Not FetchSessionStore.markFetched() here - ScheduleActivity marks it itself right
+            // when it actually consumes EXTRA_FETCH_ROSTER=true. Marking it this early would
+            // make ScheduleActivity think a fetch already happened on its own very first,
+            // legitimate read of this same intent.
+            startScheduleActivity(fetch = true)
+        }
+        btnUseCache.setOnClickListener {
+            UserActionLogger.click("SplashActivity", "btnUseCache")
+            startScheduleActivity(fetch = false)
+        }
     }
 
+    /**
+     * Normally lets the driver choose Fetch Roster vs Use Cache. But skip straight to the same
+     * place "Use Cache" goes - without asking - if either:
+     *  - [FetchSessionStore] shows "Fetch Roster" was already chosen earlier this same
+     *    continuous app-open (a crash mid-trip cold-starts straight back through this screen;
+     *    without this check that restart would silently re-fetch and reset the schedule the
+     *    driver never asked to reset), or
+     *  - [TripLog] still shows an active trip (belt-and-suspenders: covers a restart landing
+     *    here before the fetch flag above was even set).
+     * Both are cleared only once the app is judged fully closed (see App.kt), so a genuine
+     * close+reopen still shows the normal choice.
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
     private fun showChoiceButtons() {
+        if (FetchSessionStore.hasFetchedThisOpen(this) || TripLog.hasActive(this)) {
+            UserActionLogger.shown("SplashActivity", "Auto-resumed interrupted session", "skipped Fetch Roster/Use Cache choice")
+            startScheduleActivity(fetch = false)
+            return
+        }
+
         val btnFetch = findViewById<Button>(R.id.btnFetchRoster)
         val btnUseCache = findViewById<Button>(R.id.btnUseCache)
 
@@ -151,6 +184,7 @@ class SplashActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val canInstall = packageManager.canRequestPackageInstalls()
             if (!canInstall) {
+                UserActionLogger.shown("SplashActivity", "dialog: Enable app updates")
                 AlertDialog.Builder(this)
                     .setTitle("Enable app updates")
                     .setMessage(
@@ -159,6 +193,7 @@ class SplashActivity : AppCompatActivity() {
                     )
                     .setCancelable(false)
                     .setPositiveButton("Open Settings") { _, _ ->
+                        UserActionLogger.click("SplashActivity", "dialog_enableAppUpdates_openSettings")
                         val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                             data = Uri.parse("package:$packageName")
                         }
@@ -166,6 +201,7 @@ class SplashActivity : AppCompatActivity() {
                     }
                     .setNegativeButton("Not now") { _, _ ->
                         // allow app to continue; OTA will simply not auto-install
+                        UserActionLogger.click("SplashActivity", "dialog_enableAppUpdates_notNow")
                         showChoiceButtons()
                     }
                     .show()
@@ -177,6 +213,7 @@ class SplashActivity : AppCompatActivity() {
         // Only keep this if you truly need /Documents or broad storage access.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!android.os.Environment.isExternalStorageManager()) {
+                UserActionLogger.shown("SplashActivity", "dialog: Storage access")
                 AlertDialog.Builder(this)
                     .setTitle("Storage access")
                     .setMessage(
@@ -185,6 +222,7 @@ class SplashActivity : AppCompatActivity() {
                     )
                     .setCancelable(false)
                     .setPositiveButton("Open Settings") { _, _ ->
+                        UserActionLogger.click("SplashActivity", "dialog_storageAccess_openSettings")
                         val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
                             data = Uri.parse("package:$packageName")
                         }
@@ -192,6 +230,7 @@ class SplashActivity : AppCompatActivity() {
                     }
                     .setNegativeButton("Not now") { _, _ ->
                         // app can still run, but features needing Documents may fail
+                        UserActionLogger.click("SplashActivity", "dialog_storageAccess_notNow")
                         showChoiceButtons()
                     }
                     .show()
@@ -237,6 +276,7 @@ class SplashActivity : AppCompatActivity() {
         FileLogger.d("SplashActivity", "ensureUnknownAppsInstallPermission: canInstall=$canInstall")
         if (canInstall) return true
 
+        UserActionLogger.shown("SplashActivity", "dialog: Enable app updates (ensureUnknownAppsInstallPermission)")
         AlertDialog.Builder(this)
             .setTitle("Enable app updates")
             .setMessage(
@@ -245,6 +285,7 @@ class SplashActivity : AppCompatActivity() {
             )
             .setCancelable(false)
             .setPositiveButton("Open Settings") { _, _ ->
+                UserActionLogger.click("SplashActivity", "dialog_enableAppUpdates2_openSettings")
                 val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                     data = Uri.parse("package:$packageName")
                 }
@@ -252,6 +293,7 @@ class SplashActivity : AppCompatActivity() {
             }
             .setNegativeButton("Not now") { _, _ ->
                 // Continue anyway, but OTA might need to redirect later
+                UserActionLogger.click("SplashActivity", "dialog_enableAppUpdates2_notNow")
                 showChoiceButtons()
             }
             .show()

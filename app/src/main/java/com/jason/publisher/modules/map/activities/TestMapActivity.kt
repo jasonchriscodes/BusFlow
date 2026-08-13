@@ -10,6 +10,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import com.jason.publisher.R
+import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
+import com.jason.publisher.main.loggers.UserActionLogger
 import com.jason.publisher.modules.map.utils.calculateBearing
 import com.jason.publisher.modules.map.utils.calculateDistance
 import java.util.Calendar
@@ -73,11 +76,17 @@ class TestMapActivity : MapActivity() {
         }
 
         addButton("Slow") {
+            UserActionLogger.click("TestMapActivity", "btnSimSlow", "speedBefore=${viewModel.speed}")
+            val oldSpeed = viewModel.speed
             viewModel.speed = (viewModel.speed - 5f).coerceAtLeast(20f)
+            UserActionLogger.stateChanged("TestMapActivity", "viewModel.speed", oldSpeed, viewModel.speed)
             applySimulationSpeed()
         }
         addButton("Speed") {
+            UserActionLogger.click("TestMapActivity", "btnSimSpeed", "speedBefore=${viewModel.speed}")
+            val oldSpeed = viewModel.speed
             viewModel.speed = if (viewModel.speed < 20f) 20f else (viewModel.speed + 5f).coerceAtMost(50f)
+            UserActionLogger.stateChanged("TestMapActivity", "viewModel.speed", oldSpeed, viewModel.speed)
             applySimulationSpeed()
         }
 
@@ -104,6 +113,7 @@ class TestMapActivity : MapActivity() {
             scheduleStatusManager.checkScheduleStatus()
         } catch (e: UninitializedPropertyAccessException) {
             Log.d("TestMapActivity", "Schedule status manager not ready yet")
+            FileLogger.w("TestMapActivity", "checkScheduleStatus skipped, scheduleStatusManager not ready | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
         }
     }
 
@@ -122,6 +132,7 @@ class TestMapActivity : MapActivity() {
         viewModel.speed = 20f
         applySimulationSpeed()
         startSimulatedLocationUpdates()
+        UserActionLogger.shown("TestMapActivity", "Toast: Test route simulation started")
         Toast.makeText(this, "Test route simulation started", Toast.LENGTH_SHORT).show()
     }
 
@@ -135,6 +146,7 @@ class TestMapActivity : MapActivity() {
                     viewModel.updateClientAttributes()
                 } catch (e: Exception) {
                     Log.e("TestMapActivity", "Simulation update failed: ${e.message}", e)
+                    FileLogger.e("TestMapActivity", "Simulation update failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 }
                 simulationHandler.postDelayed(this, 100L)
             }

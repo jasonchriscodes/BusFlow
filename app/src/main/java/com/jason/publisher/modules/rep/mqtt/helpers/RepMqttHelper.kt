@@ -10,7 +10,9 @@ import com.google.gson.Gson
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.modules.map.activities.MapActivity
 import com.jason.publisher.main.model.Bus
+import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.LifecycleLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
 import com.jason.publisher.main.services.ClientAttributesResponse
 import com.jason.publisher.main.services.ApiService
 import com.jason.publisher.modules.rep.activities.RepActivity
@@ -224,12 +226,12 @@ class RepMqttHelper(
                             try {
                                 owner.panelController.refreshPanelDetailWithLogging(binding.map.model.mapViewPosition.zoomLevel.toDouble())
                             } catch (e: Exception) {
-                                Log.w("MqttHelper", "panel debounce runnable failed: ${e.message}")
+                                FileLogger.w("RepMqttHelper", "panel debounce runnable failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                             }
                         }
                         owner.panelDebounceHandler.postDelayed(owner.panelDebounceRunnable!!, 180L)
                     } catch (e: Exception) {
-                        Log.w("MqttHelper", "scheduling panel debounce failed: ${e.message}")
+                        FileLogger.w("RepMqttHelper", "scheduling panel debounce failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                     }
                 }
                 // ------------------------------------------------------------------
@@ -456,7 +458,7 @@ class RepMqttHelper(
                             owner.panelController.refreshDetailPanelIcons(binding.map.model.mapViewPosition.zoomLevel.toDouble())
                         }
                     } catch (e: Exception) {
-                        Log.e("MqttHelper", "Error updating marker: ${e.message}", e)
+                        FileLogger.e("RepMqttHelper", "Error updating marker | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                     }
                 }
             }

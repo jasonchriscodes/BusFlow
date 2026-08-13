@@ -17,6 +17,7 @@ import androidx.core.graphics.createBitmap
 import com.jason.publisher.R
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.LifecycleLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
 import com.jason.publisher.main.model.BusRoute
 import com.jason.publisher.main.model.BusStop
 import com.jason.publisher.main.ui.DrawableHelper
@@ -201,7 +202,7 @@ class RepMapViewController(
                     // 3) schedule next check in 1s only if handler is still valid
                     activityMonitorHandler?.postDelayed(this, 1_000L)
                 } catch (e: Exception) {
-                    Log.e("MapViewController", "Error in activity monitor: ${e.message}", e)
+                    FileLogger.e("RepMapViewController", "Error in activity monitor | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 }
             }
         }
@@ -318,7 +319,7 @@ class RepMapViewController(
             val store = try {
                 MapFile(mapFile)
             } catch (e: Exception) {
-                Log.e("MapViewController", "Error loading map file: ${e.message}", e)
+                FileLogger.e("RepMapViewController", "Error loading map file | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
                         activity,
@@ -373,13 +374,13 @@ class RepMapViewController(
                                 Log.d("MapViewController", "✅ Map layer added and invalidated")
                             }, 200)
                         } catch (e: Exception) {
-                            Log.e("MapViewController", "Error setting up map: ${e.message}", e)
+                            FileLogger.e("RepMapViewController", "Error setting up map | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                             // Ensure map is invalidated even on error
                             mapView.invalidate()
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("MapViewController", "Error adding map layer: ${e.message}", e)
+                    FileLogger.e("RepMapViewController", "Error adding map layer | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                     // Ensure map is invalidated even on error
                     mapView.invalidate()
                 }
@@ -590,7 +591,7 @@ class RepMapViewController(
                         mapView.layerManager.layers.add(0, mapTileLayer)
                     }
                 } catch (e: Exception) {
-                    Log.e("MapViewController", "Error re-adding map layer: ${e.message}", e)
+                    FileLogger.e("RepMapViewController", "Error re-adding map layer | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 }
             }
 
@@ -602,12 +603,12 @@ class RepMapViewController(
                 activity.onBusMarkerUpdated()
             }
         } catch (e: Exception) {
-            Log.e("MapViewController", "Error updating bus marker: ${e.message}", e)
+            FileLogger.e("RepMapViewController", "Error updating bus marker | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
             // Ensure map is invalidated even on error to prevent white screen
             try {
                 mapView.invalidate()
             } catch (e2: Exception) {
-                Log.e("MapViewController", "Error invalidating map: ${e2.message}", e2)
+                FileLogger.e("RepMapViewController", "Error invalidating map | ${e2.javaClass.simpleName}: ${e2.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e2)}")
             }
         }
     }

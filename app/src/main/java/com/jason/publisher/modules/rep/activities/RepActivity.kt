@@ -34,6 +34,8 @@ import com.google.android.gms.location.*
 import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.LifecycleLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
+import com.jason.publisher.main.loggers.UserActionLogger
 import com.jason.publisher.main.model.BusItem
 import com.jason.publisher.main.model.BusStop
 import com.jason.publisher.main.model.RouteData
@@ -162,6 +164,7 @@ open class RepActivity : AppCompatActivity() {
         setContentView(binding.root)
         repStep("04 setContentView OK")
         FileLogger.d("RepActivity", "onCreate")
+        TripStateSnapshot.onActivityEntered("RepActivity")
 
         // Reset final stop message flag for new trip
         viewModel.hasShownFinalStopMessage = false
@@ -175,7 +178,7 @@ open class RepActivity : AppCompatActivity() {
         FileLogger.init(this)
         FileLogger.markAppOpened("RepActivity")
 
-        mqttManager = MqttManager()
+        replaceMqttManager(MqttManager())
 
         // Initialize Managers before using it
         scheduleStatusManager = RepScheduleStatusManager(this, binding)
@@ -433,7 +436,7 @@ open class RepActivity : AppCompatActivity() {
                         viewModel.config.orEmpty()
                     )
 
-                    mqttManager = MqttManager(username = viewModel.token)
+                    replaceMqttManager(MqttManager(username = viewModel.token))
 
                     mapController.getDefaultConfigValue()
                     panelController.activeSegment = selfLabel
@@ -450,8 +453,8 @@ open class RepActivity : AppCompatActivity() {
                         mapController.startActivityMonitor()
                     }
                 } else {
-                    mqttManager = MqttManager()
-                    Log.e("RepActivity", "Failed to fetch config, entering offline mode.")
+                    replaceMqttManager(MqttManager())
+                    FileLogger.e("RepActivity", "Failed to fetch config, entering offline mode. | ${TripStateSnapshot.describe()}")
 
                     Toast.makeText(
                         this@RepActivity,
@@ -586,9 +589,11 @@ open class RepActivity : AppCompatActivity() {
         })
 
         binding.startSimulationButton.setOnClickListener {
+            UserActionLogger.click("RepActivity", "startSimulationButton")
 //            startSimulation()
         }
         binding.stopSimulationButton.setOnClickListener {
+            UserActionLogger.click("RepActivity", "stopSimulationButton")
             resetSimulationState()
             Toast.makeText(this, "Simulation stopped and state reset", Toast.LENGTH_SHORT).show()
         }
@@ -604,7 +609,9 @@ open class RepActivity : AppCompatActivity() {
             binding.backButton.compoundDrawablePadding = dpToPx(4)
         }
         binding.backButton.setOnClickListener {
+            UserActionLogger.click("RepActivity", "backButton (End Trip)")
             if (viewModel.speed > 30.0) {  // Treat speeds above 30 km/h as "moving"
+                UserActionLogger.shown("RepActivity", "End Trip blocked", "speed=${viewModel.speed}km/h > 30km/h")
                 Toast.makeText(this, "❌ Bus must be moving slower than 30 km/h before ending the trip.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
@@ -633,16 +640,22 @@ open class RepActivity : AppCompatActivity() {
             dlgBuilder.setView(numberPadView)
                 .setTitle("Enter Passcode")
                 .setPositiveButton("Confirm") { _, _ ->
+                    UserActionLogger.click("RepActivity", "endTripPasscodeDialog.Confirm")
                     // ensure attribute is cleared (defensive — also called at final stop)
                     clearActiveSegmentAndRefresh()
                     val enteredCode = numberPadInput.text.toString()
                     if (enteredCode == "0000") {
+                        UserActionLogger.shown("RepActivity", "End Trip confirmed", TripStateSnapshot.describe())
                         finishToScheduleWithRemainingTrips()
                     } else {
+                        UserActionLogger.shown("RepActivity", "End Trip rejected", "incorrect passcode")
                         Toast.makeText(this, "❌ Incorrect code. Please enter 0000.", Toast.LENGTH_LONG).show()
                     }
                 }
-                .setNegativeButton("Cancel") { d, _ -> d.dismiss() }
+                .setNegativeButton("Cancel") { d, _ ->
+                    UserActionLogger.click("RepActivity", "endTripPasscodeDialog.Cancel")
+                    d.dismiss()
+                }
 
             val dialog = dlgBuilder.create()
 
@@ -660,14 +673,17 @@ open class RepActivity : AppCompatActivity() {
         }
 
         binding.speedUpButton.setOnClickListener {
+            UserActionLogger.click("RepActivity", "speedUpButton")
             viewModel.speedUp()
         }
 
         binding.slowDownButton.setOnClickListener {
+            UserActionLogger.click("RepActivity", "slowDownButton")
             viewModel.slowDown()
         }
 
         binding.arriveButton.setOnClickListener {
+            UserActionLogger.click("RepActivity", "arriveButton")
             confirmArrival()
         }
     }
@@ -775,7 +791,7 @@ open class RepActivity : AppCompatActivity() {
         }
 
         if (viewModel.stops.isEmpty() || viewModel.route.isEmpty()) {
-            Log.e("RepActivity confirmArrival", "❌ No stops or route data available.")
+            FileLogger.e("RepActivity confirmArrival", "No stops or route data available. | ${TripStateSnapshot.describe()}")
             return
         }
 
@@ -1443,7 +1459,7 @@ open class RepActivity : AppCompatActivity() {
                                         updateUIElementsThrottled()
                                     }
                                 } catch (e: Exception) {
-                                    Log.e("RepActivity", "Error updating before first stop: ${e.message}", e)
+                                    FileLogger.e("RepActivity", "Error updating before first stop | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                                 }
                             }
                             return
@@ -1531,7 +1547,7 @@ open class RepActivity : AppCompatActivity() {
                                 LastLocationStore.save(this@RepActivity, viewModel.latitude, viewModel.longitude)
                             }
                         } catch (e: Exception) {
-                            Log.e("RepActivity", "Error in location update: ${e.message}", e)
+                            FileLogger.e("RepActivity", "Error in location update | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                         }
                     }
                 }
@@ -1546,7 +1562,7 @@ open class RepActivity : AppCompatActivity() {
                 fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
             }
             .addOnFailureListener { e ->
-                Log.e("RepActivity", "❌ GPS settings error: ${e.localizedMessage}")
+                FileLogger.e("RepActivity", "GPS settings error | ${e.javaClass.simpleName}: ${e.localizedMessage} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 Toast.makeText(this, "Please enable GPS for accurate tracking.", Toast.LENGTH_LONG).show()
             }
 
@@ -1605,7 +1621,7 @@ open class RepActivity : AppCompatActivity() {
                     val nextTripStartTime = viewModel.scheduleData.getNextScheduleStartTime()
                     viewModel.updateNextTripText(nextTripStartTime)
                 } catch (e: Exception) {
-                    Log.e("RepActivity", "Error updating nextTripCountdownTextView: ${e.message}", e)
+                    FileLogger.e("RepActivity", "Error updating nextTripCountdownTextView | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 }
             }
 
@@ -1641,9 +1657,16 @@ open class RepActivity : AppCompatActivity() {
                 upcomingStopName, currentStopName, etaText, statusText
             )
 
+            // Keep the always-on error-context snapshot fresh (cheap: field writes only, no I/O)
+            TripStateSnapshot.updatePosition(viewModel.latitude, viewModel.longitude, viewModel.speed, viewModel.bearing)
+            TripStateSnapshot.updateStops(
+                upcomingStopName, currentStopName,
+                viewModel.passedStops.size, viewModel.passedStops.lastOrNull()?.address
+            )
+            TripStateSnapshot.updateScheduleStatus(statusText)
+
         } catch (e: Exception) {
-            Log.e("RepActivity", "Error updating UI elements: ${e.message}", e)
-            e.printStackTrace()
+            FileLogger.e("RepActivity", "Error updating UI elements | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
         }
     }
 
@@ -1741,7 +1764,7 @@ open class RepActivity : AppCompatActivity() {
                     updateUIElementsThrottled()
                     periodicUIUpdateHandler?.postDelayed(this, 3000)
                 } catch (e: Exception) {
-                    Log.e("RepActivity", "Error in periodic UI update: ${e.message}", e)
+                    FileLogger.e("RepActivity", "Error in periodic UI update | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 }
             }
         }
@@ -1853,6 +1876,24 @@ open class RepActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Swaps in a freshly-built [MqttManager], disconnecting whatever client [mqttManager]
+     * currently points at first. [mqttManager] gets rebuilt with a new access token multiple
+     * times per activity instance (initial offline placeholder, config fetch success/failure) -
+     * without this, each replaced client's underlying Paho connection (and its background
+     * receiver/sender threads) is orphaned and keeps reconnecting forever.
+     */
+    private fun replaceMqttManager(new: MqttManager) {
+        if (::mqttManager.isInitialized) {
+            try {
+                mqttManager.disconnect()
+            } catch (e: Exception) {
+                FileLogger.w("RepActivity", "Failed to disconnect previous MQTT client before replacing | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
+            }
+        }
+        mqttManager = new
+    }
+
     /** Cleans up resources on activity destruction. */
     @RequiresApi(Build.VERSION_CODES.M)
     override fun onDestroy() {
@@ -1877,7 +1918,7 @@ open class RepActivity : AppCompatActivity() {
                 mqttManager.disconnect()
             }
         } catch (e: Exception) {
-            Log.w("RepActivity", "MQTT disconnect failed: ${e.message}")
+            FileLogger.w("RepActivity", "MQTT disconnect failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
         }
 
         if (::mapController.isInitialized) {
@@ -1920,7 +1961,7 @@ open class RepActivity : AppCompatActivity() {
             try {
                 publishActiveSegment("") // re-uses your existing publisher
             } catch (e: Exception) {
-                Log.w("RepActivity", "publishActiveSegment(\"\") failed: ${e.message}")
+                FileLogger.w("RepActivity", "publishActiveSegment(\"\") failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
             }
 
             // 2) ask ThingsBoard to re-broadcast and then force a poll/refresh
@@ -1928,7 +1969,7 @@ open class RepActivity : AppCompatActivity() {
                 if (::mqttHelper.isInitialized) {
                     // this triggers any admin broadcast side-effects you use
                     try { mqttHelper.requestAdminMessage() } catch (e: Exception) {
-                        Log.w("RepActivity", "requestAdminMessage failed: ${e.message}")
+                        FileLogger.w("RepActivity", "requestAdminMessage failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
                     }
 
                     // give the server a moment to process the publish, then refresh attributes
@@ -1938,7 +1979,7 @@ open class RepActivity : AppCompatActivity() {
                                 mqttHelper.refreshAllAttributes()
                             }
                         } catch (e: Exception) {
-                            Log.w("RepActivity", "refreshAllAttributes failed: ${e.message}")
+                            FileLogger.w("RepActivity", "refreshAllAttributes failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
                         }
 
                         // Refresh local UI and log after the attribute refresh attempt
@@ -1947,14 +1988,14 @@ open class RepActivity : AppCompatActivity() {
                     return
                 }
             } catch (e: Exception) {
-                Log.w("RepActivity", "mqttHelper interaction failed: ${e.message}")
+                FileLogger.w("RepActivity", "mqttHelper interaction failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
             }
 
             // If mqttHelper not initialized or above failed, still refresh UI locally
             panelController.refreshPanelDetailWithLogging(binding.map.model.mapViewPosition.zoomLevel.toDouble())
 
         } catch (e: Exception) {
-            Log.w("RepActivity", "clearActiveSegmentAndRefresh failed: ${e.message}")
+            FileLogger.w("RepActivity", "clearActiveSegmentAndRefresh failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
         }
     }
 
@@ -1974,11 +2015,11 @@ open class RepActivity : AppCompatActivity() {
                 try {
                     if (::mqttHelper.isInitialized) mqttHelper.refreshAllAttributes()
                 } catch (e: Exception) {
-                    Log.w("RepActivity","refreshAllAttributes failed: ${e.message}")
+                    FileLogger.w("RepActivity", "refreshAllAttributes failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
                 }
             }, 200L)
         } catch (e: Exception) {
-            Log.w("RepActivity", "publishActiveSegment follow-up failed: ${e.message}")
+            FileLogger.w("RepActivity", "publishActiveSegment follow-up failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
         }
     }
 

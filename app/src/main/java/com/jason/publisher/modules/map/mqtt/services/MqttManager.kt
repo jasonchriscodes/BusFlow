@@ -2,6 +2,7 @@ package com.jason.publisher.modules.map.mqtt.services
 
 import android.util.Log
 import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
 import com.jason.publisher.main.model.BusItem
 import okhttp3.Call
 import okhttp3.Callback
@@ -49,6 +50,10 @@ class MqttManager(
         connectOptions.isCleanSession = true
         connectOptions.connectionTimeout = 10
         connectOptions.keepAliveInterval = 60
+        // Bus connectivity drops constantly (tunnels, dead zones, etc.) - let Paho retry the
+        // connection itself instead of leaving tracking silently dark until some other screen
+        // happens to call connect() again.
+        connectOptions.isAutomaticReconnect = true
 
         mqttClient.setCallback(object : MqttCallbackExtended {
             override fun connectComplete(reconnect: Boolean, serverURI: String?) {
@@ -62,10 +67,11 @@ class MqttManager(
                     return
                 }
 
-                Log.w("MqttManager", "MQTT connection lost: ${cause?.message}", cause)
+                val causeText = cause?.let { "${it.javaClass.simpleName}: ${it.message}\n${Log.getStackTraceString(it)}" } ?: "unknown"
+                FileLogger.w("MqttManager", "MQTT connection lost | $causeText | ${TripStateSnapshot.describe()}")
 
-                // Important: do not throw here.
-                // Just log it. Optional reconnect can be added later.
+                // Important: do not throw here. isAutomaticReconnect handles getting back
+                // online; connectComplete(reconnect=true, ...) fires once it succeeds.
             }
 
             override fun messageArrived(topic: String?, message: MqttMessage?) {
@@ -96,8 +102,7 @@ class MqttManager(
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                e.printStackTrace()
-                Log.e("MqttManager", "Failed to fetch shared attributes", e)
+                FileLogger.e("MqttManager", "Failed to fetch shared attributes | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 callback(emptyList()) // Return an empty list in case of failure
             }
 
@@ -130,19 +135,19 @@ class MqttManager(
                                 Log.d("MqttManager", "Parsed bus config: $busList")
                                 callback(busList)
                             } else {
-                                Log.e("MqttManager", "No 'busConfig' found in the config.")
+                                FileLogger.e("MqttManager", "No 'busConfig' found in the config. | ${TripStateSnapshot.describe()}")
                                 callback(emptyList()) // Return empty list if no busConfig found
                             }
                         } else {
-                            Log.e("MqttManager", "No 'config' found in the shared attributes.")
+                            FileLogger.e("MqttManager", "No 'config' found in the shared attributes. | ${TripStateSnapshot.describe()}")
                             callback(emptyList()) // Return empty list if no config found
                         }
                     } catch (e: JSONException) {
-                        Log.e("MqttManager", "Failed to parse JSON", e)
+                        FileLogger.e("MqttManager", "Failed to parse JSON | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                         callback(emptyList()) // Handle JSON parsing errors
                     }
                 } else {
-                    Log.e("MqttManager", "Response was not successful: ${response.message}")
+                    FileLogger.e("MqttManager", "Response was not successful: ${response.message} | ${TripStateSnapshot.describe()}")
                     callback(emptyList()) // Return empty list if response failed
                 }
             }
@@ -163,7 +168,7 @@ class MqttManager(
         }
 
         if (connecting) {
-            Log.w("MqttManager", "Connect skipped: already connecting")
+            FileLogger.w("MqttManager", "Connect skipped: already connecting | ${TripStateSnapshot.describe()}")
             callback(false)
             return
         }
@@ -175,7 +180,7 @@ class MqttManager(
             mqttClient.connect(connectOptions)
             true
         } catch (e: Exception) {
-            Log.e("MqttManager", "MQTT connect failed: ${e.message}", e)
+            FileLogger.e("MqttManager", "MQTT connect failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
             false
         } finally {
             connecting = false
@@ -212,7 +217,7 @@ class MqttManager(
             }
             mqttClient.publish(topic, mqttMessage)
         } catch (e: Exception) {
-            Log.d("MqttManager", "Failed to publish message: ${e.message}", e)
+            FileLogger.w("MqttManager", "Failed to publish message to $topic | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
         }
     }
 
@@ -224,7 +229,7 @@ class MqttManager(
      */
     fun subscribe(topic: String, callback: (String) -> Unit) {
         if (!mqttClient.isConnected) {
-            Log.e("MqttManager", "Subscribe skipped: not connected")
+            FileLogger.e("MqttManager", "Subscribe skipped: not connected | topic=$topic | ${TripStateSnapshot.describe()}")
             return
         }
         mqttClient.subscribe(topic) { _, msg -> callback(String(msg.payload)) }
@@ -251,13 +256,13 @@ class MqttManager(
                 mqttClient.disconnect()
             }
         } catch (e: Exception) {
-            Log.w("MqttManager", "Disconnect failed: ${e.message}", e)
+            FileLogger.w("MqttManager", "Disconnect failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
         }
 
         try {
             mqttClient.close()
         } catch (e: Exception) {
-            Log.w("MqttManager", "Close failed: ${e.message}", e)
+            FileLogger.w("MqttManager", "Close failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
         }
     }
 

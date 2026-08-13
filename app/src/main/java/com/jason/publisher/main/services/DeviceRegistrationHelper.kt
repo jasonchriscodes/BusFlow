@@ -2,6 +2,7 @@ package com.jason.publisher.main.services
 
 import android.util.Log
 import com.jason.publisher.BuildConfig
+import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.model.BusItem
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -160,6 +161,7 @@ class DeviceRegistrationHelper {
                 ) { callback() }
             } catch (e: Exception) {
                 Log.e(TAG, "applyTemplateAttributes parse error", e)
+                FileLogger.e(TAG, "applyTemplateAttributes parse error | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 applyDefaultAttributes(jwt, newDeviceId, newBusName, callback)
             }
         }
@@ -195,6 +197,7 @@ class DeviceRegistrationHelper {
         client.newCall(request).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: IOException) {
                 Log.e(TAG, "readConfigData network failure", e)
+                FileLogger.e(TAG, "readConfigData network failure | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 callback(null)
             }
 
@@ -207,6 +210,7 @@ class DeviceRegistrationHelper {
                 }
                 if (!response.isSuccessful) {
                     Log.e(TAG, "readConfigData → ${response.code}: $body")
+                    FileLogger.e(TAG, "readConfigData failed | HTTP ${response.code}: $body")
                     callback(null)
                     return
                 }
@@ -232,6 +236,7 @@ class DeviceRegistrationHelper {
                     callback(list)
                 } catch (e: Exception) {
                     Log.e(TAG, "readConfigData parse error", e)
+                    FileLogger.e(TAG, "readConfigData parse error | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                     callback(null)
                 }
             }
@@ -261,6 +266,7 @@ class DeviceRegistrationHelper {
                 callback(map)
             } catch (e: Exception) {
                 Log.e(TAG, "listAllDevices parse error", e)
+                FileLogger.e(TAG, "listAllDevices parse error | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 callback(emptyMap())
             }
         }
@@ -327,13 +333,18 @@ class DeviceRegistrationHelper {
         client.newCall(request).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: IOException) {
                 Log.e(TAG, "request failed: ${request.url}", e)
+                FileLogger.e(TAG, "request failed: ${request.url} | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 onError()
             }
 
             override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
                 val body = response.body?.string() ?: ""
                 if (response.isSuccessful) onSuccess(body)
-                else { Log.e(TAG, "${request.url} → ${response.code}: $body"); onError() }
+                else {
+                    Log.e(TAG, "${request.url} → ${response.code}: $body")
+                    FileLogger.e(TAG, "request failed: ${request.url} | HTTP ${response.code}: $body")
+                    onError()
+                }
             }
         })
     }

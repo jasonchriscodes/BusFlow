@@ -2,6 +2,7 @@ package com.jason.publisher.modules.map.mqtt.helpers
 
 import android.annotation.SuppressLint
 import android.util.Log
+import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.model.BusItem
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 
@@ -37,7 +38,7 @@ class MqttConfigHelper {
                 Log.d("MqttConfigHelper", "Config received: $configList")
                 callback(configList)
             } else {
-                Log.e("MqttConfigHelper", "Failed to initialize config. No bus information available.")
+                FileLogger.e("MqttConfigHelper", "Failed to initialize config. No bus information available.")
                 callback(emptyList())
             }
         }

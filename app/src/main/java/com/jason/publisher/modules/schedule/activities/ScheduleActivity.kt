@@ -46,7 +46,10 @@ import com.jason.publisher.databinding.ActivityScheduleBinding
 import com.jason.publisher.modules.confirmation.activities.ConfirmationActivity
 import com.jason.publisher.main.model.Bus
 import com.jason.publisher.main.model.ScheduleItem
+import com.jason.publisher.main.loggers.FetchSessionStore
 import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
+import com.jason.publisher.main.loggers.UserActionLogger
 import com.jason.publisher.main.loggers.TripLog
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.map.utils.formatPanelLabel
@@ -161,7 +164,6 @@ class ScheduleActivity : AppCompatActivity() {
         // initialize them here
         connectionStatusTextView = binding.connectionStatusTextView
         networkStatusIndicator = binding.networkStatusIndicator
-        viewModel.fetchRoster = intent.getBooleanExtra("EXTRA_FETCH_ROSTER", false)
 
         // initialize RecyclerView adapter
         scheduleAdapter = ScheduleAdapter(emptyList(), viewModel.isDarkMode)
@@ -219,6 +221,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         // Save preference on toggle
         darkModeSwitch.setOnCheckedChangeListener { _, isChecked ->
+            UserActionLogger.inputChanged("ScheduleActivity", "darkModeSwitch", isChecked)
             viewModel.isDarkMode = isChecked
             applyThemeMode(viewModel.isDarkMode)
             getSharedPreferences("prefs", MODE_PRIVATE).edit {
@@ -249,7 +252,9 @@ class ScheduleActivity : AppCompatActivity() {
             override fun onLost(network: Network) {
                 runOnUiThread {
                     stopAdminPolling()
-                    try { mqttManager.disconnect() } catch (_: Exception) {}
+                    try { mqttManager.disconnect() } catch (e: Exception) {
+                        FileLogger.w("ScheduleActivity", "MQTT disconnect on network lost failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
+                    }
                     onlineInitStarted = false
                     connecting = false
                     enterOfflineMode()
@@ -268,8 +273,19 @@ class ScheduleActivity : AppCompatActivity() {
             connectivityManager.registerNetworkCallback(request, networkCallback)
         }
 
-        // read the user’s choice from the Splash
-        val fetchRoster = intent.getBooleanExtra("EXTRA_FETCH_ROSTER", false)
+        // Read the user's choice from the Splash - but if a fetch already happened once this
+        // continuous open, force cache mode even if this intent still says fetch=true.
+        // Android can recreate this exact ScheduleActivity instance directly - skipping
+        // SplashActivity entirely - using its ORIGINAL intent after a crash that happens
+        // several trips into a session (confirmed on-device: a crash mid-trip 5 restored
+        // straight into this activity with the same fetch=true intent from trip 1's launch).
+        // Without this, that stale intent extra would silently re-fetch and wipe all progress.
+        val intentSaysFetch = intent.getBooleanExtra("EXTRA_FETCH_ROSTER", false)
+        val alreadyFetchedThisOpen = FetchSessionStore.hasFetchedThisOpen(this)
+        val fetchRoster = intentSaysFetch && !alreadyFetchedThisOpen
+        if (intentSaysFetch) {
+            FetchSessionStore.markFetched(this)
+        }
         viewModel.fetchRoster = fetchRoster
 
         if (!fetchRoster) {
@@ -292,6 +308,7 @@ class ScheduleActivity : AppCompatActivity() {
         )
 
         copyAidButton.setOnClickListener {
+            UserActionLogger.click("ScheduleActivity", "copyAidButton")
             val aid = viewModel.aid?.trim().orEmpty()
             if (aid.isBlank()) {
                 Toast.makeText(this, "AID is not available.", Toast.LENGTH_SHORT).show()
@@ -338,7 +355,10 @@ class ScheduleActivity : AppCompatActivity() {
         )
 
         changeModeButton.setOnClickListener {
+            UserActionLogger.click("ScheduleActivity", "changeModeButton")
+            val oldMode = viewModel.isTabulatedView
             viewModel.isTabulatedView = !viewModel.isTabulatedView
+            UserActionLogger.stateChanged("ScheduleActivity", "isTabulatedView", oldMode, viewModel.isTabulatedView)
 
             if (viewModel.isTabulatedView) {
                 viewModel.currentPage = viewModel.currentPage.coerceIn(0, maxOf(viewModel.totalPages - 1, 0))
@@ -356,6 +376,7 @@ class ScheduleActivity : AppCompatActivity() {
         }
 
         btnPrevious.setOnClickListener {
+            UserActionLogger.click("ScheduleActivity", "btnPrevious", "currentPage=${viewModel.currentPage}")
             if (viewModel.currentPage > 0) {
                 viewModel.currentPage--
                 updateScheduleTablePaged()
@@ -363,6 +384,7 @@ class ScheduleActivity : AppCompatActivity() {
         }
 
         btnNext.setOnClickListener {
+            UserActionLogger.click("ScheduleActivity", "btnNext", "currentPage=${viewModel.currentPage}")
             if (viewModel.currentPage < viewModel.totalPages - 1) {
                 viewModel.currentPage++
                 updateScheduleTablePaged()
@@ -371,6 +393,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         // Set up the "Start Route" button
         binding.startRouteButton.setOnClickListener {
+            UserActionLogger.click("ScheduleActivity", "startRouteButton")
             try {
                 if (viewModel.activeScheduleData.isEmpty()) {
                     Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
@@ -425,6 +448,18 @@ class ScheduleActivity : AppCompatActivity() {
                     return@setOnClickListener
                 }
 
+                UserActionLogger.stateChanged(
+                    "ScheduleActivity",
+                    "startRouteButton.target",
+                    null,
+                    when {
+                        first.isBreak() -> "Break"
+                        first.isSigning() -> "Signing"
+                        first.isReposition() -> "Reposition"
+                        else -> "Map"
+                    }
+                )
+
                 when {
                     first.isBreak()      -> launchBreakActivity(first, no)
                     first.isSigning()    -> launchSigningActivity(first, no)
@@ -433,13 +468,14 @@ class ScheduleActivity : AppCompatActivity() {
                 }
 
             } catch (e: Exception) {
-                FileLogger.e("ScheduleActivity", "Error in startRouteButton: ${e.message}")
+                FileLogger.e("ScheduleActivity", "Error in startRouteButton | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                 Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
 
         // Set up the "Test Start Route" button
         binding.testStartRouteButton.setOnClickListener {
+            UserActionLogger.click("ScheduleActivity", "testStartRouteButton")
             if (viewModel.activeScheduleData.isEmpty()) {
                 Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -458,6 +494,7 @@ class ScheduleActivity : AppCompatActivity() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.M)
     private fun launchTestMapActivity(no: Int) {
         if (viewModel.activeScheduleData.isEmpty()) {
             Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
@@ -492,9 +529,15 @@ class ScheduleActivity : AppCompatActivity() {
             putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleDataToPass))
             putExtra("EXTRA_PANEL_DEBUG_NO", no)
         }
+
+        if (!hasActiveTrip) {
+            updateActiveScheduleDataOnLaunch(scheduleDataToPass)
+        }
+
         signingLauncher.launch(intent)
     }
 
+    @RequiresApi(Build.VERSION_CODES.M)
     private fun launchTestRepActivity(first: ScheduleItem, no: Int) {
         if (viewModel.activeScheduleData.isEmpty()) {
             Toast.makeText(this, "No schedules available.", Toast.LENGTH_SHORT).show()
@@ -529,6 +572,11 @@ class ScheduleActivity : AppCompatActivity() {
             putExtra("FULL_SCHEDULE_DATA", ArrayList(scheduleDataToPass))
             putExtra("EXTRA_PANEL_DEBUG_NO", no)
         }
+
+        if (!hasActiveTrip) {
+            updateActiveScheduleDataOnLaunch(scheduleDataToPass)
+        }
+
         signingLauncher.launch(intent)
     }
 
@@ -559,6 +607,12 @@ class ScheduleActivity : AppCompatActivity() {
             "ScheduleActivity -> TestBreakActivity",
             "ScheduleActivity -> TestBreakActivity | no=$no | label=$breakLabel | selectedIdx=-1 (NO ROUTE)"
         )
+
+        if (!TripLog.hasActive(this)) {
+            updateActiveScheduleDataOnLaunch(
+                viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
+            )
+        }
 
         signingLauncher.launch(intent)
     }
@@ -593,6 +647,12 @@ class ScheduleActivity : AppCompatActivity() {
             "ScheduleActivity -> TestSigningActivity",
             "ScheduleActivity -> TestSigningActivity | no=$no | label=$label action=$action | selectedIdx=-1 (NO ROUTE)"
         )
+
+        if (!TripLog.hasActive(this)) {
+            updateActiveScheduleDataOnLaunch(
+                viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
+            )
+        }
 
         signingLauncher.launch(intent)
     }
@@ -894,7 +954,10 @@ class ScheduleActivity : AppCompatActivity() {
                 .setTitle("App update")
                 .setView(wrap)
                 .setCancelable(false)
-                .setNegativeButton("Close") { d, _ -> d.dismiss() }
+                .setNegativeButton("Close") { d, _ ->
+                    UserActionLogger.click("ScheduleActivity", "otaProgressDialog.Close")
+                    d.dismiss()
+                }
                 .create()
 
             otaProgressDialog?.show()
@@ -1033,11 +1096,13 @@ class ScheduleActivity : AppCompatActivity() {
                     )
                     .setCancelable(true)
                     .setNegativeButton("Not now") { dialog, _ ->
+                        UserActionLogger.click("ScheduleActivity", "otaUpdateDialog.NotNow", "version=$serverName")
                         otaLog("OTA(admin): user clicked NOT NOW for $serverName -> suppress")
                         prefs.edit().putString("last_prompted_sw_version", serverName).apply()
                         dialog.dismiss()
                     }
                     .setPositiveButton("Update") { dialog, _ ->
+                        UserActionLogger.click("ScheduleActivity", "otaUpdateDialog.Update", "version=$serverName")
                         otaLog("OTA(admin): user clicked UPDATE for $serverName")
                         dialog.dismiss()
 
@@ -1107,7 +1172,7 @@ class ScheduleActivity : AppCompatActivity() {
                                 hideOtaProgress()
 
                             } catch (e: Exception) {
-                                otaLog("OTA(admin): EXCEPTION during update flow: ${e.message}")
+                                FileLogger.e("ScheduleActivity", "OTA(admin): EXCEPTION during update flow | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                                 updateOtaProgress("Update failed: ${e.message}")
                             }
                         }
@@ -1115,7 +1180,7 @@ class ScheduleActivity : AppCompatActivity() {
                     .show()
 
             } catch (e: Exception) {
-                otaLog("OTA(admin): EXCEPTION in check: ${e.message}")
+                FileLogger.e("ScheduleActivity", "OTA(admin): EXCEPTION in check | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             } finally {
                 otaCheckInFlight = false
                 otaLog("OTA(admin): END | otaCheckInFlight=false")
@@ -1411,7 +1476,7 @@ class ScheduleActivity : AppCompatActivity() {
                 mqttManager.disconnect()
             }
         } catch (e: Exception) {
-            Log.w("ScheduleActivity", "MQTT disconnect before RepActivity failed: ${e.message}")
+            FileLogger.w("ScheduleActivity", "MQTT disconnect before RepActivity failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
         }
 
         signingLauncher.launch(intent)
@@ -1476,6 +1541,9 @@ class ScheduleActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.M)
     private fun updateActiveScheduleDataOnLaunch(newScheduleData: List<ScheduleItem>) {
         viewModel.activeScheduleData = newScheduleData
+        // scheduleDataCache.txt (written below) is the single source of truth "Use Cache" reads
+        // from - also what SplashActivity falls back to automatically if the app was killed
+        // mid-trip. Nothing else needs to track resume state separately.
         viewModel.isScheduleCacheUpdated = false
         saveScheduleDataToCache()
         updateScheduleTablePaged()
@@ -1627,6 +1695,7 @@ class ScheduleActivity : AppCompatActivity() {
             .setCancelable(false)
             .setPositiveButton("Register") { _, _ ->
                 val busName = input.text.toString().trim()
+                UserActionLogger.click("ScheduleActivity", "registrationDialog.Register", "busName=$busName")
                 when {
                     busName.isBlank() -> {
                         Toast.makeText(this, "Bus name cannot be empty.", Toast.LENGTH_SHORT).show()
@@ -1644,11 +1713,13 @@ class ScheduleActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("Go Offline") { _, _ ->
+                UserActionLogger.click("ScheduleActivity", "registrationDialog.GoOffline")
                 connecting = false
                 onlineInitStarted = false
                 enterOfflineMode()
             }
             .show()
+        UserActionLogger.shown("ScheduleActivity", "registrationDialog")
     }
 
     private fun autoRegisterDevice(busName: String, templateToken: String) {
@@ -1721,7 +1792,9 @@ class ScheduleActivity : AppCompatActivity() {
                 }
 
                 // ✅ If you already had a client running, stop it first
-                try { mqttManager.disconnect() } catch (_: Exception) {}
+                try { mqttManager.disconnect() } catch (e: Exception) {
+                    FileLogger.w("ScheduleActivity", "MQTT disconnect before reconnect failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
+                }
                 stopAdminPolling()
 
                 mqttManager = MqttManager(clientId = buildClientId(), username = viewModel.token)
@@ -1817,6 +1890,7 @@ class ScheduleActivity : AppCompatActivity() {
             .setMessage("All data has been cached successfully. Please click OK to view the schedule.")
             .setCancelable(false)
             .setPositiveButton("OK") { dialog, _ ->
+                UserActionLogger.click("ScheduleActivity", "cacheCompleteDialog.OK")
                 dialog.dismiss()
 
                 // ✅ Hide progress bar
@@ -1880,6 +1954,7 @@ class ScheduleActivity : AppCompatActivity() {
                 textSize = 14f
                 setPadding(8, 4, 8, 4)
                 setOnClickListener {
+                    UserActionLogger.click("ScheduleActivity", "paginationPageButton", "page=$page")
                     viewModel.currentPage = page
                     updateScheduleTablePaged()
                 }
@@ -2021,9 +2096,9 @@ class ScheduleActivity : AppCompatActivity() {
                     }
 
                 } catch (e: Exception) {
-                    Log.e(
+                    FileLogger.e(
                         "ScheduleActivity loadScheduleDataFromCache",
-                        "❌ Error reading schedule data cache: ${e.message}"
+                        "Error reading schedule data cache | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}"
                     )
                 }
             } else {
@@ -2094,7 +2169,14 @@ class ScheduleActivity : AppCompatActivity() {
                         "ScheduleActivity subscribeSharedData | busRouteData.size=${viewModel.busRouteData.size} | first=${viewModel.busRouteData.firstOrNull()}"
                     )
 
-                    // Retrieve `scheduleData` from ThingsBoard
+                    // Retrieve `scheduleData` from ThingsBoard. "Fetch Roster" always means a
+                    // full reset from the beginning (that's the whole point of the button, as
+                    // opposed to "Use Cache") - this must never be trimmed by any resume state.
+                    // The crash-recovery / mid-shift-resume path is handled entirely by
+                    // "Use Cache" (see enterOfflineMode/loadScheduleDataFromCache), which reads
+                    // the same scheduleDataCache.txt that SplashActivity auto-selects after an
+                    // interrupted trip - so there's exactly one source of truth for "resume",
+                    // not a second one duplicated here.
                     viewModel.scheduleData = (data.shared?.scheduleData1 ?: emptyList()).map { it.copy(runName = safeRunName(it)) }
                     viewModel.activeScheduleData = viewModel.scheduleData.toList() // Shallow copy to sever connection
                     FileLogger.d(
@@ -2142,7 +2224,7 @@ class ScheduleActivity : AppCompatActivity() {
                         FileLogger.d("ScheduleActivity subscribeSharedData", "No route data available.")
                     }
                 } catch (e: Exception) {
-                    Log.e("ScheduleActivity subscribeSharedData", "Error processing shared data: ${e.message}", e)
+                    FileLogger.e("ScheduleActivity subscribeSharedData", "Error processing shared data | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
                     Toast.makeText(this, "Error processing shared data.", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -2181,7 +2263,7 @@ class ScheduleActivity : AppCompatActivity() {
                     ).show()
                 }
             } catch (e: Exception) {
-                Log.e("ScheduleActivity saveBusDataToCache", "Error saving bus data cache: ${e.message}")
+                FileLogger.e("ScheduleActivity saveBusDataToCache", "Error saving bus data cache | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             }
         }
     }
@@ -2209,7 +2291,7 @@ class ScheduleActivity : AppCompatActivity() {
                     ).show()
                 }
             } catch (e: Exception) {
-                Log.e("ScheduleActivity saveScheduleDataToCache", "Error saving schedule data cache: ${e.message}")
+                FileLogger.e("ScheduleActivity saveScheduleDataToCache", "Error saving schedule data cache | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             }
         }
     }
@@ -2229,7 +2311,7 @@ class ScheduleActivity : AppCompatActivity() {
                 Log.d("ScheduleActivity saveScheduleDataToCache", "✅ Schedule data cache updated successfully.")
                 Toast.makeText(this, "Schedule data updated.", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Log.e("ScheduleActivity saveScheduleDataToCache", "❌ Error saving schedule data cache: ${e.message}")
+                FileLogger.e("ScheduleActivity saveScheduleDataToCache", "Error saving schedule data cache (rewriteOfflineScheduleData) | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             }
         }
     }
@@ -2237,7 +2319,9 @@ class ScheduleActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopAdminPolling()
-        try { mqttManager.disconnect() } catch (_: Exception) {}
+        try { mqttManager.disconnect() } catch (e: Exception) {
+            FileLogger.w("ScheduleActivity", "MQTT disconnect on onDestroy failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
+        }
         NetworkStatusHelper.unregisterReceiver(this)
         dateTimeHandler.removeCallbacks(dateTimeRunnable)
         connectivityManager.unregisterNetworkCallback(networkCallback)
@@ -2284,7 +2368,7 @@ class ScheduleActivity : AppCompatActivity() {
             return androidId
 
         } catch (e: Exception) {
-            Log.e("AID", "Error handling AID file: ${e.message}")
+            FileLogger.e("AID", "Error handling AID file | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
 
             // fallback (always safe)
             return Settings.Secure.getString(

@@ -8,10 +8,16 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import androidx.core.content.edit
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -20,6 +26,11 @@ object FileLogger {
     private const val RELATIVE_DIR = "Documents/Log"
     private val lock = ReentrantLock()
     private lateinit var appContext: Context
+
+    // All actual disk/MediaStore I/O happens on this single background thread so that
+    // callers (main thread, GPS callback thread, MQTT callback thread, etc.) never block.
+    @Volatile
+    private var writerExecutor: ExecutorService? = null
 
     // === Formats ===
     private val timeFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
@@ -40,15 +51,66 @@ object FileLogger {
 
     private fun ready(): Boolean = ::appContext.isInitialized
 
+    // init() is called from App.onCreate() plus every top-level Activity's onCreate() as a
+    // "make sure it's ready" safety net. Only the first call in a process should actually pick
+    // a target file / write the header - repeat calls used to re-run resolveOrCreateMediaStoreFile()
+    // for the same display name, which (depending on MediaStore query timing) could create a
+    // second, uniquely-renamed row and leave this session split across two files on disk.
+    @Volatile
+    private var initialized = false
+
+    // Survives process death (crash + auto-restart, or the OS killing the app in the
+    // background) so the next process to call init() can find and append to the SAME file
+    // instead of starting a new one. Which file counts as "current" is controlled entirely by
+    // the driver's Fetch Roster / Use Cache choice (see startNewSession) - NOT by whether the
+    // app was closed in between, so "Use Cache" always continues the most recent log even after
+    // a full close+reopen, and only "Fetch Roster" ever starts a new one.
+    private const val SESSION_PREFS = "file_logger_session"
+    private const val KEY_SESSION_FILE = "session_file_name"
+    private fun sessionPrefs() = appContext.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
+
     fun init(context: Context) {
         appContext = context.applicationContext
-        try { getLogDir().mkdirs() } catch (_: Exception) {}
-        if (fileDisplayName == null) {
-            sessionStart = Date()
-            fileDisplayName = "app-log_${nameFmt.format(sessionStart)}.txt"
+        if (initialized) return
+        initialized = true
+
+        if (writerExecutor == null) {
+            writerExecutor = Executors.newSingleThreadExecutor { r ->
+                Thread(r, "FileLogger-Writer").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }
+            }
         }
+        try { getLogDir().mkdirs() } catch (_: Exception) {}
+
+        // Default until the driver picks a button: continue whatever the most recent log was,
+        // same as "Use Cache" would (covers early boot-time logging, and the crash-restart path
+        // where SplashActivity auto-selects Use Cache without the driver clicking anything).
+        beginSession(resumedName = sessionPrefs().getString(KEY_SESSION_FILE, null))
+    }
+
+    /**
+     * Forces a brand new log file starting now, abandoning whatever was previously active - call
+     * this when the driver picks "Fetch Roster", since that's the one action that means "start
+     * over," matching the schedule reset with a clean log instead of mixing a new shift into an
+     * old file. "Use Cache" needs no corresponding call: init()'s default already continues the
+     * most recent log.
+     */
+    fun startNewSession() {
+        if (!ready()) return
+        line("=== Switching to a new log (Fetch Roster selected) ===")
+        beginSession(resumedName = null)
+    }
+
+    private fun beginSession(resumedName: String?) {
+        sessionStart = Date()
+        fileDisplayName = resumedName ?: "app-log_${nameFmt.format(sessionStart)}.txt"
         prepareTarget()
-        writeCreationHeader()
+
+        if (resumedName != null) {
+            line("=== Session resumed ${now()} (same log continues) ===")
+        } else {
+            sessionPrefs().edit { putString(KEY_SESSION_FILE, fileDisplayName) }
+            writeCreationHeader()
+        }
 
         // 🔧 keep only the newest 6 log files
         Thread { pruneOldLogs(maxKeep = 6) }.start()
@@ -102,12 +164,28 @@ object FileLogger {
      * Write to public Documents/Log:
      *  - API 29+: MediaStore (no storage permission needed)
      *  - API 28-: Documents/Log via Environment.getExternalStoragePublicDirectory (needs WRITE_EXTERNAL_STORAGE)
+     *
+     * Never touches disk/MediaStore on the calling thread — the actual I/O is queued onto a
+     * single background thread so this call returns immediately (safe to call from the main
+     * thread / GPS callback / MQTT callback without risking lag or ANRs).
      */
     private fun line(text: String) {
         if (!ready()) {
             Log.w(TAG, "Called before init(); dropping line"); return
         }
+        val exec = writerExecutor
+        if (exec == null) {
+            Log.w(TAG, "Writer not ready; dropping line"); return
+        }
+        try {
+            exec.execute { writeLineBlocking(text) }
+        } catch (e: RejectedExecutionException) {
+            Log.e(TAG, "Log executor rejected task: ${e.message}")
+        }
+    }
 
+    /** Actual disk/MediaStore write. Only ever called on the background writer thread. */
+    private fun writeLineBlocking(text: String) {
         lock.withLock {
             try {
                 if (Build.VERSION.SDK_INT >= 29) {
@@ -125,6 +203,23 @@ object FileLogger {
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to write log: ${e.message}")
             }
+        }
+    }
+
+    /**
+     * Blocks the calling thread until all log lines queued so far have been written to disk,
+     * or [timeoutMs] elapses. Intended ONLY for use right before the process is about to die
+     * (e.g. from an uncaught exception handler) where an async write could otherwise be lost.
+     * Do not call this from normal app code / hot paths.
+     */
+    fun flushBlocking(timeoutMs: Long = 2000) {
+        val exec = writerExecutor ?: return
+        try {
+            val latch = CountDownLatch(1)
+            exec.execute { latch.countDown() }
+            latch.await(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (e: Exception) {
+            Log.e(TAG, "flushBlocking failed: ${e.message}")
         }
     }
 

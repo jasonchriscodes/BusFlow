@@ -8,11 +8,14 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.view.WindowManager
 import androidx.core.app.ActivityCompat
 import com.jason.publisher.main.services.background.ScreenRecordService
 import com.jason.publisher.modules.battery.services.BatteryLowWatcher
+import com.jason.publisher.main.loggers.FetchSessionStore
 import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
 import android.Manifest
 import android.util.Log
 import androidx.core.content.edit
@@ -40,16 +43,73 @@ class App : Application(), Application.ActivityLifecycleCallbacks {
                 Log.d("App", "No activities alive, stopping screen recording service")
                 ScreenRecordService.stop(applicationContext)
             }
+
+            // The app is judged "fully closed" here - forget that Fetch Roster was already
+            // chosen this open, so the next open shows the normal Fetch/Use Cache choice again
+            // instead of silently treating it like a crash-restart.
+            FetchSessionStore.clear(applicationContext)
         }
     }
 
     override fun onCreate() {
         super.onCreate()
         FileLogger.init(this)
+        installCrashHandler()
         registerActivityLifecycleCallbacks(this)
 
         // 🔋 Start battery watcher (sends GPS when battery is about to die)
         BatteryLowWatcher.start(this)
+    }
+
+    /**
+     * Catches any exception that would otherwise crash the app silently (from the log's
+     * perspective). Writes the full exception type/message/stack trace plus a snapshot of
+     * what the driver was looking at (current page, current/upcoming stop, position) to the
+     * persistent file log, then hands off to the previous handler so normal OS crash
+     * behavior (system dialog, process death, any crash-reporting SDK) is unaffected.
+     *
+     * Exception: MQTT (Paho) runs its own background threads that Android will kill the whole
+     * app for if one of them ever throws uncaught - e.g. a plain network drop while the bus is
+     * moving through a dead zone. That's a routine, recoverable event (Paho's automatic
+     * reconnect handles it), not a reason to end the driver's shift. Those are logged as a
+     * warning and swallowed instead of being handed to the OS default handler.
+     */
+    private fun installCrashHandler() {
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            val isMqttThreadFailure = originatesFromPaho(throwable)
+            try {
+                FileLogger.e(
+                    if (isMqttThreadFailure) "MQTT_THREAD_FAILURE" else "FATAL_CRASH",
+                    "thread=${thread.name} | ${throwable.javaClass.name}: ${throwable.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(throwable)}"
+                )
+                // Uncaught exceptions kill the process right after this handler returns, so the
+                // async write above must be forced to disk now or it may never land.
+                FileLogger.flushBlocking()
+            } catch (loggingFailure: Throwable) {
+                Log.e("App", "Failed to log fatal crash: ${loggingFailure.message}")
+            }
+
+            if (isMqttThreadFailure) return@setDefaultUncaughtExceptionHandler
+
+            previousHandler?.uncaughtException(thread, throwable)
+                ?: run {
+                    Process.killProcess(Process.myPid())
+                    kotlin.system.exitProcess(10)
+                }
+        }
+    }
+
+    /** True if [throwable] or anything in its cause chain was raised by the Paho MQTT library. */
+    private fun originatesFromPaho(throwable: Throwable): Boolean {
+        var current: Throwable? = throwable
+        var depth = 0
+        while (current != null && depth < 10) {
+            if (current.stackTrace.any { it.className.startsWith("org.eclipse.paho.") }) return true
+            current = current.cause.takeIf { it !== current }
+            depth++
+        }
+        return false
     }
 
     override fun onTerminate() {
@@ -77,6 +137,10 @@ class App : Application(), Application.ActivityLifecycleCallbacks {
 
     // Apply to every Activity while it's visible
     override fun onActivityResumed(activity: Activity) {
+        // Fallback page tracker for the crash handler in case an activity never called
+        // TripStateSnapshot.onActivityEntered() itself (e.g. a screen we haven't wired up yet).
+        TripStateSnapshot.currentActivity = activity.javaClass.simpleName
+
         activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         // 🔔 Ask POST_NOTIFICATIONS at first foreground Activity on Android 13+

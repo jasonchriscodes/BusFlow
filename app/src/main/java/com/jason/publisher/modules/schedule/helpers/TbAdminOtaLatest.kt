@@ -1,5 +1,6 @@
 package com.jason.publisher.modules.schedule.helpers
 
+import android.util.Log
 import com.jason.publisher.main.loggers.FileLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -55,7 +56,10 @@ class TbAdminOtaLatest(
 
             if (!resp.isSuccessful) return@withContext null
 
-            val json = runCatching { JSONObject(bodyStr) }.getOrNull()
+            val json = runCatching { JSONObject(bodyStr) }.getOrElse { e ->
+                FileLogger.e("TbAdminOtaLatest", "login: JSON parse failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
+                null
+            }
             if (json == null) {
                 log("login: FAIL cannot parse JSON")
                 return@withContext null

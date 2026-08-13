@@ -15,6 +15,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.jason.publisher.R
+import com.jason.publisher.main.loggers.FileLogger
+import com.jason.publisher.main.loggers.TripStateSnapshot
+import com.jason.publisher.main.loggers.UserActionLogger
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.utils.extractWorkIntervalsAndRunNames
 import com.jason.publisher.main.utils.truncateUntilBreak
@@ -53,6 +56,7 @@ class ConfirmationActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_confirmation)
+        FileLogger.d("ConfirmationActivity", "onCreate")
 
         val firstScheduleItem = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableArrayListExtra("FIRST_SCHEDULE_ITEM", ScheduleItem::class.java)
@@ -93,8 +97,14 @@ class ConfirmationActivity : AppCompatActivity() {
         warningText.text = "Please confirm BDC and Hanover before"
         startTimeText.text = firstScheduleItem?.startTime ?: "--:--"
 
-        bdcRow.setOnClickListener { bdcSparkButton.performClick() }
-        hanoverRow.setOnClickListener { hanoverSparkButton.performClick() }
+        bdcRow.setOnClickListener {
+            UserActionLogger.click("ConfirmationActivity", "bdcRow", "tripLabel=$tripLabel")
+            bdcSparkButton.performClick()
+        }
+        hanoverRow.setOnClickListener {
+            UserActionLogger.click("ConfirmationActivity", "hanoverRow", "tripLabel=$tripLabel")
+            hanoverSparkButton.performClick()
+        }
 
         var signageConfirmed = false
 
@@ -111,13 +121,17 @@ class ConfirmationActivity : AppCompatActivity() {
         val onSignageAnimationEnd = {
             if (!signageConfirmed) {
                 signageConfirmed = true
+                UserActionLogger.stateChanged("ConfirmationActivity", "signageConfirmed", false, true)
                 launchTarget()
             }
         }
 
         bdcSparkButton.setEventListener(object : SparkEventListener {
             override fun onEvent(button: ImageView, buttonState: Boolean) {
-                if (buttonState) onSignageChecked()
+                if (buttonState) {
+                    UserActionLogger.stateChanged("ConfirmationActivity", "bdcConfirmed", false, true)
+                    onSignageChecked()
+                }
             }
             override fun onEventAnimationStart(button: ImageView, buttonState: Boolean) {}
             override fun onEventAnimationEnd(button: ImageView, buttonState: Boolean) {
@@ -126,7 +140,10 @@ class ConfirmationActivity : AppCompatActivity() {
         })
         hanoverSparkButton.setEventListener(object : SparkEventListener {
             override fun onEvent(button: ImageView, buttonState: Boolean) {
-                if (buttonState) onSignageChecked()
+                if (buttonState) {
+                    UserActionLogger.stateChanged("ConfirmationActivity", "hanoverConfirmed", false, true)
+                    onSignageChecked()
+                }
             }
             override fun onEventAnimationStart(button: ImageView, buttonState: Boolean) {}
             override fun onEventAnimationEnd(button: ImageView, buttonState: Boolean) {
@@ -136,9 +153,11 @@ class ConfirmationActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                UserActionLogger.click("ConfirmationActivity", "systemBackPressed")
                 if (bdcSparkButton.isChecked || hanoverSparkButton.isChecked) {
                     finish()
                 } else {
+                    UserActionLogger.shown("ConfirmationActivity", "toast", "Please confirm BDC or Hanover before continuing")
                     Toast.makeText(
                         this@ConfirmationActivity,
                         "Please confirm BDC or Hanover before continuing",
@@ -192,7 +211,10 @@ class ConfirmationActivity : AppCompatActivity() {
         applyVisibility()
 
         changeModeButton.setOnClickListener {
+            UserActionLogger.click("ConfirmationActivity", "changeModeButton")
+            val old = isTabulatedView
             isTabulatedView = !isTabulatedView
+            UserActionLogger.stateChanged("ConfirmationActivity", "isTabulatedView", old, isTabulatedView)
             applyVisibility()
         }
     }
@@ -224,9 +246,12 @@ class ConfirmationActivity : AppCompatActivity() {
         }
 
         if (targetClass == null) {
+            FileLogger.w("ConfirmationActivity", "launchTarget: unknown/missing EXTRA_TARGET=${intent.getStringExtra(EXTRA_TARGET)}")
             finish()
             return
         }
+
+        FileLogger.d("ConfirmationActivity", "launchTarget -> ${targetClass.simpleName} | ${TripStateSnapshot.describe()}")
 
         val forwardedIntent = Intent(this, targetClass).apply {
             putExtras(intent)
