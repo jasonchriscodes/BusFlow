@@ -4,9 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Service
 import android.content.Intent
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresApi
 import com.jason.publisher.main.loggers.FetchSessionStore
@@ -15,7 +13,6 @@ import com.jason.publisher.main.utils.getOrCreateDeviceAid
 import com.jason.publisher.modules.map.mqtt.helpers.MqttConfigHelper
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper.Companion.ATTR_TOPIC
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper.Companion.PUB_MSG_TOPIC
-import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper.Companion.REQUEST_PERIODIC_TIME
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import org.json.JSONObject
 
@@ -111,20 +108,6 @@ class ClientAttributesService : Service() {
                 Log.w("ClientAttributesService", "clearActiveSegment failed: ${e.message}")
                 FileLogger.w("ClientAttributesService", "clearActiveSegment failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             }
-
-            // 2) ask ThingsBoard to re-broadcast and then force a poll/refresh
-            try {
-                // this triggers any admin broadcast side-effects you use
-                try { requestAdminMessage() } catch (e: Exception) {
-                    Log.w("ClientAttributesService", "requestAdminMessage failed: ${e.message}")
-                    FileLogger.w("ClientAttributesService", "requestAdminMessage failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
-                }
-                return
-            } catch (e: Exception) {
-                Log.w("ClientAttributesService", "mqttHelper interaction failed: ${e.message}")
-                FileLogger.w("ClientAttributesService", "mqttHelper interaction failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
-            }
-
         } catch (e: Exception) {
             Log.w("ClientAttributesService", "clearActiveSegmentAndRefresh failed: ${e.message}")
             FileLogger.w("ClientAttributesService", "clearActiveSegmentAndRefresh failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
@@ -132,18 +115,12 @@ class ClientAttributesService : Service() {
     }
 
     /**
-     * Requests admin messages periodically.
+     * Nudges ThingsBoard to re-broadcast shared attributes with a single request.
      */
     fun requestAdminMessage() {
         val jsonObject = JSONObject().apply {
             put("sharedKeys", "message,busRoute,busStop,config")
         }
         mqttManager.publish(PUB_MSG_TOPIC, jsonObject.toString())
-        Handler(Looper.getMainLooper()).post(object : Runnable {
-            override fun run() {
-                mqttManager.publish(PUB_MSG_TOPIC, jsonObject.toString())
-                Handler(Looper.getMainLooper()).postDelayed(this, REQUEST_PERIODIC_TIME)
-            }
-        })
     }
 }
