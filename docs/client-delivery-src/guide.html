@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BusFlow: Quick Start Guide</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root { --ink:#1c2230; --muted:#5d6677; --line:#e3e7ee; --soft:#f5f7fb; --brand:#5b3df5; --brand-soft:#efebff;
+          --green:#1f8a4c; --green-soft:#e7f6ee; --red:#d23b3b; --red-soft:#fdecec; --blue:#1e6fd9; --blue-soft:#e8f1fd; --amber:#b7791f; --amber-soft:#fdf5e6; --purple:#7b3fb8; }
+  * { box-sizing:border-box; }
+  html { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body { font-family:"Segoe UI","Inter",Arial,sans-serif; color:var(--ink); font-size:10.2pt; line-height:1.55; margin:0; }
+  h2 { font-size:15pt; margin:0 0 10px; padding-bottom:6px; border-bottom:2px solid var(--brand); display:flex; gap:10px; align-items:baseline; }
+  h2 .num { color:var(--brand); font-weight:800; }
+  h3 { font-size:11.5pt; margin:14px 0 6px; }
+  p { margin:0 0 8px; }
+  code, .mono { font-family:"Cascadia Code",Consolas,monospace; font-size:8.8pt; background:var(--soft); padding:1px 5px; border-radius:4px; }
+  .cmd { font-family:"Cascadia Code",Consolas,monospace; font-size:8.8pt; background:#121826; color:#d7e0f0; border-radius:10px; padding:9px 12px; margin:6px 0 10px; white-space:pre-wrap; word-break:break-all; }
+  section { margin-bottom:18px; }
+  .page-break { break-before:page; }
+  .avoid { break-inside:avoid; }
+  .cover { height:257mm; display:flex; flex-direction:column; }
+  .band { background:linear-gradient(135deg,#3b1fd1 0%,#6a4bff 55%,#1e9bd7 100%); color:#fff; border-radius:18px; padding:34px 32px; }
+  .eyebrow { text-transform:uppercase; letter-spacing:.14em; font-size:8.5pt; opacity:.85; font-weight:600; }
+  .band h1 { font-size:30pt; margin:10px 0 6px; font-weight:800; line-height:1.15; }
+  .band .sub { font-size:12pt; opacity:.92; }
+  .toc { margin-top:22px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .toc div { border:1px solid var(--line); border-radius:12px; padding:11px 13px; }
+  .toc b { color:var(--brand); margin-right:6px; }
+  .steps { counter-reset:s; list-style:none; margin:0; padding:0; }
+  .steps > li { counter-increment:s; position:relative; padding:10px 12px 10px 50px; border:1px solid var(--line); border-radius:12px; margin-bottom:8px; break-inside:avoid; }
+  .steps > li::before { content:counter(s); position:absolute; left:12px; top:10px; width:26px; height:26px; border-radius:50%; background:var(--brand); color:#fff; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:10pt; }
+  .steps b.t { display:block; margin-bottom:2px; }
+  .note { border-radius:10px; padding:10px 13px; font-size:9.4pt; margin:8px 0; break-inside:avoid; }
+  .note.warn { background:var(--amber-soft); border-left:4px solid var(--amber); }
+  .note.info { background:var(--blue-soft); border-left:4px solid var(--blue); }
+  .note.bad { background:var(--red-soft); border-left:4px solid var(--red); }
+  .note.ok { background:var(--green-soft); border-left:4px solid var(--green); }
+  table { width:100%; border-collapse:collapse; font-size:9.3pt; }
+  th { text-align:left; background:var(--soft); color:var(--muted); font-weight:600; font-size:8.4pt; text-transform:uppercase; letter-spacing:.04em; padding:7px 8px; border-bottom:1px solid var(--line); }
+  td { padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tr { break-inside:avoid; }
+  .sw { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-1px; margin-right:6px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .shot { border:1px solid var(--line); border-radius:12px; overflow:hidden; break-inside:avoid; }
+  .shot img { width:100%; display:block; }
+  .shot .cap { padding:7px 11px; font-size:8.8pt; border-top:1px solid var(--line); }
+  .files td:first-child { white-space:nowrap; font-weight:600; }
+  .muted { color:var(--muted); font-size:8.6pt; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="band">
+    <div class="eyebrow">BusFlow · Schedule Stabilization Release</div>
+    <h1>Quick Start Guide</h1>
+    <div class="sub">Install the app, link the tablet to a bus, and run the schedule. About 15 minutes the first time.</div>
+  </div>
+
+  <div class="toc">
+    <div><b>1</b> What's in this package</div>
+    <div><b>2</b> Install the APK</div>
+    <div><b>3</b> First launch &amp; permissions</div>
+    <div><b>4</b> Link the tablet to a bus (AID)</div>
+    <div><b>5</b> Daily use</div>
+    <div><b>6</b> Reading the schedule status</div>
+    <div><b>7</b> Checking accuracy with logs</div>
+    <div><b>8</b> Troubleshooting</div>
+  </div>
+
+  <section style="margin-top:22px">
+    <h2><span class="num">1</span> What's in this package</h2>
+    <table class="files">
+      <tr><th style="width:42%">File</th><th>What it is</th></tr>
+      <tr><td>01_Quick_Start_Guide.pdf</td><td>This guide</td></tr>
+      <tr><td>02_BusFlow-v1.0.1-schedule-stabilization.apk</td><td>The app, ready to install on the tablet</td></tr>
+      <tr><td>03_Stabilization_Report.pdf</td><td>What was fixed, how it was tested, and open questions</td></tr>
+      <tr><td>04_Proof_Screenshots/</td><td>Screenshots and logs from the test run</td></tr>
+      <tr><td>05_Source_Patch/</td><td>Code changes as a git patch, for your developer</td></tr>
+      <tr><td>06_Walkthrough_Video.mp4</td><td>4-minute screen recording of the whole flow, with captions</td></tr>
+      <tr><td>Thank_You.pdf</td><td>A short note from us</td></tr>
+    </table>
+  </section>
+
+  <div style="flex:1"></div>
+  <div class="note info"><b>Quick start in one line:</b> install the APK, grant the permissions, tap <b>Copy AID</b>, put that AID into the bus's <code>config</code> entry in ThingsBoard, reopen the app, then tap <b>Fetch Roster</b>.</div>
+</div>
+
+<!-- 2 INSTALL -->
+<section class="page-break">
+  <h2><span class="num">2</span> Install the APK</h2>
+  <div class="note warn"><b>Before you start:</b> this is a <b>test build (debug-signed)</b>. If the tablet already has BusFlow installed from a different build, Android will refuse to update it (<i>"App not installed"</i> / signature conflict). <b>Uninstall the old app first.</b> Uninstalling is safe: the tablet's ID (<code>aid.txt</code>) and the schedule cache are stored in <code>Documents/.vlrshiddenfolder/</code> and are kept.</div>
+
+  <h3>Option A: on the tablet (no computer needed)</h3>
+  <ol class="steps">
+    <li><b class="t">Copy the APK to the tablet</b>Use a USB cable, Google Drive, or email. Save it somewhere easy to find, such as <i>Downloads</i>.</li>
+    <li><b class="t">Open the APK</b>Open the <i>Files</i> app, go to <i>Downloads</i>, and tap <code>02_BusFlow-v1.0.1-schedule-stabilization.apk</code>.</li>
+    <li><b class="t">Allow installing from this source</b>If Android asks, tap <b>Settings</b>, turn on <b>Allow from this source</b>, then go back.</li>
+    <li><b class="t">Tap Install</b>When it finishes, tap <b>Open</b>, or find <b>BusFlow-Publisher</b> in the app list.</li>
+  </ol>
+
+  <h3>Option B: from a computer with ADB</h3>
+  <p>Turn on <i>Developer options → USB debugging</i> on the tablet, connect it with USB, then run:</p>
+  <div class="cmd">adb install -r -g 02_BusFlow-v1.0.1-schedule-stabilization.apk</div>
+  <p class="muted"><code>-g</code> grants the normal permissions automatically. You still need to allow "All files access" by hand (next page).</p>
+
+  <h3>Requirements</h3>
+  <table>
+    <tr><td style="width:34%"><b>Android</b></td><td>5.0 or newer (tested on Android 15, tablet 2560×1600)</td></tr>
+    <tr><td><b>Internet</b></td><td>Needed for Fetch Roster and live status. Use Wi-Fi the first time: the app downloads a <b>656 MB</b> offline map on the first Start Route.</td></tr>
+    <tr><td><b>Storage</b></td><td>About 1 GB free</td></tr>
+    <tr><td><b>Location</b></td><td>GPS on, set to high accuracy</td></tr>
+  </table>
+</section>
+
+<!-- 3 FIRST LAUNCH -->
+<section class="page-break">
+  <h2><span class="num">3</span> First launch &amp; permissions</h2>
+  <p>Allow everything the app asks for. Without these permissions the schedule cannot be saved or tracked.</p>
+  <table>
+    <tr><th style="width:30%">Permission</th><th style="width:25%">Choose</th><th>Why</th></tr>
+    <tr><td><b>Location</b></td><td><b>Allow all the time</b></td><td>Live position, ETA, and Ahead / On Time / Behind</td></tr>
+    <tr><td><b>All files access</b></td><td><b>Allow</b></td><td>Stores the tablet ID, the schedule cache, the offline map, and logs in <code>Documents/</code></td></tr>
+    <tr><td><b>Notifications</b></td><td><b>Allow</b></td><td>Background service status</td></tr>
+    <tr><td><b>Screen recording</b> prompt</td><td>Start, or Cancel</td><td>Optional trip recording. The schedule works either way.</td></tr>
+  </table>
+  <div class="note info">If "All files access" did not appear, open <i>Settings → Apps → BusFlow-Publisher → Permissions → Files and media</i> (on some tablets: <i>Special app access → All files access</i>) and turn it on.</div>
+
+  <h3>The start screen</h3>
+  <table>
+    <tr><td style="width:30%"><b>FETCH ROSTER</b></td><td>Downloads a <b>fresh</b> schedule from ThingsBoard and starts the day from the beginning. Use it at the start of a shift, or after the schedule was changed on the server.</td></tr>
+    <tr><td><b>USE CACHE</b></td><td><b>Continues</b> where the tablet left off (for example after a restart or with no signal). Completed trips stay completed, and an interrupted trip is still at the top.</td></tr>
+  </table>
+  <div class="note ok">If the app was closed in the middle of a trip, it goes straight back to the schedule on the next launch. This is expected.</div>
+</section>
+
+<!-- 4 AID -->
+<section class="page-break">
+  <h2><span class="num">4</span> Link the tablet to a bus (AID)</h2>
+  <p>Every tablet has a permanent ID called the <b>AID</b>. ThingsBoard uses it to decide which bus (and which schedule) the tablet belongs to. <b>If the schedule does not appear, check this first.</b></p>
+
+  <div class="note bad"><b>Important:</b> on a new tablet the app may show a <b>"Register"</b> dialog asking for a bus name. <b>Do not tap Register</b> unless you really want to create a brand-new bus. It creates a new device in ThingsBoard and changes the config on every device. Tap <b>Go Offline</b> instead and continue below.</div>
+
+  <ol class="steps">
+    <li><b class="t">Get the tablet's AID</b>On the schedule screen, tap <b>COPY AID</b> (top right) and paste it somewhere, such as a note or a message to yourself.<br>
+      <span class="muted">With a computer:</span> <code>adb shell cat /sdcard/Documents/.vlrshiddenfolder/aid.txt</code><br>
+      <span class="muted">Do not use <code>settings get secure android_id</code>. On Android 8+ it returns a different value from the one the app uses.</span></li>
+    <li><b class="t">Open ThingsBoard</b>Go to <i>Entities → Devices</i>.</li>
+    <li><b class="t">Edit the bus entry in every device that has a <code>config</code></b>
+      For each of <b>Config Data</b>, <b>Bus A Device</b>, and <b>Bus B Device</b>: open the device, go to <i>Attributes → Shared attributes</i>, edit <code>config</code>, find the entry for your bus (for example <code>"bus": "Bus B"</code>), and replace <b>only</b> the <code>aid</code> value with the tablet's AID.</li>
+    <li><b class="t">Keep everything else the same</b>Do not change <code>bus</code> or <code>accessToken</code>. All three devices must end up with the same value.</li>
+    <li><b class="t">Reopen the app and tap FETCH ROSTER</b>The bus's schedule should now appear.</li>
+  </ol>
+
+  <div class="grid2 avoid">
+    <div class="note warn" style="margin:0"><b>Before</b><br><code>{"aid": "OLD_AID", "bus": "Bus B", "accessToken": "…"}</code></div>
+    <div class="note ok" style="margin:0"><b>After</b><br><code>{"aid": "TABLET_AID", "bus": "Bus B", "accessToken": "…"}</code></div>
+  </div>
+  <p class="muted" style="margin-top:8px">The AID is saved in <code>Documents/.vlrshiddenfolder/aid.txt</code>. Reinstalling the app does <b>not</b> change it.</p>
+</section>
+
+<!-- 5 DAILY USE -->
+<section class="page-break">
+  <h2><span class="num">5</span> Daily use</h2>
+  <div class="shot" style="margin-bottom:10px"><img src="../../../BusFlow_Client_Delivery_2026-09-30/04_Proof_Screenshots/01-fetch-roster-busB-20-items.png"><div class="cap">The schedule screen after Fetch Roster. Green = trip, blue = REP, olive = Sign On / Sign Off / Break.</div></div>
+  <ol class="steps">
+    <li><b class="t">START ROUTE</b>Starts the first item in the list: Sign On, REP, Trip, or Break.</li>
+    <li><b class="t">Confirm</b>Tick the BDC / Hanover confirmation for that item.</li>
+    <li><b class="t">Drive</b>The map shows the route, the upcoming stop, the schedule status, and <i>Next run in</i>.</li>
+    <li><b class="t">Finish</b>At the last stop a <b>Trip Completed</b> dialog shows the rest time before the next run. Tap <b>VIEW NEXT TRIP</b>. For Sign On/Off and Break, tap <b>BACK TO SCHEDULE</b>.</li>
+    <li><b class="t">End a trip early</b>Tap <b>END TRIP</b> (only when the speed is at or below 30 km/h) and enter the passcode (default <code>0000</code>).</li>
+  </ol>
+  <div class="note info"><b>TEST ROUTE</b> runs the same flow with a simulated bus, using the <b>Speed</b> / <b>Slow</b> buttons. Use it for demos and training, not on a live service.</div>
+  <div class="note warn">If Start Route shows <b>"No route data for …"</b>, the app could not find the right route for that item, so it will not start rather than guide the driver along the wrong route. Tap <b>Fetch Roster</b> again. If it still happens, check <code>busRouteData</code> for that bus in ThingsBoard.</div>
+</section>
+
+<!-- 6 STATUS -->
+<section class="page-break">
+  <h2><span class="num">6</span> Reading the schedule status</h2>
+  <p>The status compares the <b>scheduled time</b> at the next timing point with the <b>predicted arrival</b> (remaining distance along the route ÷ current speed). The text, icon, colour, and stop markers always agree.</p>
+  <table>
+    <tr><th style="width:28%">Status</th><th style="width:30%">Predicted arrival vs schedule</th><th>What it means</th></tr>
+    <tr><td><span class="sw" style="background:var(--red)"></span><b>Early</b></td><td>more than 30 s early</td><td>Slow down or wait at the timing point</td></tr>
+    <tr><td><span class="sw" style="background:var(--green)"></span><b>On Time</b></td><td>within ±30 s</td><td>On schedule</td></tr>
+    <tr><td><span class="sw" style="background:var(--blue)"></span><b>Slightly Behind</b></td><td>30 s to 5 min late</td><td>A little late</td></tr>
+    <tr><td><span class="sw" style="background:var(--purple)"></span><b>Very Behind</b></td><td>more than 5 min late</td><td>Significantly late</td></tr>
+  </table>
+  <p class="muted" style="margin-top:6px">Small GPS jitter does not flip the status: it only changes once the value is clearly past a boundary (10 s margin). When the bus is stopped, the app uses the schedule's average speed for the prediction.</p>
+  <div class="note info"><b>"Late for next run by N mins"</b> appears when the predicted arrival at the last stop leaves less than a 5-minute layover before the next run.</div>
+  <div class="grid2">
+    <div class="shot"><img src="../../../BusFlow_Client_Delivery_2026-09-30/04_Proof_Screenshots/07-map-start-ontime-fallback.png"><div class="cap">On Time at the start of a trip</div></div>
+    <div class="shot"><img src="../../../BusFlow_Client_Delivery_2026-09-30/04_Proof_Screenshots/09-map-slightly-behind.png"><div class="cap">Slightly Behind (~1 min late)</div></div>
+  </div>
+</section>
+
+<!-- 7 LOGS -->
+<section class="page-break">
+  <h2><span class="num">7</span> Checking accuracy with logs</h2>
+  <p>Every status the tablet shows can be traced to the numbers that produced it. Connect the tablet to a computer and run:</p>
+  <div class="cmd">adb logcat -s ScheduleAdherence</div>
+  <p>Each line looks like this:</p>
+  <div class="cmd">scheduled=07:34:00 now=07:31:19 distanceRemainingM=1437 effectiveSpeedKmh=20.0 speedSource=GPS predictedArrival=07:35:38 deltaSec=-98 status=SLIGHTLY_BEHIND</div>
+  <table>
+    <tr><td style="width:32%"><code>distanceRemainingM</code></td><td>Metres left to the next timing point, along the route</td></tr>
+    <tr><td><code>speedSource</code></td><td><code>GPS</code>, or <code>SCHEDULE_AVERAGE_FALLBACK</code> when stopped or the GPS speed is implausible</td></tr>
+    <tr><td><code>predictedArrival</code></td><td>now + distance ÷ speed</td></tr>
+    <tr><td><code>deltaSec</code></td><td>scheduled − predicted. Positive = early, negative = late.</td></tr>
+  </table>
+  <p style="margin-top:8px"><b>Example check:</b> 1437 m ÷ 5.56 m/s = 259 s, so 07:31:19 + 4:19 = 07:35:38. 07:34:00 − 07:35:38 = −98 s, which is <b>Slightly Behind</b>, the same as the screen.</p>
+  <p class="muted">The app also writes full logs to <code>Documents/Log/</code> on the tablet.</p>
+</section>
+
+<!-- 8 TROUBLESHOOTING -->
+<section class="page-break">
+  <h2><span class="num">8</span> Troubleshooting</h2>
+  <table>
+    <tr><th style="width:36%">Problem</th><th>What to do</th></tr>
+    <tr><td><b>"App not installed"</b></td><td>An older build with a different signature is installed. Uninstall it, then install again. The tablet ID and cache are kept.</td></tr>
+    <tr><td><b>No schedule / "AID does not match" / Register dialog</b></td><td>The tablet is not linked to a bus. Follow section 4 and check that the AID is identical in <code>config</code> on all three devices.</td></tr>
+    <tr><td><b>"No route data for …" on Start Route</b></td><td>Tap Fetch Roster again. Check <code>busRouteData</code> for that bus in ThingsBoard.</td></tr>
+    <tr><td><b>Start Route does nothing the first time</b></td><td>The 656 MB offline map is downloading. Stay on the schedule screen on Wi-Fi until it finishes, then try again.</td></tr>
+    <tr><td><b>App stays on a blank screen after reopening</b></td><td>Force-stop the app (<i>Settings → Apps → BusFlow-Publisher → Force stop</i>) and open it again.</td></tr>
+    <tr><td><b>Status looks wrong</b></td><td>Check the <code>ScheduleAdherence</code> log (section 7): time, distance, speed, and speed source.</td></tr>
+    <tr><td><b>A completed trip came back</b></td><td>This should no longer happen. If it does, send us the files in <code>Documents/Log/</code> and the time it happened.</td></tr>
+  </table>
+
+  <div class="note warn" style="margin-top:12px"><b>Known issue, outside this release:</b> during testing, the MQTT connection to ThingsBoard Cloud was repeatedly closed by the server about every 2 seconds. The app no longer freezes when this happens and keeps working, but live updates may be delayed. We suspect the ThingsBoard plan limits or several app connections sharing one device token. Details are in the report.</div>
+
+  <h3>For your developer</h3>
+  <p><code>05_Source_Patch/BusFlow-schedule-stabilization.patch</code> contains every code change and the new unit tests, and applies cleanly to commit <code>4b7d3dd</code> on branch <code>jchris_time-table-app</code>:</p>
+  <div class="cmd">git checkout jchris_time-table-app
+git apply 05_Source_Patch/BusFlow-schedule-stabilization.patch
+./gradlew :app:testDebugUnitTest :app:assembleDebug   # needs JDK 17</div>
+</section>
+
+</body>
+</html>

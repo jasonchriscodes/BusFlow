@@ -1,0 +1,1 @@
+timingPoint=Ocean View Road/Tui Street scheduled=07:34:00 now=07:31:19 lat=-36.78159436868221 lon=174.9973789583718 distanceRemainingM=1437 straightLineM=1216 routeDistanceM=2000 scheduledTravelSec=240 smoothedSpeedKmh=20.0 effectiveSpeedKmh=20.0 speedSource=GPS predictedArrival=07:35:38 deltaSec=-98 status=SLIGHTLY_BEHIND
