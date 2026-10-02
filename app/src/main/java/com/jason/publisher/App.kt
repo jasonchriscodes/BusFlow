@@ -95,7 +95,10 @@ class App : Application(), Application.ActivityLifecycleCallbacks {
                 Log.e("App", "Failed to log fatal crash: ${loggingFailure.message}")
             }
 
-            if (isMqttThreadFailure) return@setDefaultUncaughtExceptionHandler
+            // Swallowing is only safe on background threads: if the main thread dies its Looper is
+            // gone, the UI freezes and Android shows an ANR. A real crash + restart is better.
+            val isMainThread = thread === android.os.Looper.getMainLooper().thread
+            if (isMqttThreadFailure && !isMainThread) return@setDefaultUncaughtExceptionHandler
 
             previousHandler?.uncaughtException(thread, throwable)
                 ?: run {

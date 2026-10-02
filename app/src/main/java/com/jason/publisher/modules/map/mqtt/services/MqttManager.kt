@@ -38,6 +38,9 @@ class MqttManager(
     private var manuallyDisconnected = false
 
     companion object {
+        /** One shared thread for blocking MQTT calls issued from the main thread. */
+        private val mqttIo = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "MqttManager-io").apply { isDaemon = true } }
+
         const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
 
         fun newClientId(): String {
@@ -54,6 +57,8 @@ class MqttManager(
         // connection itself instead of leaving tracking silently dark until some other screen
         // happens to call connect() again.
         connectOptions.isAutomaticReconnect = true
+        // Blocking Paho calls must never wait longer than this (they used to hang the UI → ANR).
+        mqttClient.timeToWait = 3000L
 
         mqttClient.setCallback(object : MqttCallbackExtended {
             override fun connectComplete(reconnect: Boolean, serverURI: String?) {
@@ -205,10 +210,10 @@ class MqttManager(
      * @param message The message to publish.
      * @param qos The Quality of Service level for the message (default is 0).
      */
-    fun publish(topic: String, message: String, qos: Int = 0) {
+    fun publish(topic: String, message: String, qos: Int = 0) = runOffMain {
         if (!mqttClient.isConnected) {
             Log.d("MqttManager", "Publish skipped: not connected")
-            return
+            return@runOffMain
         }
         try {
             val mqttMessage = MqttMessage(message.toByteArray()).apply {
@@ -227,14 +232,36 @@ class MqttManager(
      * @param topic The topic to subscribe to.
      * @param callback The callback to handle incoming messages.
      */
-    fun subscribe(topic: String, callback: (String) -> Unit) {
+    fun subscribe(topic: String, callback: (String) -> Unit) = runOffMain {
         if (!mqttClient.isConnected) {
             FileLogger.e("MqttManager", "Subscribe skipped: not connected | topic=$topic | ${TripStateSnapshot.describe()}")
-            return
+            return@runOffMain
         }
-        mqttClient.subscribe(topic) { _, msg -> callback(String(msg.payload)) }
+        try {
+            mqttClient.subscribe(topic) { _, msg -> callback(String(msg.payload)) }
+        } catch (e: Exception) {
+            // The connection can drop between isConnected and subscribe; Paho then rethrows
+            // "Connection lost" on the caller's thread (often main), which froze the UI (ANR).
+            FileLogger.w("MqttManager", "Subscribe failed | topic=$topic | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
+        }
     }
 
+
+    /**
+     * MqttClient is synchronous: publish/subscribe block until the broker answers. Callers run on
+     * the main thread (Handlers, activity code), so hand the work to a background thread there.
+     */
+    private fun runOffMain(block: () -> Unit) {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            mqttIo.execute {
+                try { block() } catch (e: Exception) {
+                    FileLogger.w("MqttManager", "Background MQTT call failed | ${e.javaClass.simpleName}: ${e.message}")
+                }
+            }
+        } else {
+            block()
+        }
+    }
 
     /**
      * Gets the username used for the MQTT connection.
