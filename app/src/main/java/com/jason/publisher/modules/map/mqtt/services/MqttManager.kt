@@ -33,11 +33,16 @@ class MqttManager(
 ) {
     private val persistence = MemoryPersistence()
     private val mqttClient = MqttClient(serverUri, clientId, persistence)
+
+    /** Log-safe identity: instance number + short hash of the device token (never the token itself). */
+    private val tag: String get() = "mqtt#$instanceNo tok=${Integer.toHexString(username.hashCode()).takeLast(6)}"
+    private val instanceNo = instanceCounter.incrementAndGet()
     private val connectOptions = MqttConnectOptions()
     @Volatile
     private var manuallyDisconnected = false
 
     companion object {
+        private val instanceCounter = java.util.concurrent.atomic.AtomicInteger(0)
         /** One shared thread for blocking MQTT calls issued from the main thread. */
         private val mqttIo = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "MqttManager-io").apply { isDaemon = true } }
 
@@ -62,8 +67,15 @@ class MqttManager(
 
         mqttClient.setCallback(object : MqttCallbackExtended {
             override fun connectComplete(reconnect: Boolean, serverURI: String?) {
-                Log.d("MqttManager", "MQTT connectComplete reconnect=$reconnect server=$serverURI")
-                FileLogger.d("MqttManager", "MQTT connectComplete reconnect=$reconnect server=$serverURI")
+                if (manuallyDisconnected) {
+                    // A reconnect finished after this manager was released: shut it down instead of
+                    // keeping a zombie session open on the same device token.
+                    FileLogger.w("MqttManager", "Late reconnect on a released client; shutting it down")
+                    mqttIo.execute { shutdownClient() }
+                    return
+                }
+                Log.d("MqttManager", "MQTT connectComplete reconnect=$reconnect $tag")
+                FileLogger.d("MqttManager", "MQTT connectComplete reconnect=$reconnect $tag")
             }
 
             override fun connectionLost(cause: Throwable?) {
@@ -73,7 +85,7 @@ class MqttManager(
                 }
 
                 val causeText = cause?.let { "${it.javaClass.simpleName}: ${it.message}\n${Log.getStackTraceString(it)}" } ?: "unknown"
-                FileLogger.w("MqttManager", "MQTT connection lost | $causeText | ${TripStateSnapshot.describe()}")
+                FileLogger.w("MqttManager", "MQTT connection lost | $tag | $causeText | ${TripStateSnapshot.describe()}")
 
                 // Important: do not throw here. isAutomaticReconnect handles getting back
                 // online; connectComplete(reconnect=true, ...) fires once it succeeds.
@@ -89,7 +101,7 @@ class MqttManager(
             }
         })
 
-        Log.d("MqttManager", "Initializing MQTT client")
+        Log.d("MqttManager", "Initializing MQTT client $tag | ${TripStateSnapshot.describe().substringBefore(" | upcoming")}")
         FileLogger.d("MqttManager", "Initializing MQTT client")
     }
 
@@ -277,17 +289,24 @@ class MqttManager(
     /** Disconnect safely (won't crash if already disconnected) */
     fun disconnect() {
         manuallyDisconnected = true
+        shutdownClient()
+    }
 
+    /**
+     * Stops this client for good. A client that was just dropped by the broker is usually in the
+     * middle of an automatic reconnect: isConnected is false and close() throws "Connect already in
+     * progress", so the old "disconnect only if connected" path left it reconnecting forever. Those
+     * leaked clients (same device token) piled up with every screen change and made ThingsBoard
+     * drop connections every few seconds.
+     */
+    private fun shutdownClient() {
         try {
-            if (mqttClient.isConnected) {
-                mqttClient.disconnect()
-            }
+            mqttClient.disconnectForcibly(0L, 1000L)
         } catch (e: Exception) {
-            FileLogger.w("MqttManager", "Disconnect failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
+            Log.d("MqttManager", "disconnectForcibly: ${e.javaClass.simpleName}: ${e.message}")
         }
-
         try {
-            mqttClient.close()
+            mqttClient.close(true)
         } catch (e: Exception) {
             FileLogger.w("MqttManager", "Close failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
         }

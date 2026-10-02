@@ -2402,6 +2402,44 @@ class ScheduleActivity : AppCompatActivity() {
         return if (rn.contains("off") || rn.contains("out")) "OFF" else "IN" // "on"/"in" => IN
     }
 
+    /** True when onStop released the MQTT client so a child screen can own the device session. */
+    private var mqttReleasedWhileStopped = false
+
+    override fun onStop() {
+        super.onStop()
+        // ThingsBoard keeps one MQTT session per device token. Map/REP/Break/Signing open their own
+        // client with the same token, so keeping ours alive made the two kick each other off every
+        // couple of seconds (the "rate limit" symptom). Release it while this screen is hidden.
+        if (!isChangingConfigurations && ::mqttManager.isInitialized && viewModel.token.isNotEmpty()) {
+            stopAdminPolling()
+            try { mqttManager.disconnect() } catch (e: Exception) {
+                FileLogger.w("ScheduleActivity", "MQTT release onStop failed | ${e.javaClass.simpleName}: ${e.message}")
+            }
+            mqttReleasedWhileStopped = true
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.P)
+    override fun onRestart() {
+        super.onRestart()
+        if (!mqttReleasedWhileStopped || viewModel.token.isEmpty()) return
+        mqttReleasedWhileStopped = false
+        mqttManager = MqttManager(clientId = buildClientId(), username = viewModel.token)
+        ioScope.launch {
+            mqttManager.connect { ok ->
+                runOnUiThread {
+                    if (ok) {
+                        // Re-delivered roster is ignored by the hasLoadedServerRoster guard.
+                        subscribeSharedData()
+                        startAdminPolling()
+                    } else {
+                        FileLogger.w("ScheduleActivity", "MQTT reconnect after returning to Schedule failed; staying on cached state")
+                    }
+                }
+            }
+        }
+    }
+
     override fun onResume() {
         super.onResume()
 
