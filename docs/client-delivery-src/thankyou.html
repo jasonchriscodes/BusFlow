@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Thank You</title>
+<style>
+  @page { size: 210mm 148mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; width: 210mm; height: 148mm; font-family: "Segoe UI", "Inter", Arial, sans-serif; color: #1c2230; }
+  .card { position: relative; width: 210mm; height: 148mm; overflow: hidden; display: grid; grid-template-columns: 78mm 1fr; }
+  .left { background: linear-gradient(160deg, #3b1fd1 0%, #6a4bff 55%, #1e9bd7 100%); color: #fff; padding: 16mm 12mm; display: flex; flex-direction: column; justify-content: space-between; position: relative; }
+  .left::after { content: ""; position: absolute; right: -40mm; bottom: -40mm; width: 90mm; height: 90mm; border-radius: 50%; background: rgba(255,255,255,.08); }
+  .left::before { content: ""; position: absolute; left: -25mm; top: -25mm; width: 60mm; height: 60mm; border-radius: 50%; background: rgba(255,255,255,.07); }
+  .brand { font-size: 9pt; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; opacity: .9; position: relative; z-index: 1; }
+  .big { font-family: Georgia, "Times New Roman", serif; font-size: 40pt; line-height: 1.02; font-style: italic; position: relative; z-index: 1; }
+  .route { position: relative; z-index: 1; display: flex; align-items: center; gap: 6px; font-size: 8pt; opacity: .95; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; flex: none; }
+  .dash { flex: 1; border-top: 2px dashed rgba(255,255,255,.7); }
+  .right { padding: 16mm 14mm 12mm 13mm; display: flex; flex-direction: column; }
+  .kicker { font-size: 8.5pt; text-transform: uppercase; letter-spacing: .14em; color: #5b3df5; font-weight: 700; }
+  h1 { font-size: 19pt; margin: 6px 0 10px; line-height: 1.2; }
+  p { font-size: 10.2pt; line-height: 1.6; margin: 0 0 8px; color: #333a4a; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+  .chip { font-size: 8.2pt; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #efebff; color: #5b3df5; }
+  .chip.g { background: #e7f6ee; color: #1f8a4c; }
+  .chip.b { background: #e8f1fd; color: #1e6fd9; }
+  .sign { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid #e3e7ee; padding-top: 8px; }
+  .sign .who { font-family: Georgia, serif; font-style: italic; font-size: 13pt; color: #1c2230; }
+  .sign .date { font-size: 8.5pt; color: #5d6677; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="left">
+    <div class="brand">BusFlow</div>
+    <div class="big">Thank<br>you.</div>
+    <div class="route"><span class="dot"></span><span class="dash"></span><span>on schedule</span><span class="dash"></span><span class="dot"></span></div>
+  </div>
+  <div class="right">
+    <div class="kicker">Schedule Stabilization · Delivered</div>
+    <h1>Thank you for trusting us with BusFlow.</h1>
+    <p>It has been a pleasure working on the app that keeps your drivers and passengers moving. This release makes the schedule steadier and its timing clearer, so every status on screen can be explained by the numbers behind it.</p>
+    <div class="chips">
+      <span class="chip g">No repeated or lost trips</span>
+      <span class="chip b">One consistent status</span>
+      <span class="chip">ETA along the real route</span>
+      <span class="chip g">No more freezes</span>
+    </div>
+    <p>We're looking forward to the live test with you, and we're happy to help with anything you need along the way.</p>
+    <div class="sign">
+      <div class="who">The BusFlow Stabilization Team</div>
+      <div class="date">30 September 2026</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -33,11 +33,19 @@ class MqttManager(
 ) {
     private val persistence = MemoryPersistence()
     private val mqttClient = MqttClient(serverUri, clientId, persistence)
+
+    /** Log-safe identity: instance number + short hash of the device token (never the token itself). */
+    private val tag: String get() = "mqtt#$instanceNo tok=${Integer.toHexString(username.hashCode()).takeLast(6)}"
+    private val instanceNo = instanceCounter.incrementAndGet()
     private val connectOptions = MqttConnectOptions()
     @Volatile
     private var manuallyDisconnected = false
 
     companion object {
+        private val instanceCounter = java.util.concurrent.atomic.AtomicInteger(0)
+        /** One shared thread for blocking MQTT calls issued from the main thread. */
+        private val mqttIo = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "MqttManager-io").apply { isDaemon = true } }
+
         const val SERVER_URI = "ssl://mqtt.thingsboard.cloud:8883"
 
         fun newClientId(): String {
@@ -54,11 +62,20 @@ class MqttManager(
         // connection itself instead of leaving tracking silently dark until some other screen
         // happens to call connect() again.
         connectOptions.isAutomaticReconnect = true
+        // Blocking Paho calls must never wait longer than this (they used to hang the UI → ANR).
+        mqttClient.timeToWait = 3000L
 
         mqttClient.setCallback(object : MqttCallbackExtended {
             override fun connectComplete(reconnect: Boolean, serverURI: String?) {
-                Log.d("MqttManager", "MQTT connectComplete reconnect=$reconnect server=$serverURI")
-                FileLogger.d("MqttManager", "MQTT connectComplete reconnect=$reconnect server=$serverURI")
+                if (manuallyDisconnected) {
+                    // A reconnect finished after this manager was released: shut it down instead of
+                    // keeping a zombie session open on the same device token.
+                    FileLogger.w("MqttManager", "Late reconnect on a released client; shutting it down")
+                    mqttIo.execute { shutdownClient() }
+                    return
+                }
+                Log.d("MqttManager", "MQTT connectComplete reconnect=$reconnect $tag")
+                FileLogger.d("MqttManager", "MQTT connectComplete reconnect=$reconnect $tag")
             }
 
             override fun connectionLost(cause: Throwable?) {
@@ -68,7 +85,7 @@ class MqttManager(
                 }
 
                 val causeText = cause?.let { "${it.javaClass.simpleName}: ${it.message}\n${Log.getStackTraceString(it)}" } ?: "unknown"
-                FileLogger.w("MqttManager", "MQTT connection lost | $causeText | ${TripStateSnapshot.describe()}")
+                FileLogger.w("MqttManager", "MQTT connection lost | $tag | $causeText | ${TripStateSnapshot.describe()}")
 
                 // Important: do not throw here. isAutomaticReconnect handles getting back
                 // online; connectComplete(reconnect=true, ...) fires once it succeeds.
@@ -84,7 +101,7 @@ class MqttManager(
             }
         })
 
-        Log.d("MqttManager", "Initializing MQTT client")
+        Log.d("MqttManager", "Initializing MQTT client $tag | ${TripStateSnapshot.describe().substringBefore(" | upcoming")}")
         FileLogger.d("MqttManager", "Initializing MQTT client")
     }
 
@@ -205,10 +222,10 @@ class MqttManager(
      * @param message The message to publish.
      * @param qos The Quality of Service level for the message (default is 0).
      */
-    fun publish(topic: String, message: String, qos: Int = 0) {
+    fun publish(topic: String, message: String, qos: Int = 0) = runOffMain {
         if (!mqttClient.isConnected) {
             Log.d("MqttManager", "Publish skipped: not connected")
-            return
+            return@runOffMain
         }
         try {
             val mqttMessage = MqttMessage(message.toByteArray()).apply {
@@ -227,14 +244,36 @@ class MqttManager(
      * @param topic The topic to subscribe to.
      * @param callback The callback to handle incoming messages.
      */
-    fun subscribe(topic: String, callback: (String) -> Unit) {
+    fun subscribe(topic: String, callback: (String) -> Unit) = runOffMain {
         if (!mqttClient.isConnected) {
             FileLogger.e("MqttManager", "Subscribe skipped: not connected | topic=$topic | ${TripStateSnapshot.describe()}")
-            return
+            return@runOffMain
         }
-        mqttClient.subscribe(topic) { _, msg -> callback(String(msg.payload)) }
+        try {
+            mqttClient.subscribe(topic) { _, msg -> callback(String(msg.payload)) }
+        } catch (e: Exception) {
+            // The connection can drop between isConnected and subscribe; Paho then rethrows
+            // "Connection lost" on the caller's thread (often main), which froze the UI (ANR).
+            FileLogger.w("MqttManager", "Subscribe failed | topic=$topic | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
+        }
     }
 
+
+    /**
+     * MqttClient is synchronous: publish/subscribe block until the broker answers. Callers run on
+     * the main thread (Handlers, activity code), so hand the work to a background thread there.
+     */
+    private fun runOffMain(block: () -> Unit) {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            mqttIo.execute {
+                try { block() } catch (e: Exception) {
+                    FileLogger.w("MqttManager", "Background MQTT call failed | ${e.javaClass.simpleName}: ${e.message}")
+                }
+            }
+        } else {
+            block()
+        }
+    }
 
     /**
      * Gets the username used for the MQTT connection.
@@ -250,17 +289,24 @@ class MqttManager(
     /** Disconnect safely (won't crash if already disconnected) */
     fun disconnect() {
         manuallyDisconnected = true
+        shutdownClient()
+    }
 
+    /**
+     * Stops this client for good. A client that was just dropped by the broker is usually in the
+     * middle of an automatic reconnect: isConnected is false and close() throws "Connect already in
+     * progress", so the old "disconnect only if connected" path left it reconnecting forever. Those
+     * leaked clients (same device token) piled up with every screen change and made ThingsBoard
+     * drop connections every few seconds.
+     */
+    private fun shutdownClient() {
         try {
-            if (mqttClient.isConnected) {
-                mqttClient.disconnect()
-            }
+            mqttClient.disconnectForcibly(0L, 1000L)
         } catch (e: Exception) {
-            FileLogger.w("MqttManager", "Disconnect failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
+            Log.d("MqttManager", "disconnectForcibly: ${e.javaClass.simpleName}: ${e.message}")
         }
-
         try {
-            mqttClient.close()
+            mqttClient.close(true)
         } catch (e: Exception) {
             FileLogger.w("MqttManager", "Close failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}")
         }

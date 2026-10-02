@@ -271,6 +271,7 @@ open class BreakActivity : AppCompatActivity() {
 
     protected open fun onDoneClicked(fullRemaining: ArrayList<ScheduleItem>) {
         val remainingAfterBreak = ArrayList(fullRemaining.drop(1))
+        com.jason.publisher.main.utils.ScheduleCache.commitRemaining("BreakActivity", remainingAfterBreak)
         val resultIntent = android.content.Intent().apply {
             putParcelableArrayListExtra("UPDATED_FULL_SCHEDULE_DATA", remainingAfterBreak)
         }
@@ -318,39 +319,19 @@ open class BreakActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 FileLogger.w("BreakActivity", "publishActiveSegment(\"\") failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
             }
-
-            // 2) ask ThingsBoard to re-broadcast and then force a poll/refresh
-            try {
-                // this triggers any admin broadcast side-effects you use
-                try { requestAdminMessage() } catch (e: Exception) {
-                    FileLogger.w("BreakActivity", "requestAdminMessage failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
-                }
-                return
-            } catch (e: Exception) {
-                FileLogger.w("BreakActivity", "mqttHelper interaction failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
-            }
-
         } catch (e: Exception) {
             FileLogger.w("BreakActivity", "clearActiveSegmentAndRefresh failed | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
         }
     }
 
     /**
-     * Requests admin messages periodically.
+     * Nudges ThingsBoard to re-broadcast shared attributes with a single request.
      */
     fun requestAdminMessage() {
         val jsonObject = JSONObject().apply {
             put("sharedKeys", "message,busRoute,busStop,config")
         }
         mqttManager.publish(MqttHelper.Companion.PUB_MSG_TOPIC, jsonObject.toString())
-        Handler(Looper.getMainLooper()).post(object : Runnable {
-            override fun run() {
-                mqttManager.publish(MqttHelper.Companion.PUB_MSG_TOPIC, jsonObject.toString())
-                Handler(Looper.getMainLooper()).postDelayed(this,
-                    MqttHelper.Companion.REQUEST_PERIODIC_TIME
-                )
-            }
-        })
     }
 
     private val heartbeatRunnable = object : Runnable {

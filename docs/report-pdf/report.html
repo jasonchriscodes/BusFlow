@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BusFlow: Schedule Stabilization Report</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root {
+    --ink: #1c2230; --muted: #5d6677; --line: #e3e7ee; --soft: #f5f7fb;
+    --brand: #5b3df5; --brand-soft: #efebff;
+    --green: #1f8a4c; --green-soft: #e7f6ee;
+    --red: #d23b3b; --red-soft: #fdecec;
+    --blue: #1e6fd9; --blue-soft: #e8f1fd;
+    --amber: #b7791f; --amber-soft: #fdf5e6;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: "Segoe UI", "Inter", Arial, sans-serif; color: var(--ink); font-size: 10pt; line-height: 1.5; margin: 0; }
+  h1, h2, h3 { line-height: 1.2; margin: 0; }
+  h2 { font-size: 15pt; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--brand); display: flex; align-items: baseline; gap: 10px; }
+  h2 .num { color: var(--brand); font-weight: 800; }
+  h3 { font-size: 11.5pt; margin: 14px 0 6px; }
+  p { margin: 0 0 8px; }
+  code, .mono { font-family: "Cascadia Code", Consolas, monospace; font-size: 8.6pt; background: var(--soft); padding: 1px 4px; border-radius: 4px; }
+  section { margin-bottom: 18px; }
+  .page-break { break-before: page; }
+  .avoid { break-inside: avoid; }
+
+  /* Cover */
+  .cover { height: 257mm; display: flex; flex-direction: column; }
+  .cover-band { background: linear-gradient(135deg, #3b1fd1 0%, #6a4bff 55%, #1e9bd7 100%); color: #fff; border-radius: 18px; padding: 34px 32px 30px; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: 8.5pt; opacity: .85; font-weight: 600; }
+  .cover h1 { font-size: 30pt; font-weight: 800; margin: 10px 0 6px; }
+  .cover .sub { font-size: 12pt; opacity: .92; }
+  .meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 22px; }
+  .meta div { background: rgba(255,255,255,.14); border-radius: 10px; padding: 9px 12px; font-size: 8.8pt; }
+  .meta b { display: block; font-size: 10pt; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 22px 0 16px; }
+  .kpi { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: #fff; }
+  .kpi .v { font-size: 20pt; font-weight: 800; color: var(--brand); line-height: 1.1; }
+  .kpi .l { font-size: 8.6pt; color: var(--muted); }
+  .note { border-radius: 10px; padding: 10px 13px; font-size: 9.2pt; }
+  .note.warn { background: var(--amber-soft); border-left: 4px solid var(--amber); }
+  .note.info { background: var(--blue-soft); border-left: 4px solid var(--blue); }
+  .note.ok { background: var(--green-soft); border-left: 4px solid var(--green); }
+
+  /* Status table */
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  th { text-align: left; background: var(--soft); color: var(--muted); font-weight: 600; font-size: 8.4pt; text-transform: uppercase; letter-spacing: .04em; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr { break-inside: avoid; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 8pt; font-weight: 700; white-space: nowrap; }
+  .pill.ok { background: var(--green-soft); color: var(--green); }
+  .pill.todo { background: var(--amber-soft); color: var(--amber); }
+  .pill.new { background: var(--red-soft); color: var(--red); }
+  .id { font-weight: 800; color: var(--brand); white-space: nowrap; }
+  .files { color: var(--muted); font-size: 8pt; }
+
+  /* Fix cards */
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; break-inside: avoid; background: #fff; }
+  .card h4 { margin: 0 0 6px; font-size: 10.2pt; display: flex; gap: 8px; align-items: center; }
+  .card .row { font-size: 8.9pt; margin-bottom: 4px; }
+  .card .k { font-weight: 700; color: var(--muted); font-size: 7.8pt; text-transform: uppercase; letter-spacing: .05em; display: block; }
+  .card .before { color: var(--red); }
+  .card .after { color: var(--green); }
+
+  /* Threshold scale */
+  .scale { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; border-radius: 10px; overflow: hidden; margin: 8px 0 4px; font-size: 8.8pt; text-align: center; color: #fff; font-weight: 700; }
+  .scale div { padding: 9px 4px; }
+  .scale small { display: block; font-weight: 500; opacity: .92; }
+
+  /* Evidence */
+  .shot { break-inside: avoid; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 12px; background: #fff; }
+  .shot img { width: 100%; display: block; }
+  .shot .cap { padding: 8px 12px; font-size: 8.9pt; border-top: 1px solid var(--line); }
+  .shot .cap b { color: var(--brand); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .log { font-family: "Cascadia Code", Consolas, monospace; font-size: 7.8pt; background: #121826; color: #d7e0f0; border-radius: 10px; padding: 10px 12px; white-space: pre-wrap; word-break: break-all; margin: 6px 0 10px; }
+  .log .hl { color: #7ee2a8; font-weight: 700; }
+  .calc { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+  .calc span { background: var(--brand-soft); color: var(--brand); border-radius: 8px; padding: 5px 9px; font-weight: 700; font-size: 9pt; }
+  .calc span.eq { background: none; color: var(--muted); padding: 5px 0; }
+  ol, ul { margin: 4px 0 8px 18px; padding: 0; }
+  li { margin-bottom: 3px; }
+  .footer-note { color: var(--muted); font-size: 8pt; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<div class="cover">
+  <div class="cover-band">
+    <div class="eyebrow">BusFlow · Stabilization Sprint</div>
+    <h1>Schedule Stabilization Report</h1>
+    <div class="sub">Schedule Crash Stabilization and Schedule Accuracy &amp; Adherence</div>
+    <div class="meta">
+      <div><b>30 Sep 2026</b>Date</div>
+      <div><b>jchris_time-table-app</b>Branch (base <span class="mono" style="background:rgba(255,255,255,.2)">4b7d3dd</span>)</div>
+      <div><b>Bus B · ThingsBoard Cloud</b>Test data (real payload)</div>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="v">9</div><div class="l">Crash &amp; state fixes, including 2 ANRs and MQTT</div></div>
+    <div class="kpi"><div class="v">9</div><div class="l">Schedule accuracy fixes</div></div>
+    <div class="kpi"><div class="v">29/29</div><div class="l">Unit tests passing</div></div>
+    <div class="kpi"><div class="v">27/27</div><div class="l">Trip/REP launches get the correct route (real payload)</div></div>
+  </div>
+
+  <table class="avoid">
+    <tr><th style="width:52%">Area</th><th>Status</th></tr>
+    <tr><td>Crashes and invalid state in the schedule flow</td><td><span class="pill ok">Done</span> tested on the emulator with real Bus B data</td></tr>
+    <tr><td>Single source for Ahead / On Time / Behind status</td><td><span class="pill ok">Done</span> text, icon, color, zone, and log from one result</td></tr>
+    <tr><td>Next run / "1200+ mins"</td><td><span class="pill ok">Done</span></td></tr>
+    <tr><td>ETA and timing points explainable from the log</td><td><span class="pill ok">Done</span> distance along the route</td></tr>
+    <tr><td>ANR (app freeze) caused by MQTT</td><td><span class="pill new">New finding</span> fixed</td></tr>
+    <tr><td>Live test with real GPS on a physical tablet</td><td><span class="pill todo">Not yet</span></td></tr>
+  </table>
+
+  <div style="flex:1"></div>
+  <div class="note warn"><b>Evidence note:</b> screenshots were taken on an <b>Android tablet emulator</b> (Android 35, 2560×1600) running a debug build from this repo, connected to ThingsBoard Cloud as Bus B. No physical tablet was connected to the PC during this session, so evidence from a physical tablet still needs to be captured during the live test.</div>
+</div>
+
+<!-- ============ 1. CRASH & STATE ============ -->
+<section class="page-break">
+  <h2><span class="num">01</span> Crash &amp; state fixes</h2>
+  <div class="cards">
+    <div class="card"><h4><span class="id">C1</span> Completed trips reappear</h4>
+      <div class="row"><span class="k">Before</span><span class="before">Admin polling every 5 seconds overwrote progress with the full roster.</span></div>
+      <div class="row"><span class="k">After</span><span class="after">The server roster is accepted once per session. Fetch Roster = a fresh snapshot. During a shift, local progress is not overwritten by polling (design decision).</span></div>
+      <div class="files">ScheduleActivity.kt · ScheduleViewModel.kt</div></div>
+    <div class="card"><h4><span class="id">C2</span> Items lost on cancel / crash</h4>
+      <div class="row"><span class="k">Before</span><span class="before">The item was removed and the cache written before the driver committed.</span></div>
+      <div class="row"><span class="k">After</span><span class="after">Removal is only staged. The cache is written on <code>RESULT_OK</code>. On cancel, the list is restored.</span></div>
+      <div class="files">ScheduleActivity.kt</div></div>
+    <div class="card"><h4><span class="id">C3</span> Trip completed, process died, trip repeated</h4>
+      <div class="row"><span class="k">Before</span><span class="before">If the process died before RESULT_OK arrived, the trip came back.</span></div>
+      <div class="row"><span class="k">After</span><span class="after">Map, REP, Break, and Signing write the cache themselves the moment the item completes (<code>ScheduleCache</code>).</span></div>
+      <div class="files">ScheduleCache.kt (new) · Map/Rep/Break/Signing Activity</div></div>
+    <div class="card"><h4><span class="id">C4</span> REP given the Sign On placeholder route</h4>
+      <div class="row"><span class="k">Before</span><span class="before">The depot→depot REP and the Sign On placeholder share the same terminals, and the matcher took the first one.</span></div>
+      <div class="row"><span class="k">After</span><span class="after">The route at the roster item's position is preferred, including for a trimmed roster (cache mode).</span></div>
+      <div class="files">RouteMatcher.kt (new) · ScheduleActivity.kt</div></div>
+    <div class="card"><h4><span class="id">C5</span> Silently used the first route</h4>
+      <div class="row"><span class="k">Before</span><span class="before"><code>firstOrNull()</code> fallback, so the driver could follow another trip's stops.</span></div>
+      <div class="row"><span class="k">After</span><span class="after">Launch is blocked, a toast is shown, and it is logged. Never falls back.</span></div>
+      <div class="files">ScheduleActivity.kt</div></div>
+    <div class="card"><h4><span class="id">C6</span> Crashes on empty / malformed data</h4>
+      <div class="row"><span class="k">Before</span><span class="before"><code>first()</code>, <code>!!</code>, <code>toInt()</code> without guards.</span></div>
+      <div class="row"><span class="k">After</span><span class="after"><code>firstOrNull()</code>, <code>toIntOrNull()</code>, <code>?: return</code>.</span></div>
+      <div class="files">Map/Rep Activity · ViewModel · StatusManager</div></div>
+    <div class="card"><h4><span class="id">C7</span> ANR: MQTT subscribe <span class="pill new">new</span></h4>
+      <div class="row"><span class="k">Before</span><span class="before">"Connection lost" was thrown on the main thread. The main thread died and the UI froze.</span></div>
+      <div class="row"><span class="k">After</span><span class="after">Subscribe is guarded. <code>App.kt</code> no longer swallows errors on the main thread.</span></div>
+      <div class="files">MqttManager.kt · App.kt</div></div>
+    <div class="card"><h4><span class="id">C8</span> ANR: publish blocks the UI <span class="pill new">new</span></h4>
+      <div class="row"><span class="k">Before</span><span class="before">Synchronous <code>MqttClient.publish</code> from the main thread, waiting more than 5 seconds.</span></div>
+      <div class="row"><span class="k">After</span><span class="after">Publish/subscribe run on a background thread, <code>timeToWait</code> = 3 seconds.</span></div>
+      <div class="files">MqttManager.kt</div></div>
+    <div class="card" style="grid-column: 1 / -1"><h4><span class="id">C9</span> MQTT "rate limit": sessions kicking each other off <span class="pill new">new</span></h4>
+      <div class="row"><span class="k">Before</span><span class="before">ThingsBoard allows only one MQTT session per device token. ClientAttributesService and ScheduleActivity (then Map/REP) opened clients with the same Bus token at the same time, so they disconnected each other every 1–2 seconds. The client's fix in <code>c0230d1</code> (leaked publish loops) was correct, but not sufficient: still 225 disconnects in 6 minutes.</span></div>
+      <div class="row"><span class="k">After</span><span class="after">The service only connects when it needs to publish, then disconnects. Schedule releases its connection while a trip screen is open and reconnects on return. A client that is mid auto-reconnect is now really stopped. Result: <b>0 disconnects</b> in the same flow.</span></div>
+      <table style="margin-top:6px"><tr><th>Build</th><th>MQTT disconnects (~6 minutes)</th><th>Per minute</th></tr>
+        <tr><td>Client branch <code>c0230d1</code></td><td>225</td><td>38.6</td></tr>
+        <tr><td>+ schedule fixes</td><td>224</td><td>38.3</td></tr>
+        <tr><td><b>+ MQTT session fix (C9)</b></td><td><b>0</b></td><td><b>0</b></td></tr></table>
+      <div class="files">ClientAttributesService.kt · ScheduleActivity.kt · MqttManager.kt</div></div>
+  </div>
+</section>
+
+<!-- ============ 2. ACCURACY ============ -->
+<section class="page-break">
+  <h2><span class="num">02</span> Schedule accuracy fixes</h2>
+
+  <h3>Single status source: centralized thresholds</h3>
+  <p>All thresholds live in <code>ScheduleAdherence.kt</code>. Text, icon, color, marker/zone, and log all use one <code>calculateScheduleStatus()</code> result, in both Map and REP. Delta = scheduled − predicted arrival.</p>
+  <div class="scale">
+    <div style="background:#d23b3b">Early<small>delta &gt; +30 s</small></div>
+    <div style="background:#1f8a4c">On Time<small>−30 … +30 s</small></div>
+    <div style="background:#1e6fd9">Slightly Behind<small>−300 … −31 s</small></div>
+    <div style="background:#7b3fb8">Very Behind<small>&lt; −300 s</small></div>
+  </div>
+  <p class="footer-note">A 10-second hysteresis at each boundary prevents the status from flickering due to GPS noise.</p>
+
+  <table style="margin-top:10px">
+    <tr><th style="width:6%">#</th><th style="width:40%">Problem before</th><th>Fix</th></tr>
+    <tr><td class="id">A1</td><td>Duplicate thresholds: internal <code>&gt;0 / −300 / −600</code>, UI <code>±30 / −300</code>. +15 seconds = EARLY internally but "On Time" in the UI.</td><td>A single <code>ScheduleAdherence</code> module, used by Map and REP.</td></tr>
+    <tr><td class="id">A2</td><td>Status flickered due to GPS noise</td><td>10-second hysteresis</td></tr>
+    <tr><td class="id">A3</td><td>Next run used <code>list[1]</code> and could point to the wrong run. The "last run" dialog appeared while a run was still left.</td><td><code>nextRunAfterActive()</code> selects the next run explicitly</td></tr>
+    <tr><td class="id">A4</td><td>"Next run in 1250 mins", "Late by 1200+ mins"</td><td>No longer shifted to tomorrow. A difference of more than 4 hours is treated as stale data and shown as "Next run at HH:mm".</td></tr>
+    <tr><td class="id">A5</td><td>Late formula jumped: +10 s became "late 10s", −10 s became "late 310s"</td><td>Shortfall against the minimum layover (300 s, value from the old code)</td></tr>
+    <tr><td class="id">A6</td><td>Multiple clocks mixed, midnight not handled</td><td>One clock for all calculations. Time parsing is safe across midnight, malformed input is skipped.</td></tr>
+    <tr><td class="id">A7</td><td><b>ETA used straight-line distance</b>. On winding routes the distance actually increased as the bus got closer.</td><td>Remaining distance measured <b>along the route polyline</b></td></tr>
+    <tr><td class="id">A8</td><td>Fallback speed = distance to the timing point divided by the time of one full trip</td><td>Divided by the scheduled time to that same timing point. <code>speedSource</code> is logged.</td></tr>
+    <tr><td class="id">A9</td><td>Logs were not enough to explain the status</td><td>One <code>ScheduleAdherence</code> line with all inputs and the result, no tokens</td></tr>
+  </table>
+</section>
+
+<!-- ============ 3. VALIDATION ============ -->
+<section class="page-break">
+  <h2><span class="num">03</span> Validation</h2>
+  <h3>Unit tests (JDK 17)</h3>
+  <table class="avoid">
+    <tr><th>Suite</th><th style="width:12%">Result</th><th>Coverage</th></tr>
+    <tr><td><code>ScheduleAdherenceTest</code></td><td><span class="pill ok">18/18</span></td><td>§18A cases (Ahead +120, On Time −10, Behind −180), threshold boundaries, hysteresis, midnight, next run, countdown, speed source</td></tr>
+    <tr><td><code>RouteMatcherTest</code></td><td><span class="pill ok">5/5</span></td><td>REP vs Sign On placeholder, trimmed roster, <b>real Bus A + B payload: 27 correct launches</b></td></tr>
+    <tr><td><code>MapActivityTest</code> (existing)</td><td><span class="pill ok">5/5</span></td><td>No regressions</td></tr>
+    <tr><td><code>ExampleUnitTest</code></td><td><span class="pill ok">1/1</span></td><td></td></tr>
+  </table>
+
+  <h3>State scenarios on the emulator (Bus B, real ThingsBoard)</h3>
+  <table>
+    <tr><th style="width:42%">Scenario</th><th>Result</th></tr>
+    <tr><td>Fetch Roster Bus B</td><td><span class="pill ok">Pass</span> 20 items shown</td></tr>
+    <tr><td>Sign On completed, then wait 15 seconds of polling</td><td><span class="pill ok">Pass</span> list starts from REP, not reset</td></tr>
+    <tr><td>Force-stop, then Use Cache</td><td><span class="pill ok">Pass</span> Sign On does not repeat</td></tr>
+    <tr><td>Process killed in the middle of REP</td><td><span class="pill ok">Pass</span> REP still on top, app automatically enters Schedule</td></tr>
+    <tr><td><b>Process killed while the "Trip Completed" dialog is showing</b></td><td><span class="pill ok">Pass</span> trip does not repeat (twice: REP and 50B)</td></tr>
+    <tr><td>Route for REP 06:29</td><td><span class="pill ok">Pass</span> <code>selectedIdx=1</code> (previously 0)</td></tr>
+    <tr><td>90-second simulation after the MQTT fix</td><td><span class="pill ok">Pass</span> 0 ANRs</td></tr>
+    <tr><td>Cancel on the Confirmation screen</td><td><span class="pill todo">Not testable</span> a single checkbox launches immediately</td></tr>
+  </table>
+
+  <h3>Example: status traceable from the numbers in the log</h3>
+<div class="log">scheduled=07:34:00 now=07:31:19 distanceRemainingM=<span class="hl">1437</span> effectiveSpeedKmh=<span class="hl">20.0</span>
+speedSource=GPS predictedArrival=<span class="hl">07:35:38</span> deltaSec=<span class="hl">-98</span> status=<span class="hl">SLIGHTLY_BEHIND</span></div>
+  <div class="calc"><span>1437 m ÷ 5.56 m/s = 259 s</span><span class="eq">→</span><span>07:31:19 + 4:19 = 07:35:38</span><span class="eq">→</span><span>07:34:00 − 07:35:38 = −98 s</span><span class="eq">→</span><span style="background:var(--blue-soft);color:var(--blue)">Slightly Behind</span></div>
+  <p class="footer-note">During the live test: <code>adb logcat -s ScheduleAdherence</code>, then match the status in the UI against the numbers in the log.</p>
+</section>
+
+<!-- ============ 4. EVIDENCE ============ -->
+<section class="page-break">
+  <h2><span class="num">04</span> Evidence: schedule flow</h2>
+  <div class="shot"><img src="../stabilization-proof/01-fetch-roster-busB-20-items.png"><div class="cap"><b>Fetch Roster:</b> the tablet is recognized as Bus B and 20 schedule items from ThingsBoard are shown.</div></div>
+  <div class="grid2">
+    <div class="shot"><img src="../stabilization-proof/02-signing-sign-on.png"><div class="cap"><b>Signing:</b> Sign On. After Done, the cache is committed and the list moves on to REP.</div></div>
+    <div class="shot"><img src="../stabilization-proof/06-confirmation-50B.png"><div class="cap"><b>Confirmation:</b> 50B 07:30, route matched via RouteMatcher.</div></div>
+  </div>
+  <div class="shot"><img src="../stabilization-proof/05-schedule-after-50A-completed.png"><div class="cap"><b>After 50A completes:</b> back to Schedule, 50B 07:30 first in the list, and the old trip does not reappear.</div></div>
+</section>
+
+<section class="page-break">
+  <h2><span class="num">05</span> Evidence: completed, then process killed</h2>
+  <div class="shot"><img src="../stabilization-proof/10-trip-completed-dialog.png"><div class="cap"><b>Trip Completed:</b> next trip 08:06 and a 20-minute break (correct next run). Log: <code>MapActivity: Committed schedule cache after completion | remaining=16</code></div></div>
+  <div class="shot"><img src="../stabilization-proof/11-killed-during-dialog-reopen-no-repeat.png"><div class="cap"><b>Process killed during the dialog, then reopened:</b> list starts from 50B 08:06. The 07:30 trip <b>does not repeat</b>.</div></div>
+</section>
+
+<section class="page-break">
+  <h2><span class="num">06</span> Evidence: adherence status</h2>
+  <div class="shot"><img src="../stabilization-proof/07-map-start-ontime-fallback.png"><div class="cap"><b>Start of trip, speed 0:</b> On Time, <code>speedSource=SCHEDULE_AVERAGE_FALLBACK</code>, <code>deltaSec=-9</code>.</div></div>
+  <div class="shot"><img src="../stabilization-proof/09-map-slightly-behind.png"><div class="cap"><b>20 km/h:</b> "Slightly Behind (~1 min late)" in blue, matching the log <code>deltaSec=-98 status=SLIGHTLY_BEHIND</code>.</div></div>
+</section>
+
+<section class="page-break">
+  <h2><span class="num">07</span> Evidence: before vs after</h2>
+  <h3>ETA: straight line vs along the route</h3>
+  <div class="grid2">
+    <div class="shot"><img src="../stabilization-proof/before-fix-straight-line-early-7min.png"><div class="cap"><b style="color:var(--red)">Before:</b> straight-line distance, "Early ~7 min". The distance increased even though the bus was getting closer.</div></div>
+    <div class="shot"><img src="../stabilization-proof/after-fix-along-route-early-4min.png"><div class="cap"><b style="color:var(--green)">After:</b> along the route, "Early ~4 min", and the prediction is stable at constant speed.</div></div>
+  </div>
+  <h3>ANR caused by MQTT</h3>
+  <div class="grid2">
+    <div class="shot"><img src="../stabilization-proof/before-fix-ANR-mqtt.png"><div class="cap"><b style="color:var(--red)">Before:</b> "BusFlow-Publisher isn't responding" when the MQTT connection drops.</div></div>
+    <div class="shot"><img src="../stabilization-proof/08-map-ontime-hysteresis.png"><div class="cap"><b style="color:var(--green)">After:</b> the app stays responsive. Delta +39 s stays On Time due to hysteresis (needs more than 40).</div></div>
+  </div>
+</section>
+
+<!-- ============ 8. DECISIONS / RISKS ============ -->
+<section class="page-break">
+  <h2><span class="num">08</span> Needs client confirmation</h2>
+  <ol>
+    <li><b>Meaning of the zone colors.</b> Blue = Slightly Behind (30 seconds to 5 minutes). Previously the marker/zone used blue for 5 minutes or more late. Do the colors carry a specific operational meaning?</li>
+    <li><b>5-minute minimum layover</b> (<code>NEXT_RUN_MIN_LAYOVER_SECONDS</code>). The value comes from the old code. Is this an operational rule?</li>
+    <li><b>On Time tolerance of ±30 seconds.</b> If the client uses, for example, ±120 seconds, it only needs changing in one place.</li>
+    <li><b>Schedule updates mid-shift</b> require another Fetch Roster.</li>
+  </ol>
+</section>
+
+<section>
+  <h2><span class="num">09</span> Remaining risks &amp; deferred items</h2>
+  <div class="note ok avoid" style="margin-bottom:10px"><b>MQTT disconnect/reconnect loop: fixed (C9).</b> The cause was several clients with the same device token disconnecting each other's sessions. After the fix: 0 disconnects on the emulator. Still needs confirming on a physical tablet.</div>
+  <div class="grid2">
+    <div class="card"><h4>Remaining risks</h4><ul style="font-size:9pt">
+      <li>No live test with real GPS on a physical tablet yet.</li>
+      <li>If the roster changes, the real-payload test needs to be rerun.</li>
+      <li>Cancelling via Confirmation is not tested end to end.</li>
+      <li>If the GPS jumps far, the distance estimate can be briefly wrong.</li>
+      <li>Midnight and Very Behind are only covered by unit tests so far.</li>
+    </ul></div>
+    <div class="card"><h4>Deferred (out of scope)</h4><ul style="font-size:9pt">
+      <li>Config Data token is hardcoded in <code>MqttManager.kt</code>.</li>
+      <li><code>vlrskey.jks</code> is committed to the repo.</li>
+      <li>Splash can hang because of the screen recording permission.</li>
+      <li><code>RepActivity</code> replaces the global crash handler.</li>
+      <li>Duplicated code between Map and REP.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">10</span> Next steps</h2>
+  <ol>
+    <li>Client confirmation for the points in section 08.</li>
+    <li>Commit to the <code>fix/schedule-stabilization</code> branch, one commit per logical change.</li>
+    <li>Install the APK on a physical tablet, get the AID, then set the Bus B AID in the <code>config</code> of all three devices (requires approval).</li>
+    <li>Live test with real GPS while recording the <code>ScheduleAdherence</code> log, then match the UI against the numbers in the log.</li>
+  </ol>
+  <p class="footer-note">Full technical details (files per change and a chronology of the work) are in <code>docs/SCHEDULE_STABILIZATION_REPORT.md</code>.</p>
+</section>
+
+</body>
+</html>

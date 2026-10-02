@@ -222,6 +222,7 @@ open class SigningActivity : AppCompatActivity() {
         doneBtn.setOnClickListener {
             UserActionLogger.click("SigningActivity", "doneBtn", "signingLabel=$signingLabel signingAction=$signingAction")
             val remainingAfterSigning = ArrayList(fullRemaining.drop(1))
+            com.jason.publisher.main.utils.ScheduleCache.commitRemaining("SigningActivity", remainingAfterSigning)
 
             val resultIntent = Intent().apply {
                 putParcelableArrayListExtra("UPDATED_FULL_SCHEDULE_DATA", remainingAfterSigning)

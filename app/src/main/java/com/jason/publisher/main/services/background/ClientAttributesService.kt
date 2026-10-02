@@ -4,9 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Service
 import android.content.Intent
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresApi
 import com.jason.publisher.main.loggers.FetchSessionStore
@@ -15,14 +13,11 @@ import com.jason.publisher.main.utils.getOrCreateDeviceAid
 import com.jason.publisher.modules.map.mqtt.helpers.MqttConfigHelper
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper.Companion.ATTR_TOPIC
 import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper.Companion.PUB_MSG_TOPIC
-import com.jason.publisher.modules.map.mqtt.helpers.MqttHelper.Companion.REQUEST_PERIODIC_TIME
 import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import org.json.JSONObject
 
 class ClientAttributesService : Service() {
     val mqttConfigHelper = MqttConfigHelper()
-
-    lateinit var mqttManager: MqttManager
 
     /** Access token of the current device */
     var token = ""
@@ -41,8 +36,7 @@ class ClientAttributesService : Service() {
             // service's currentTripLabel clearing was publishing under no proper device identity.
             val aid = getOrCreateDeviceAid(applicationContext)
             token = MqttConfigHelper.getAccessToken(aid, configList)
-            mqttManager = if (token.isNotEmpty()) MqttManager(username = token) else MqttManager()
-            Log.d("ClientAttributesService", "access token: $token")
+            Log.d("ClientAttributesService", "access token resolved: ${token.isNotEmpty()}")
             clearActiveSegmentAndRefresh()
         }
         return START_NOT_STICKY
@@ -78,72 +72,45 @@ class ClientAttributesService : Service() {
      */
     @RequiresApi(Build.VERSION_CODES.M)
     private fun clearActiveSegmentAndRefresh() {
-        try {
-            // 1) publish empty label to clear server-side client attribute
-            try {
-                val payload = "{\"currentTripLabel\":\"\", \"activityState\":\"\"}"
-                if (::mqttManager.isInitialized) {
-                    if (!mqttManager.isMqttConnect()) {
-                        mqttManager.connect { success ->
-                            if (success) {
-                                Log.d("ClientAttributesService", "publishing clearer payload")
-                                mqttManager.publish(ATTR_TOPIC, payload)
-                            } else {
-                                Log.w("ClientAttributesService", "unable to connect to MQTT")
-                            }
-                        }
-                    } else {
-                        Log.d("ClientAttributesService", "publishing clearer payload")
-                        mqttManager.publish(ATTR_TOPIC, payload)
-                    }
-                }
-
-                // Ask server to re-publish shared data and force a quick attribute refresh
-                // so other tablets observe the change promptly.
-                try {
-                    Log.d("ClientAttributesService", "requesting refresh")
-                    requestAdminMessage()
-                } catch (e: Exception) {
-                    Log.w("ClientAttributesService", "clearActiveSegment follow-up failed: ${e.message}")
-                    FileLogger.w("ClientAttributesService", "clearActiveSegment follow-up failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
-                }
-            } catch (e: Exception) {
-                Log.w("ClientAttributesService", "clearActiveSegment failed: ${e.message}")
-                FileLogger.w("ClientAttributesService", "clearActiveSegment failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
-            }
-
-            // 2) ask ThingsBoard to re-broadcast and then force a poll/refresh
-            try {
-                // this triggers any admin broadcast side-effects you use
-                try { requestAdminMessage() } catch (e: Exception) {
-                    Log.w("ClientAttributesService", "requestAdminMessage failed: ${e.message}")
-                    FileLogger.w("ClientAttributesService", "requestAdminMessage failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
-                }
-                return
-            } catch (e: Exception) {
-                Log.w("ClientAttributesService", "mqttHelper interaction failed: ${e.message}")
-                FileLogger.w("ClientAttributesService", "mqttHelper interaction failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
-            }
-
-        } catch (e: Exception) {
-            Log.w("ClientAttributesService", "clearActiveSegmentAndRefresh failed: ${e.message}")
-            FileLogger.w("ClientAttributesService", "clearActiveSegmentAndRefresh failed | ${e.javaClass.simpleName}: ${e.message}\n${Log.getStackTraceString(e)}")
-        }
+        val payload = "{\"currentTripLabel\":\"\", \"activityState\":\"\"}"
+        val refresh = JSONObject().apply { put("sharedKeys", "message,busRoute,busStop,config") }.toString()
+        publishOnce(listOf(ATTR_TOPIC to payload, PUB_MSG_TOPIC to refresh))
     }
 
     /**
-     * Requests admin messages periodically.
+     * Connects, publishes, and disconnects right away. ThingsBoard keeps only one MQTT session per
+     * device token, so a long-lived client here (same token as the activities' client) made the two
+     * sessions kick each other off every couple of seconds. Runs off the main thread because
+     * MqttClient calls block.
+     */
+    private fun publishOnce(messages: List<Pair<String, String>>) {
+        val deviceToken = token
+        Thread({
+            val manager = if (deviceToken.isNotEmpty()) MqttManager(username = deviceToken) else MqttManager()
+            try {
+                manager.connect { success ->
+                    if (success) {
+                        messages.forEach { (topic, body) -> manager.publish(topic, body) }
+                        Log.d("ClientAttributesService", "published ${messages.size} message(s)")
+                    } else {
+                        Log.w("ClientAttributesService", "unable to connect to MQTT")
+                    }
+                }
+            } catch (e: Exception) {
+                FileLogger.w("ClientAttributesService", "publishOnce failed | ${e.javaClass.simpleName}: ${e.message}")
+            } finally {
+                manager.disconnect()
+            }
+        }, "ClientAttributesService-publish").start()
+    }
+
+    /**
+     * Nudges ThingsBoard to re-broadcast shared attributes with a single request.
      */
     fun requestAdminMessage() {
         val jsonObject = JSONObject().apply {
             put("sharedKeys", "message,busRoute,busStop,config")
         }
-        mqttManager.publish(PUB_MSG_TOPIC, jsonObject.toString())
-        Handler(Looper.getMainLooper()).post(object : Runnable {
-            override fun run() {
-                mqttManager.publish(PUB_MSG_TOPIC, jsonObject.toString())
-                Handler(Looper.getMainLooper()).postDelayed(this, REQUEST_PERIODIC_TIME)
-            }
-        })
+        publishOnce(listOf(PUB_MSG_TOPIC to jsonObject.toString()))
     }
 }
