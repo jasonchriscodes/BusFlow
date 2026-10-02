@@ -36,6 +36,7 @@ Scope: per `CLAUDE.md`, namely (1) Schedule Crash Stabilization and (2) Schedule
 | C6 | Possible crashes from `first()`, `!!`, or `toInt()` on empty or malformed data | Unguarded access | Replaced with `firstOrNull()`, `toIntOrNull()`, and `?: return` | `MapActivity.kt`, `RepActivity.kt`, `ScheduleStatusManager.kt`, `RepScheduleStatusManager.kt`, `MapViewModel.kt`, `RepViewModel.kt` |
 | C7 | **ANR:** app froze when the MQTT connection dropped (found on the emulator) | `MqttManager.subscribe()` had no try/catch, so "Connection lost" was thrown on the main thread. The main thread died and `App.kt` swallowed the exception, leaving the UI frozen. | `subscribe` is guarded. `App.kt` no longer swallows MQTT errors on the main thread. | `MqttManager.kt`, `App.kt` |
 | C8 | **ANR:** `publish` blocked the main thread for more than 5 seconds (found on the emulator) | `ClientAttributesService` called the synchronous `MqttClient.publish` from the main thread | Publish and subscribe calls made from the main thread now run on a background thread. `timeToWait` = 3 seconds. | `MqttManager.kt` |
+| C9 | **MQTT "rate limit": sessions kicking each other off** (found while retesting the client branch at `c0230d1`) | ThingsBoard allows only one MQTT session per device token. `ClientAttributesService` and `ScheduleActivity` (then Map/REP) opened clients with the same Bus token at the same time, so they disconnected each other every 1–2 seconds. The client's fix in `c0230d1` was correct but not sufficient (225 disconnects in 6 minutes). | The service only connects to publish, then disconnects. Schedule releases its client in `onStop` and reconnects in `onRestart`. `disconnect()` now really stops a client that is mid auto-reconnect. Result: **0 disconnects** (previously 224–225). | `ClientAttributesService.kt`, `ScheduleActivity.kt`, `MqttManager.kt` |
 
 ### 2.2 Schedule accuracy
 
@@ -155,7 +156,7 @@ adb logcat -s ScheduleAdherence
 
 ## 5. Remaining risks
 
-- **MQTT keeps disconnecting and reconnecting.** On the emulator, the connection to `mqtt.thingsboard.cloud` connects and is then dropped by the server within about 25 ms, repeating every 2 seconds (204 times in 20 minutes, on every screen). The ANR is handled, but the cause is out of scope. Suspected: connection/message limits on the ThingsBoard **Free plan**, or several clients connecting at the same time with the same token (the app creates up to 4 `MqttManager` instances). Needs checking on a physical tablet.
+- **MQTT disconnect/reconnect loop: fixed (C9).** The cause was several clients with the same device token disconnecting each other's sessions. Result on the emulator: 0 disconnects. Still needs confirming on a physical tablet.
 - **No live test with real GPS on a physical tablet yet.** Real GPS noise, hardware accuracy, and OEM behavior are untested.
 - If the client changes the roster, the real-payload test (`RouteMatcherTest`) needs to be rerun with the new data.
 - Cancelling via the Confirmation screen cannot be tested on the emulator, because a single checkbox launches immediately and Back is blocked before anything is checked. The restore logic exists but is not tested end to end.

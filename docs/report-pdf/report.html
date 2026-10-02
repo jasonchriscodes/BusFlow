@@ -102,7 +102,7 @@
   </div>
 
   <div class="kpis">
-    <div class="kpi"><div class="v">8</div><div class="l">Crash &amp; state fixes, including 2 ANRs</div></div>
+    <div class="kpi"><div class="v">9</div><div class="l">Crash &amp; state fixes, including 2 ANRs and MQTT</div></div>
     <div class="kpi"><div class="v">9</div><div class="l">Schedule accuracy fixes</div></div>
     <div class="kpi"><div class="v">29/29</div><div class="l">Unit tests passing</div></div>
     <div class="kpi"><div class="v">27/27</div><div class="l">Trip/REP launches get the correct route (real payload)</div></div>
@@ -158,6 +158,14 @@
       <div class="row"><span class="k">Before</span><span class="before">Synchronous <code>MqttClient.publish</code> from the main thread, waiting more than 5 seconds.</span></div>
       <div class="row"><span class="k">After</span><span class="after">Publish/subscribe run on a background thread, <code>timeToWait</code> = 3 seconds.</span></div>
       <div class="files">MqttManager.kt</div></div>
+    <div class="card" style="grid-column: 1 / -1"><h4><span class="id">C9</span> MQTT "rate limit": sessions kicking each other off <span class="pill new">new</span></h4>
+      <div class="row"><span class="k">Before</span><span class="before">ThingsBoard allows only one MQTT session per device token. ClientAttributesService and ScheduleActivity (then Map/REP) opened clients with the same Bus token at the same time, so they disconnected each other every 1–2 seconds. The client's fix in <code>c0230d1</code> (leaked publish loops) was correct, but not sufficient: still 225 disconnects in 6 minutes.</span></div>
+      <div class="row"><span class="k">After</span><span class="after">The service only connects when it needs to publish, then disconnects. Schedule releases its connection while a trip screen is open and reconnects on return. A client that is mid auto-reconnect is now really stopped. Result: <b>0 disconnects</b> in the same flow.</span></div>
+      <table style="margin-top:6px"><tr><th>Build</th><th>MQTT disconnects (~6 minutes)</th><th>Per minute</th></tr>
+        <tr><td>Client branch <code>c0230d1</code></td><td>225</td><td>38.6</td></tr>
+        <tr><td>+ schedule fixes</td><td>224</td><td>38.3</td></tr>
+        <tr><td><b>+ MQTT session fix (C9)</b></td><td><b>0</b></td><td><b>0</b></td></tr></table>
+      <div class="files">ClientAttributesService.kt · ScheduleActivity.kt · MqttManager.kt</div></div>
   </div>
 </section>
 
@@ -271,7 +279,7 @@ speedSource=GPS predictedArrival=<span class="hl">07:35:38</span> deltaSec=<span
 
 <section>
   <h2><span class="num">09</span> Remaining risks &amp; deferred items</h2>
-  <div class="note warn avoid" style="margin-bottom:10px"><b>MQTT disconnect/reconnect loop:</b> on the emulator, the connection to ThingsBoard connects and is then dropped by the server within about 25 ms, repeating every 2 seconds (204 times in 20 minutes). The ANR is handled, but the cause is out of scope. Suspected: Free plan limits, or several clients using the same token. Needs checking on a physical tablet.</div>
+  <div class="note ok avoid" style="margin-bottom:10px"><b>MQTT disconnect/reconnect loop: fixed (C9).</b> The cause was several clients with the same device token disconnecting each other's sessions. After the fix: 0 disconnects on the emulator. Still needs confirming on a physical tablet.</div>
   <div class="grid2">
     <div class="card"><h4>Remaining risks</h4><ul style="font-size:9pt">
       <li>No live test with real GPS on a physical tablet yet.</li>

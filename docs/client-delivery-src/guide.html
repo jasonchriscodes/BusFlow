@@ -225,10 +225,10 @@
     <tr><td><b>A completed trip came back</b></td><td>This should no longer happen. If it does, send us the files in <code>Documents/Log/</code> and the time it happened.</td></tr>
   </table>
 
-  <div class="note warn" style="margin-top:12px"><b>Known issue, outside this release:</b> during testing, the MQTT connection to ThingsBoard Cloud was repeatedly closed by the server about every 2 seconds. The app no longer freezes when this happens and keeps working, but live updates may be delayed. We suspect the ThingsBoard plan limits or several app connections sharing one device token. Details are in the report.</div>
+  <div class="note ok" style="margin-top:12px"><b>Fixed in this release: MQTT "rate limit" disconnects.</b> ThingsBoard allows one MQTT session per device token, and the app used to open several at once, so they kept disconnecting each other every 1–2 seconds. The app now uses one session at a time. In testing this went from 225 disconnects in 6 minutes to 0.</div>
 
   <h3>For your developer</h3>
-  <p><code>05_Source_Patch/BusFlow-schedule-stabilization.patch</code> contains every code change and the new unit tests, and applies cleanly to commit <code>4b7d3dd</code> on branch <code>jchris_time-table-app</code>:</p>
+  <p><code>05_Source_Patch/BusFlow-schedule-stabilization.patch</code> contains every code change and the new unit tests, and applies cleanly to commit <code>c0230d1</code> (latest) on branch <code>jchris_time-table-app</code>:</p>
   <div class="cmd">git checkout jchris_time-table-app
 git apply 05_Source_Patch/BusFlow-schedule-stabilization.patch
 ./gradlew :app:testDebugUnitTest :app:assembleDebug   # needs JDK 17</div>
