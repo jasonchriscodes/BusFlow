@@ -10,9 +10,8 @@ import androidx.lifecycle.ViewModelProvider
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.TripStateSnapshot
 import com.jason.publisher.main.model.ScheduleItem
-import com.jason.publisher.main.utils.getNextScheduleStartTime
+import com.jason.publisher.main.utils.formatNextRunCountdown
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
 
 class TimeManager(): ViewModel() {
@@ -74,7 +73,7 @@ class TimeManager(): ViewModel() {
      * function to calculate and display the remaining time until the next scheduled run
      */
     fun startNextTripCountdownUpdater(
-        scheduleData: List<ScheduleItem>,
+        nextRun: ScheduleItem?,
         timeProvider: () -> Long = { System.currentTimeMillis() }
     ) {
         // Stop any existing countdown timer first
@@ -84,38 +83,7 @@ class TimeManager(): ViewModel() {
         nextTripRunnable = object : Runnable {
             override fun run() {
                 try {
-                    val currentTime = Calendar.getInstance().apply {
-                        timeInMillis = timeProvider()
-                    }
-                    val nextTripStartTime = scheduleData.getNextScheduleStartTime()
-
-                    val newNextTripText: String
-                    if (nextTripStartTime != null) {
-                        val timeParts = nextTripStartTime.split(":").map { it.toInt() }
-                        // Next trip is always today's upcoming run (no more trips today is
-                        // handled separately above) - don't roll to tomorrow once the target
-                        // is reached, otherwise the countdown can never show "late" and either
-                        // freezes near 0:00 or jumps to a ~24h overflow once the time passes.
-                        val nextTripCalendar = Calendar.getInstance().apply {
-                            set(Calendar.YEAR, currentTime.get(Calendar.YEAR))
-                            set(Calendar.MONTH, currentTime.get(Calendar.MONTH))
-                            set(Calendar.DAY_OF_MONTH, currentTime.get(Calendar.DAY_OF_MONTH))
-                            set(Calendar.HOUR_OF_DAY, timeParts[0])
-                            set(Calendar.MINUTE, timeParts[1])
-                            set(Calendar.SECOND, 0)
-                            set(Calendar.MILLISECOND, 0)
-                        }
-                        val diff = nextTripCalendar.timeInMillis - currentTime.timeInMillis
-                        if (diff > 0) {
-                            val mins = (diff / 1000 / 60).toInt()
-                            val secs = ((diff / 1000) % 60).toInt()
-                            newNextTripText = "Next run in: $mins mins $secs seconds"
-                        } else {
-                            newNextTripText = "You are late for the next run"
-                        }
-                    } else {
-                        newNextTripText = "No more scheduled trips for today"
-                    }
+                    val newNextTripText = formatNextRunCountdown(nextRun?.startTime, timeProvider())
                     nextTripCountdown.postValue(newNextTripText)
 
                     // Schedule next update only if handler is still valid

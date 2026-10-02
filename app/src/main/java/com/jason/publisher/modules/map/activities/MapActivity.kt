@@ -60,7 +60,10 @@ import com.jason.publisher.modules.map.mqtt.services.MqttManager
 import com.jason.publisher.modules.network.utils.NetworkStatusHelper
 import com.jason.publisher.R
 import com.jason.publisher.main.utils.convertTimeToMinutes
-import com.jason.publisher.main.utils.getNextScheduleStartTime
+import com.jason.publisher.main.utils.ScheduleCache
+import com.jason.publisher.main.utils.nextRunAfterActive
+import com.jason.publisher.main.utils.remainingAfterActive
+import com.jason.publisher.main.utils.resolveTimeOfDay
 import com.jason.publisher.main.utils.parseTimeToday
 import com.jason.publisher.modules.map.utils.calculateBearing
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
@@ -136,6 +139,8 @@ open class MapActivity : AppCompatActivity() {
     @SuppressLint("LongLogTag")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // ETA / next-run math must use the same clock as the status check (simulated in Test*Activity).
+        viewModel.getScheduleNowMillis = { getScheduleStatusNowMillis() }
         AndroidGraphicFactory.createInstance(application)
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -280,11 +285,10 @@ open class MapActivity : AppCompatActivity() {
         timeManager.currentTime.observe(this) { currentTimeTextView.text = it }
 
         // Start the next trip countdown updater
-        val countdownList = ArrayList<ScheduleItem>().apply {
-            addAll(viewModel.scheduleList)  // current (REP)
-            addAll(viewModel.scheduleData)  // remaining (Run 3, etc)
-        }
-        timeManager.startNextTripCountdownUpdater(countdownList, timeProvider = { getDisplayNowMillis() })
+        timeManager.startNextTripCountdownUpdater(
+            nextRunAfterActive(viewModel.scheduleList.firstOrNull(), viewModel.scheduleData),
+            timeProvider = { getDisplayNowMillis() }
+        )
 
         timeManager.nextTripCountdown.observe(this) { nextTripCountdownTextView.text = it }
 
@@ -733,8 +737,8 @@ open class MapActivity : AppCompatActivity() {
 
         // 4) snap UI to the snappedStop (if any)
         snappedStop?.let { stop ->
-            viewModel.latitude  = stop.latitude!!
-            viewModel.longitude = stop.longitude!!
+            viewModel.latitude  = stop.latitude ?: viewModel.latitude
+            viewModel.longitude = stop.longitude ?: viewModel.longitude
             viewModel.stopAddress = viewModel.findAddressByCoordinates(viewModel.latitude, viewModel.longitude)
                 ?: stop.address.orEmpty()
             upcomingBusStopTextView.text = viewModel.stopAddress
@@ -750,13 +754,16 @@ open class MapActivity : AppCompatActivity() {
         val totalDurationUntilArrive =
             getTotalDurationUpToIndex(busStopIndex, viewModel.durationBetweenStops)
 
-        val firstSchedule = viewModel.scheduleList.first()
-        val startTimeParts = firstSchedule.startTime.split(":")
+        val firstSchedule = viewModel.scheduleList.firstOrNull() ?: return
+        val startTimeParts = firstSchedule.startTime.trim().split(":")
         if (startTimeParts.size != 2) return
+        val startHour = startTimeParts[0].toIntOrNull() ?: return
+        val startMinute = startTimeParts[1].toIntOrNull() ?: return
 
         val startCalendar = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, startTimeParts[0].toInt())
-            set(Calendar.MINUTE, startTimeParts[1].toInt())
+            timeInMillis = getScheduleStatusNowMillis()
+            set(Calendar.HOUR_OF_DAY, startHour)
+            set(Calendar.MINUTE, startMinute)
             set(Calendar.SECOND, 0)
         }
 
@@ -820,6 +827,9 @@ open class MapActivity : AppCompatActivity() {
             return
         }
 
+        // Trip is finished here; persist before the driver even taps "View Next Trip".
+        ScheduleCache.commitRemaining("MapActivity", remainingScheduleAfterThisTrip())
+
         // Flatten scheduleData into a List<ScheduleItem>
         val flatSchedule = (viewModel.scheduleData as? List<Any> ?: emptyList()).flatMap { element ->
             when (element) {
@@ -828,24 +838,13 @@ open class MapActivity : AppCompatActivity() {
                 else -> emptyList()
             }
         }
-        val messageText = if (flatSchedule.size < 2) {
+        val nextTrip = nextRunAfterActive(viewModel.scheduleList.firstOrNull(), flatSchedule)
+        val messageText = if (nextTrip == null) {
             "You have completed last run of the day."
         } else {
-            val nextTrip: ScheduleItem =
-                flatSchedule.getOrNull(1)
-                    ?: flatSchedule.firstOrNull()
-                    ?: run {
-                        // defensive fallback (shouldn't happen if list isn't empty)
-                        return
-                    }
-
-            val nextStartMinutes = nextTrip.startTime.convertTimeToMinutes()
-            val currentTime = Calendar.getInstance().apply {
-                timeInMillis = getDisplayNowMillis()
-            }
-            val currentMinutes = currentTime.get(Calendar.HOUR_OF_DAY) * 60 +
-                    currentTime.get(Calendar.MINUTE)
-            val restTotalMinutes = if (nextStartMinutes > currentMinutes) nextStartMinutes - currentMinutes else 0
+            val nowMillis = getDisplayNowMillis()
+            val nextStartMillis = resolveTimeOfDay(nextTrip.startTime, nowMillis) ?: nowMillis
+            val restTotalMinutes = ((nextStartMillis - nowMillis) / 60_000L).coerceAtLeast(0L).toInt()
             val restHours = restTotalMinutes / 60
             val restMinutes = restTotalMinutes % 60
             "Trip complete! You have $restHours hour(s) and $restMinutes minute(s) rest before your next trip, which starts at ${nextTrip.startTime}:00."
@@ -902,13 +901,16 @@ open class MapActivity : AppCompatActivity() {
 
         if (viewModel.busRouteData.isEmpty() || viewModel.scheduleList.isEmpty()) return
 
-        val firstSchedule = viewModel.scheduleList.first()
-        val startTimeParts = firstSchedule.startTime.split(":")
+        val firstSchedule = viewModel.scheduleList.firstOrNull() ?: return
+        val startTimeParts = firstSchedule.startTime.trim().split(":")
         if (startTimeParts.size != 2) return
+        val startHour = startTimeParts[0].toIntOrNull() ?: return
+        val startMinute = startTimeParts[1].toIntOrNull() ?: return
 
         val startCalendar = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, startTimeParts[0].toInt())
-            set(Calendar.MINUTE, startTimeParts[1].toInt())
+            timeInMillis = getScheduleStatusNowMillis()
+            set(Calendar.HOUR_OF_DAY, startHour)
+            set(Calendar.MINUTE, startMinute)
             set(Calendar.SECOND, 0)
         }
 
@@ -1531,8 +1533,9 @@ open class MapActivity : AppCompatActivity() {
             // Explicitly update nextTripCountdownTextView (only if changed)
             if (::nextTripCountdownTextView.isInitialized) {
                 try {
-                    val nextTripStartTime = viewModel.scheduleData.getNextScheduleStartTime()
-                    viewModel.updateNextTripText(nextTripStartTime)
+                    val nextTripStartTime =
+                        nextRunAfterActive(viewModel.scheduleList.firstOrNull(), viewModel.scheduleData)?.startTime
+                    viewModel.updateNextTripText(nextTripStartTime, getDisplayNowMillis())
                 } catch (e: Exception) {
                     FileLogger.e("MapActivity", "Error updating nextTripCountdownTextView | ${e.javaClass.simpleName}: ${e.message} | ${TripStateSnapshot.describe()}\n${Log.getStackTraceString(e)}")
                 }
@@ -1584,11 +1587,11 @@ open class MapActivity : AppCompatActivity() {
     }
 
     private fun maybeShowNextRunSafetyWarning() {
-        val nextTrip = viewModel.scheduleData.firstOrNull() ?: return
-        val nextStartStr = (nextTrip.startTime + ":00")
-        val nextStart = nextStartStr.parseTimeToday()
+        val nextTrip = nextRunAfterActive(viewModel.scheduleList.firstOrNull(), viewModel.scheduleData) ?: return
+        val nowMillis = getDisplayNowMillis()
+        val nextStart = resolveTimeOfDay(nextTrip.startTime, nowMillis) ?: return
 
-        val deltaSec = ((nextStart.time - getDisplayNowMillis()) / 1000L).toInt()
+        val deltaSec = ((nextStart - nowMillis) / 1000L).toInt()
 
         // Warn if already late, or if it's imminent and we're in "10+ min late" state
         val shouldWarn = (deltaSec < -60) ||
@@ -1950,11 +1953,15 @@ open class MapActivity : AppCompatActivity() {
 
     private fun finishToScheduleWithRemainingTrips() {
         val resultIntent = Intent().apply {
-            putParcelableArrayListExtra("UPDATED_FULL_SCHEDULE_DATA", getRemainingScheduleFromIntent())
+            putParcelableArrayListExtra("UPDATED_FULL_SCHEDULE_DATA", remainingScheduleAfterThisTrip())
         }
         setResult(RESULT_OK, resultIntent)
         finish()
     }
+
+    /** Remaining items after the active one, whether or not FULL_SCHEDULE_DATA still includes it. */
+    private fun remainingScheduleAfterThisTrip(): ArrayList<ScheduleItem> =
+        ArrayList(remainingAfterActive(viewModel.scheduleList.firstOrNull(), getRemainingScheduleFromIntent()))
 
     private fun getRemainingScheduleFromIntent(): ArrayList<ScheduleItem> {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

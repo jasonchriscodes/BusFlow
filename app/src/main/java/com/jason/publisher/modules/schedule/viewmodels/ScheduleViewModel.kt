@@ -54,6 +54,12 @@ class ScheduleViewModel: ViewModel() {
     var arrBusData: List<BusItem> = emptyList()
 
     var isScheduleUpdatedFromServer = false
+
+    /** True once this screen accepted a roster from ThingsBoard; later polls must not reset progress. */
+    var hasLoadedServerRoster = false
+
+    /** List as it was before the current launch; restored if the downstream flow is abandoned. */
+    var scheduleBeforeLaunch: List<ScheduleItem>? = null
     var isTabulatedView: Boolean = false
     var isDarkMode = false
     var currentPage = 0

@@ -10,14 +10,18 @@ import com.jason.publisher.databinding.ActivityMapBinding
 import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.LifecycleLogger
 import com.jason.publisher.main.loggers.TripStateSnapshot
-import com.jason.publisher.main.utils.getDeltaNextSec
-import com.jason.publisher.main.utils.parseTimeToday
+import com.jason.publisher.main.utils.ScheduleAdherence
+import com.jason.publisher.main.utils.ScheduleState
+import com.jason.publisher.main.utils.calculateScheduleStatus
+import com.jason.publisher.main.utils.estimateEffectiveSpeed
+import com.jason.publisher.main.utils.nextRunAfterActive
+import com.jason.publisher.main.utils.nextRunSlackSeconds
+import com.jason.publisher.main.utils.resolveTimeOfDay
 import com.jason.publisher.modules.rep.activities.RepActivity
 import com.jason.publisher.modules.map.utils.calculateDistance
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import kotlin.math.abs
 
 class RepScheduleStatusManager(
     private val activity: RepActivity,
@@ -27,8 +31,8 @@ class RepScheduleStatusManager(
     enum class RepStopPassCategory {
         ON_TIME,     // green
         EARLY,       // red (timing points only)
-        LATE_5,      // blue  (>= 5 min late)
-        LATE_10,     // purple(>= 10 min late)
+        LATE_5,      // blue  (Slightly Behind)
+        LATE_10,     // purple(Very Behind)
         PENDING      // orange (non-timing until next timing point)
     }
 
@@ -52,17 +56,17 @@ class RepScheduleStatusManager(
     private var cachedRedStopIndex: Int = -1
     private var cachedRouteSize: Int = 0
     private var cachedD2: Double = -1.0
+    private var cachedRedRouteIndex: Int = -1
 
-    private fun categorizeTimingDelta(deltaSec: Int): RepStopPassCategory {
-        // deltaSec = scheduled - predicted
-        // positive => predicted before scheduled (EARLY)
-        // negative => predicted after scheduled (LATE)
-        return when {
-            deltaSec > 0          -> RepStopPassCategory.EARLY
-            deltaSec <= -600      -> RepStopPassCategory.LATE_10
-            deltaSec <= -300      -> RepStopPassCategory.LATE_5
-            else                  -> RepStopPassCategory.ON_TIME
-        }
+    /** Last shared status state; used for hysteresis so GPS noise does not flip the status. */
+    private var lastState: ScheduleState? = null
+
+    // Zone/marker category is derived from the same shared state as the text, icon and color.
+    private fun categoryFor(state: ScheduleState): RepStopPassCategory = when (state) {
+        ScheduleState.AHEAD           -> RepStopPassCategory.EARLY
+        ScheduleState.ON_TIME         -> RepStopPassCategory.ON_TIME
+        ScheduleState.SLIGHTLY_BEHIND -> RepStopPassCategory.LATE_5
+        ScheduleState.VERY_BEHIND     -> RepStopPassCategory.LATE_10
     }
 
     /**
@@ -151,14 +155,23 @@ class RepScheduleStatusManager(
         }
 
         try {
+            // One clock for every value in this calculation.
+            val nowMillis = activity.getScheduleStatusNowMillis()
             val scheduledTimeStr = binding.timingPointValueTextView.text.toString()
-            val timingPointTime = scheduledTimeStr.parseTimeToday()
+            val timingPointMillis = resolveTimeOfDay(scheduledTimeStr, nowMillis) ?: run {
+                Log.w("checkScheduleStatus", "Skipping status check: invalid timing point '$scheduledTimeStr'")
+                return
+            }
 
-            val baseTime = if (activity.viewModel.forceAheadStatus) {
+            val baseTimeStr = if (activity.viewModel.forceAheadStatus) {
                 "22:15:00" // dummy actual-time string
             } else {
-                activity.viewModel.scheduleList.first().startTime + ":00"
-            }.parseTimeToday()
+                activity.viewModel.scheduleList.first().startTime
+            }
+            val baseMillis = resolveTimeOfDay(baseTimeStr, nowMillis) ?: run {
+                Log.w("checkScheduleStatus", "Skipping status check: invalid trip start '$baseTimeStr'")
+                return
+            }
 
             var apiTimeStr = binding.ApiTimeValueTextView.text.toString()
             val firstAddress = activity.viewModel.scheduleList.firstOrNull()?.busStops?.firstOrNull()?.address
@@ -185,7 +198,13 @@ class RepScheduleStatusManager(
                 apiTimeStr = adjustedApiTime
             }
 
-            val apiTime = apiTimeStr.parseTimeToday()
+            // Resolved against the trip start so a trip crossing midnight keeps a positive t2.
+            val apiMillis = resolveTimeOfDay(apiTimeStr, baseMillis) ?: run {
+                Log.w("checkScheduleStatus", "Skipping status check: invalid API time '$apiTimeStr'")
+                return
+            }
+
+            if (activity.viewModel.stops.isEmpty()) return
 
             // ✅ Find next stop that is a red timing point
             var redStopIndex = -1
@@ -204,12 +223,12 @@ class RepScheduleStatusManager(
                 redStopIndex = activity.viewModel.stops.lastIndex
             }
 
-            val redStop = activity.viewModel.stops[redStopIndex]
-            val stopLat = redStop.latitude!!
-            val stopLon = redStop.longitude!!
+            val redStop = activity.viewModel.stops.getOrNull(redStopIndex) ?: return
+            val stopLat = redStop.latitude ?: return
+            val stopLon = redStop.longitude ?: return
 
-            // --- 1. Distance from current location to red timing point (d1) ---
-            val d1 = calculateDistance(activity.viewModel.latitude, activity.viewModel.longitude, stopLat, stopLon)
+            // Straight-line distance; only a fallback, it under/over-estimates on winding routes.
+            val straightLineM = calculateDistance(activity.viewModel.latitude, activity.viewModel.longitude, stopLat, stopLon)
 
             // --- 2. Total distance from route start to this red timing point (d2) ---
             val routeSize = activity.viewModel.route.size
@@ -224,79 +243,70 @@ class RepScheduleStatusManager(
                 }
                 cachedRedStopIndex = redStopIndex
                 cachedRouteSize = routeSize
+                cachedRedRouteIndex = upcomingIndex
             }
             val d2 = cachedD2
+
+            // --- 1. Remaining distance to the red timing point along the route polyline (d1) ---
+            val route = activity.viewModel.route
+            val nearestIdx = activity.viewModel.findNearestBusRoutePoint(activity.viewModel.latitude, activity.viewModel.longitude)
+            val d1 = if (nearestIdx < cachedRedRouteIndex && cachedRedRouteIndex <= route.lastIndex) {
+                val next = route[nearestIdx + 1]
+                calculateDistance(activity.viewModel.latitude, activity.viewModel.longitude, next.latitude!!, next.longitude!!) +
+                        (nearestIdx + 1 until cachedRedRouteIndex).sumOf { i ->
+                            val p1 = route[i]
+                            val p2 = route[i + 1]
+                            calculateDistance(p1.latitude!!, p1.longitude!!, p2.latitude!!, p2.longitude!!)
+                        }
+            } else {
+                straightLineM
+            }
 
             if (d2 == 0.0) {
                 Log.e("checkScheduleStatus", "❌ d2 (total distance) is 0. Cannot compute estimated time.")
                 return
             }
 
-            // --- 3. Total time from start to red timing point in seconds (t2) ---
-            val t2 = ((apiTime.time - baseTime.time) / 1000).toDouble()
+            // --- 3. Scheduled time from trip start to this red timing point (t2), matching d2 ---
+            val t2 = ((timingPointMillis - baseMillis) / 1000).toDouble()
+                .takeIf { it > 0 } ?: ((apiMillis - baseMillis) / 1000).toDouble()
 
             // --- 4. Estimate time to arrival from current position (t1) ---
-            // Use actual speed if available and reasonable, otherwise use average speed from schedule
-            val minSpeedMps = 0.5  // Minimum speed (0.5 m/s = 1.8 km/h) to avoid division by zero
-            val maxSpeedMps = 30.0 // Maximum speed (30 m/s = 108 km/h) for urban bus
-
-            // Calculate average speed from schedule if available
-            val avgSpeedFromSchedule = if (d2 > 0 && t2 > 0) {
-                (d2 / t2).coerceIn(minSpeedMps, maxSpeedMps)
-            } else {
-                minSpeedMps
-            }
-
-            // Use smoothed speed if available and reasonable, otherwise fall back to schedule average
-            val rawSpeedMps = activity.viewModel.smoothedSpeed / 3.6
-            val effectiveSpeed = when {
-                rawSpeedMps >= minSpeedMps && rawSpeedMps <= maxSpeedMps -> rawSpeedMps
-                rawSpeedMps < minSpeedMps -> avgSpeedFromSchedule // Use schedule average if too slow
-                else -> avgSpeedFromSchedule.coerceAtMost(maxSpeedMps) // Cap at max if too fast
-            }
-
+            val rawSpeedKmh = activity.viewModel.smoothedSpeed.toDouble()
+            val speed = estimateEffectiveSpeed(rawSpeedKmh, if (d2 > 0 && t2 > 0) d2 / t2 else null)
+            val effectiveSpeed = speed.mps
             val t1 = d1 / effectiveSpeed  // d1 is the distance to the red stop in meters
 
-            val predictedArrival = Calendar.getInstance().apply {
-                timeInMillis = activity.getScheduleStatusNowMillis()
-                add(Calendar.SECOND, t1.toInt())
+            val predictedArrivalMillis = nowMillis + (t1 * 1000).toLong()
+            val predictedArrivalStr = timeFormat.format(predictedArrivalMillis)
+
+            // --- 5. Compare predicted arrival with Timing Point (shared thresholds) ---
+            val status = calculateScheduleStatus(timingPointMillis, predictedArrivalMillis, lastState)
+            lastState = status.state
+            lastCategory = categoryFor(status.state)
+            val deltaSec = status.deltaSeconds.toInt()
+            val statusText = status.displayText
+
+            val symbolRes = when (status.state) {
+                ScheduleState.AHEAD           -> R.drawable.ic_schedule_very_ahead
+                ScheduleState.ON_TIME         -> R.drawable.ic_schedule_on_time
+                ScheduleState.SLIGHTLY_BEHIND -> R.drawable.ic_schedule_slightly_behind
+                ScheduleState.VERY_BEHIND     -> R.drawable.ic_schedule_very_behind
             }
 
-            val predictedArrivalStr = timeFormat.format(predictedArrival.time)
+            val statusColor = ContextCompat.getColor(activity, when (status.state) {
+                ScheduleState.AHEAD           -> R.color.blind_red
+                ScheduleState.ON_TIME         -> R.color.blind_green
+                ScheduleState.SLIGHTLY_BEHIND -> R.color.blind_blue
+                ScheduleState.VERY_BEHIND     -> R.color.blind_purple
+            })
 
-            // --- 5. Compare predicted arrival with Timing Point ---
-            val deltaSec = ((timingPointTime.time - predictedArrival.time.time) / 1000).toInt()
-            lastCategory = categorizeTimingDelta(deltaSec)
-
-            // convert to minutes only (drop seconds)
-            val deltaMin = deltaSec / 60               // signed minutes
-            val absMin   = abs(deltaMin)   // absolute value
-
-            fun minutesLabel(m: Int) = if (m == 1) "1 min" else "$m min"
-            val timeDiff = minutesLabel(absMin)
-
-            // On Time is an exact, symmetric +/-60s window (matches how Google Maps shows
-            // live transit status); only outside that window do we fall back to minute labels.
-            val statusText = when {
-                deltaSec > 30         -> "Early (~$timeDiff early)"
-                deltaSec >= -30       -> "On Time"
-                deltaSec >= -300      -> "Slightly Behind (~$timeDiff late)"
-                else                  -> "Very Behind (~$timeDiff late)"
-            }
-
-            val symbolRes = when {
-                deltaSec > 30         -> R.drawable.ic_schedule_very_ahead
-                deltaSec >= -30       -> R.drawable.ic_schedule_on_time
-                deltaSec >= -300      -> R.drawable.ic_schedule_slightly_behind
-                else                  -> R.drawable.ic_schedule_very_behind
-            }
-
-            val statusColor = when {
-                deltaSec > 30         -> ContextCompat.getColor(activity, R.color.blind_red)    // Very Ahead, red
-                deltaSec >= -30       -> ContextCompat.getColor(activity, R.color.blind_green)  // On Time, green
-                deltaSec >= -300      -> ContextCompat.getColor(activity, R.color.blind_blue)   // Slightly Behind, blue
-                else                  -> ContextCompat.getColor(activity, R.color.blind_purple) // Very Behind, purple
-            }
+            Log.d("ScheduleAdherence",
+                "timingPoint=${redStop.address} scheduled=$scheduledTimeStr now=${timeFormat.format(nowMillis)} " +
+                        "lat=${activity.viewModel.latitude} lon=${activity.viewModel.longitude} " +
+                        "distanceRemainingM=${d1.toInt()} straightLineM=${straightLineM.toInt()} routeDistanceM=${d2.toInt()} scheduledTravelSec=${t2.toLong()} " +
+                        "smoothedSpeedKmh=$rawSpeedKmh effectiveSpeedKmh=${"%.1f".format(effectiveSpeed * 3.6)} " +
+                        "speedSource=${speed.source} predictedArrival=$predictedArrivalStr deltaSec=$deltaSec status=${status.state}")
 
             // Update UI directly (already on main thread from RepActivity)
             try {
@@ -336,6 +346,8 @@ class RepScheduleStatusManager(
                 "t1" to t1,
                 "t2" to t2,
                 "effectiveSpeed" to effectiveSpeed,
+                "speedSource" to speed.source,
+                "scheduleState" to status.state.name,
                 "scheduleStatusText" to statusText,
                 "timingPointTime" to scheduledTimeStr,
                 "predictedArrival" to predictedArrivalStr,
@@ -364,13 +376,13 @@ class RepScheduleStatusManager(
     /**
      * Override the schedule status text with a late-for-next-run message if the difference between
      * the next schedule's start time and the predicted arrival time at the final bus stop (predictedArrivalLastStop)
-     * is within the range [-86400, 300] seconds.
+     * leaves less than [ScheduleAdherence.NEXT_RUN_MIN_LAYOVER_SECONDS] of layover.
      *
      * Calculation details:
      * - First, the predicted arrival at the final bus stop is computed (using variable names ending with LastStop).
      * - Then, the next schedule start time (converted to full HH:mm:ss) is parsed.
      * - The difference deltaNextSec = nextScheduleStartTime - predictedArrival is obtained in seconds.
-     * - If deltaNextSec is negative, then the override value is computed as (-deltaNextSec) + 300.
+     * - The override value is the layover shortfall: NEXT_RUN_MIN_LAYOVER_SECONDS - deltaNextSec.
      * - The status text is then overridden with:
      *      "Late for next run by <overrideValue>s"
      */
@@ -380,13 +392,23 @@ class RepScheduleStatusManager(
 
         val t1 = activity.viewModel.getExpectedDurationForNextSchedule() ?: return
 
-        val deltaNextSec = activity.viewModel.scheduleData.getDeltaNextSec(
-            t1,
-            activity.getScheduleStatusNowMillis()
+        // Explicit next run (FULL_SCHEDULE_DATA may or may not still contain the active item).
+        val nextRun = nextRunAfterActive(
+            activity.viewModel.scheduleList.firstOrNull(),
+            activity.viewModel.scheduleData
         ) ?: return
 
-        if (deltaNextSec in -86400..300) {
-            val overrideValue = if (deltaNextSec < 0) (-deltaNextSec) + 300 else deltaNextSec
+        // Implausible values (stale roster / wrong day) come back null and are never displayed.
+        val deltaNextSec = nextRunSlackSeconds(
+            nextRun.startTime,
+            t1,
+            activity.getScheduleStatusNowMillis()
+        )?.toInt() ?: return
+
+        val requiredSlack = ScheduleAdherence.NEXT_RUN_MIN_LAYOVER_SECONDS.toInt()
+        if (deltaNextSec < requiredSlack) {
+            // How far short of the minimum layover the driver will be.
+            val overrideValue = requiredSlack - deltaNextSec
 
             // Format time as "xx mins" only (no seconds) if >= 60 seconds
             val overrideStatusText = if (overrideValue >= 60) {

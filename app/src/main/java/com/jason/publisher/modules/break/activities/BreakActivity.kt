@@ -271,6 +271,7 @@ open class BreakActivity : AppCompatActivity() {
 
     protected open fun onDoneClicked(fullRemaining: ArrayList<ScheduleItem>) {
         val remainingAfterBreak = ArrayList(fullRemaining.drop(1))
+        com.jason.publisher.main.utils.ScheduleCache.commitRemaining("BreakActivity", remainingAfterBreak)
         val resultIntent = android.content.Intent().apply {
             putParcelableArrayListExtra("UPDATED_FULL_SCHEDULE_DATA", remainingAfterBreak)
         }

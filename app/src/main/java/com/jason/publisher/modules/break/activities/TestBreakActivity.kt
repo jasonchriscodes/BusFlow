@@ -27,6 +27,7 @@ class TestBreakActivity : BreakActivity() {
     override fun onDoneClicked(fullRemaining: ArrayList<ScheduleItem>) {
         UserActionLogger.click("TestBreakActivity", "btnDone (test override)", "remainingBefore=${fullRemaining.size}")
         val remainingAfterBreak = ArrayList(fullRemaining.drop(1))
+        com.jason.publisher.main.utils.ScheduleCache.commitRemaining("TestBreakActivity", remainingAfterBreak)
         UserActionLogger.stateChanged("TestBreakActivity", "remainingSchedule.size", fullRemaining.size, remainingAfterBreak.size)
         val resultIntent = Intent().apply {
             putParcelableArrayListExtra("UPDATED_FULL_SCHEDULE_DATA", remainingAfterBreak)

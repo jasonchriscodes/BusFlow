@@ -51,6 +51,7 @@ import com.jason.publisher.main.loggers.FileLogger
 import com.jason.publisher.main.loggers.TripStateSnapshot
 import com.jason.publisher.main.loggers.UserActionLogger
 import com.jason.publisher.main.loggers.TripLog
+import com.jason.publisher.main.utils.RouteMatcher
 import com.jason.publisher.main.utils.getOrCreateDeviceAid
 import com.jason.publisher.modules.battery.ui.hookBatteryToasts
 import com.jason.publisher.modules.map.utils.formatPanelLabel
@@ -509,6 +510,12 @@ class ScheduleActivity : AppCompatActivity() {
         val firstScheduleItem = viewModel.activeScheduleData.first()
         val selectedIdx = findRouteIndexForScheduleItem(firstScheduleItem)
         val selectedRouteData = viewModel.busRouteData.getOrNull(selectedIdx)
+        if (selectedRouteData == null) {
+            // Never fall back to "first route": the driver would follow another trip's stops.
+            FileLogger.w("ScheduleActivity", "No route matches run=${firstScheduleItem.runNo} name=${firstScheduleItem.runName} idx=$selectedIdx routes=${viewModel.busRouteData.size}; not launching")
+            Toast.makeText(this, "No route data for ${firstScheduleItem.runName}. Fetch Roster again or contact admin.", Toast.LENGTH_LONG).show()
+            return
+        }
 
         val hasActiveTrip = TripLog.hasActive(this)
         val scheduleDataToPass = if (hasActiveTrip) {
@@ -536,7 +543,7 @@ class ScheduleActivity : AppCompatActivity() {
         }
 
         if (!hasActiveTrip) {
-            updateActiveScheduleDataOnLaunch(scheduleDataToPass)
+            stageScheduleItemLaunch(scheduleDataToPass)
         }
 
         signingLauncher.launch(intent)
@@ -552,6 +559,12 @@ class ScheduleActivity : AppCompatActivity() {
         val firstScheduleItem = viewModel.activeScheduleData.first()
         val selectedIdx = findRouteIndexForScheduleItem(firstScheduleItem)
         val selectedRouteData = viewModel.busRouteData.getOrNull(selectedIdx)
+        if (selectedRouteData == null) {
+            // Never fall back to "first route": the driver would follow another trip's stops.
+            FileLogger.w("ScheduleActivity", "No route matches run=${firstScheduleItem.runNo} name=${firstScheduleItem.runName} idx=$selectedIdx routes=${viewModel.busRouteData.size}; not launching")
+            Toast.makeText(this, "No route data for ${firstScheduleItem.runName}. Fetch Roster again or contact admin.", Toast.LENGTH_LONG).show()
+            return
+        }
 
         val hasActiveTrip = TripLog.hasActive(this)
         val scheduleDataToPass = if (hasActiveTrip) {
@@ -579,7 +592,7 @@ class ScheduleActivity : AppCompatActivity() {
         }
 
         if (!hasActiveTrip) {
-            updateActiveScheduleDataOnLaunch(scheduleDataToPass)
+            stageScheduleItemLaunch(scheduleDataToPass)
         }
 
         signingLauncher.launch(intent)
@@ -614,7 +627,7 @@ class ScheduleActivity : AppCompatActivity() {
         )
 
         if (!TripLog.hasActive(this)) {
-            updateActiveScheduleDataOnLaunch(
+            stageScheduleItemLaunch(
                 viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
             )
         }
@@ -654,7 +667,7 @@ class ScheduleActivity : AppCompatActivity() {
         )
 
         if (!TripLog.hasActive(this)) {
-            updateActiveScheduleDataOnLaunch(
+            stageScheduleItemLaunch(
                 viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
             )
         }
@@ -732,10 +745,17 @@ class ScheduleActivity : AppCompatActivity() {
                         result.data?.getParcelableArrayListExtra("UPDATED_FULL_SCHEDULE_DATA")
                     }
 
-                if (updatedList != null) {
-                    updateActiveScheduleDataOnLaunch(updatedList)
+                // Commit: the flow finished, persist the list without the consumed item.
+                updateActiveScheduleDataOnLaunch(updatedList ?: viewModel.activeScheduleData)
+            } else {
+                // Abandoned (back press, missing token, early exit): put the item back.
+                val restore = viewModel.scheduleBeforeLaunch
+                if (restore != null) {
+                    FileLogger.w("ScheduleActivity", "Launch not completed (result=${result.resultCode}); restoring ${restore.size} schedule item(s)")
+                    updateActiveScheduleDataOnLaunch(restore)
                 }
             }
+            viewModel.scheduleBeforeLaunch = null
         }
 
     private fun offlineMapFile(): File {
@@ -1253,50 +1273,8 @@ class ScheduleActivity : AppCompatActivity() {
 
     // ===== RouteData matching (fix for index mismatch when SignOn/Break don't exist in busRouteData) =====
 
-    private fun findRouteIndexForScheduleItem(item: ScheduleItem): Int {
-        val routes = viewModel.busRouteData
-        if (routes.isEmpty()) return -1
-        if (item.busStops.isEmpty()) return -1
-
-        val firstStop = item.busStops.firstOrNull() ?: return -1
-        val lastStop = item.busStops.lastOrNull() ?: return -1
-
-        val startLat = firstStop.latitude ?: return -1
-        val startLon = firstStop.longitude ?: return -1
-        val endLat = lastStop.latitude ?: return -1
-        val endLon = lastStop.longitude ?: return -1
-
-        var bestIdx = -1
-        var bestScore = Double.MAX_VALUE
-
-        routes.forEachIndexed { idx, route ->
-            val routeStart = route.startingPoint
-            val routeEnd = route.nextPoints.lastOrNull() ?: return@forEachIndexed
-
-            val startDistance = distanceMeters(
-                startLat,
-                startLon,
-                routeStart.latitude,
-                routeStart.longitude
-            )
-
-            val endDistance = distanceMeters(
-                endLat,
-                endLon,
-                routeEnd.latitude,
-                routeEnd.longitude
-            )
-
-            val score = startDistance + endDistance
-
-            if (score < bestScore) {
-                bestScore = score
-                bestIdx = idx
-            }
-        }
-
-        return if (bestScore <= 250.0) bestIdx else -1
-    }
+    private fun findRouteIndexForScheduleItem(item: ScheduleItem): Int =
+        RouteMatcher.findRouteIndex(item, viewModel.busRouteData, viewModel.scheduleData)
 
     private fun pickMatchPoint(item: ScheduleItem): Pair<Double, Double>? {
         if (item.busStops.isEmpty()) return null
@@ -1366,7 +1344,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         // ✅ Consume only the schedule item (NOT busRouteData)
         if (!hasActiveTrip) {
-            updateActiveScheduleDataOnLaunch(
+            stageScheduleItemLaunch(
                 viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
             )
         } else {
@@ -1414,7 +1392,7 @@ class ScheduleActivity : AppCompatActivity() {
 
         // ✅ Consume only the schedule item (NOT busRouteData)
         if (!hasActiveTrip) {
-            updateActiveScheduleDataOnLaunch(
+            stageScheduleItemLaunch(
                 viewModel.activeScheduleData.toMutableList().apply { removeAt(0) }
             )
         } else {
@@ -1435,6 +1413,12 @@ class ScheduleActivity : AppCompatActivity() {
 
         val selectedIdx = findRouteIndexForScheduleItem(firstScheduleItem)
         val selectedRouteData = viewModel.busRouteData.getOrNull(selectedIdx)
+        if (selectedRouteData == null) {
+            // Never fall back to "first route": the driver would follow another trip's stops.
+            FileLogger.w("ScheduleActivity", "No route matches run=${firstScheduleItem.runNo} name=${firstScheduleItem.runName} idx=$selectedIdx routes=${viewModel.busRouteData.size}; not launching")
+            Toast.makeText(this, "No route data for ${firstScheduleItem.runName}. Fetch Roster again or contact admin.", Toast.LENGTH_LONG).show()
+            return
+        }
 
         val hasActiveTrip = TripLog.hasActive(this)
         val scheduleDataToPass = if (hasActiveTrip) {
@@ -1472,7 +1456,7 @@ class ScheduleActivity : AppCompatActivity() {
         )
 
         if (!hasActiveTrip) {
-            updateActiveScheduleDataOnLaunch(scheduleDataToPass)
+            stageScheduleItemLaunch(scheduleDataToPass)
         }
 
         stopAdminPolling()
@@ -1502,6 +1486,12 @@ class ScheduleActivity : AppCompatActivity() {
 
         val selectedIdx = findRouteIndexForScheduleItem(firstScheduleItem)
         val selectedRouteData = viewModel.busRouteData.getOrNull(selectedIdx)
+        if (selectedRouteData == null) {
+            // Never fall back to "first route": the driver would follow another trip's stops.
+            FileLogger.w("ScheduleActivity", "No route matches run=${firstScheduleItem.runNo} name=${firstScheduleItem.runName} idx=$selectedIdx routes=${viewModel.busRouteData.size}; not launching")
+            Toast.makeText(this, "No route data for ${firstScheduleItem.runName}. Fetch Roster again or contact admin.", Toast.LENGTH_LONG).show()
+            return
+        }
 
         val hasActiveTrip = TripLog.hasActive(this)
         val scheduleDataToPass = if (hasActiveTrip) {
@@ -1536,10 +1526,24 @@ class ScheduleActivity : AppCompatActivity() {
         )
 
         if (!hasActiveTrip) {
-            updateActiveScheduleDataOnLaunch(scheduleDataToPass)
+            stageScheduleItemLaunch(scheduleDataToPass)
         }
 
         signingLauncher.launch(intent)
+    }
+
+    /**
+     * Removes the launched item from the on-screen list but deliberately does NOT write the cache.
+     * If the app dies mid-trip, "Use Cache" still has the interrupted item at the top; the removal
+     * is only persisted when the downstream flow returns RESULT_OK (see signingLauncher).
+     */
+    private fun stageScheduleItemLaunch(newScheduleData: List<ScheduleItem>) {
+        if (viewModel.scheduleBeforeLaunch == null) {
+            viewModel.scheduleBeforeLaunch = viewModel.activeScheduleData
+        }
+        viewModel.activeScheduleData = newScheduleData
+        updateScheduleTablePaged()
+        updateTimeline()
     }
 
     /** */
@@ -2182,8 +2186,17 @@ class ScheduleActivity : AppCompatActivity() {
                     // the same scheduleDataCache.txt that SplashActivity auto-selects after an
                     // interrupted trip - so there's exactly one source of truth for "resume",
                     // not a second one duplicated here.
-                    viewModel.scheduleData = (data.shared?.scheduleData1 ?: emptyList()).map { it.copy(runName = safeRunName(it)) }
-                    viewModel.activeScheduleData = viewModel.scheduleData.toList() // Shallow copy to sever connection
+                    // The admin poll re-delivers the full roster every few seconds; only the first
+                    // non-empty delivery (or one while no trip is in flight) may replace the list,
+                    // otherwise completed trips reappear after returning from Map/Break/Signing.
+                    val serverSchedule = (data.shared?.scheduleData1 ?: emptyList()).map { it.copy(runName = safeRunName(it)) }
+                    if (!viewModel.hasLoadedServerRoster) {
+                        viewModel.scheduleData = serverSchedule
+                        viewModel.activeScheduleData = viewModel.scheduleData.toList() // Shallow copy to sever connection
+                        viewModel.hasLoadedServerRoster = serverSchedule.isNotEmpty()
+                    } else {
+                        Log.d("ScheduleActivity", "Ignoring re-delivered roster (${serverSchedule.size} items); keeping local progress (${viewModel.activeScheduleData.size} left)")
+                    }
                     FileLogger.d(
                         "ScheduleActivity scheduleData",
                         "ScheduleActivity subscribeSharedData | scheduleData.size=${viewModel.activeScheduleData.size} | first=${viewModel.activeScheduleData.firstOrNull()}"

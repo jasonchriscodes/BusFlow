@@ -2,7 +2,6 @@ package com.jason.publisher.modules.map.utils
 
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.modules.map.models.BusStopWithTimingPoint
-import java.util.Calendar
 import java.util.Locale.getDefault
 
 /**
@@ -29,38 +28,4 @@ fun getScheduledIndices(
         .filter { it.value.address?.lowercase(getDefault()) in scheduledAddresses }
         .map { it.index }
         .sorted()
-}
-
-fun getNextTripFormattedLabel(nextTripStartTime: String?): String {
-    return if (nextTripStartTime != null) {
-        val currentTime = Calendar.getInstance().apply { timeInMillis = System.currentTimeMillis() }
-        val timeParts = nextTripStartTime.split(":").map { it.toInt() }
-        val nextTripCalendar = Calendar.getInstance().apply {
-            set(Calendar.YEAR, currentTime.get(Calendar.YEAR))
-            set(Calendar.MONTH, currentTime.get(Calendar.MONTH))
-            set(Calendar.DAY_OF_MONTH, currentTime.get(Calendar.DAY_OF_MONTH))
-            set(Calendar.HOUR_OF_DAY, timeParts[0])
-            set(Calendar.MINUTE, timeParts[1])
-            set(Calendar.SECOND, 0)
-            if (timeInMillis <= currentTime.timeInMillis) add(Calendar.DATE, 1)
-        }
-        val diff = nextTripCalendar.timeInMillis - currentTime.timeInMillis
-        if (diff > 0) {
-            val totalSeconds = (diff / 1000).toInt()
-            val mins = totalSeconds / 60
-            val secs = totalSeconds % 60
-            "Next run in: $mins mins $secs seconds"
-        } else {
-            // Format late time as "xx mins" only (no seconds) if >= 60 seconds
-            val lateSeconds = (-diff / 1000).toInt()
-            if (lateSeconds >= 60) {
-                val mins = lateSeconds / 60
-                "You are late for the next run by $mins mins"
-            } else {
-                "You are late for the next run by ${lateSeconds}s"
-            }
-        }
-    } else {
-        "No more scheduled trips for today"
-    }
 }

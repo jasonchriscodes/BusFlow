@@ -19,7 +19,8 @@ import com.jason.publisher.main.model.RouteData
 import com.jason.publisher.main.model.ScheduleItem
 import com.jason.publisher.main.services.ApiService
 import com.jason.publisher.main.services.ApiServiceBuilder
-import com.jason.publisher.main.utils.parseTimeToday
+import com.jason.publisher.main.utils.estimateEffectiveSpeed
+import com.jason.publisher.main.utils.resolveTimeOfDay
 import com.jason.publisher.modules.map.`interface`.LocationListener
 import com.jason.publisher.modules.map.models.BusStopWithTimingPoint
 import com.jason.publisher.modules.map.utils.BUS_STOP_RADIUS
@@ -27,7 +28,7 @@ import com.jason.publisher.modules.map.utils.TimeBasedMovingAverageFilterDouble
 import com.jason.publisher.modules.map.utils.calculateDistance
 import com.jason.publisher.modules.map.utils.formatPanelLabel
 import com.jason.publisher.modules.map.utils.getLastScheduledAddress
-import com.jason.publisher.modules.map.utils.getNextTripFormattedLabel
+import com.jason.publisher.main.utils.formatNextRunCountdown
 import org.json.JSONArray
 import org.json.JSONObject
 import retrofit2.Call
@@ -74,6 +75,9 @@ class MapViewModel: ViewModel() {
     var upcomingStop: String = "Unknown"
     var stopAddress: String = "Unknown"
     val upcomingStopName by lazy { MutableLiveData("Unknown") }
+
+    /** Schedule clock; the activity points this at getScheduleStatusNowMillis(). */
+    var getScheduleNowMillis: () -> Long = { System.currentTimeMillis() }
 
     lateinit var scheduleList: List<ScheduleItem>
     lateinit var scheduleData: List<ScheduleItem>
@@ -464,8 +468,8 @@ class MapViewModel: ViewModel() {
         }
     }
 
-    fun updateNextTripText(nextTripStartTime: String?) {
-        val nextTripText = getNextTripFormattedLabel(nextTripStartTime)
+    fun updateNextTripText(nextTripStartTime: String?, nowMillis: Long) {
+        val nextTripText = formatNextRunCountdown(nextTripStartTime, nowMillis)
         if (nextTripText != lastNextTripText.value) {
             lastNextTripText.postValue(nextTripText)
         }
@@ -612,20 +616,18 @@ class MapViewModel: ViewModel() {
     }
 
     fun getExpectedDurationForNextSchedule(): Double? {
-        val scheduledTimeForFinalStopStr = scheduleList.first().endTime + ":00"
-        val finalStopScheduledTime = scheduledTimeForFinalStopStr.parseTimeToday()
-
-        val baseTimeStr = scheduleList.first().startTime + ":00"
-        val baseTime = baseTimeStr.parseTimeToday()
-
-        return getExpectedDuration(baseTime, finalStopScheduledTime)
+        val trip = scheduleList.firstOrNull() ?: return null
+        // Same clock as ScheduleStatusManager; end resolved against start so midnight trips work.
+        val start = resolveTimeOfDay(trip.startTime, getScheduleNowMillis()) ?: return null
+        val end = resolveTimeOfDay(trip.endTime, start) ?: return null
+        return getExpectedDuration(Date(start), Date(end))
     }
 
     fun getExpectedDuration(start: Date, end: Date): Double? {
-        if (stops.isEmpty()) return null
+        if (stops.isEmpty() || route.size < 2) return null
         val finalStop = stops.last()
-        val stopLat = finalStop.latitude!!
-        val stopLon = finalStop.longitude!!
+        val stopLat = finalStop.latitude ?: return null
+        val stopLon = finalStop.longitude ?: return null
 
         val d1 = calculateDistance(latitude, longitude, stopLat, stopLon)
 
@@ -648,23 +650,8 @@ class MapViewModel: ViewModel() {
 
         val t2 = ((end.time - start.time) / 1000).toDouble()
 
-        // Use smoothed speed with fallback to schedule average
-        val minSpeedMps = 0.5
-        val maxSpeedMps = 30.0
-        val avgSpeedFromSchedule = if (d2 > 0 && t2 > 0) {
-            (d2 / t2).coerceIn(minSpeedMps, maxSpeedMps)
-        } else {
-            minSpeedMps
-        }
-
-        val rawSpeedMps = smoothedSpeed / 3.6
-        val speedMetersPerSec = when {
-            rawSpeedMps >= minSpeedMps && rawSpeedMps <= maxSpeedMps -> rawSpeedMps
-            rawSpeedMps < minSpeedMps -> avgSpeedFromSchedule
-            else -> avgSpeedFromSchedule.coerceAtMost(maxSpeedMps)
-        }
-
-        return d1 / speedMetersPerSec
+        val speed = estimateEffectiveSpeed(smoothedSpeed.toDouble(), if (d2 > 0 && t2 > 0) d2 / t2 else null)
+        return d1 / speed.mps
     }
 
     fun createTelemetryJson(): JSONObject {
