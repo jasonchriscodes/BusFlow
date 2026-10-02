@@ -41,7 +41,7 @@ class App : Application(), Application.ActivityLifecycleCallbacks {
             val prefs = applicationContext.getSharedPreferences("screen_recording_prefs", MODE_PRIVATE)
             val isBuiltinEnabled = prefs.getBoolean("enable_builtin_recording", false)
             if (isBuiltinEnabled) {
-                Log.d("App", "No activities alive, stopping screen recording service")
+                Log.d("App", "No activities alive, stopping screen recording service.")
                 ScreenRecordService.stop(applicationContext)
             }
 
